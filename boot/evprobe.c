@@ -1,9 +1,9 @@
-/* evprobe.c — READ-ONLY evdev-diagnostik til GESTUS-FIX (MerakiTech Gen 1).
+/* evprobe.c — READ-ONLY evdev diagnostics for GESTUS-FIX (MerakiTech Gen 1).
  *
- *   evprobe info                     navn + ABS-bitmap + absinfo for event0..3
- *   evprobe cap <node> <ms> <fil>   fang rå input_events i <ms> til <fil> (O_RDONLY)
+ *   evprobe info                     name + ABS bitmap + absinfo for event0..3
+ *   evprobe cap <node> <ms> <file>  capture raw input_events for <ms> into <file> (O_RDONLY)
  *
- * Ingen writes til input, ingen grab. Build:
+ * No writes to input, no grab. Build:
  *   zig cc -target arm-linux-musleabihf -mcpu=cortex_a7 -static -O2 \
  *       -Wall -Wextra -Werror -o evprobe evprobe.c
  */
@@ -23,10 +23,10 @@
 static void info_node(const char *path)
 {
     int fd = open(path, O_RDONLY | O_NONBLOCK);
-    if (fd < 0) { printf("%s: open fejlede (%s)\n", path, strerror(errno)); return; }
+    if (fd < 0) { printf("%s: open failed (%s)\n", path, strerror(errno)); return; }
     char name[128] = "";
     ioctl(fd, EVIOCGNAME(sizeof name), name);
-    printf("%s: navn '%s'\n", path, name);
+    printf("%s: name '%s'\n", path, name);
     unsigned long absbits[4] = {0};
     if (ioctl(fd, EVIOCGBIT(EV_ABS, sizeof absbits), absbits) >= 0) {
         printf("  ABS-bitmap: %08lx %08lx\n", absbits[0], absbits[1]);
@@ -39,7 +39,7 @@ static void info_node(const char *path)
                        code, ai.minimum, ai.maximum, ai.fuzz, ai.flat, ai.resolution);
         }
     }
-    /* Eksplicitte MT/ST-akser (også hvis bitmap ikke viser dem) */
+    /* Explicit MT/ST axes (even if the bitmap does not show them) */
     const int codes[] = { ABS_X, ABS_Y, ABS_MT_POSITION_X, ABS_MT_POSITION_Y, ABS_MT_TRACKING_ID };
     for (size_t i = 0; i < sizeof codes / sizeof codes[0]; i++) {
         struct input_absinfo ai;
@@ -92,7 +92,7 @@ int main(int argc, char **argv)
         return 0;
     }
     if (argc >= 3 && strcmp(argv[1], "mem") == 0) {
-        /* READ-ONLY: dump kernel-hukommelse via /dev/mem (diagnostik, ingen writes) */
+        /* READ-ONLY: dump kernel memory via /dev/mem (diagnostics, no writes) */
         unsigned long addr = strtoul(argv[2], NULL, 16);
         int words = argc >= 4 ? atoi(argv[3]) : 4;
         int fd = open("/dev/mem", O_RDONLY | O_SYNC);
@@ -106,6 +106,6 @@ int main(int argc, char **argv)
         munmap(m, 0x2000); close(fd);
         return 0;
     }
-    fprintf(stderr, "brug: evprobe info | evprobe cap <node> <ms> <fil> | evprobe mem <hexaddr> [words]\n");
+    fprintf(stderr, "usage: evprobe info | evprobe cap <node> <ms> <file> | evprobe mem <hexaddr> [words]\n");
     return 2;
 }

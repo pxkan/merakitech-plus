@@ -1,6 +1,6 @@
 {
   "name": "gesture_center",
-  "description": "v6.12 center-gestus: ÉT hold >=5000 ms i center (240,240, radius 40) -> trigger; kort hold (2 s) -> ingen; off-center (150,240) hold 5,2 s -> ingen. ÆGTE switcher_host i fil-mode, SWITCHER_GESTURE=center.",
+  "description": "v6.12 center gesture: ONE hold >=5000 ms in the center (240,240, radius 40) -> trigger; short hold (2 s) -> none; off-center (150,240) hold 5.2 s -> none. REAL switcher_host in file mode, SWITCHER_GESTURE=center.",
   "duration_s": 22,
   "events": [
     { "t": 1, "target": "runner", "op": "gesture", "name": "center_positiv", "gesture": "center", "presses": 1, "x": 240, "y": 240, "hold_ms": 5200, "inject_ui": true },

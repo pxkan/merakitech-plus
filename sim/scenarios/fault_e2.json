@@ -1,6 +1,6 @@
 {
   "name": "fault_e2",
-  "description": "E2 bit4 (mælk-NTC): damp sikkerhedsstoppes",
+  "description": "E2 bit4 (milk NTC): steam is safety-stopped",
   "duration_s": 16,
   "events": [
     {
@@ -57,7 +57,7 @@
       "kind": "sim_log",
       "assert": "activity_stop",
       "activity": "steam",
-      "reason_contains": "fejl",
+      "reason_contains": "fault",
       "t0": 4.5,
       "t1": 7
     },

@@ -1,30 +1,30 @@
-/* tinj_hold.c — touch-injektor med LONG-PRESS til boot-testens gestus-verifikation.
+/* tinj_hold.c — touch injector with LONG-PRESS for the boot test's gesture verification.
  *
- * Baseret på artifacts/ourui/tinj.c (samme raw-skalering via EVIOCGABS, samme
- * event-sekvens). tinj.c's tap holder kun 80 ms — switcher-gestus'en kræver
- * ≥1,5 s pr. press, derfor denne variant. Rører IKKE tinj.c (fælles artefakt).
+ * Based on artifacts/ourui/tinj.c (same raw scaling via EVIOCGABS, same
+ * event sequence). tinj.c's tap only holds 80 ms — the switcher gesture requires
+ * ≥1.5 s per press, hence this variant. Does NOT touch tinj.c (shared artifact).
  *
- * Brug:
- *   tinj_hold tap <x> <y>                 (80 ms, som tinj)
- *   tinj_hold hold <x> <y> <ms>           (long-press på ét punkt)
- *   tinj_hold gesture                     (v6.12 DEFAULT: CENTER-hold 5200 ms i
- *                                          (240,240) — baggrund på stock-home mellem
- *                                          de fire knapper; switcher's center-gestus
- *                                          kræver ≥5000 ms inden for radius 40)
- *   tinj_hold gesture center [x y] [ms]   (center-hold, default (240,240) 5200 ms)
+ * Usage:
+ *   tinj_hold tap <x> <y>                 (80 ms, like tinj)
+ *   tinj_hold hold <x> <y> <ms>           (long-press on one point)
+ *   tinj_hold gesture                     (v6.12 DEFAULT: CENTER hold 5200 ms at
+ *                                          (240,240) — background on stock home between
+ *                                          the four buttons; the switcher's center gesture
+ *                                          requires ≥5000 ms within radius 40)
+ *   tinj_hold gesture center [x y] [ms]   (center hold, default (240,240) 5200 ms)
  *   tinj_hold gesture corner [x y]        (LEGACY fallback: 3×1600 ms hold + 300 ms
- *                                          gap, default (75,75) = øverste venstre
- *                                          hjørne, baggrund på stock-home;
- *                                          span 5400 ms ≤ switcher's 6 s-vindue)
+ *                                          gap, default (75,75) = top-left
+ *                                          corner, background on stock home;
+ *                                          span 5400 ms ≤ the switcher's 6 s window)
  *
- * KUN til A-mode (stock-UI): i B-mode griber ourui event0 eksklusivt (EVIOCGRAB),
- * så injicerede events går til ourui, ikke til stock. Hele hjørne-boksen x<90,y<90
- * er baggrund på stock-home (Grinder-cirklen centreret ~(160,154) r≈72 når ikke
- * derind) → ingen aktuator-tryk. Center (240,240) er også baggrund: nærmeste
- * knap-kant ligger ~45 px væk (målt: measure_stock_home.py) — hold fingeren stille.
+ * ONLY for A mode (stock UI): in B mode ourui grabs event0 exclusively (EVIOCGRAB),
+ * so injected events go to ourui, not to stock. The whole corner box x<90,y<90
+ * is background on stock home (the Grinder circle centered ~(160,154) r≈72 does not
+ * reach into it) → no actuator press. Center (240,240) is also background: the nearest
+ * button edge is ~45 px away (measured: measure_stock_home.py) — keep the finger still.
  *
- * RAW-RANGE: auto via EVIOCGABS; fallback = enhedens konstant 0..480 (FINDINGS
- * 'Gestus-debug'; ikke 4095). Samme formel som switcher/ourui: raw = px*(max-min+1)/480.
+ * RAW RANGE: auto via EVIOCGABS; fallback = the device's constant 0..480 (FINDINGS
+ * 'Gestus-debug'; not 4095). Same formula as switcher/ourui: raw = px*(max-min+1)/480.
  *
  * Build: zig cc -target arm-linux-musleabihf -mcpu=cortex_a7 -static -O2 \
  *            -Wall -Wextra -Werror -o tinj_hold tinj_hold.c
@@ -39,7 +39,7 @@
 #include <linux/input.h>
 
 static int fd = -1;
-static int xmin = 0, xmax = 480, ymin = 0, ymax = 480;   /* device-konstant fallback */
+static int xmin = 0, xmax = 480, ymin = 0, ymax = 480;   /* device-constant fallback */
 
 static void send(__u16 type, __u16 code, __s32 val)
 {
@@ -78,7 +78,7 @@ static void hold_ms(int x, int y, int ms)
 int main(int argc, char **argv)
 {
     if (argc < 2) {
-        fprintf(stderr, "brug: tinj_hold tap x y | hold x y ms | "
+        fprintf(stderr, "usage: tinj_hold tap x y | hold x y ms | "
                         "gesture [center [x y] [ms] | corner [x y]]\n");
         return 2;
     }
@@ -96,7 +96,7 @@ int main(int argc, char **argv)
         printf("tap %d %d\n", x, y);
     } else if (strcmp(argv[1], "hold") == 0 && argc >= 5) {
         int x = atoi(argv[2]), y = atoi(argv[3]), ms = atoi(argv[4]);
-        if (ms < 0 || ms > 60000) { fprintf(stderr, "ms skal være 0..60000\n"); return 2; }
+        if (ms < 0 || ms > 60000) { fprintf(stderr, "ms must be 0..60000\n"); return 2; }
         hold_ms(x, y, ms);
         printf("hold %d %d %d ms\n", x, y, ms);
     } else if (strcmp(argv[1], "gesture") == 0) {
@@ -104,26 +104,26 @@ int main(int argc, char **argv)
         if (strcmp(mode, "corner") == 0) {
             int x = argc >= 5 ? atoi(argv[3]) : 75;
             int y = argc >= 5 ? atoi(argv[4]) : 75;
-            /* 3×1600 ms + 2×300 ms gap = 5400 ms fra første down til sidste up */
+            /* 3×1600 ms + 2×300 ms gap = 5400 ms from first down to last up */
             for (int i = 0; i < 3; i++) {
                 hold_ms(x, y, 1600);
                 printf("gesture corner: hold %d/3 (%d,%d) 1600 ms\n", i + 1, x, y);
                 fflush(stdout);
                 if (i < 2) usleep(300000);
             }
-            printf("gesture corner faerdig (span 5400 ms)\n");
+            printf("gesture corner done (span 5400 ms)\n");
         } else {
-            /* center (default): ét sammenhængende hold ≥5000 ms */
+            /* center (default): one continuous hold ≥5000 ms */
             int off = strcmp(mode, "center") == 0 ? 3 : 2;
             int x = argc >= off + 2 ? atoi(argv[off]) : 240;
             int y = argc >= off + 2 ? atoi(argv[off + 1]) : 240;
             int ms = argc >= off + 3 ? atoi(argv[off + 2]) : 5200;
-            if (ms < 0 || ms > 60000) { fprintf(stderr, "ms skal være 0..60000\n"); return 2; }
+            if (ms < 0 || ms > 60000) { fprintf(stderr, "ms must be 0..60000\n"); return 2; }
             hold_ms(x, y, ms);
             printf("gesture center: hold (%d,%d) %d ms\n", x, y, ms);
         }
     } else {
-        fprintf(stderr, "ukendt mode\n");
+        fprintf(stderr, "unknown mode\n");
         return 2;
     }
     close(fd);

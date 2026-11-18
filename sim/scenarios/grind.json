@@ -1,6 +1,6 @@
 {
   "name": "grind",
-  "description": "Grind via TOUCH hold-for-start (650 ms): vægt-ramp → auto-stop",
+  "description": "Grind via TOUCH hold-for-start (650 ms): weight ramp → auto-stop",
   "duration_s": 17,
   "events": [
     {
@@ -87,7 +87,7 @@
       "kind": "sim_log",
       "assert": "activity_stop",
       "activity": "grind",
-      "reason_contains": "vægt",
+      "reason_contains": "weight",
       "t0": 11,
       "t1": 14
     },

@@ -1,6 +1,6 @@
 {
   "name": "brew",
-  "description": "Bryg: pre-infusion plateau (ord51≈358, 6 s) → ekstraktion (≈1346) → prædiktivt vægt-stop → efter-dryp",
+  "description": "Brew: pre-infusion plateau (word51≈358, 6 s) → extraction (≈1346) → predictive weight stop → post-drip",
   "duration_s": 40,
   "events": [
     {
@@ -109,7 +109,7 @@
       "kind": "sim_log",
       "assert": "activity_stop",
       "activity": "brew",
-      "reason_contains": "vægt",
+      "reason_contains": "weight",
       "t0": 29,
       "t1": 34
     },

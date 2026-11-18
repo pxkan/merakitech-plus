@@ -1,6 +1,6 @@
 {
   "name": "steam_auto",
-  "description": "Damp m. wand: mælk-ramp → AUTO-stop ved ord48≥ord25 (ingen stop-write)",
+  "description": "Steam w/ wand: milk ramp → AUTO stop at word48≥word25 (no stop write)",
   "duration_s": 40,
   "events": [
     {
@@ -77,7 +77,7 @@
       "kind": "sim_log",
       "assert": "activity_stop",
       "activity": "steam",
-      "reason_contains": "mælk",
+      "reason_contains": "milk",
       "t0": 30,
       "t1": 35
     },

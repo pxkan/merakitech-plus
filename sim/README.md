@@ -10,8 +10,8 @@
 >
 > **Quick:** `./build.sh host && python3 sim/selftest.py && python3 sim/run_e2e.py --all --quick --parallel 4`
 >
-> Some runner/selftest console output and scenario descriptions are still in Danish (e.g. `SAMLET`
-> = total, `fejl` = errors); scenario assertions that match UI toasts use the UI's own EN/DA strings.
+> Runner/selftest output and scenario descriptions are in English; scenario assertions that match UI
+> toasts use the UI's own EN/DA strings.
 
 **Date:** 2026-11-17 · **Owner:** the test work stream · **Status:** COMPLETE AND VERIFIED LOCALLY
 **Policy:** local development only — **no contact with the physical device**. The UI work stream's
@@ -179,7 +179,7 @@ Scenarios are JSON files in `sim/scenarios/` (they can be written by hand or gen
     {"kind": "word_min_seen", "word": 48, "t0": 30, "t1": 35, "min": 650},
     {"kind": "work_sta_seen", "t0": 9, "t1": 31, "value": "0x1307", "mask": "0x2C00"},
     {"kind": "sim_log", "assert": "write_words", "sub": 11, "words": [880], "t0": 2, "t1": 3},
-    {"kind": "sim_log", "assert": "activity_stop", "activity": "brew", "reason_contains": "vægt", "t0": 29, "t1": 34},
+    {"kind": "sim_log", "assert": "activity_stop", "activity": "brew", "reason_contains": "weight", "t0": 29, "t1": 34},
     {"kind": "config", "field": "brewTemper", "t": 3, "value": 880},
     {"kind": "circle"},
     {"kind": "point", "t": 6, "point": [240, 8], "color": [98, 222, 168], "tol": 30},
@@ -190,7 +190,7 @@ Scenarios are JSON files in `sim/scenarios/` (they can be written by hand or gen
 }
 ```
 
-(`"positiv"` and `"vægt"` are literal values matched by the runner/sim log — "positive" and "weight".)
+(`"positiv"` is a literal gesture-result name matched by the runner — "positive"; `"weight"` is matched against the sim's stop reason.)
 
 **Expect kinds:** `phase`, `phase_hold`, `phase_seq`, `word`, `word_hold`, `word_min_seen`,
 `work_sta_seen`, `stop_ok` (v6.13: `state.stop.ok/fail`), `page`, `view`, `toast`, `lang`, `config`,

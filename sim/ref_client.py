@@ -1,18 +1,18 @@
 #!/usr/bin/env python3
-"""ref_client.py — protokol-level REFERENCE-KLIENT til E2E-testmiljøet.
+"""ref_client.py — protocol-level REFERENCE CLIENT for the E2E test environment.
 
-Beviser mcu_sim'en indtil Fable's ourui SIM-build lander. Implementerer samme
-SIM-kontrakt (CONTRACT.md): state-JSONL pr. frame, fb-buffer-fil, touch via
-evdev-FIFO (tinj_hold-format), ctrl-socket, boot-push, keep-awake (word1=0),
-poll-rotation, write-politik (bånd/trigger/range) og ourui v6's ACK/retransmit-
-politik (150 ms timeout, præcis én retransmit, derefter FAIL).
+Proves mcu_sim until Fable's ourui SIM build lands. Implements the same
+SIM contract (CONTRACT.md): state JSONL per frame, fb buffer file, touch via
+evdev FIFO (tinj_hold format), ctrl socket, boot push, keep-awake (word1=0),
+poll rotation, write policy (band/trigger/range) and ourui v6's ACK/retransmit
+policy (150 ms timeout, exactly one retransmit, then FAIL).
 
-UI'et er en MINIMAL emulering (home + 4 aktivitets-knapper m. 650 ms hold-for-
-start + settings-save via ctrl) med en simpel syntetisk fb-renderer (cirkel-clip
-r234, fase-farver, page-/toast-regioner). Den erstatter IKKE ourui's rigtige
-UI — men den beviser sim + runner + assertions-pipelinen.
+The UI is a MINIMAL emulation (home + 4 activity buttons w/ 650 ms hold-for-
+start + settings save via ctrl) with a simple synthetic fb renderer (circle clip
+r234, phase colours, page/toast regions). It does NOT replace ourui's real
+UI — but it proves the sim + runner + assertions pipeline.
 
-Kun Python stdlib. Ingen enhedskontakt.
+Python stdlib only. No device contact.
 """
 import argparse
 import json
@@ -36,18 +36,18 @@ from proto import (REGN, FB_BYTES, W, H, crc16_modbus, build_frame, build_query,
 
 POLL_INTERVAL = 0.100       # stock: ~100 ms rotation
 POLL_ROTATION = [(0, 56), (33, 7), (56, 56), (33, 7)]
-EXT_INTERVAL = 1.0          # ord 112..114 @ 1 s (som ourui v6)
+EXT_INTERVAL = 1.0          # words 112..114 @ 1 s (as ourui v6)
 KEEPALIVE_INTERVAL = 30.0
-ACK_TIMEOUT = 0.150         # ourui v6: 150 ms, præcis én retransmit
+ACK_TIMEOUT = 0.150         # ourui v6: 150 ms, exactly one retransmit
 LINK_TIMEOUT = 1.5          # ourui: link_up = now-last_rx < 1500 ms
-HOLD_START_MS = 650         # ourui: hold-for-start på aktivitets-knapper
-# v6.14 (UI_v6 §19): tænd/sluk-knappen — samme semantik som ourui/stock
-PW_HOLD_S = 1.5             # stock: 2 sekund-skift (1,0-2,0 s); midten
+HOLD_START_MS = 650         # ourui: hold-for-start on activity buttons
+# v6.14 (UI_v6 §19): the power button — same semantics as ourui/stock
+PW_HOLD_S = 1.5             # stock: 2-second switch (1.0-2.0 s); the midpoint
 PW_GAP_S = 0.080            # cmd8 → usleep(80 ms) → cmd6 sub0 len2 [0,0]
-PW_WAKE_S = 10.0            # TÆNDER…: så længe ventes på ord0=1
-PW_SEEN_S = 0.6             # ord0=1 set så længe (m. forbindelse) → vågen
+PW_WAKE_S = 10.0            # TÆNDER… (turning on): how long to wait for word0=1
+PW_SEEN_S = 0.6             # word0=1 seen this long (w/ link) → awake
 
-# ourui v6 fase-farver (RGB) — bruges til fb-rendering + region-assertions
+# ourui v6 phase colours (RGB) — used for fb rendering + region assertions
 PHASE_RGB = {
     "OFFLINE": (90, 90, 96), "SLEEP": (70, 80, 120), "ERROR": (255, 96, 96),
     "HEAT": (255, 186, 84), "READY": (98, 222, 168), "GRIND": (174, 228, 112),
@@ -63,7 +63,7 @@ PHASE_BG = {
 PAGE_RGB = {"home": (40, 44, 52), "settings": (52, 44, 60),
             "detail": (60, 52, 44), "sys": (44, 52, 60), "diag": (36, 40, 44),
             "bye": (60, 40, 40), "off": (16, 16, 18)}
-# home-knapper (x, y, r) — reference-layout (ikke ourui's rigtige layout)
+# home buttons (x, y, r) — reference layout (not ourui's real layout)
 BUTTONS = {"grind": (130, 160, 58), "brew": (350, 160, 58),
            "water": (130, 330, 58), "steam": (350, 330, 58)}
 SETTINGS_BTN = (240, 430, 26)
@@ -94,7 +94,7 @@ class RefClient:
         self.rx_ok = 0
         self.rx_bad = 0
         self.last_rx = -1e9
-        # write-kø (ourui v6-politik)
+        # write queue (ourui v6 policy)
         self.wq = None            # {sub, words, sent, tries, raw}
         self.c6_ok = self.c6_retx = self.c6_fail = self.c6_block = 0
         # UI-state
@@ -104,20 +104,20 @@ class RefClient:
         self.save_state = None    # {state: pending|ok|fail, param, value}
         self.activity_pending = None
         self.activity_seen = False
-        # v6.13: manuel STOP (samme state-felt som ourui's stop:{req,ok,fail})
+        # v6.13: manual STOP (same state field as ourui's stop:{req,ok,fail})
         self.stop_req = self.stop_ok = self.stop_fail = 0
-        self.stop_pending = None      # aktiv stop-bestilling (kind)
+        self.stop_pending = None      # active stop request (kind)
         self.stop_last = None
         self.stop_t0 = 0.0
-        self._stop_sw_followup = False  # vand: sub19=[0] efter sub16-ACK
+        self._stop_sw_followup = False  # water: sub19=[0] after the sub16 ACK
         self.view_bye = False
-        # v6.14: tænd/sluk-knappen (samme state-felt som ourui's power:{...})
+        # v6.14: the power button (same state field as ourui's power:{...})
         self.pw_state = "on"          # on|turning_off|off|turning_on
         self.pw_key_down = False
         self.pw_fired = False
         self.pw_blk_shown = False
         self.pw_push_set = False
-        self.pw_f8 = None             # sidste cmd8-frame (til ack8-match)
+        self.pw_f8 = None             # last cmd8 frame (for ack8 matching)
         self.pw_t_press = self.pw_t_down = 0.0
         self.pw_t_req = self.pw_t_state = self.pw_t_on1 = 0.0
         self.pw_n = {"presses": 0, "short": 0, "offs": 0, "ons": 0,
@@ -158,7 +158,7 @@ class RefClient:
             if not tp.exists():
                 os.mkfifo(str(tp))
             self.touch_fd = os.open(str(tp), os.O_RDONLY | os.O_NONBLOCK)
-            # hold FIFO'en åben i skrive-ende så reads ikke EOF'er
+            # keep the FIFO open at the write end so reads don't hit EOF
             self.touch_wfd = os.open(str(tp), os.O_WRONLY | os.O_NONBLOCK)
         self.ctrl_listener = None
         self.ctrl_clients = {}
@@ -169,7 +169,7 @@ class RefClient:
             self.ctrl_listener.bind(str(cp))
             self.ctrl_listener.listen(4)
             self.ctrl_listener.setblocking(False)
-        self.log(f"reference-klient klar: tty={args.tty} config={self.cfg_path}")
+        self.log(f"reference client ready: tty={args.tty} config={self.cfg_path}")
 
     def log(self, msg):
         print(f"[ref_client t={self.now:7.2f}] {msg}", flush=True)
@@ -196,7 +196,7 @@ class RefClient:
         self.lang = int(self.cfg.get("language", 0))
 
     def config_set(self, field, value):
-        """Atomisk config-skrivning (tmp+rename, som ourui/REVERT-mønsteret)."""
+        """Atomic config write (tmp+rename, like the ourui/REVERT pattern)."""
         cfg = dict(self.cfg)
         cfg[field] = value
         tmp = self.cfg_path.with_suffix(".json.tmp")
@@ -226,14 +226,14 @@ class RefClient:
         try:
             os.write(self.ufd, data)
         except OSError as e:
-            self.log(f"uart write-fejl: {e}")
+            self.log(f"uart write error: {e}")
 
     def frame_query(self, sub, n):
         self.uart_send(build_query(sub, n))
 
     def wq_push(self, sub, words, intent=()):
-        """Frame-politik før send (ourui v6 wq_push_t): bånd + trigger + range.
-        intent = mængde af ord der eksplicit må være start/trigger-ord."""
+        """Frame policy before sending (ourui v6 wq_push_t): band + trigger + range.
+        intent = set of words that may explicitly be start/trigger words."""
         n = len(words)
         end = sub + n
         if not (end < 33 or end in (113, 114, 115)):
@@ -280,7 +280,7 @@ class RefClient:
                                    "param": (self.save_state or {}).get("param"),
                                    "value": (self.save_state or {}).get("value")}
                 if self.pw_state == "turning_off":
-                    self.pw_fail()          # v6.14: PowerOff kom ikke igennem
+                    self.pw_fail()          # v6.14: PowerOff did not get through
                 elif self.stop_pending:
                     self.stop_fail += 1
                     self.stop_pending = None
@@ -288,7 +288,7 @@ class RefClient:
                     self.toast_set("STOP: NO ACK · TRY AGAIN", "err")
                 else:
                     self.toast_set("GEM FEJLET · INGEN ACK · INTET GEMT", "err")
-                self.log(f"write FAIL (ingen ACK): sub{self.wq['sub']}")
+                self.log(f"write FAIL (no ACK): sub{self.wq['sub']}")
                 self.wq = None
 
     def on_ack(self, sub, words):
@@ -297,13 +297,13 @@ class RefClient:
             self.wq = None
             if (self.pw_state == "turning_off" and self.pw_push_set
                     and sub == 0 and list(words) == [0, 0]):
-                # v6.14: PowerOff ACK'et → SLUKKET (MCU'en går i dvale)
+                # v6.14: PowerOff ACKed → OFF (the MCU goes into deep sleep)
                 self.pw_state = "off"
                 self.pw_t_state = self.now
                 self.pw_t_on1 = 0.0
             if self._stop_sw_followup and sub == 16 and list(words) == [0]:
                 self._stop_sw_followup = False
-                self.wq_push(19, [0])      # vand-stop del 2 (ord19≠0 ved stop)
+                self.wq_push(19, [0])      # water stop part 2 (word19≠0 at stop)
             if self.save_state and self.save_state.get("state") == "pending":
                 p = self.save_state.get("param")
                 v = self.save_state.get("value")
@@ -327,25 +327,25 @@ class RefClient:
                 self.on_ack(sub, payload)
             elif cmd == 0x89:
                 if self.version_sent:
-                    # MCU'en sender 0x89 igen efter gennemført håndtryk →
-                    # den er genstartet (reboot/link reopen): re-handshake
-                    # + boot-push som ved ny connect (PARITY §1.4).
+                    # the MCU sends 0x89 again after a completed handshake →
+                    # it has restarted (reboot/link reopen): re-handshake
+                    # + boot push as on a new connect (PARITY §1.4).
                     self.version_sent = False
                     self.boot_pushed = False
-                    self.log("MCU-genstart detekteret (0x89 igen) → re-handshake + boot-push")
+                    self.log("MCU restart detected (0x89 again) → re-handshake + boot push")
                 if not self.version_sent:
                     ver = str(self.cfg.get("softversion", "1.1.1-69"))
                     self.uart_send(build_version_response(ver))
                     self.version_sent = True
-                    self.log(f"versions-svar sendt: {ver}")
+                    self.log(f"version reply sent: {ver}")
             elif cmd == 0x88:
                 self.rx_ok += 1
                 if self.pw_f8 and payload == self.pw_f8[3:13]:
-                    self.pw_n["ack8"] += 1    # v6.14: MCU'ens 0x88-kvittering
+                    self.pw_n["ack8"] += 1    # v6.14: the MCU's 0x88 acknowledgement
         self.rx_bad = self.parser.crc_bad
 
     def boot_push(self):
-        """PARITY §1.4: sub1 len30 + sub112 len3 ved opstart (fra config-mirror)."""
+        """PARITY §1.4: sub1 len30 + sub112 len3 at startup (from the config mirror)."""
         words = config_to_words(self.cfg)
         mirror = [0] * 31
         for w, v in words.items():
@@ -361,9 +361,9 @@ class RefClient:
         self.next_awake = self.now + KEEPALIVE_INTERVAL
         self.log("boot-push: sub1 len30 + sub112 len3 + power/awake")
 
-    # ------------------------------------------------------------ handlinger
+    # ------------------------------------------------------------ actions
     def act_push(self, kind):
-        # STOP må aldrig blokeres af aktiv fase (ourui v6 act_push_steam_stop)
+        # STOP must never be blocked by an active phase (ourui v6 act_push_steam_stop)
         if kind == "steam_stop":
             g = lambda k, d: int(self.cfg.get(k, d))
             mt = min(700, max(450, g("AtuoSteamTarge", 650)))
@@ -373,9 +373,9 @@ class RefClient:
                 self.toast_set("STOP: DAMP", "ok")
             return ok
         if kind in ("grind_stop", "brew_stop", "water_stop"):
-            # v6.13 (UI_v6 §18): stop-frames = kun nuller, ingen intent,
-            # samme write-kø/ACK-politik som alt andet. Vand: sub16=[0]
-            # (+ sub19=[0] hvis ord19≠0 — aldrig en halv vand-stop).
+            # v6.13 (UI_v6 §18): stop frames = zeros only, no intent,
+            # same write-queue/ACK policy as everything else. Water: sub16=[0]
+            # (+ sub19=[0] if word19≠0 — never half a water stop).
             if kind == "grind_stop":
                 ok = self.wq_push(6, [0])
             elif kind == "brew_stop":
@@ -408,7 +408,7 @@ class RefClient:
         if kind == "grind":
             ok = self.wq_push(3, [1, g("autoGrindWeight", 185), 60, 1], intent=(3, 6))
         elif kind == "brew":
-            # sync kun hvis mirror afviger fra config (som ourui v6 act_push)
+            # sync only if the mirror differs from config (as ourui v6 act_push)
             if self.reg_seen[23] and self.regs[23] != g("autobrewWeight", 360):
                 if not self.wq_push(23, [g("autobrewWeight", 360)]):
                     return False
@@ -439,7 +439,7 @@ class RefClient:
         return ok
 
     def _stop_running(self, kind):
-        """v6.13: samme bits som ourui's stop_running() (confirmation-vagten)."""
+        """v6.13: same bits as ourui's stop_running() (the confirmation guard)."""
         ws = self.regs[33]
         if kind == "grind_stop":
             return bool(ws & 0x0040)
@@ -449,14 +449,14 @@ class RefClient:
             return (ws & 0x000A) == 0x000A
         return False
 
-    # ------------------------------------------------------------ v6.14: tænd/sluk
-    # Samme semantik som ourui v6.14 / stock (UI_v6 §19.1): HOLD 1,5 s →
-    # cmd8 (alarm 0/0/0) → ≥80 ms → cmd6 sub0 len2 [0,0] → ACK → SLUKKET.
-    # Spærret under bryg/damp/kværn (stock stopper ALDRIG en aktivitet ved
-    # sluk; varmt vand spærrer ikke). Keep-awake pauserer mens der er slukket.
-    # MCU'en vågner selv (knap-hold/alarm → reset); svarer den ord0=1 i 0,6 s
-    # → PowerOn (sub0=[1] + sub1=[0]) + HJEM. Re-push sker via 0x89-runden
-    # (rx_feed ovenfor: boot_pushed=False → boot_push() igen).
+    # ------------------------------------------------------------ v6.14: power on/off
+    # Same semantics as ourui v6.14 / stock (UI_v6 §19.1): HOLD 1.5 s →
+    # cmd8 (alarm 0/0/0) → ≥80 ms → cmd6 sub0 len2 [0,0] → ACK → OFF.
+    # Blocked during brew/steam/grind (stock NEVER stops an activity on
+    # power-off; hot water does not block). Keep-awake pauses while off.
+    # The MCU wakes by itself (button hold/alarm → reset); if it answers word0=1
+    # for 0.6 s → PowerOn (sub0=[1] + sub1=[0]) + HOME. Re-push happens via the
+    # 0x89 round (rx_feed above: boot_pushed=False → boot_push() again).
     def pw_busy(self):
         ws = self.regs[33] if self.reg_seen[33] else 0
         return bool((ws & 0x1000) or (ws & 0x4000)
@@ -474,7 +474,7 @@ class RefClient:
             self.pw_n["presses"] += 1
             if self.pw_state == "off":
                 self.pw_fired = True
-                self.pw_state = "turning_on"      # TÆNDER… (MCU'en vågner selv)
+                self.pw_state = "turning_on"      # TÆNDER… (turning on; the MCU wakes by itself)
                 self.pw_t_state = self.now
                 self.pw_t_on1 = 0.0
         elif val == 0 and self.pw_key_down:
@@ -497,8 +497,8 @@ class RefClient:
         self.pw_t_on1 = 0.0
         self.pw_n["ons"] += 1
         self.page = "home"
-        self.uart_send(build_frame(0x06, 0, [1]))   # PowerOn (som app_init)
-        self.uart_send(build_frame(0x06, 1, [0]))   # vågen
+        self.uart_send(build_frame(0x06, 0, [1]))   # PowerOn (as app_init)
+        self.uart_send(build_frame(0x06, 1, [0]))   # awake
         self.next_awake = self.now + KEEPALIVE_INTERVAL
         self.toast_set("MASKINEN ER TÆNDT", "ok")
 
@@ -513,7 +513,7 @@ class RefClient:
         lt = time.localtime()
         payload = bytes([lt.tm_year & 0xFF, (lt.tm_year >> 8) & 0xFF,
                          lt.tm_mon, lt.tm_mday, lt.tm_hour, lt.tm_min,
-                         lt.tm_sec, 0, 0, 0])       # alarm 0/0/0 (ingen ugeplan)
+                         lt.tm_sec, 0, 0, 0])       # alarm 0/0/0 (no weekly schedule)
         self.pw_f8 = build_power_frame(payload)
         self.uart_send(self.pw_f8)
         self.pw_state = "turning_off"
@@ -526,7 +526,7 @@ class RefClient:
     def pw_step(self):
         if self.pw_state == "on" and self.pw_key_down and not self.pw_fired:
             if self.pw_busy():
-                self.pw_t_down = self.now     # stock: e60 tæller ikke under aktivitet
+                self.pw_t_down = self.now     # stock: e60 does not count during activity
                 if self.now - self.pw_t_press >= PW_HOLD_S and not self.pw_blk_shown:
                     self.pw_blk_shown = True
                     self.pw_n["blocked"] += 1
@@ -543,9 +543,9 @@ class RefClient:
                 self.pw_push_set = True
                 if not self.wq_push(0, [0, 0]):
                     self.pw_fail()
-            # ACK → off i on_ack(); FAIL → pw_fail() i wq_step()
+            # ACK → off in on_ack(); FAIL → pw_fail() in wq_step()
         elif self.pw_state == "off":
-            if self.pw_mcu_on():              # MCU'en vågnede af sig selv (alarm/knap)
+            if self.pw_mcu_on():              # the MCU woke by itself (alarm/button)
                 self.pw_n["auto_on"] += 1
                 self.pw_on()
         elif self.pw_state == "turning_on":
@@ -558,7 +558,7 @@ class RefClient:
                 self.pw_t_on1 = 0.0
 
     def save_param(self, pid, value):
-        """Settings-GEM: MCU-write først (hvor ordet kendes), så config (PARITY §5.8)."""
+        """Settings SAVE: MCU write first (where the word is known), then config (PARITY §5.8)."""
         prm = self.params.get(pid)
         if not prm:
             self.toast_set(f"UKENDT PARAMETER {pid}", "err")
@@ -575,18 +575,18 @@ class RefClient:
                 return False
         self.save_state = {"state": "pending", "param": pid, "value": value}
         wr = prm.get("write") or {}
-        # hotwater_mode: parity_spec's write-blok (sub9 len11) er en START-blok,
-        # ikke en settings-write — ourui v6 persisterer KUN config (M_NONE,
-        # "OURUI STARTER KUN AUTO"). Behandles derfor som config-only.
+        # hotwater_mode: parity_spec's write block (sub9 len11) is a START block,
+        # not a settings write — ourui v6 persists config ONLY (M_NONE,
+        # "OURUI STARTER KUN AUTO" / "STARTS AUTO ONLY"). Hence treated as config-only.
         config_only_override = {"hotwater_mode"}
         if wr.get("sub") is None or not prm.get("words") or pid in config_only_override:
-            # config-only (tier 2): ingen MCU-write
+            # config-only (tier 2): no MCU write
             self.config_set(prm["config_field"], value)
             self.save_state = {"state": "ok", "param": pid, "value": value}
             self.toast_set("GEMT · STOCK-UI: EFTER GENSTART", "ok")
             return True
         if prm.get("packing"):
-            # byte-pakket word112/113: bevar øvrige bytes fra config
+            # byte-packed word112/113: keep the other bytes from config
             sw = int(self.cfg.get("preInfusionSwitch", 1))
             pr = int(self.cfg.get("preInfusionPressure", 4))
             ti = int(self.cfg.get("preInfusionTime", 6))
@@ -609,7 +609,7 @@ class RefClient:
             off = wr.get("offset", 0)
             words[off] = value
             if pid == "grind_mode":
-                words = [value, 0]            # sub2 len2 jf. parity_spec (word3=0)
+                words = [value, 0]            # sub2 len2 per parity_spec (word3=0)
         ok = self.wq_push(sub, words)
         if not ok:
             self.save_state = {"state": "fail", "param": pid, "value": value}
@@ -686,9 +686,9 @@ class RefClient:
                 pend_down = pend_up = False
 
     # ------------------------------------------------------------ fb-rendering
-    # Rendereren er en simpel syntetisk emulering (IKKE ourui's rigtige UI):
-    # cirkel-clip r234, fase-ring + baggrund, page-region (top), knapper, toast.
-    # Base-frames caches pr. (fase, page) så kun små overlays tegnes pr. frame.
+    # The renderer is a simple synthetic emulation (NOT ourui's real UI):
+    # circle clip r234, phase ring + background, page region (top), buttons, toast.
+    # Base frames are cached per (phase, page) so only small overlays are drawn per frame.
     def _build_base(self, ph, page):
         bg = rgb2bgra(*PHASE_BG.get(ph, (20, 20, 24)))
         ring = rgb2bgra(*PHASE_RGB.get(ph, (128, 128, 128)))
@@ -701,7 +701,7 @@ class RefClient:
         for y in range(H):
             dy = y - cy + 0.5
             row = y * W * 4
-            # række-spans: udenfor | ring | indre
+            # row spans: outside | ring | inner
             dx_max = int((r_safe * r_safe - dy * dy) ** 0.5) if abs(dy) < r_safe else -1
             dx_in = int((r_in * r_in - dy * dy) ** 0.5) if abs(dy) < r_in else -1
             for x in range(W):
@@ -731,7 +731,7 @@ class RefClient:
     def render(self):
         t_start = time.monotonic()
         ph = phase_of(self.regs, self.link_up())
-        page = "off" if self.pw_state != "on" else self.page   # v6.14: sluk-side
+        page = "off" if self.pw_state != "on" else self.page   # v6.14: power-off page
         key = (ph, page)
         if not hasattr(self, "_base_cache"):
             self._base_cache = {}
@@ -781,9 +781,9 @@ class RefClient:
         if not self.state_f:
             return
         ph = phase_of(self.regs, self.link_up())
-        # v6.6: spejler nu også trigger-/flag-/wand-ordene (3/6/9/16/19/22/24/
-        # 44/46) som ourui eksporterer — scenariernes word-checks måler dermed
-        # ægte værdier i stedet for runnerens manglende-nøgle=0 (additivt).
+        # v6.6: now also mirrors the trigger/flag/wand words (3/6/9/16/19/22/24/
+        # 44/46) that ourui exports — so the scenarios' word checks measure
+        # real values instead of the runner's missing-key=0 (additive).
         shown = [0, 1, 3, 4, 6, 9, 11, 14, 16, 17, 19, 22, 23, 24, 25, 33,
                  34, 35, 36, 38, 39, 40, 42, 44, 46, 47, 48, 50, 51, 52, 58,
                  112, 113, 114]
@@ -826,15 +826,15 @@ class RefClient:
         if cmd == "action":
             return {"ok": self.act_push(req.get("name", ""))}
         if cmd == "key":
-            # v6.14: tænd/sluk-knappen (samme krog som ourui's SIM-build):
+            # v6.14: the power button (same hook as ourui's SIM build):
             # {"cmd":"key","value":1|0[,"code":116]}
             v = int(req.get("value", -1))
             if v not in (0, 1):
-                return {"ok": False, "error": "value skal vaere 0 eller 1"}
+                return {"ok": False, "error": "value must be 0 or 1"}
             self.pw_key(v)
             return {"ok": True, "power": self.pw_state}
         if cmd == "raw_write":
-            # test-hook: emulerer stock-UI writes (fx MachSleep sub1=[1])
+            # test hook: emulates stock-UI writes (e.g. MachSleep sub1=[1])
             return {"ok": self.wq_push(int(req.get("sub", 0)),
                                        [int(w) for w in req.get("words", [])])}
         if cmd == "save":
@@ -848,7 +848,7 @@ class RefClient:
             if ms < HOLD_START_MS:
                 self.touch_event("up", x, y)
             else:
-                # simuleret hold: down nu, up efter ms via intern timer
+                # simulated hold: down now, up after ms via an internal timer
                 self._hold_up_at = self.now + ms / 1000.0
             return {"ok": True}
         if cmd == "boot_flag":
@@ -872,10 +872,10 @@ class RefClient:
             self.emit_state()
             return {"ok": True}
         if cmd == "layout":
-            # v6.5-scenarios: samme krog-form som ourui's SIM-build (CONTRACT
-            # TILLÆG v6.4 B), men med REFERENCE-layoutet (BUTTONS ovenfor) —
-            # ikke ourui's rigtige geometri. Bruges af scenariernes touch-
-            # hændelser med "layout"-navn i stedet for syntetiske koordinater.
+            # v6.5-scenarios: same hook shape as ourui's SIM build (CONTRACT
+            # ADDENDUM v6.4 B), but with the REFERENCE layout (BUTTONS above) —
+            # not ourui's real geometry. Used by the scenarios' touch
+            # events with a "layout" name instead of synthetic coordinates.
             targets = [{"name": n, "x": bx, "y": by, "r": br}
                        for n, (bx, by, br) in BUTTONS.items()]
             bx, by, br = SETTINGS_BTN
@@ -885,7 +885,7 @@ class RefClient:
             self.exit_code = int(req.get("code", 0))
             self.running = False
             return {"ok": True}
-        return {"ok": False, "error": f"ukendt cmd {cmd}"}
+        return {"ok": False, "error": f"unknown cmd {cmd}"}
 
     def ctrl_io(self):
         if self.ctrl_listener:
@@ -923,12 +923,12 @@ class RefClient:
                 except OSError:
                     pass
 
-    # ------------------------------------------------------------ hoved-loop
+    # ------------------------------------------------------------ main loop
     def run(self):
         self._hold_up_at = None
         self._bye_back_at = None
         self._exit_at = None
-        # vent på 0x89 → versions-svar, så boot-push (sim rækkefølge)
+        # wait for 0x89 → version reply, then boot push (sim order)
         self.next_poll = 0.3
         self.next_ext = 1.0
         while self.running:
@@ -971,14 +971,14 @@ class RefClient:
                     self.next_ext = self.now + EXT_INTERVAL
                     self.frame_query(112, 3)
             if self.boot_pushed and self.now >= self.next_awake \
-                    and self.pw_state == "on":    # v6.14: keep-awake pause i dvale
+                    and self.pw_state == "on":    # v6.14: keep-awake paused in deep sleep
                 if self.wq is None:
                     self.wq_push(1, [0])          # keep-awake word1=0 (v6-fix)
                     self.next_awake = self.now + KEEPALIVE_INTERVAL
                 else:
-                    self.next_awake = self.now + 0.5   # prøv igen snart (≤30 s-gap)
+                    self.next_awake = self.now + 0.5   # retry soon (≤30 s gap)
             self.wq_step()
-            self.pw_step()                        # v6.14: tænd/sluk-knappen
+            self.pw_step()                        # v6.14: the power button
             self.inp_read()
             if self._hold_up_at and self.now >= self._hold_up_at:
                 self._hold_up_at = None
@@ -989,7 +989,7 @@ class RefClient:
                 self.page = "home"
             if self._exit_at and self.now >= self._exit_at:
                 self.running = False
-            # aktivitet færdig → toast + pending ryddes (først EFTER set-fase set)
+            # activity done → toast + pending cleared (only AFTER the active phase was seen)
             ph = phase_of(self.regs, self.link_up())
             if self.activity_pending:
                 if ph in ("GRIND", "PRE", "EXT", "WATER", "STEAM"):
@@ -999,8 +999,8 @@ class RefClient:
                     self.toast_set(f"FÆRDIG: {self.activity_pending.upper()}", "ok")
                     self.activity_pending = None
                     self.activity_seen = False
-            # v6.13: stop-bekræftelse (ourui stop_step): først når MCU'en har
-            # ryddet bits'ene — et ACK alene tæller ikke. 5 s uden clear = fail.
+            # v6.13: stop confirmation (ourui stop_step): only once the MCU has
+            # cleared the bits — an ACK alone does not count. 5 s without clear = fail.
             if self.stop_pending:
                 if not self._stop_running(self.stop_pending):
                     self.stop_ok += 1
@@ -1031,7 +1031,7 @@ class RefClient:
 
 
 def main():
-    ap = argparse.ArgumentParser(description="Reference-klient til mcu_sim (E2E)")
+    ap = argparse.ArgumentParser(description="Reference client for mcu_sim (E2E)")
     ap.add_argument("--tty", default=os.environ.get("OURUI_SIM_TTY"))
     ap.add_argument("--state", default=os.environ.get("OURUI_SIM_STATE"))
     ap.add_argument("--fb", default=os.environ.get("OURUI_SIM_FB"))
@@ -1044,12 +1044,12 @@ def main():
     ap.add_argument("--spec")
     args = ap.parse_args()
     if not args.tty:
-        print("OURUI_SIM_TTY/--tty mangler", file=sys.stderr)
+        print("OURUI_SIM_TTY/--tty missing", file=sys.stderr)
         sys.exit(2)
     try:
         client = RefClient(args)
     except OSError as e:
-        print(f"init-fejl: {e}", file=sys.stderr)
+        print(f"init error: {e}", file=sys.stderr)
         sys.exit(3)
     try:
         sys.exit(client.run())

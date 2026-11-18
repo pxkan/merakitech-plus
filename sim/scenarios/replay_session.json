@@ -1,6 +1,6 @@
 {
   "name": "replay_session",
-  "description": "REPLAY serve: session sleep/drain-trace (8×): SLEEP det meste af tiden (keep-awake writes giver kortvarige flickers — dokumenteret), kølende boilers",
+  "description": "REPLAY serve: session sleep/drain trace (8×): SLEEP most of the time (keep-awake writes cause brief flickers — documented), cooling boilers",
   "duration_s": 20,
   "events": [
     {

@@ -1,6 +1,6 @@
 {
   "name": "steam_manual_stop",
-  "description": "Damp m. wand → MANUEL stop (sub24 len8 ord24=0) før setpoint",
+  "description": "Steam w/ wand → MANUAL stop (sub24 len8 word24=0) before setpoint",
   "duration_s": 12,
   "events": [
     {
@@ -79,7 +79,7 @@
       "kind": "sim_log",
       "assert": "activity_stop",
       "activity": "steam",
-      "reason_contains": "manuel",
+      "reason_contains": "manual",
       "t0": 5.5,
       "t1": 8
     },

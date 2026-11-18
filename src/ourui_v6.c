@@ -1,152 +1,152 @@
-/* ourui_v6.c — Meraki+ (internt kode-navn: ourui): eget display-UI til den runde
- * 480x480-skærm, v6.14: feature-paritet (settings + aktivitets-styring), eget visuelt
- * design-system, boot-slot-integration, produktnavn + to sprog — og fra v6.4 et SIM-build.
+/* ourui_v6.c — Meraki+ (internal code name: ourui): a custom display UI for the round
+ * 480x480 screen, v6.14: feature parity (settings + activity control), its own visual
+ * design system, boot-slot integration, product name + two languages — and from v6.4 a SIM build.
  *
- * v6.14 = v6.13 + den FYSISKE TÆND/SLUK-KNAP (UI_v6.md "CHANGES-v6.14" + §19). Brugerfejl: knappen virkede ikke i ourui —
- *  ourui læste kun touch-noden (event0); knappen er k62091-noden (event1, EV_KEY), som stock's app_powerKey_thread (0x140AB4)
- *  læser. Stock-semantikken er reverset (dealPowerState 0x14911C / powerOff 0x149074 / SleepRefresh 0x149268) og spejlet:
- *  HOLD knappen (stock: to sekund-skift = 1-2 s; ourui 1,5 s) -> cmd8 tid/alarm-frame (alarm 0/0/0 = ingen) + 80 ms ->
- *  cmd6 sub0 len2 = [0, 0] (ord 0 = power off, ord 1 = vågen) -> SLUKKET-visning, baggrundslys slukkes, keep-awake på pause.
- *  Spærret (som stock's isExtractionOrSteamSwitchOn 0x1481E0) mens bryg/damp/kværn kører — stock stopper ALDRIG en aktivitet.
- *  MCU'en (sleep-task 0x2F52) sletter selv status-tasken (ingen UART-svar), nulstiller work_sta + udgange og vågner KUN ved et
- *  hold på knappen (>= 0,8 s, egen GPIO PC.8 -> MCU-reset 0x326) eller en alarm. ourui: knap igen -> TÆNDER… -> når
- *  controlleren svarer med ord 0 = 1 -> PowerOn (sub0=[1] + sub1=[0], som ved opstart) -> HJEM. Ingen SoC-suspend
- *  (stock: echo mem > /sys/power/state + killall demo_v9) — net-vagt og telnet lever videre; kun baggrundslyset slukkes.
- * v6.13 = v6.12 + MANUEL STOP for VAND, BRYG og KVÆRN (UI_v6.md "CHANGES-v6.13" + §18). Brugerfejl: varmt vand kunne ikke
- *  stoppes fra skærmen — kun damp havde en STOP-knap. Stop-ordene er reverset fra MCU-firmwaren og krydstjekket mod
- *  stock-UI'ets egne stop-kald: VAND cmd6 sub16 len1 ord16=0 (+ sub19 len1 ord19=0, hvis ord 19 != 0), BRYG cmd6 sub22 len1
- *  ord22=0, KVÆRN cmd6 sub6 len1 ord6=0 (adresser ved act_push_stop()). HJEM viser STOP-knappen (STOP VAND / STOP BRYG /
- *  STOP KVÆRN) samme sted som STOP DAMP, mens aktivitetens bits står; samtidig latchet damp = to knapper side om side.
- *  Tryk -> toast "STOPPER …" -> frame (CRC + ACK + én retransmit) -> "… STOPPET", når MCU'en har ryddet bits'ene; ellers
- *  "STOP: INTET SVAR" / "STOP IKKE BEKRÆFTET" (5 s). Auto-stop er uændret (ourui sender intet, når MCU'en selv stopper).
- *  v6.12 = v6.11-UI'et (kilde = ourui_v6_12.c, binær 725386cc…) + boot-agentens gestus-fix (boot/GESTUS-FIX.md).
+ * v6.14 = v6.13 + the PHYSICAL POWER BUTTON (UI_v6.md "CHANGES-v6.14" + §19). User bug: the button did nothing in ourui —
+ *  ourui only read the touch node (event0); the button is the k62091 node (event1, EV_KEY), which stock's app_powerKey_thread (0x140AB4)
+ *  reads. The stock semantics are reversed (dealPowerState 0x14911C / powerOff 0x149074 / SleepRefresh 0x149268) and mirrored:
+ *  HOLD the button (stock: two one-second ticks = 1-2 s; ourui 1.5 s) -> cmd8 time/alarm frame (alarm 0/0/0 = none) + 80 ms ->
+ *  cmd6 sub0 len2 = [0, 0] (word 0 = power off, word 1 = awake) -> OFF view, backlight off, keep-awake paused.
+ *  Blocked (like stock's isExtractionOrSteamSwitchOn 0x1481E0) while brew/steam/grind is running — stock NEVER stops an activity.
+ *  The MCU (sleep task 0x2F52) deletes the status task itself (no UART replies), resets work_sta + outputs and wakes ONLY on a
+ *  hold of the button (>= 0.8 s, its own GPIO PC.8 -> MCU reset 0x326) or an alarm. ourui: button again -> TURNING ON… -> when
+ *  the controller replies with word 0 = 1 -> PowerOn (sub0=[1] + sub1=[0], as at boot) -> HOME. No SoC suspend
+ *  (stock: echo mem > /sys/power/state + killall demo_v9) — net watchdog and telnet keep running; only the backlight goes off.
+ * v6.13 = v6.12 + MANUAL STOP for WATER, BREW and GRIND (UI_v6.md "CHANGES-v6.13" + §18). User bug: hot water could not be
+ *  stopped from the screen — only steam had a STOP button. The stop words are reversed from the MCU firmware and cross-checked against
+ *  the stock UI's own stop calls: WATER cmd6 sub16 len1 word16=0 (+ sub19 len1 word19=0, if word 19 != 0), BREW cmd6 sub22 len1
+ *  word22=0, GRIND cmd6 sub6 len1 word6=0 (addresses at act_push_stop()). HOME shows the STOP button (STOP WATER / STOP BREW /
+ *  STOP GRIND) in the same place as STOP STEAM while the activity's bits are set; with latched steam at the same time = two buttons side by side.
+ *  Press -> toast "STOPPING …" -> frame (CRC + ACK + one retransmit) -> "… STOPPED" once the MCU has cleared the bits; otherwise
+ *  "STOP: NO REPLY" / "STOP NOT CONFIRMED" (5 s). Auto-stop is unchanged (ourui sends nothing when the MCU stops by itself).
+ *  v6.12 = the v6.11 UI (source = ourui_v6_12.c, binary 725386cc…) + the boot agent's gesture fix (boot/GESTUS-FIX.md).
  *
- * v6.10 = v6.9 + TRYK-ESTIMAT i bar (UI_v6.md "CHANGES-v6.10" + §16): "TRYK* UKALIBRERET" er erstattet af "≈BAR · EST.".
- *  Ét lineært anker: pre-infusion-plateauet i optagelsen (BREW.md §6: ord 51 = 358 rå i 6,06 s) = config
- *  preInfusionPressure (4 bar) -> k = preInfusionPressure / P_ANCHOR_RAW bar pr. rå enhed (0,01117). Ankeret læses fra
- *  config (SET[S_PIPRESS]), så en ændret config ændrer skalaen. Over P_EST_MAX (20 bar) er den lineære værdi ikke fysisk
- *  (deadhead-/vedligehold-pulser op til 16670 rå = 186 bar): BAR-feltet viser "PULS", DIAGNOSE "VEDLIGEHOLD-PULS" — aldrig
- *  et tal. Grundlaget står på DIAGNOSE (ny blok TRYK · ESTIMAT) og i en toast ved tryk på chartet/BAR-feltet. RÅ-visningen
- *  (DIAGNOSE → GRAF) viser ord 51 som rå tal. Afsnittet "v6.10: tryk-estimat" nedenfor har konstanterne og forbeholdene.
- *  Styring, writes, auto-stop og tærskler læser fortsat kun rå værdier — v6.10 ændrer kun det, der vises.
+ * v6.10 = v6.9 + PRESSURE ESTIMATE in bar (UI_v6.md "CHANGES-v6.10" + §16): "PRESSURE* UNCALIBRATED" is replaced by "≈BAR · EST.".
+ *  One linear anchor: the pre-infusion plateau in the capture (BREW.md §6: word 51 = 358 raw at 6.06 s) = config
+ *  preInfusionPressure (4 bar) -> k = preInfusionPressure / P_ANCHOR_RAW bar per raw unit (0.01117). The anchor is read from
+ *  config (SET[S_PIPRESS]), so a changed config changes the scale. Above P_EST_MAX (20 bar) the linear value is not physical
+ *  (deadhead/maintenance pulses up to 16670 raw = 186 bar): the BAR field shows "PULSE", DIAGNOSTICS "MAINTENANCE PULSE" — never
+ *  a number. The basis is shown on DIAGNOSTICS (new block PRESSURE · ESTIMATE) and in a toast when tapping the chart/BAR field. The RAW view
+ *  (DIAGNOSTICS → GRAPH) shows word 51 as raw numbers. The section "v6.10: pressure estimate" below has the constants and caveats.
+ *  Control, writes, auto-stop and thresholds still read only raw values — v6.10 only changes what is displayed.
  *
- * v6.9 = v6.8 + VISNINGS-KONDITIONERING af grafen og hero-tallet (UI_v6.md "CHANGES-v6.9" + §14): chartet og
- *  hero/gauge/BAR viser median-3 + EMA af de rå samples; chart-skalaen ignorerer korte deadhead-pulser (de vises som
- *  små streger i overkanten). Ringbufferen og reg[] er fortsat RÅ — styring, writes, auto-stop, tærskler og
- *  DIAGNOSE-tællere er uændrede. DIAGNOSE → GRAF skifter til rå visning (kun denne session). Afsnittet
- *  "v6.9: visnings-konditionering" nedenfor har konstanterne og hvordan de tunes.
+ * v6.9 = v6.8 + DISPLAY CONDITIONING of the graph and the hero number (UI_v6.md "CHANGES-v6.9" + §14): the chart and
+ *  hero/gauge/BAR show median-3 + EMA of the raw samples; the chart scale ignores short deadhead pulses (they are shown as
+ *  small ticks along the top edge). The ring buffer and reg[] are still RAW — control, writes, auto-stop, thresholds and
+ *  DIAGNOSTICS counters are unchanged. DIAGNOSTICS → GRAPH switches to the raw view (this session only). The section
+ *  "v6.9: display conditioning" below has the constants and how to tune them.
  *
- * v6.8 = v6.7 uden REVERT-knappen på HJEM (UI_v6.md "CHANGES-v6.8"): den var en fase-2-sikring.
- *  HJEM = gauge + stats + aktivitets-ikoner + side-prikker; der er ingen tryk-zone, hvor pillen sad.
- *  Flugtvejene er uændrede: SYSTEM "SKIFT TIL ORIGINAL NU" (i run.sh-tilstand = ren exit, run.sh SIGCONT'er)
- *  + BOOT-UI-rækken, switcher-gestussen og run.sh's trap.
+ * v6.8 = v6.7 without the REVERT button on HOME (UI_v6.md "CHANGES-v6.8"): it was a phase-2 safeguard.
+ *  HOME = gauge + stats + activity icons + page dots; there is no touch zone where the pill used to be.
+ *  The escape routes are unchanged: SYSTEM "SWITCH TO ORIGINAL NOW" (in run.sh mode = clean exit, run.sh SIGCONTs)
+ *  + the BOOT UI row, the switcher gesture and run.sh's trap.
  *
- * v6.7 = v6.6 + to ting (UI_v6.md "CHANGES-v6.7"):
- *  - NET-VAGT: wifi ved opstart + selv-heal (afsnittet "NET" nedenfor). Ved slot B-boot startede intet
- *    wifi (INSTALL-REPORT §3.1). ourui gør nu det, stock's libmi_wlan gør efter /config/wifi/wlan.json —
- *    init-script, conf fra config.json (byte-identisk m. save_config), wpa_supplicant og udhcpc med
- *    stock's argumenter — men KUN når stakken er nede. En levende wpa_supplicant røres aldrig, og der
- *    sendes stadig ikke et signal til nogen proces (0 kill-kald). DIAGNOSE har en NET-række; log i
- *    /tmp/ourui_net.log; `ourui --net-status` (kun læsning) og `--net-watch [s]`.
- *  - ORD 113 I BOOT-PUSHEN: lo-byten sendes som 0 (stock's optagede boot-push, GROUND-TRUTH.md);
- *    GEM-vejen pakker fortsat breakTime.
+ * v6.7 = v6.6 + two things (UI_v6.md "CHANGES-v6.7"):
+ *  - NET WATCHDOG: wifi at boot + self-heal (the section "NET" below). On a slot B boot nothing started
+ *    wifi (INSTALL-REPORT §3.1). ourui now does what stock's libmi_wlan does according to /config/wifi/wlan.json —
+ *    init script, conf from config.json (byte-identical w. save_config), wpa_supplicant and udhcpc with
+ *    stock's arguments — but ONLY when the stack is down. A live wpa_supplicant is never touched, and still
+ *    no signal is sent to any process (0 kill calls). DIAGNOSTICS has a NET row; log in
+ *    /tmp/ourui_net.log; `ourui --net-status` (read-only) and `--net-watch [s]`.
+ *  - WORD 113 IN THE BOOT PUSH: the lo byte is sent as 0 (stock's captured boot push, GROUND-TRUTH.md);
+ *    the SAVE path still packs breakTime.
  *
- * v6.6 = v6.5 + tre ting (UI_v6.md "CHANGES-v6.6"):
- *  - FASE-SEMANTIK efter STEAMLIVE.md (live-bevist): to damp-veje — LATCHET (ord 24 = 1, UI-start,
- *    auto-stop ved ord 48 >= ord 25: STEAM·AUTO m. mål og STOP-knap) og MOMENTAN wand/flush (bits 5+14
- *    uden ord 24 = 1: STEAM·WAND, ingen auto-stop-forventning, ingen STOP-knap). Samtidige faser
- *    (bryg-bits + damp-bits, 0x5327): HJEM viser hoved-aktiviteten OG et damp-mærke, vægt + mælke-temp.
- *    State-kontraktens phase (phase_raw: damp først) er uændret; phase_main() er nyt.
- *  - 64-BIT-UR: alle tider er ms_t (int64_t). Til og med v6.5 var uret en 32-bit `long` på enheden og
- *    løb rundt efter 24,86 døgn (poll/render kunne gå i stå, keep-awake løbe løbsk). Main-loopets
- *    timere står i `lt` og drives af loop_poll()/loop_graph()/loop_render_due()/loop_rendered().
- *  - RE-PUSH EFTER MCU-GENSTART: kommer controllerens versions-forespørgsel (0x89) igen efter det
- *    første håndtryk, eller står ord 112/113 på MCU'ens startværdier (0 / 0), sendes boot-pushen
- *    forfra — samme blokke, samme frame-politik, samme aktivitets-vagt. Tælles på DIAGNOSE.
+ * v6.6 = v6.5 + three things (UI_v6.md "CHANGES-v6.6"):
+ *  - PHASE SEMANTICS per STEAMLIVE.md (proven live): two steam paths — LATCHED (word 24 = 1, UI start,
+ *    auto-stop at word 48 >= word 25: STEAM·AUTO w. target and STOP button) and MOMENTARY wand/flush (bits 5+14
+ *    without word 24 = 1: STEAM·WAND, no auto-stop expectation, no STOP button). Concurrent phases
+ *    (brew bits + steam bits, 0x5327): HOME shows the main activity AND a steam marker, weight + milk temp.
+ *    The state contract's phase (phase_raw: steam first) is unchanged; phase_main() is new.
+ *  - 64-BIT CLOCK: all times are ms_t (int64_t). Up to and including v6.5 the clock was a 32-bit `long` on the device and
+ *    wrapped after 24.86 days (poll/render could stall, keep-awake could run away). The main loop's
+ *    timers live in `lt` and are driven by loop_poll()/loop_graph()/loop_render_due()/loop_rendered().
+ *  - RE-PUSH AFTER MCU RESTART: if the controller's version request (0x89) comes again after the
+ *    first handshake, or words 112/113 hold the MCU's start values (0 / 0), the boot push is sent
+ *    again — same blocks, same frame policy, same activity guard. Counted on DIAGNOSTICS.
  *
- * v6.5 = v6.4 + to rettelser i ENHEDS-build'et (UI_v6.md "CHANGES-v6.5"):
- *  - BOOT-PUSH også på enheden: ved opstart sendes cmd6 sub1 len30 + cmd6 sub112 len3 fra
- *    config.json — de samme to blokke som stock-UI'ets fuart_thread — gennem frame-politikken og
- *    write-køen (ACK-vent + én retransmit). Ved slot B-boot starter stock-UI'et aldrig, og
- *    controlleren ville ellers stå på sine egne startværdier (bryg 92,0 °C / gruppe 50 °C).
- *    AKTIVITETS-VAGT: kører en aktivitet allerede, første gang work_sta er kendt, springes
- *    pushen over (run.sh startet midt i et bryg: blokken ville nulstille start-ordene).
- *  - RX-RESYNC-WATCHDOG: en header-kandidat med umulig længde forkastes straks, og en ufuldstændig
- *    kandidat, der har ventet RX_RESYNC_MS, forkastes, så parseren finder næste AA 55. Ingen bytes
- *    forbruges uden en CRC-dom. Ny tæller på DIAGNOSE (RX CRC / RESYNC) + boot-push-status.
+ * v6.5 = v6.4 + two fixes in the DEVICE build (UI_v6.md "CHANGES-v6.5"):
+ *  - BOOT PUSH on the device too: at boot cmd6 sub1 len30 + cmd6 sub112 len3 are sent from
+ *    config.json — the same two blocks as the stock UI's fuart_thread — through the frame policy and
+ *    the write queue (ACK wait + one retransmit). On a slot B boot the stock UI never starts, and
+ *    the controller would otherwise sit on its own start values (brew 92.0 °C / group 50 °C).
+ *    ACTIVITY GUARD: if an activity is already running the first time work_sta is known, the
+ *    push is skipped (run.sh started in the middle of a brew: the block would reset the start words).
+ *  - RX RESYNC WATCHDOG: a header candidate with an impossible length is discarded immediately, and an incomplete
+ *    candidate that has waited RX_RESYNC_MS is discarded, so the parser finds the next AA 55. No bytes
+ *    are consumed without a CRC verdict. New counter on DIAGNOSTICS (RX CRC / RESYNC) + boot push status.
  *
- * v6.4 = v6.3 + SIM-HAL mod det simulerede testmiljø (sim/CONTRACT.md; UI_v6.md "CHANGES-v6.4"):
- *  - -DOURUI_SIM (uden OURUI_PREVIEW) = REALTIDS-build uden hardware: framebuffer -> hukommelse
- *    + fil, touch -> FIFO m. rå 16-byte evdev-records, UART -> pty, alle system-stier under en
- *    sandkasse-rod, state-JSONL pr. frame og en ctrl-socket m. test-kroge. Samme main-loop,
- *    samme protokol-, gem-, aktivitets- og tegne-kode som enheden.
- *  - UDEN -DOURUI_SIM er alt dette væk: kildeteksten efter preprocessoren er den samme som
- *    v6.3 bortset fra versions-strengen og én toast-tekst (se nedenfor).
- *  - BOOT-PUSH (sub1 len30 + sub112 len3, som stock-UI'ets fuart_thread) fandtes i v6.4 KUN i
- *    SIM- og preview-build (kontrakt-krav). Fra v6.5 sender enheds-build'et den også (se ovenfor).
- *  - Toast ved GEM uden ACK: "GEM FEJLET · INGEN ACK · INTET GEMT" (før: "INGEN ACK · INTET GEMT").
+ * v6.4 = v6.3 + SIM HAL against the simulated test environment (sim/CONTRACT.md; UI_v6.md "CHANGES-v6.4"):
+ *  - -DOURUI_SIM (without OURUI_PREVIEW) = REAL-TIME build without hardware: framebuffer -> memory
+ *    + file, touch -> FIFO w. raw 16-byte evdev records, UART -> pty, all system paths under a
+ *    sandbox root, state JSONL per frame and a ctrl socket w. test hooks. Same main loop,
+ *    same protocol, save, activity and drawing code as the device.
+ *  - WITHOUT -DOURUI_SIM all of this is gone: the source after the preprocessor is the same as
+ *    v6.3 except for the version string and one toast text (see below).
+ *  - BOOT PUSH (sub1 len30 + sub112 len3, like the stock UI's fuart_thread) existed in v6.4 ONLY in
+ *    the SIM and preview builds (contract requirement). From v6.5 the device build sends it too (see above).
+ *  - Toast on SAVE without ACK: "SAVE FAILED · NO ACK · NOTHING SAVED" (before: "NO ACK · NOTHING SAVED").
  *
- * v6.3 = v6.2 + produktnavn + internationalisering (se UI_v6.md "CHANGES-v6.3", REVERT.md):
- *  - PRODUKTNAVN: UI'et hedder Meraki+ (splash, HJEM-titellinje m. "+"-badge, DIAGNOSE/OM,
- *    exit-tekster). Intet generations-navn i nogen UI-streng — samme software kører på flere
- *    maskin-generationer. Kode-navn, stier og proces-navn er fortsat ourui (run.sh/boot).
- *  - I18N: ÉN streng-tabel (STR_TABLE) m. engelsk (default) + dansk for HVER synlig tekst;
- *    opslag pr. render (TR()), så et sprogskift slår igennem live uden genstart.
- *  - SYSTEM-række UI LANGUAGE / UI-SPROG: gemmes i ourui's EGEN fil /new_customer/ourui/lang
- *    ("en"/"da", atomisk; mangler/ulæselig/ukendt -> engelsk). Stock-UI'ets config.language
- *    røres ikke; dens række (STOCK LANG. / STOCK-SPROG) er uafhængig.
- *  - Tal, decimalpunktum og enheder (°C, g, s, bar) er ens i begge sprog; kun ord oversættes.
- *  - Protokol, frame-politik, keep-awake, EVIOCGRAB, circle-clip, boot-logik og run.sh: UÆNDRET.
+ * v6.3 = v6.2 + product name + internationalisation (see UI_v6.md "CHANGES-v6.3", REVERT.md):
+ *  - PRODUCT NAME: the UI is called Meraki+ (splash, HOME title line w. "+" badge, DIAGNOSTICS/ABOUT,
+ *    exit texts). No generation name in any UI string — the same software runs on several
+ *    machine generations. Code name, paths and process name are still ourui (run.sh/boot).
+ *  - I18N: ONE string table (STR_TABLE) w. English (default) + Danish for EVERY visible text;
+ *    lookup per render (TR()), so a language switch takes effect live without a restart.
+ *  - SYSTEM row UI LANGUAGE / UI-SPROG: saved in ourui's OWN file /new_customer/ourui/lang
+ *    ("en"/"da", atomic; missing/unreadable/unknown -> English). The stock UI's config.language
+ *    is not touched; its row (STOCK LANG. / STOCK-SPROG) is independent.
+ *  - Numbers, decimal point and units (°C, g, s, bar) are the same in both languages; only words are translated.
+ *  - Protocol, frame policy, keep-awake, EVIOCGRAB, circle clip, boot logic and run.sh: UNCHANGED.
  *
- * v6.2 = v6.1 + boot-slot-integration (se UI_v6.md "CHANGES-v6.2", REVERT.md):
- *  - SYSTEM-række BOOT-UI: OURUI/ORIGINAL til NÆSTE genstart = flag-filen /customer/new
- *    (touch/rm). Kun når /new_customer er mountet og dens demo_v9 er ourui; ellers låst.
- *  - SYSTEM-handling SKIFT TIL ORIGINAL NU: runtime-skift uden reboot efter boot/BOOT.md §9.2
- *    (luk UART/fb/touch -> fork+setsid+execl /customer/demo_v9 -> vent 400 ms -> exit).
- *  - REVERT/exit: synlig påmindelse når stock-UI'et fortsætter på et gammelt RAM-spejl.
- *  - DIAGNOSE: boot-flag, exe-slot, switcher-daemon, seneste skift-hændelse (scroll).
- *  - Protokol, frame-politik, keep-awake, EVIOCGRAB, circle-clip og run.sh: UÆNDRET.
+ * v6.2 = v6.1 + boot-slot integration (see UI_v6.md "CHANGES-v6.2", REVERT.md):
+ *  - SYSTEM row BOOT UI: OURUI/ORIGINAL for the NEXT reboot = the flag file /customer/new
+ *    (touch/rm). Only when /new_customer is mounted and its demo_v9 is ourui; otherwise locked.
+ *  - SYSTEM action SWITCH TO ORIGINAL NOW: runtime switch without reboot per boot/BOOT.md §9.2
+ *    (close UART/fb/touch -> fork+setsid+execl /customer/demo_v9 -> wait 400 ms -> exit).
+ *  - REVERT/exit: visible reminder when the stock UI continues on an old RAM mirror.
+ *  - DIAGNOSTICS: boot flag, exe slot, switcher daemon, latest switch event (scroll).
+ *  - Protocol, frame policy, keep-awake, EVIOCGRAB, circle clip and run.sh: UNCHANGED.
  *
- * v6.1 = v6 afstemt mod PARITY.md / parity_spec.json (se UI_v6.md "CHANGES-v6.1"):
- *  - SET[] bruger spec-beviste grænser/trin; skønnede max er mærket SF_EST (synlig hint).
- *  - brewMode/sleepMode/sleepModeSetting fjernet (ingen stock-editor); breakTime låst
- *    (MCU 0x1E10 overskriver den); varmt-vand-TEMPERATUR vises som sensor (ord 40).
- *  - Central frame-politik i wq_push_t(): trigger-ord 26/27/30 kan ALDRIG være != 0,
- *    start-ord kun m. eksplicit intent, og hvert ord skal ligge i sit spec-interval.
+ * v6.1 = v6 reconciled against PARITY.md / parity_spec.json (see UI_v6.md "CHANGES-v6.1"):
+ *  - SET[] uses spec-proven limits/steps; estimated max values are marked SF_EST (visible hint).
+ *  - brewMode/sleepMode/sleepModeSetting removed (no stock editor); breakTime locked
+ *    (MCU 0x1E10 overwrites it); hot-water TEMPERATURE is shown as a sensor (word 40).
+ *  - Central frame policy in wq_push_t(): trigger words 26/27/30 can NEVER be != 0,
+ *    start words only w. explicit intent, and every word must lie within its spec interval.
  *
- * Fase 2 soft-replace (uændret kontrakt): run.sh SIGSTOP'er demo_v9, ourui ejer
- * /dev/fb0 + /dev/ttyS1 + /dev/input/event0, run.sh SIGCONT'er demo_v9 ved exit.
+ * Phase 2 soft-replace (unchanged contract): run.sh SIGSTOPs demo_v9, ourui owns
+ * /dev/fb0 + /dev/ttyS1 + /dev/input/event0, run.sh SIGCONTs demo_v9 on exit.
  *
- * v6 vs v4 (detaljer i UI_v6.md):
- *  - KEEP-AWAKE FIX: ord1 skrives 0 (=vågen). v4 skrev 1 (=sleep/drain) — bug.
- *  - SETTINGS: 24 rækker på 3 sider (liste -> stepper-detalje -> SAVE/CANCEL).
- *    Save = cmd6-write (hvor ordet er kendt) + atomisk config.json-persist
- *    (tmp+rename, pristine+rullende backup, md5-log). UI'et er eneste range-vagt.
- *  - AKTIVITETER: GRIND/BREW/VAND/DAMP m. observerede recepter (hold-for-start),
- *    STOP for damp (ord24=0), auto-stop-forventning i UI-tekst.
- *  - FASER: damp = work_sta bits 5+14 (0x4020); sleep = ord1==1 / bit8 ryddet.
- *  - GRAFIK: anti-aliaset stroke-font (egen, ingen afhængigheder), AA-primitiver,
- *    270-graders gauge m. LUT, retained compositor m. dirty-rects, page-slide,
- *    crossfade, touch-ripple, toasts, boot-splash. Global circle-clip bevaret.
+ * v6 vs v4 (details in UI_v6.md):
+ *  - KEEP-AWAKE FIX: word1 is written 0 (=awake). v4 wrote 1 (=sleep/drain) — bug.
+ *  - SETTINGS: 24 rows on 3 pages (list -> stepper detail -> SAVE/CANCEL).
+ *    Save = cmd6 write (where the word is known) + atomic config.json persist
+ *    (tmp+rename, pristine+rolling backup, md5 log). The UI is the only range guard.
+ *  - ACTIVITIES: GRIND/BREW/WATER/STEAM w. observed recipes (hold-to-start),
+ *    STOP for steam (word24=0), auto-stop expectation in UI text.
+ *  - PHASES: steam = work_sta bits 5+14 (0x4020); sleep = word1==1 / bit8 cleared.
+ *  - GRAPHICS: anti-aliased stroke font (own, no dependencies), AA primitives,
+ *    270-degree gauge w. LUT, retained compositor w. dirty rects, page slide,
+ *    crossfade, touch ripple, toasts, boot splash. Global circle clip kept.
  *
  * Build (device):  zig cc -target arm-linux-musleabihf -mcpu=cortex_a7 -static -O2 -o ourui_v6 ourui_v6.c
- * Build (SIM):     zig cc -DOURUI_SIM -O2 -o ourui_v6_sim ourui_v6.c -lm          (vært; den run_e2e.py starter)
+ * Build (SIM):     zig cc -DOURUI_SIM -O2 -o ourui_v6_sim ourui_v6.c -lm          (host; the one run_e2e.py starts)
  *                  zig cc -target arm-linux-musleabihf -mcpu=cortex_a7 -static -O2 -DOURUI_SIM -o ourui_v6_sim_arm ourui_v6.c
- *                  miljø: OURUI_SIM_TTY, OURUI_SIM_FB, OURUI_SIM_STATE (påkrævet), OURUI_SIM_ROOT (påkrævet),
+ *                  env: OURUI_SIM_TTY, OURUI_SIM_FB, OURUI_SIM_STATE (required), OURUI_SIM_ROOT (required),
  *                  OURUI_SIM_TOUCH, OURUI_SIM_CTRL, OURUI_SIM_NOBOOTPUSH=1, OURUI_SIM_NOPROVISION=1,
- *                  OURUI_SIM_BOOTPUSH_GUARD=1 (enhedens aktivitets-vagt: spring over i stedet for at udskyde),
- *                  OURUI_SIM_UPTIME_MS=<n> (v6.6: uret starter på n ms — omløbs-test i realtid; findes kun i SIM-build'et)
+ *                  OURUI_SIM_BOOTPUSH_GUARD=1 (the device's activity guard: skip instead of defer),
+ *                  OURUI_SIM_UPTIME_MS=<n> (v6.6: the clock starts at n ms — real-time wrap test; exists only in the SIM build)
  * Build (preview): zig cc -DOURUI_PREVIEW -O2 -o /tmp/ourui_v6_preview ourui_v6.c
- *                  /tmp/ourui_v6_preview [--lang en|da] <outdir>   (alle sider/tilstande -> .bin)
- *                  /tmp/ourui_v6_preview [--lang en|da] --selftest (frame-vektorer, config-save, i18n)
+ *                  /tmp/ourui_v6_preview [--lang en|da] <outdir>   (all pages/states -> .bin)
+ *                  /tmp/ourui_v6_preview [--lang en|da] --selftest (frame vectors, config save, i18n)
  *                  /tmp/ourui_v6_preview --bench         (ms/frame)
- *                  /tmp/ourui_v6_preview --dump-table    (SET[] som TSV -> parity_check.py)
- *                  /tmp/ourui_v6_preview --dump-strings  (streng-tabellen som TSV: id, klasse, EN, DA)
- * Miljø (device):  OURUI_CONFIG, OURUI_BAKDIR, OURUI_NOGRAB=1, OURUI_NOBL=1, OURUI_READONLY=1,
- *                  OURUI_NOBOOTPUSH=1 (v6.5: ingen boot-push ved opstart — v6.4-adfærd),
- *                  OURUI_LANGFILE=<fil> (sprog-filen; default /new_customer/ourui/lang),
- *                  OURUI_SWITCH_DRY=1 (SKIFT NU logger kun hvad den ville gøre; ourui bliver kørende),
- *                  OURUI_ROOT=<mappe> (præfiks for boot-stierne /customer /new_customer /proc /tmp; kun test)
+ *                  /tmp/ourui_v6_preview --dump-table    (SET[] as TSV -> parity_check.py)
+ *                  /tmp/ourui_v6_preview --dump-strings  (the string table as TSV: id, class, EN, DA)
+ * Env (device):    OURUI_CONFIG, OURUI_BAKDIR, OURUI_NOGRAB=1, OURUI_NOBL=1, OURUI_READONLY=1,
+ *                  OURUI_NOBOOTPUSH=1 (v6.5: no boot push at startup — v6.4 behaviour),
+ *                  OURUI_LANGFILE=<file> (the language file; default /new_customer/ourui/lang),
+ *                  OURUI_SWITCH_DRY=1 (SWITCH NOW only logs what it would do; ourui keeps running),
+ *                  OURUI_ROOT=<dir> (prefix for the boot paths /customer /new_customer /proc /tmp; test only)
  */
 #define _GNU_SOURCE
 #include <stdio.h>
@@ -168,14 +168,14 @@
 #include <sys/select.h>
 #include <sys/wait.h>
 #include <dirent.h>
-/* v6.6: tidsbasen — monotone millisekunder i 64 bit (begrundelse og now_ms(): se "TIDSBASE" nedenfor) */
+/* v6.6: the time base — monotonic milliseconds in 64 bits (rationale and now_ms(): see "TIME BASE" below) */
 typedef int64_t ms_t;
-/* v6.4: tre build-typer.
- *   DEVICE_RT      (default)                        enheden: /dev/fb0, /dev/ttyS1, /dev/input/event0
- *   OURUI_PREVIEW  (-DOURUI_PREVIEW)                offline previews + selftest (syntetisk tid)
- *   SIM_RT         (-DOURUI_SIM uden OURUI_PREVIEW) realtid mod sim/mcu_sim.py (sim/CONTRACT.md)
- * Alt SIM-specifikt står i "#ifdef SIM_RT"-blokke eller i makroerne nedenfor, som er TOMME
- * (eller lig v6.3-udtrykket) i enheds-build'et. */
+/* v6.4: three build types.
+ *   DEVICE_RT      (default)                        the device: /dev/fb0, /dev/ttyS1, /dev/input/event0
+ *   OURUI_PREVIEW  (-DOURUI_PREVIEW)                offline previews + selftest (synthetic time)
+ *   SIM_RT         (-DOURUI_SIM without OURUI_PREVIEW) real time against sim/mcu_sim.py (sim/CONTRACT.md)
+ * Everything SIM-specific is in "#ifdef SIM_RT" blocks or in the macros below, which are EMPTY
+ * (or equal to the v6.3 expression) in the device build. */
 #if defined(OURUI_SIM) && !defined(OURUI_PREVIEW)
 #define SIM_RT 1
 #endif
@@ -193,9 +193,9 @@ typedef int64_t ms_t;
 #ifdef SIM_RT
 #include <sys/socket.h>
 #include <sys/un.h>
-/* kontrakt §4: rå 16-byte evdev-record (= struct input_event på 32-bit ARM), little-endian */
+/* contract §4: raw 16-byte evdev record (= struct input_event on 32-bit ARM), little-endian */
 struct input_event { int32_t sec, usec; uint16_t type, code; int32_t value; };
-_Static_assert(sizeof(struct input_event)==16,"evdev-record skal vaere 16 bytes");
+_Static_assert(sizeof(struct input_event)==16,"evdev record must be 16 bytes");
 #define EV_SYN 0x00
 #define EV_KEY 0x01
 #define EV_ABS 0x03
@@ -207,7 +207,7 @@ _Static_assert(sizeof(struct input_event)==16,"evdev-record skal vaere 16 bytes"
 #define ABS_MT_POSITION_Y 0x36
 #define ABS_MT_TRACKING_ID 0x39
 #endif
-/* ---- HAL-makroer: enheds-grenen er ordret v6.3 ---- */
+/* ---- HAL macros: the device branch is verbatim v6.3 ---- */
 #ifdef SIM_RT
 static char sim_tty[300]="";
 static int  sim_rc=0;
@@ -261,30 +261,30 @@ static int  sim_net_on=1;
 #define H 480
 #define CX 240
 #define CY 240
-#define RSAFE 234          /* sikkerhedsradius (bezel) — al content clips hertil */
+#define RSAFE 234          /* safety radius (bezel) — all content clips to this */
 #define REGN 129
 #define UART "/dev/ttyS1"
 #define FB   "/dev/fb0"
 #define INP  "/dev/input/event0"
-#define INP_KBD "/dev/input/event1"   /* v6.14: tænd/sluk-knappen (k62091, EV_KEY) — stock app_powerKey_thread 0x140AB4 åbner præcis denne */
+#define INP_KBD "/dev/input/event1"   /* v6.14: the power button (k62091, EV_KEY) — stock app_powerKey_thread 0x140AB4 opens exactly this one */
 #define KBD_NAME "k62091"
 #define BL_SYSFS "/sys/class/pwm/pwmchip0/pwm2/duty_cycle"
 #define BL_EN_SYSFS "/sys/class/pwm/pwmchip0/pwm2/enable"   /* v6.14: stock uikit_os_back_light_off/on 0xC2278 = blpwm_set_enable(2,0/1) */
 #define OURUI_VERSION "V6.14"
 
-/* ---- v6.10: tryk-estimat (UI_v6.md §16) ----
- * Ord 51 (SPI2-ADC kanal 0xA, REGISTERMAP: tryk- ELLER pumpe-drive-kandidat) -> bar med ÉT lineært anker:
- *   P0 = P_ANCHOR_RAW = 358 rå: pre-infusion-plateauet i optagelsen BREW.md §6 (UART-kapture 20:54:05-06,7, 6,06 s,
- *        median 356, spænd 332..366; STEAMLIVE.md bekræfter ~360 / 6,84 s), optaget med config preInfusionPressure = 4.
- *   anker-tryk = config preInfusionPressure (SET[S_PIPRESS], default P_ANCHOR_BAR_DEF = 4; uden for 1..15 -> default).
- *   k = anker-tryk / P0 bar pr. rå enhed (4/358 = 0,011173); vist bar = ord51 x k (pre 358 -> 4,0; ext 1346 -> 15,0).
- * FORBEHOLD (står også på DIAGNOSE og i UI_v6.md §16):
- *   (a) ext ~15 bar er plausibelt for en vibrationspumpe UDEN OPV, men det er pumpe-side-tryk, ikke tryk ved pucken.
- *   (b) deadhead-/vedligehold-pulser (op til 16670 rå = 186 bar lineært) er IKKE fysiske under en lineær skala: over
- *       P_EST_MAX (20 bar) vises intet tal — BAR-feltet viser "PULS", DIAGNOSE "VEDLIGEHOLD-PULS" / "PULS".
- *   (c) en to-punkts-affin skala (ro 0 + pre 4 + ext 9) er inkonsistent -> ord 51 kan være ikke-lineær eller et
- *       pumpe-drive-niveau; derfor et ESTIMAT, ikke en certificeret kalibrering. Rå er altid tilgængelig (DIAGNOSE → GRAF).
- * Kun visning: styring, writes, auto-stop og tærskler bruger aldrig bar. Tuning: -DP_ANCHOR_RAW=… -DP_EST_MAX=… ved build. */
+/* ---- v6.10: pressure estimate (UI_v6.md §16) ----
+ * Word 51 (SPI2 ADC channel 0xA, REGISTERMAP: pressure OR pump-drive candidate) -> bar with ONE linear anchor:
+ *   P0 = P_ANCHOR_RAW = 358 raw: the pre-infusion plateau in the capture BREW.md §6 (UART capture 20:54:05-06.7, 6.06 s,
+ *        median 356, span 332..366; STEAMLIVE.md confirms ~360 / 6.84 s), captured with config preInfusionPressure = 4.
+ *   anchor pressure = config preInfusionPressure (SET[S_PIPRESS], default P_ANCHOR_BAR_DEF = 4; outside 1..15 -> default).
+ *   k = anchor pressure / P0 bar per raw unit (4/358 = 0.011173); displayed bar = word51 x k (pre 358 -> 4.0; ext 1346 -> 15.0).
+ * CAVEATS (also shown on DIAGNOSTICS and in UI_v6.md §16):
+ *   (a) ext ~15 bar is plausible for a vibration pump WITHOUT an OPV, but it is pump-side pressure, not pressure at the puck.
+ *   (b) deadhead/maintenance pulses (up to 16670 raw = 186 bar linear) are NOT physical under a linear scale: above
+ *       P_EST_MAX (20 bar) no number is shown — the BAR field shows "PULSE", DIAGNOSTICS "MAINTENANCE PULSE" / "PULSE".
+ *   (c) a two-point affine scale (rest 0 + pre 4 + ext 9) is inconsistent -> word 51 may be non-linear or a
+ *       pump-drive level; hence an ESTIMATE, not a certified calibration. Raw is always available (DIAGNOSTICS → GRAPH).
+ * Display only: control, writes, auto-stop and thresholds never use bar. Tuning: -DP_ANCHOR_RAW=… -DP_EST_MAX=… at build time. */
 #ifndef P_ANCHOR_RAW
 #define P_ANCHOR_RAW 358
 #endif
@@ -295,17 +295,17 @@ static int  sim_net_on=1;
 #define P_EST_MAX 20.f
 #endif
 
-/* ---- TIDSBASE (v6.6): monotone millisekunder i 64 bit ----
- * Til og med v6.5 var uret en `long`. På enheden (ARMv7, ILP32) er `long` 32 bit, så uret løb rundt
- * 2^31 ms = 24,86 døgn efter opstart: timere, der sammenlignes absolut (poll, render, keep-awake),
- * kunne gå i stå i 49,7 døgn, og enhver tidsforskel over 24,86 døgn blev negativ ("FÆRDIG"-chip,
- * CRC-advarsel og toast, der kom igen). ms_t er 64 bit i alle build-typer: uret løber ikke rundt
- * (292 mio. år), og ALLE tidsværdier — tidspunkter, frister og forskelle — er ms_t.
- * Summen dannes i 64 bit (time_t er 64 bit hos musl og på værten) og tildeles først derefter.
- * (typedef'en står øverst i filen, før HAL-makroerne.) */
-_Static_assert(sizeof(ms_t)==8,"tidsbasen skal vaere 64 bit");
+/* ---- TIME BASE (v6.6): monotonic milliseconds in 64 bits ----
+ * Up to and including v6.5 the clock was a `long`. On the device (ARMv7, ILP32) `long` is 32 bits, so the clock wrapped
+ * 2^31 ms = 24.86 days after boot: timers compared absolutely (poll, render, keep-awake)
+ * could stall for 49.7 days, and any time difference over 24.86 days became negative ("DONE" chip,
+ * CRC warning and toast that came back). ms_t is 64 bits in all build types: the clock does not wrap
+ * (292 million years), and ALL time values — points in time, deadlines and differences — are ms_t.
+ * The sum is formed in 64 bits (time_t is 64 bits on musl and on the host) and only assigned afterwards.
+ * (The typedef is at the top of the file, before the HAL macros.) */
+_Static_assert(sizeof(ms_t)==8,"the time base must be 64 bits");
 #ifdef SIM_RT
-static int64_t sim_clk_off=0;                              /* OURUI_SIM_UPTIME_MS: uret starter paa en valgt vaerdi (omloebs-test i realtid) */
+static int64_t sim_clk_off=0;                              /* OURUI_SIM_UPTIME_MS: the clock starts at a chosen value (real-time wrap test) */
 #define CLK_OFF sim_clk_off
 #else
 #define CLK_OFF 0
@@ -323,14 +323,14 @@ static uint16_t crc16(const uint8_t *d, int n){
 /* ================= register mirror ================= */
 static uint16_t reg[REGN];
 static int reg_seen[REGN];
-static uint32_t rx_ok=0, rx_bad=0;      /* v6.6: uint32 — løber veldefineret rundt (2^32 frames = ca. 5 år ved 26/s) */
+static uint32_t rx_ok=0, rx_bad=0;      /* v6.6: uint32 — wraps in a well-defined way (2^32 frames = approx. 5 years at 26/s) */
 static ms_t last_rx_ms=-100000, last_bad_ms=-100000;
 
 /* ================= UART ================= */
 static int ufd=-1;
 static uint8_t rxbuf[8192]; static int rxlen=0;
 static uint8_t txq[1024]; static int txq_len=0;
-static int ro_mode=0;                 /* OURUI_READONLY=1: ingen cmd6-writes overhovedet */
+static int ro_mode=0;                 /* OURUI_READONLY=1: no cmd6 writes at all */
 
 #ifndef OURUI_PREVIEW
 static void uart_open(void){
@@ -363,7 +363,7 @@ static void frame_query(uint8_t sub,uint8_t len){
     uint16_t c=crc16(b,5); b[5]=c&0xFF; b[6]=c>>8;
     uart_send(b,7);
 }
-/* bygger cmd6-frame i out (>= 2*len+7 bytes); returnerer længde */
+/* builds a cmd6 frame in out (>= 2*len+7 bytes); returns the length */
 static int build_write(uint8_t*b,uint8_t sub,const uint16_t*w,int len){
     int n=0;
     b[n++]=0xAA;b[n++]=0x55;b[n++]=0x06;b[n++]=sub;b[n++]=(uint8_t)len;
@@ -380,53 +380,53 @@ static void frame_version(void){
     uart_send(b,n);
 }
 
-/* ---- write-kø: sekventielle cmd6-writes, hver m. CRC + ACK-vent + ÉN retransmit ----
- * ACK = 0x86 m. samme sub/len og echo == payload. Timeout 150 ms -> retransmit,
- * derefter 300 ms -> FEJL (resten af køen droppes; UI viser fejlen). */
+/* ---- write queue: sequential cmd6 writes, each w. CRC + ACK wait + ONE retransmit ----
+ * ACK = 0x86 w. the same sub/len and echo == payload. Timeout 150 ms -> retransmit,
+ * then 300 ms -> FAIL (the rest of the queue is dropped; the UI shows the error). */
 #define WQ_MAX 8
-#define WQ_WMAX 30         /* boot-push-blokken sub1 len30 (v6.5: alle build-typer; v6.4-enheden havde 24) */
+#define WQ_WMAX 30         /* the boot push block sub1 len30 (v6.5: all build types; the v6.4 device had 24) */
 #define WQ_ACK1_MS 150
 #define WQ_ACK2_MS 300
 typedef struct { uint8_t sub,len; uint16_t w[WQ_WMAX]; } WFrame;
 enum { WQ_IDLE=0, WQ_WAIT };
 enum { WR_NONE=0, WR_OK, WR_FAIL };
 static struct { WFrame q[WQ_MAX]; int n; int state; ms_t sent_ms; int tries; int result; long seq; int sim_ack; long n_ok,n_fail,n_retx,n_block; } wq;
-static uint8_t last_tx[80]; static int last_tx_len=0;   /* seneste cmd6-frame (selftest/diag) */
+static uint8_t last_tx[80]; static int last_tx_len=0;   /* latest cmd6 frame (selftest/diag) */
 
-/* ---- FRAME-POLITIK (PARITY §1.5 + §6.1-6.4): sidste værn før UART ----
- * MCU'en har INGEN range-checks (cmd6 = memcpy + ACK), og visse ord er triggere som
- * MCU'en konsumerer: 3/6/9 = start/tare, 26/27 = vægt-kalibrering (skriver MCU-flash),
- * 30 = MCU-REBOOT. Derfor passerer HVER cmd6-frame — settings, aktiviteter, keep-awake —
- * denne ene port, som afviser frames der
- *   (a) ligger uden for skrive-båndene (ord 0..31 / 112..114),
- *   (b) har et trigger-ord != 0 uden at kalderen eksplicit har bedt om det (intent), eller
- *   (c) har et ord uden for sit spec-interval (word_ok(), afledt af SET[]).
- * TRIG_NEVER kan ingen intent tillade — ourui kalibrerer og rebooter aldrig. */
+/* ---- FRAME POLICY (PARITY §1.5 + §6.1-6.4): last line of defence before the UART ----
+ * The MCU has NO range checks (cmd6 = memcpy + ACK), and certain words are triggers that
+ * the MCU consumes: 3/6/9 = start/tare, 26/27 = weight calibration (writes MCU flash),
+ * 30 = MCU REBOOT. Therefore EVERY cmd6 frame — settings, activities, keep-awake — passes
+ * this one gate, which rejects frames that
+ *   (a) lie outside the write bands (words 0..31 / 112..114),
+ *   (b) have a trigger word != 0 without the caller explicitly asking for it (intent), or
+ *   (c) have a word outside its spec interval (word_ok(), derived from SET[]).
+ * No intent can allow TRIG_NEVER — ourui never calibrates and never reboots. */
 #define WBIT(n) (1u<<(n))
 #define TRIG_NEVER (WBIT(26)|WBIT(27)|WBIT(30))
 #define TRIG_START (WBIT(3)|WBIT(6)|WBIT(9)|WBIT(16)|WBIT(22)|WBIT(24))
 #define I_NONE  0u
 #define I_GRIND (WBIT(3)|WBIT(6))      /* grind-start + grind-tare   (sub3 len4)  */
-#define I_BREW  (WBIT(9)|WBIT(22))     /* start-trigger + bryg-aktiv (sub5 len18) */
-#define I_WATER (WBIT(9)|WBIT(16))     /* start-trigger + auto-flag  (sub9 len11) */
-#define I_STEAM (WBIT(24))             /* damp-switch                (sub24 len8) */
-/* v6.14: ord 0 = 0 (PowerOff) er ikke et start-ord, men et "sluk"-ord: det må KUN sendes med denne eksplicitte intent
- * (pw_off_step, stock powerOff 0x149074: usart_send(6,0,2) med ord 0 = 0). Uden intent afvises det (WJ_TRIG). */
+#define I_BREW  (WBIT(9)|WBIT(22))     /* start trigger + brew active (sub5 len18) */
+#define I_WATER (WBIT(9)|WBIT(16))     /* start trigger + auto flag  (sub9 len11) */
+#define I_STEAM (WBIT(24))             /* steam switch               (sub24 len8) */
+/* v6.14: word 0 = 0 (PowerOff) is not a start word but a "power off" word: it may ONLY be sent with this explicit intent
+ * (pw_off_step, stock powerOff 0x149074: usart_send(6,0,2) with word 0 = 0). Without intent it is rejected (WJ_TRIG). */
 #define I_POWEROFF (WBIT(0))
-_Static_assert(((I_GRIND|I_BREW|I_WATER|I_STEAM)&TRIG_NEVER)==0,"ingen intent maa tillade ord 26/27/30");
-_Static_assert(((I_GRIND|I_BREW|I_WATER|I_STEAM)&~TRIG_START)==0,"intent maa kun naevne start-ord");
-_Static_assert((I_POWEROFF&(TRIG_NEVER|TRIG_START))==0,"sluk-intent er hverken et start- eller et service-ord");
-_Static_assert((TRIG_NEVER&TRIG_START)==0,"trigger-klasserne maa ikke overlappe");
+_Static_assert(((I_GRIND|I_BREW|I_WATER|I_STEAM)&TRIG_NEVER)==0,"no intent may allow words 26/27/30");
+_Static_assert(((I_GRIND|I_BREW|I_WATER|I_STEAM)&~TRIG_START)==0,"intent may only name start words");
+_Static_assert((I_POWEROFF&(TRIG_NEVER|TRIG_START))==0,"power-off intent is neither a start word nor a service word");
+_Static_assert((TRIG_NEVER&TRIG_START)==0,"the trigger classes must not overlap");
 enum { WJ_NONE=0, WJ_RO, WJ_FULL, WJ_BAND, WJ_TRIG, WJ_RANGE };
-static int wq_rej=WJ_NONE;             /* årsag til seneste afvisning (selftest/diag) */
-static int frame_policy(uint8_t sub,const uint16_t*w,int len,uint32_t intent);   /* defineret efter SET[] */
+static int wq_rej=WJ_NONE;             /* reason for the latest rejection (selftest/diag) */
+static int frame_policy(uint8_t sub,const uint16_t*w,int len,uint32_t intent);   /* defined after SET[] */
 
 static int wq_busy(void){ return wq.n>0; }
 static int wq_push_t(uint8_t sub,const uint16_t*w,int len,uint32_t intent){
     wq_rej=WJ_NONE;
     if(ro_mode){ wq_rej=WJ_RO; return 0; }
     if(wq.n>=WQ_MAX||len>WQ_WMAX||len<1){ wq_rej=WJ_FULL; return 0; }
-    /* skrive-bånd-vagt (REGISTERMAP §3): ord 0..31 eller ord 112..114 */
+    /* write-band guard (REGISTERMAP §3): words 0..31 or words 112..114 */
     int end=sub+len;
     if(!(end<33 || (sub>=112 && end>=113 && end<=115))){ wq_rej=WJ_BAND; wq.n_block++; return 0; }
     int pj=frame_policy(sub,w,len,intent);
@@ -435,7 +435,7 @@ static int wq_push_t(uint8_t sub,const uint16_t*w,int len,uint32_t intent){
     if(wq.n==1){ wq.state=WQ_IDLE; wq.result=WR_NONE; }
     return 1;
 }
-static int wq_push(uint8_t sub,const uint16_t*w,int len){ return wq_push_t(sub,w,len,I_NONE); }   /* uden intent: ingen start-ord */
+static int wq_push(uint8_t sub,const uint16_t*w,int len){ return wq_push_t(sub,w,len,I_NONE); }   /* without intent: no start words */
 static void wq_tx(ms_t now){
     WFrame*f=&wq.q[0]; uint8_t b[2*WQ_WMAX+7]; int n=build_write(b,f->sub,f->w,f->len);
     uart_send(b,n); memcpy(last_tx,b,n); last_tx_len=n; wq.sent_ms=now;
@@ -448,7 +448,7 @@ static void wq_pop(int ok){
 static void wq_step(ms_t now){
     if(wq.n==0) return;
     if(wq.state==WQ_IDLE){ wq.tries=1; wq.state=WQ_WAIT; wq_tx(now); return; }
-    if(wq.sim_ack && now-wq.sent_ms>=40){   /* kun preview: simuleret ACK */
+    if(wq.sim_ack && now-wq.sent_ms>=40){   /* preview only: simulated ACK */
         WFrame*f=&wq.q[0]; for(int k=0;k<f->len&&f->sub+k<REGN;k++) reg[f->sub+k]=f->w[k];
         wq_pop(1); return;
     }
@@ -463,61 +463,61 @@ static void wq_on_ack(uint8_t sub,uint8_t L,const uint8_t*payload){
     wq_pop(1);
 }
 
-/* ---- BOOT-PUSH: tilstand (v6.5: alle build-typer; logikken står ved boot_push_step) ---- */
+/* ---- BOOT PUSH: state (v6.5: all build types; the logic is at boot_push_step) ---- */
 enum { BP_OFF=0, BP_WAIT_A, BP_A, BP_WAIT_B, BP_B, BP_DONE };
 enum { BPR_NONE=0, BPR_OK, BPR_NOACK, BPR_BLOCKED, BPR_NOCFG, BPR_SKIP };
-static struct { int state, ra, rb, runs, guard; long seq; ms_t t0; int t0_set; } bp;   /* t0: da pushen forlod VENTER (blok køet / afgjort) */
-static int bp_on=1;                    /* OURUI_NOBOOTPUSH / OURUI_SIM_NOBOOTPUSH slår boot-pushen fra */
-static int repush_count(void);         /* v6.6: antal re-push efter MCU-genstart (repush_step) */
+static struct { int state, ra, rb, runs, guard; long seq; ms_t t0; int t0_set; } bp;   /* t0: when the push left WAITING (block queued / settled) */
+static int bp_on=1;                    /* OURUI_NOBOOTPUSH / OURUI_SIM_NOBOOTPUSH turn the boot push off */
+static int repush_count(void);         /* v6.6: number of re-pushes after an MCU restart (repush_step) */
 
-/* ---- RX frame parse (v4-logik + ACK-kø + tidsstempler) — v6.5: RESYNC-WATCHDOG ----
- * En header-kandidat (AA 55 …) bliver kun til en frame, når HELE framen er modtaget og CRC'en
- * stemmer; ellers rykkes der én byte frem, og der søges efter næste AA 55. Ingen bytes forbruges
- * uden en CRC-dom (v6.4 sprang cmd 3 og cmd 8/0x88 over uden CRC og kunne dermed sluge starten på
- * en gyldig frame lige efter støj). Det eneste, der kan holde parseren fast, er en kandidat, hvis
- * længde-felt lover flere bytes, end der er kommet. Den stilling har to værn:
- *  (1) UMULIG LÆNGDE: LEN > 129 ord findes ikke (registerfilen er 129 ord) -> forkastes straks.
- *      (v6.4: parseren blev stående her, til 8 kB-bufferen løb over — ca. 3,5 s uden RX.)
- *  (2) WATCHDOG: en ufuldstændig kandidat, der har ventet RX_RESYNC_MS, forkastes; resten af
- *      bufferen søges igennem for næste AA 55, så gyldige frames, der er kommet BAGVED, ikke tabes.
- *      Bytes, hvis seneste ankomst er RX_RESYNC_MS gammel, kan ikke være en frame på vej og
- *      forkastes på samme måde. main() kalder rx_feed(…,0,now) i hver omgang, så værnet også
- *      virker, når der intet kommer.
- * RX_RESYNC_MS = 400 ms, valgt ud fra det målte (UI_v6.md CHANGES-v6.5 pkt. 3):
- *  - den længste gyldige frame (2*129+7 = 265 bytes) fylder 46 ms på linjen ved 57600 8N1, og
- *    MCU'en sender en frame i ét stræk — et gyldigt ophold MIDT i en frame er ikke set;
- *  - MCU'ens længste målte tavshed er 279 ms (første ACK efter en start-write, BREW.md §3.2);
- *    400 ms er 1,4x det — en frame delt af et så langt ophold bliver stadig modtaget;
- *  - 400 ms er under write-køens ACK-budget (150 + 300 = 450 ms), så en fastlåst kandidat foran
- *    en ACK ikke i sig selv bliver til "GEM FEJLET", og langt under OFFLINE-grænsen (1500 ms).
- * Ophold MELLEM frames (poll-kadence ~100 ms, målt op til 456 ms) rører ikke watchdog'en:
- * bufferen er tom imellem, og den måler kun en kandidat, der venter på resten af sig selv.
- * rx_resync (DIAGNOSE "RX CRC / RESYNC") tæller forkastede kandidater: umulig længde, watchdog
- * (én pr. kald) og buffer-overløb. CRC-fejl på en hel frame tælles som før i rx_bad. */
+/* ---- RX frame parse (v4 logic + ACK queue + timestamps) — v6.5: RESYNC WATCHDOG ----
+ * A header candidate (AA 55 …) only becomes a frame when the WHOLE frame has been received and the CRC
+ * matches; otherwise it advances one byte and searches for the next AA 55. No bytes are consumed
+ * without a CRC verdict (v6.4 skipped cmd 3 and cmd 8/0x88 without CRC and could thus swallow the start of
+ * a valid frame right after noise). The only thing that can keep the parser stuck is a candidate whose
+ * length field promises more bytes than have arrived. That situation has two guards:
+ *  (1) IMPOSSIBLE LENGTH: LEN > 129 words does not exist (the register file is 129 words) -> discarded immediately.
+ *      (v6.4: the parser stayed stuck here until the 8 kB buffer overflowed — approx. 3.5 s without RX.)
+ *  (2) WATCHDOG: an incomplete candidate that has waited RX_RESYNC_MS is discarded; the rest of
+ *      the buffer is searched for the next AA 55, so valid frames that arrived BEHIND it are not lost.
+ *      Bytes whose latest arrival is RX_RESYNC_MS old cannot be a frame in transit and
+ *      are discarded the same way. main() calls rx_feed(…,0,now) on every pass, so the guard also
+ *      works when nothing arrives.
+ * RX_RESYNC_MS = 400 ms, chosen from the measurements (UI_v6.md CHANGES-v6.5 item 3):
+ *  - the longest valid frame (2*129+7 = 265 bytes) takes 46 ms on the line at 57600 8N1, and
+ *    the MCU sends a frame in one go — a valid gap IN THE MIDDLE of a frame has not been seen;
+ *  - the MCU's longest measured silence is 279 ms (first ACK after a start write, BREW.md §3.2);
+ *    400 ms is 1.4x that — a frame split by such a long gap is still received;
+ *  - 400 ms is below the write queue's ACK budget (150 + 300 = 450 ms), so a stuck candidate in front of
+ *    an ACK does not by itself turn into "SAVE FAILED", and far below the OFFLINE limit (1500 ms).
+ * Gaps BETWEEN frames (poll cadence ~100 ms, measured up to 456 ms) do not affect the watchdog:
+ * the buffer is empty in between, and it only measures a candidate waiting for the rest of itself.
+ * rx_resync (DIAGNOSTICS "RX CRC / RESYNC") counts discarded candidates: impossible length, watchdog
+ * (one per call) and buffer overflow. CRC errors on a complete frame are counted in rx_bad as before. */
 #define RX_RESYNC_MS 400
 static uint32_t rx_resync=0;
-/* v6.6 (MCU-genstart -> re-push, se repush_step): controllerens versions-forespørgsler og friske læsninger af ord 112..113 */
+/* v6.6 (MCU restart -> re-push, see repush_step): the controller's version requests and fresh reads of words 112..113 */
 static unsigned ver_n=0, rx_n112=0; static ms_t ver_ms=0;
-static ms_t rx_pend_ms=0, rx_last_ms=0;     /* hvornår hovedet af rxbuf begyndte at vente / seneste byte ankom */
-static void pw_ack8(const uint8_t*p);       /* v6.14: controllerens kvittering (0x88) for sluk-sekvensens tid/alarm-frame */
+static ms_t rx_pend_ms=0, rx_last_ms=0;     /* when the head of rxbuf started waiting / when the latest byte arrived */
+static void pw_ack8(const uint8_t*p);       /* v6.14: the controller's acknowledgement (0x88) of the power-off sequence's time/alarm frame */
 static void rx_feed(const uint8_t*d,int n,ms_t now){
     if(n<=0&&rxlen==0) return;
     if(rxlen+n>(int)sizeof(rxbuf)){ rxlen=0; rx_resync++; }
     int old_n=rxlen; ms_t old_last=rx_last_ms;
     if(n>0){ if(rxlen==0) rx_pend_ms=now; memcpy(rxbuf+rxlen,d,n); rxlen+=n; rx_last_ms=now; }
-    /* seneste tidspunkt bytes fra position i kan være begyndt at vente: hovedet har sit eget ur,
-     * ældre bytes bagved kom senest ved forrige ankomst, og nye bytes kom nu */
+    /* the latest time bytes from position i can have started waiting: the head has its own clock,
+     * older bytes behind it arrived at the latest at the previous arrival, and new bytes arrived now */
 #define RX_REF(i) ((i)==0?rx_pend_ms:((i)<old_n?old_last:now))
     int i=0, fired=0;
     while(i+7<=rxlen){
         if(rxbuf[i]!=0xAA||rxbuf[i+1]!=0x55){ i++; continue; }
         uint8_t cmd=rxbuf[i+2]; int ver=(cmd==0x09||cmd==0x89), tot;
-        if(ver) tot=rxbuf[i+3]+7;                           /* versions-frames: LEN er bytes (PROTOCOL §2.2) */
-        else if(cmd==0x08||cmd==0x88) tot=15;               /* power/tid: fast 15 bytes (§2.3) */
-        else if(cmd==0x03) tot=7;                           /* query: ingen payload */
-        else if(rxbuf[i+4]>REGN){ rx_resync++; i++; continue; }   /* (1) umulig længde */
+        if(ver) tot=rxbuf[i+3]+7;                           /* version frames: LEN is bytes (PROTOCOL §2.2) */
+        else if(cmd==0x08||cmd==0x88) tot=15;               /* power/time: fixed 15 bytes (§2.3) */
+        else if(cmd==0x03) tot=7;                           /* query: no payload */
+        else if(rxbuf[i+4]>REGN){ rx_resync++; i++; continue; }   /* (1) impossible length */
         else tot=2*rxbuf[i+4]+7;
-        if(i+tot>rxlen){                                    /* ufuldstændig: vent — men højst RX_RESYNC_MS */
+        if(i+tot>rxlen){                                    /* incomplete: wait — but at most RX_RESYNC_MS */
             if(now-RX_REF(i)<RX_RESYNC_MS) break;
             fired=1; i++; continue;                         /* (2) watchdog */
         }
@@ -525,7 +525,7 @@ static void rx_feed(const uint8_t*d,int n,ms_t now){
         uint16_t got=rxbuf[i+tot-2]|(rxbuf[i+tot-1]<<8);
         if(rx!=got){ rx_bad++; last_bad_ms=now; i++; continue; }
         if(ver){ rx_ok++; last_rx_ms=now; if(cmd==0x89){ frame_version(); ver_n++; ver_ms=now; } }
-        else if(cmd==0x88) pw_ack8(rxbuf+i+3);                 /* v6.14: tælles kun til DIAGNOSE — stock venter heller ikke på den */
+        else if(cmd==0x88) pw_ack8(rxbuf+i+3);                 /* v6.14: only counted for DIAGNOSTICS — stock does not wait for it either */
         else if(cmd!=0x08&&cmd!=0x88&&cmd!=0x03){
             uint8_t sub=rxbuf[i+3], L=rxbuf[i+4];
             rx_ok++; last_rx_ms=now;
@@ -540,7 +540,7 @@ static void rx_feed(const uint8_t*d,int n,ms_t now){
         }
         i+=tot;
     }
-    /* under 7 bytes tilbage: behold kun det, der kan være starten på en header — og kun så længe det er friskt */
+    /* fewer than 7 bytes left: keep only what can be the start of a header — and only while it is fresh */
     if(i+7>rxlen){
         while(i<rxlen&&!(rxbuf[i]==0xAA&&(i+1>=rxlen||rxbuf[i+1]==0x55))) i++;
         if(i<rxlen&&now-RX_REF(i)>=RX_RESYNC_MS){ fired=1; i=rxlen; }
@@ -550,7 +550,7 @@ static void rx_feed(const uint8_t*d,int n,ms_t now){
 #undef RX_REF
 }
 
-/* ================= MD5 (til config-log; RFC 1321) ================= */
+/* ================= MD5 (for the config log; RFC 1321) ================= */
 typedef struct { uint32_t s[4]; uint64_t len; uint8_t buf[64]; int nb; } MD5;
 static const uint32_t MD5K[64]={
  0xd76aa478,0xe8c7b756,0x242070db,0xc1bdceee,0xf57c0faf,0x4787c62a,0xa8304613,0xfd469501,
@@ -589,27 +589,27 @@ static void md5_hex(const uint8_t*data,size_t n,char out[33]){
 }
 
 /* ================= sysroot + boot-id (v6.2) =================
- * Alle boot-relaterede stier (/customer, /new_customer, /proc, /tmp) går gennem rp(), så
- * flag-/skift-logikken kan køres mod en mock-rod (OURUI_ROOT / selftest). Tom = ægte rod. */
+ * All boot-related paths (/customer, /new_customer, /proc, /tmp) go through rp(), so
+ * the flag/switch logic can be run against a mock root (OURUI_ROOT / selftest). Empty = real root. */
 static char sysroot[200]="";
 static const char* rp(const char*p){
     static char b[4][400]; static int k;
     if(!sysroot[0]) return p;
     char*o=b[k++&3]; snprintf(o,400,"%s%s",sysroot,p); return o;
 }
-static int64_t mono_fake=-1;                               /* kun selftest */
-static int64_t mono_s(void){ return mono_fake>=0?mono_fake:now_ms()/1000; }   /* sekunder siden boot (64 bit, v6.6) */
+static int64_t mono_fake=-1;                               /* selftest only */
+static int64_t mono_s(void){ return mono_fake>=0?mono_fake:now_ms()/1000; }   /* seconds since boot (64 bit, v6.6) */
 static void boot_id_read(char*out,size_t n){
     out[0]=0; int fd=open(rp("/proc/sys/kernel/random/boot_id"),O_RDONLY); if(fd<0) return;
     int k=read(fd,out,n-1); close(fd); if(k<0)k=0; out[k]=0; out[strcspn(out," \r\n")]=0;
 }
 
-/* ================= config.json: læs + atomisk felt-persist =================
- * Mønster fra WRITETEST.md §7: byte-eksakt cJSON-format bevares (kun tal-token for
- * det ene felt udskiftes), tmp-fil i SAMME mappe + fsync + verificér + rename().
- * demo_v9 (SIGSTOP'et) holder en write-fd på den gamle inode -> ingen race.
- * Før første write: pristine-backup (config.json.orig, overskrives aldrig).
- * Før hver write: rullende backup (config.json.bak). Hver write logges m. md5. */
+/* ================= config.json: read + atomic field persist =================
+ * Pattern from WRITETEST.md §7: the byte-exact cJSON format is preserved (only the number token of
+ * the one field is replaced), tmp file in the SAME directory + fsync + verify + rename().
+ * demo_v9 (SIGSTOPped) holds a write fd on the old inode -> no race.
+ * Before the first write: pristine backup (config.json.orig, never overwritten).
+ * Before every write: rolling backup (config.json.bak). Every write is logged w. md5. */
 #define CFG_MAX 16384
 static char cfg_path[256]="/customer/config.json";
 static char cfg_bakdir[256]="/new_customer/ourui/cfgbak";
@@ -620,12 +620,12 @@ static int cfg_read(void){
     cfg_ok=0; cfglen=0;
     int fd=open(cfg_path,O_RDONLY); if(fd<0){ snprintf(cfg_err,sizeof cfg_err,"open: %s",strerror(errno)); return 0; }
     int n=read(fd,cfgbuf,CFG_MAX-1); close(fd);
-    if(n<=2){ snprintf(cfg_err,sizeof cfg_err,"tom fil"); return 0; }
-    if(n>=CFG_MAX-1){ snprintf(cfg_err,sizeof cfg_err,"for stor"); return 0; }
+    if(n<=2){ snprintf(cfg_err,sizeof cfg_err,"empty file"); return 0; }
+    if(n>=CFG_MAX-1){ snprintf(cfg_err,sizeof cfg_err,"too large"); return 0; }
     cfglen=n; cfgbuf[n]=0; cfg_ok=1; md5_hex((uint8_t*)cfgbuf,cfglen,cfg_md5);
     return 1;
 }
-/* find værdi-span for top-niveau-nøgle (dybde 1; ignorerer presetStore-indhold) */
+/* find the value span for a top-level key (depth 1; ignores presetStore contents) */
 static int cfg_find(const char*buf,int len,const char*key,int*vs,int*ve){
     int depth=0,i=0,kl=strlen(key),hits=0;
     while(i<len){
@@ -665,33 +665,33 @@ static void fsync_dir(const char*filepath){
     char d[256]; snprintf(d,sizeof d,"%s",filepath); char*s=strrchr(d,'/'); if(!s) return; if(s==d) s[1]=0; else *s=0;
     int fd=open(d,O_RDONLY); if(fd>=0){ fsync(fd); close(fd); }
 }
-/* returnerer 1 ved succes; ved fejl er config.json uændret og cfg_err sat */
+/* returns 1 on success; on failure config.json is unchanged and cfg_err is set */
 static int cfg_set_int(const char*key,int newv){
     char cur[CFG_MAX]; char md_before[33],md_after[33];
-    /* 1) frisk læsning (aldrig fra cache) */
+    /* 1) fresh read (never from cache) */
     int fd=open(cfg_path,O_RDONLY); if(fd<0){ snprintf(cfg_err,sizeof cfg_err,"open: %s",strerror(errno)); return 0; }
     int n=read(fd,cur,CFG_MAX-1); close(fd);
-    if(n<=2||n>=CFG_MAX-1){ snprintf(cfg_err,sizeof cfg_err,"laes-fejl"); return 0; }
+    if(n<=2||n>=CFG_MAX-1){ snprintf(cfg_err,sizeof cfg_err,"read error"); return 0; }
     cur[n]=0; md5_hex((uint8_t*)cur,n,md_before);
-    int a,b; if(!cfg_find(cur,n,key,&a,&b)){ snprintf(cfg_err,sizeof cfg_err,"felt mangler: %s",key); return 0; }
+    int a,b; if(!cfg_find(cur,n,key,&a,&b)){ snprintf(cfg_err,sizeof cfg_err,"field missing: %s",key); return 0; }
     int oldv=atoi(cur+a);
     /* 2) backups */
     mkdir(cfg_bakdir,0755);
     char p[320];
     snprintf(p,sizeof p,"%s/config.json.orig",cfg_bakdir);
-    if(access(p,F_OK)!=0){ if(!write_all(p,cur,n,1)){ snprintf(cfg_err,sizeof cfg_err,"orig-backup fejlede"); return 0; } fsync_dir(p); }
+    if(access(p,F_OK)!=0){ if(!write_all(p,cur,n,1)){ snprintf(cfg_err,sizeof cfg_err,"orig backup failed"); return 0; } fsync_dir(p); }
     char pt[340]; snprintf(p,sizeof p,"%s/config.json.bak",cfg_bakdir); snprintf(pt,sizeof pt,"%s.tmp",p);
-    if(!write_all(pt,cur,n,0)||rename(pt,p)!=0){ snprintf(cfg_err,sizeof cfg_err,"backup fejlede"); return 0; }
-    /* 3) byg nyt indhold: kun tal-tokenet udskiftes */
+    if(!write_all(pt,cur,n,0)||rename(pt,p)!=0){ snprintf(cfg_err,sizeof cfg_err,"backup failed"); return 0; }
+    /* 3) build the new content: only the number token is replaced */
     char nb[CFG_MAX]; char num[16]; int nl=snprintf(num,sizeof num,"%d",newv);
-    int nn=a+nl+(n-b); if(nn>=CFG_MAX-1){ snprintf(cfg_err,sizeof cfg_err,"for stor"); return 0; }
+    int nn=a+nl+(n-b); if(nn>=CFG_MAX-1){ snprintf(cfg_err,sizeof cfg_err,"too large"); return 0; }
     memcpy(nb,cur,a); memcpy(nb+a,num,nl); memcpy(nb+a+nl,cur+b,n-b); nb[nn]=0;
-    /* 4) tmp i samme mappe -> fsync -> genlæs+sammenlign -> rename */
+    /* 4) tmp in the same directory -> fsync -> re-read+compare -> rename */
     char tmp[300]; snprintf(tmp,sizeof tmp,"%s",cfg_path);
     char*sl=strrchr(tmp,'/'); if(sl) snprintf(sl+1,sizeof tmp-(sl+1-tmp),".ourui_cfg.tmp"); else snprintf(tmp,sizeof tmp,".ourui_cfg.tmp");
     if(!write_all(tmp,nb,nn,0)){ snprintf(cfg_err,sizeof cfg_err,"tmp-write: %s",strerror(errno)); unlink(tmp); return 0; }
     char chk[CFG_MAX]; fd=open(tmp,O_RDONLY); int cn=fd>=0?read(fd,chk,CFG_MAX):-1; if(fd>=0) close(fd);
-    if(cn!=nn||memcmp(chk,nb,nn)){ snprintf(cfg_err,sizeof cfg_err,"tmp-verifikation fejlede"); unlink(tmp); return 0; }
+    if(cn!=nn||memcmp(chk,nb,nn)){ snprintf(cfg_err,sizeof cfg_err,"tmp verification failed"); unlink(tmp); return 0; }
     if(rename(tmp,cfg_path)!=0){ snprintf(cfg_err,sizeof cfg_err,"rename: %s",strerror(errno)); unlink(tmp); return 0; }
     fsync_dir(cfg_path);
     md5_hex((uint8_t*)nb,nn,md_after);
@@ -704,47 +704,47 @@ static int cfg_set_int(const char*key,int newv){
         fflush(lf); fsync(fileno(lf)); fclose(lf);
     }
     snprintf(p,sizeof p,"%s/RESTART_NEEDED",cfg_bakdir);
-    lf=fopen(p,"w"); if(lf){ fprintf(lf,"config.json aendret af ourui. Controlleren har allerede vaerdierne (cmd6 ved GEM).\n"
-                           "Stock-UI'et (demo_v9) laeser config KUN ved opstart: genstart det (kill $(pidof demo_v9);\n"
-                           "watchdog starter det igen) FOER stock-settings bruges. Ved opstart boot-pusher det\n"
-                           "config-vaerdierne til controlleren (cmd6 sub1 len30 + sub112 len3).\n");
-                /* stempel til restart_pending(): et stock-UI startet EFTER dette har selv laest config */
+    lf=fopen(p,"w"); if(lf){ fprintf(lf,"config.json changed by ourui. The controller already has the values (cmd6 on SAVE).\n"
+                           "The stock UI (demo_v9) reads config ONLY at startup: restart it (kill $(pidof demo_v9);\n"
+                           "the watchdog starts it again) BEFORE stock settings are used. At startup it boot-pushes\n"
+                           "the config values to the controller (cmd6 sub1 len30 + sub112 len3).\n");
+                /* stamp for restart_pending(): a stock UI started AFTER this has read config itself */
                 char bid[64]; boot_id_read(bid,sizeof bid); fprintf(lf,"boot_id=%s mono_s=%lld\n",bid[0]?bid:"?",(long long)mono_s()); fclose(lf); }
     memcpy(cfgbuf,nb,nn+1); cfglen=nn; cfg_ok=1; strcpy(cfg_md5,md_after); cfg_writes++;
     return 1;
 }
 
 /* ====================================================================== */
-/* ================= NET: wifi ved opstart + selv-heal (v6.7) =========== */
+/* ================= NET: wifi at startup + self-heal (v6.7) ============ */
 /* ====================================================================== */
-/* Stock-UI'et bringer SELV wifi op (libmi_wlan.so styret af /config/wifi/wlan.json) — demo.sh gør det
- * ikke. Ved slot B-boot starter stock-UI'et aldrig, og maskinen var uden netværk (INSTALL-REPORT §3.1):
- * hverken driveren (8188fu.ko), wpa_supplicant eller DHCP blev startet. Mekanismen er revers-bevist på
- * enheden (wlan.json, ssw01bInit.sh, libmi_wlan.so, demo_v9's _wifi_init/_wifi_open/_wifi_connect og
- * stock's egen strace-optagelse; se UI_v6.md "CHANGES-v6.7" + net_re/NET-REVERSE.md). Stock gør:
+/* The stock UI brings wifi up ITSELF (libmi_wlan.so driven by /config/wifi/wlan.json) — demo.sh does
+ * not. On a slot B boot the stock UI never starts, and the machine had no network (INSTALL-REPORT §3.1):
+ * neither the driver (8188fu.ko), wpa_supplicant nor DHCP was started. The mechanism is reverse-proven on
+ * the device (wlan.json, ssw01bInit.sh, libmi_wlan.so, demo_v9's _wifi_init/_wifi_open/_wifi_connect and
+ * stock's own strace capture; see UI_v6.md "CHANGES-v6.7" + net_re/NET-REVERSE.md). Stock does:
  *   1. MI_WLAN_Init:    sh -c "source /config/wifi/ssw01bInit.sh dummy1 dummy2 "   (mkdir /tmp/wifi/run,
- *                       insmod /config/wifi/8188fu.ko, mdev -s, vent paa wlan0 i op til 10 s)
+ *                       insmod /config/wifi/8188fu.ko, mdev -s, wait for wlan0 for up to 10 s)
  *   2. MI_WLAN_Open:    sh -c "ifconfig wlan0 up  ; wpa_supplicant -i wlan0 -Dnl80211 -c
  *                       /appconfigs/wpa_supplicant.conf  & sleep 1  ; "
  *   3. MI_WLAN_Connect: wpa_cli add_network / set_network ssid, psk, key_mgmt WPA-PSK / select_network /
- *                       enable_network / save_config  — save_config skriver netværks-blokken i
- *                       /appconfigs/wpa_supplicant.conf (demo.sh kopierer .conf_bak over den ved HVER boot)
- *                       og:  udhcpc -i wlan0 -s /etc/init.d/udhcpc.script -a -q -b -t 20 -T 1 &
- *      (-q: udhcpc afslutter, når den har en lease — derfor findes der ingen udhcpc i normal drift)
- *   Miljø for børnene: LD_LIBRARY_PATH og PATH får ":/config/wifi" føjet til.
- * ourui gør det samme, men kun når stakken er NEDE:
- *   - init-scriptet køres KUN, når wlan0 ikke findes (et insmod af en indlæst driver fejler);
- *   - conf-filen skrives direkte fra config.json (ssid/password) i PRÆCIS det format, save_config giver
- *     (byte-identisk, md5-bevist) — og kun når indholdet afviger; derefter startes wpa_supplicant med de
- *     samme argumenter, og 1 s senere udhcpc med de samme argumenter — medmindre wlan0 stadig har sin
- *     IP og default-rute (heal efter en død supplicant): så beholdes de (samme IP; stock kører heller
- *     aldrig udhcpc igen i drift, -q);
- *   - en wpa_supplicant, der lever, dræbes ALDRIG — ourui sender ikke et signal til nogen proces (0 kill-kald).
- *     Lever den, men er wlan0 administrativt NEDE, gøres "ifconfig wlan0 up" (som MI_WLAN_Open).
- *     Mangler IP (eller default-ruten, hvis der har været en) og kører der ingen udhcpc, startes udhcpc
- *     (efter NET_NOIP_MS / NET_NOGW_MS, med backoff). Uden carrier ventes der (supplicanten genforbinder selv).
- * Alt er ikke-blokerende: main-loopet kalder net_step(); langsomme trin er børne-processer.
- * Log: /tmp/ourui_net.log (kun overgange; password skrives aldrig). OURUI_NONET=1 slår vagten fra. */
+ *                       enable_network / save_config  — save_config writes the network block into
+ *                       /appconfigs/wpa_supplicant.conf (demo.sh copies .conf_bak over it on EVERY boot)
+ *                       and:  udhcpc -i wlan0 -s /etc/init.d/udhcpc.script -a -q -b -t 20 -T 1 &
+ *      (-q: udhcpc exits once it has a lease — which is why there is no udhcpc in normal operation)
+ *   Environment for the children: LD_LIBRARY_PATH and PATH get ":/config/wifi" appended.
+ * ourui does the same, but only when the stack is DOWN:
+ *   - the init script is run ONLY when wlan0 does not exist (an insmod of a loaded driver fails);
+ *   - the conf file is written directly from config.json (ssid/password) in EXACTLY the format save_config produces
+ *     (byte-identical, md5-proven) — and only when the content differs; then wpa_supplicant is started with the
+ *     same arguments, and 1 s later udhcpc with the same arguments — unless wlan0 still has its
+ *     IP and default route (heal after a dead supplicant): then they are kept (same IP; stock never runs
+ *     udhcpc again in operation either, -q);
+ *   - a live wpa_supplicant is NEVER killed — ourui does not send a signal to any process (0 kill calls).
+ *     If it is alive but wlan0 is administratively DOWN, "ifconfig wlan0 up" is done (like MI_WLAN_Open).
+ *     If the IP is missing (or the default route, if there has been one) and no udhcpc is running, udhcpc is started
+ *     (after NET_NOIP_MS / NET_NOGW_MS, with backoff). Without carrier it waits (the supplicant reconnects by itself).
+ * Everything is non-blocking: the main loop calls net_step(); slow steps are child processes.
+ * Log: /tmp/ourui_net.log (transitions only; the password is never written). OURUI_NONET=1 turns the watchdog off. */
 #define NET_IF          "wlan0"
 #define NET_WIFI_DIR    "/config/wifi"
 #define NET_WPA_BIN     NET_WIFI_DIR "/wpa_supplicant"
@@ -758,23 +758,23 @@ static int cfg_set_int(const char*key,int newv){
 #define NET_LOG         "/tmp/ourui_net.log"
 #define NET_LOG_MAX     131072
 #define NET_CONF_HDR    "ctrl_interface=" NET_CTRL "\nupdate_config=1\n"
-#define NET_PROBE_MS       1000     /* mens noget er i gang */
-#define NET_PROBE_UP_MS    2000     /* sund stak: ét /proc-opslag + carrier + SIOCGIFADDR */
-#define NET_PROBE_IDLE_MS  5000     /* FRA / venter paa naeste forsoeg */
-#define NET_DEAD_MS        3000     /* wpa_supplicant vaek saa laenge -> bring-up (ved opstart: straks) */
+#define NET_PROBE_MS       1000     /* while something is in progress */
+#define NET_PROBE_UP_MS    2000     /* healthy stack: one /proc lookup + carrier + SIOCGIFADDR */
+#define NET_PROBE_IDLE_MS  5000     /* OFF / waiting for the next attempt */
+#define NET_DEAD_MS        3000     /* wpa_supplicant gone this long -> bring-up (at startup: immediately) */
 #define NET_WPA_SETTLE_MS  1000     /* stock: "& sleep 1" */
-#define NET_NOIP_MS        8000     /* supplicant lever, ingen IP, ingen udhcpc -> udhcpc */
-#define NET_NOGW_MS        3000     /* carrier + IP, men default-ruten er vaek (fx efter ifconfig down/up) -> udhcpc */
-#define NET_IFDOWN_MS      3000     /* supplicant lever, wlan0 administrativt nede -> ifconfig wlan0 up */
-#define NET_DHCP_MAX_MS    60000    /* backoff-loft for gentagne udhcpc-starter i samme udfald */
-#define NET_INIT_TMO_MS    25000    /* init-scriptet venter selv hoejst ~10 s paa wlan0; derefter logges det (draebes ikke) */
+#define NET_NOIP_MS        8000     /* supplicant alive, no IP, no udhcpc -> udhcpc */
+#define NET_NOGW_MS        3000     /* carrier + IP, but the default route is gone (e.g. after ifconfig down/up) -> udhcpc */
+#define NET_IFDOWN_MS      3000     /* supplicant alive, wlan0 administratively down -> ifconfig wlan0 up */
+#define NET_DHCP_MAX_MS    60000    /* backoff ceiling for repeated udhcpc starts within the same outage */
+#define NET_INIT_TMO_MS    25000    /* the init script itself waits at most ~10 s for wlan0; after that it is logged (not killed) */
 #define NET_BACKOFF0_MS    5000
 #define NET_BACKOFF_MAX_MS 60000
 #define NET_CFG_RECHECK_MS 30000
 enum { NS_OFF=0, NS_DOWN, NS_STARTING, NS_CONNECTING, NS_UP };
 enum { NB_NONE=0, NB_INIT, NB_WPA };
 enum { NC_OK=0, NC_NOCFG, NC_WIFIOFF, NC_NOSSID, NC_BADPSK };
-/* ip: a.b.c.d = a<<24|b<<16|c<<8|d; 0 = ingen. ifup = IFF_UP ("ifconfig wlan0 up"). gw = default-rute via wlan0 */
+/* ip: a.b.c.d = a<<24|b<<16|c<<8|d; 0 = none. ifup = IFF_UP ("ifconfig wlan0 up"). gw = default route via wlan0 */
 typedef struct { int iface, ifup, wpa_pid, dhcp_pid, carrier, gw; uint32_t ip; } NetProbe;
 static struct {
     int on, state, step, cfg, cfg_logged, booted, was_up, acted, dead, job, orphan, init_hung, backoff, gw_seen, carrier_was, dhcp_wait, ifdown;
@@ -784,9 +784,9 @@ static struct {
     char ssid[100], psk[80], conf_md5[33], evt[200]; int ssid_n;
 } net;
 static ms_t net_now=0; static int net_echo=0;
-static const char*const NC_TXT[]={"ok","config.json kan ikke laeses","wifionoff = 0","intet (eller for langt) ssid i config.json","password: ugyldig laengde/tegn (0 eller 8..63 ASCII, som stock)"};
+static const char*const NC_TXT[]={"ok","config.json cannot be read","wifionoff = 0","no (or too long) ssid in config.json","password: invalid length/characters (0 or 8..63 ASCII, like stock)"};
 
-/* top-niveau STRENG-værdi (dybde 1) m. JSON-escapes -> out; returnerer længden, -1 hvis nøglen mangler / ikke er en streng */
+/* top-level STRING value (depth 1) w. JSON escapes -> out; returns the length, -1 if the key is missing / not a string */
 static int cfg_find_str(const char*buf,int len,const char*key,char*out,int on){
     int depth=0,i=0,kl=(int)strlen(key);
     while(i<len){
@@ -831,7 +831,7 @@ static int cfg_find_str(const char*buf,int len,const char*key,char*out,int on){
     }
     return -1;
 }
-/* wifionoff / ssid / password læses FRISK fra config.json (egen buffer: settings-modellen røres ikke) */
+/* wifionoff / ssid / password are read FRESH from config.json (own buffer: the settings model is not touched) */
 static void net_cfg_load(void){
     static char b[CFG_MAX]; int a,e,on=1;
     net.ssid[0]=net.psk[0]=0; net.ssid_n=0;
@@ -849,9 +849,9 @@ static void net_cfg_load(void){
     for(int i=0;i<pn;i++) if((unsigned char)net.psk[i]<32||(unsigned char)net.psk[i]>=127){ net.cfg=NC_BADPSK; return; }
     net.cfg=NC_OK;
 }
-/* conf-filen i save_config-format. Globale linjer (ctrl_interface, update_config, ...) tages fra vendor-skabelonen
- * (.conf_bak — den demo.sh kopierer ved hver boot), ellers fra den nuværende conf, ellers standarden.
- * ssid: "tekst" — eller hex uden anførselstegn, hvis den har bytes < 32 eller >= 127 (wpa_config_write_string). */
+/* the conf file in save_config format. Global lines (ctrl_interface, update_config, ...) are taken from the vendor template
+ * (.conf_bak — the one demo.sh copies on every boot), otherwise from the current conf, otherwise the default.
+ * ssid: "text" — or hex without quotes if it has bytes < 32 or >= 127 (wpa_config_write_string). */
 static int net_conf_build(char*out,int max){
     static const char*const src[2]={NET_CONF_BAK,NET_CONF};
     char hdr[1024]; int hn=0;
@@ -879,7 +879,7 @@ static int net_conf_build(char*out,int max){
     else           n=snprintf(out,(size_t)max,"%s\nnetwork={\n\tssid=%s\n\tkey_mgmt=NONE\n}\n",hdr,ss);
     return (n>0&&n<max)?n:-1;
 }
-/* 0 = filen har allerede præcis dette indhold (ikke rørt), 1 = skrevet (tmp + fsync + rename), -1 = fejl */
+/* 0 = the file already has exactly this content (not touched), 1 = written (tmp + fsync + rename), -1 = error */
 static int net_conf_sync(void){
     char want[4096],have[4096],path[420],tmp[440];
     int wn=net_conf_build(want,sizeof want); if(wn<0) return -1;
@@ -910,19 +910,19 @@ static void net_log(const char*fmt,...){
     if(net_echo){ printf("up=%lld.%03d NET %s\n",(long long)(net_now/1000),(int)(net_now%1000),m); fflush(stdout); }
 }
 
-/* ---- HAL: enheden (ægte) / model (SIM + preview/selftest) ---- */
+/* ---- HAL: the device (real) / model (SIM + preview/selftest) ---- */
 #ifdef DEVICE_RT
 static int net_sock=-1;
 static int net_slurp(const char*path,char*b,int n){
     int fd=open(path,O_RDONLY|O_CLOEXEC); if(fd<0) return -1;
     int k=(int)read(fd,b,(size_t)n-1); close(fd); if(k<0) k=0; b[k]=0; return k;
 }
-static int net_pid_is(int pid,const char*name){        /* argv[0]'s basisnavn; zombier/kerne-tråde har tom cmdline */
+static int net_pid_is(int pid,const char*name){        /* argv[0]'s basename; zombies/kernel threads have an empty cmdline */
     char p[64],b[200]; snprintf(p,sizeof p,"/proc/%d/cmdline",pid);
     if(net_slurp(p,b,sizeof b)<=0) return 0;
     const char*a=strrchr(b,'/'); return !strcmp(a?a+1:b,name);
 }
-static void net_pid_scan(int*wpa,int*dhcp){            /* ét gennemløb af /proc; kun de pladser, der er 0, søges */
+static void net_pid_scan(int*wpa,int*dhcp){            /* one pass over /proc; only the slots that are 0 are searched */
     DIR*d=opendir("/proc"); if(!d) return;
     struct dirent*de;
     while((de=readdir(d))&&((wpa&&!*wpa)||(dhcp&&!*dhcp))){
@@ -940,7 +940,7 @@ static int net_ifreq(unsigned long req,struct ifreq*r){
     if(net_sock<0) return -1;
     return ioctl(net_sock,req,r);
 }
-static int net_has_gw(void){                           /* /proc/net/route: "wlan0  00000000  <gw>  <flags m. RTF_UP|RTF_GATEWAY>" */
+static int net_has_gw(void){                           /* /proc/net/route: "wlan0  00000000  <gw>  <flags w. RTF_UP|RTF_GATEWAY>" */
     char b[2048]; if(net_slurp("/proc/net/route",b,sizeof b)<=0) return 0;
     for(char*l=b;l&&*l;){
         char ifn[20]; unsigned dst=1,gw=0,fl=0; char*nl=strchr(l,'\n');
@@ -959,13 +959,13 @@ static void nh_probe(NetProbe*p,ms_t now,int want_dhcp){
     memset(&r,0,sizeof r); snprintf(r.ifr_name,sizeof r.ifr_name,"%s",NET_IF);
     if(p->iface&&net_ifreq(SIOCGIFADDR,&r)==0) p->ip=ntohl(((struct sockaddr_in*)(void*)&r.ifr_addr)->sin_addr.s_addr);
     p->gw=p->ip?net_has_gw():0;
-    want_dhcp=want_dhcp&&!(p->ip&&(p->gw||!net.gw_seen));    /* udhcpc soeges kun, mens IP-konfigurationen mangler */
+    want_dhcp=want_dhcp&&!(p->ip&&(p->gw||!net.gw_seen));    /* udhcpc is only searched for while the IP configuration is missing */
     if(p->wpa_pid>0&&!net_pid_is(p->wpa_pid,"wpa_supplicant")) p->wpa_pid=0;
     if(!want_dhcp) p->dhcp_pid=0; else if(p->dhcp_pid>0&&!net_pid_is(p->dhcp_pid,"udhcpc")) p->dhcp_pid=0;
     if(!p->wpa_pid||(want_dhcp&&!p->dhcp_pid)) net_pid_scan(&p->wpa_pid,want_dhcp?&p->dhcp_pid:NULL);
 }
-/* kaldes i BARNET efter fork: samme miljø-tilføjelse som MI_WLAN_Init (wlan.json "env": "%s:%s" — føjes til
- * uden dublet-tjek; stock's wpa_supplicant har derfor ".../config/wifi:/config/wifi", målt i /proc/841/environ) */
+/* called in the CHILD after fork: the same environment addition as MI_WLAN_Init (wlan.json "env": "%s:%s" — appended
+ * without a duplicate check; stock's wpa_supplicant therefore has ".../config/wifi:/config/wifi", measured in /proc/841/environ) */
 static void net_child_env(void){
     const char*l=getenv("LD_LIBRARY_PATH"),*pa=getenv("PATH"); char b[1200];
     if(!l||!*l) setenv("LD_LIBRARY_PATH","/lib:" NET_WIFI_DIR,1);
@@ -973,9 +973,9 @@ static void net_child_env(void){
     if(!pa||!*pa) setenv("PATH","/bin:/sbin:/usr/bin:/usr/sbin:" NET_WIFI_DIR,1);
     else { snprintf(b,sizeof b,"%s:%s",pa,NET_WIFI_DIR); setenv("PATH",b,1); }
 }
-/* detach=1: dobbelt fork — processen arves af init (PPid 1, egen session), som stock's "… &" fra system().
- * Barnet arver INGEN af ourui's fd'er (fb, UART, touch-grab) — stock's wpa_supplicant arver dem alle.
- * Returnerer: detach -> 1 ved succes; ellers barnets pid; -1 ved fejl. */
+/* detach=1: double fork — the process is inherited by init (PPid 1, own session), like stock's "… &" from system().
+ * The child inherits NONE of ourui's fds (fb, UART, touch grab) — stock's wpa_supplicant inherits all of them.
+ * Returns: detach -> 1 on success; otherwise the child's pid; -1 on error. */
 static int net_spawn(int detach,const char*out,const char*path,char*const argv[]){
     fflush(stdout); fflush(stderr);
     pid_t c=fork(); if(c<0) return -1;
@@ -1002,9 +1002,9 @@ static int nh_job_done(int pid,int*rc){
     int st=0; pid_t r=waitpid(pid,&st,WNOHANG); if(r==0) return 0;
     *rc=(r==pid&&WIFEXITED(st))?WEXITSTATUS(st):-1; return 1;
 }
-static void nh_prepare(void){          /* det af init-scriptet, wpa_supplicant behøver, når wlan0 allerede findes */
+static void nh_prepare(void){          /* the part of the init script that wpa_supplicant needs when wlan0 already exists */
     mkdir("/tmp/wifi",0755); mkdir(NET_RUN_DIR,0777); chmod(NET_RUN_DIR,0777);
-    unlink(NET_CTRL "/" NET_IF);      /* kaldes kun, når ingen wpa_supplicant lever: en efterladt socket er død */
+    unlink(NET_CTRL "/" NET_IF);      /* only called when no wpa_supplicant is alive: a leftover socket is dead */
 }
 static void nh_iface_up(void){         /* = "ifconfig wlan0 up" */
     struct ifreq r; memset(&r,0,sizeof r); snprintf(r.ifr_name,sizeof r.ifr_name,"%s",NET_IF);
@@ -1019,13 +1019,13 @@ static int nh_dhcp_start(void){
     return net_spawn(1,NULL,NET_DHCP_BIN,a)>0;
 }
 #else
-/* MODEL af wifi-stakken (SIM-build + preview/selftest): samme tilstandsmaskine, ingen processer, intet netværk.
- * init-scriptet giver wlan0 efter NM_INIT_MS; en startet supplicant faar carrier efter NM_ASSOC_MS (hvis AP'et er
- * der); udhcpc nulstiller IP'en ved start (deconfig), faar en lease NM_LEASE_MS efter carrier og afslutter (-q). */
+/* MODEL of the wifi stack (SIM build + preview/selftest): the same state machine, no processes, no network.
+ * the init script provides wlan0 after NM_INIT_MS; a started supplicant gets carrier after NM_ASSOC_MS (if the AP is
+ * there); udhcpc resets the IP at start (deconfig), gets a lease NM_LEASE_MS after carrier and exits (-q). */
 #define NM_INIT_MS  600
 #define NM_ASSOC_MS 1500
 #define NM_LEASE_MS 1200
-/* ifdown (ifconfig wlan0 down) fjerner kernens ruter via wlan0, men ikke IP'en — som paa enheden. init_hang: scriptet bliver aldrig faerdigt. */
+/* ifdown (ifconfig wlan0 down) removes the kernel's routes via wlan0, but not the IP — as on the device. init_hang: the script never finishes. */
 static struct { int iface, ifup, wpa_pid, dhcp_pid, carrier, gw, ap, gw_offer, job, pid_next, init_fail, init_hang, wpa_fail, n_init, n_wpa, n_dhcp, n_prep, n_ifup; uint32_t ip, lease; ms_t now, t_init, assoc_at, lease_at; } nm;
 static void nm_reset(int cold){
     memset(&nm,0,sizeof nm); nm.ap=1; nm.gw_offer=1; nm.pid_next=900; nm.lease=(192u<<24)|(168u<<16)|(1u<<8)|100u;
@@ -1048,45 +1048,45 @@ static int nh_wpa_start(void){ nm.n_wpa++; if(nm.wpa_fail||!nm.iface) return 1; 
 static int nh_dhcp_start(void){ nm.n_dhcp++; nm.dhcp_pid=nm.pid_next++; nm.ip=0; nm.gw=0; nm.lease_at=0; return 1; }
 #endif
 
-/* ---- tilstandsmaskinen (ens i alle build-typer) ---- */
+/* ---- the state machine (identical in all build types) ---- */
 static void net_fail(ms_t now,const char*why){
     net.step=NB_NONE; net.job=0; net.n_fail++; net.state=NS_DOWN;
     net.backoff=net.backoff?(net.backoff*2>NET_BACKOFF_MAX_MS?NET_BACKOFF_MAX_MS:net.backoff*2):NET_BACKOFF0_MS;
     net.t_retry=now+net.backoff;
-    net_log("bring-up FEJLEDE: %s - nyt forsoeg om %d s (fejl i alt: %d)",why,net.backoff/1000,net.n_fail);
+    net_log("bring-up FAILED: %s - retrying in %d s (failures in total: %d)",why,net.backoff/1000,net.n_fail);
 }
 static void net_off(ms_t now){
-    if(net.state!=NS_OFF||net.cfg_logged!=net.cfg){ net.cfg_logged=net.cfg; net_log("FRA: %s - netvaerket roeres ikke",NC_TXT[net.cfg]); }
+    if(net.state!=NS_OFF||net.cfg_logged!=net.cfg){ net.cfg_logged=net.cfg; net_log("OFF: %s - the network is not touched",NC_TXT[net.cfg]); }
     net.state=NS_OFF; net.step=NB_NONE; net.t_cfg=now+NET_CFG_RECHECK_MS;
 }
-/* IP-konfigurationen er komplet: en IP — og default-ruten, hvis der nogensinde har vaeret en (et net uden gateway er ogsaa sundt) */
+/* the IP configuration is complete: an IP — and the default route, if there has ever been one (a network without a gateway is healthy too) */
 static int net_ipok(const NetProbe*p){ return p->ip&&(p->gw||!net.gw_seen); }
 static void net_dhcp(ms_t now,const char*why){
-    if(nh_dhcp_start()){ net.n_dhcp++; net_log("%s: startet udhcpc -i " NET_IF " -s " NET_DHCP_SH " -a -q -b -t 20 -T 1",why); }
-    else net_log("%s: udhcpc kunne IKKE startes",why);
+    if(nh_dhcp_start()){ net.n_dhcp++; net_log("%s: started udhcpc -i " NET_IF " -s " NET_DHCP_SH " -a -q -b -t 20 -T 1",why); }
+    else net_log("%s: udhcpc could NOT be started",why);
     net.t_noip=now;
 }
 static void net_wpa_begin(ms_t now){
     char sv_[40]; int k=0; for(;k<net.ssid_n&&k<32;k++){ unsigned char c=(unsigned char)net.ssid[k]; sv_[k]=(c<32||c>=127)?'?':(char)c; } sv_[k]=0;
     nh_prepare();
     int c=net_conf_sync();
-    if(c<0){ net_fail(now,"kan ikke skrive " NET_CONF); return; }
-    if(c>0){ net.n_conf++; net_log(NET_CONF " skrevet fra config.json (ssid \"%s\", %s, md5 %.8s)",sv_,net.psk[0]?"WPA-PSK":"aabent net",net.conf_md5); }
-    else net_log(NET_CONF " har allerede det rigtige indhold (ssid \"%s\", md5 %.8s) - ikke skrevet",sv_,net.conf_md5);
+    if(c<0){ net_fail(now,"cannot write " NET_CONF); return; }
+    if(c>0){ net.n_conf++; net_log(NET_CONF " written from config.json (ssid \"%s\", %s, md5 %.8s)",sv_,net.psk[0]?"WPA-PSK":"open network",net.conf_md5); }
+    else net_log(NET_CONF " already has the correct content (ssid \"%s\", md5 %.8s) - not written",sv_,net.conf_md5);
     nh_iface_up();
-    if(!nh_wpa_start()){ net_fail(now,"wpa_supplicant kunne ikke startes"); return; }
+    if(!nh_wpa_start()){ net_fail(now,"wpa_supplicant could not be started"); return; }
     net.n_wpa++; net.step=NB_WPA; net.t_step=now;
-    net_log("startet: wpa_supplicant -i " NET_IF " -Dnl80211 -c " NET_CONF " (venter %d ms som stock)",NET_WPA_SETTLE_MS);
+    net_log("started: wpa_supplicant -i " NET_IF " -Dnl80211 -c " NET_CONF " (waiting %d ms like stock)",NET_WPA_SETTLE_MS);
 }
 static void net_bringup(ms_t now){
     net_cfg_load();
     if(net.cfg!=NC_OK){ net_off(now); return; }
     net.acted=1; net.state=NS_STARTING;
     if(!net.p.iface){
-        if(net.orphan){ net_fail(now,"et tidligere init-script koerer stadig - startes ikke igen"); return; }
-        int j=nh_init_start(); if(j<=0){ net_fail(now,"init-scriptet kunne ikke startes"); return; }
+        if(net.orphan){ net_fail(now,"an earlier init script is still running - not starting another"); return; }
+        int j=nh_init_start(); if(j<=0){ net_fail(now,"the init script could not be started"); return; }
         net.job=j; net.init_hung=0; net.n_init++; net.step=NB_INIT; net.t_step=now;
-        net_log(NET_IF " findes ikke: koerer \"source " NET_INIT_SH " dummy1 dummy2\" (som MI_WLAN_Init)");
+        net_log(NET_IF " missing: running \"source " NET_INIT_SH " dummy1 dummy2\" (like MI_WLAN_Init)");
         return;
     }
     net_wpa_begin(now);
@@ -1099,68 +1099,68 @@ static void net_eval(ms_t now){
         int rc=0;
         if(!nh_job_done(net.job,&rc)){
             if(now-net.t_step<NET_INIT_TMO_MS) return;
-            if(!p->iface){                                    /* ingen kill-kald: scriptet faar lov at blive faerdigt, og der startes ikke et til */
-                if(!net.init_hung){ net.init_hung=1; net_log("init-scriptet (pid %d) har koert i %d s uden " NET_IF " - venter fortsat (det draebes ikke)",net.job,NET_INIT_TMO_MS/1000); }
+            if(!p->iface){                                    /* no kill calls: the script is allowed to finish, and no second one is started */
+                if(!net.init_hung){ net.init_hung=1; net_log("the init script (pid %d) has been running for %d s without " NET_IF " - still waiting (it is not killed)",net.job,NET_INIT_TMO_MS/1000); }
                 return;
             }
-            net_log("init-scriptet (pid %d) koerer stadig efter %d s, men " NET_IF " findes: fortsaetter (scriptet hoestes, naar det slutter)",net.job,(int)((now-net.t_step)/1000));
+            net_log("the init script (pid %d) is still running after %d s, but " NET_IF " exists: continuing (the script is reaped when it ends)",net.job,(int)((now-net.t_step)/1000));
             net.orphan=net.job; net.job=0; net_wpa_begin(now); return;
         }
         net.job=0; nh_probe(p,now,0);
-        if(!p->iface){ char w[72]; snprintf(w,sizeof w,"init-scriptet rc=%d, " NET_IF " findes stadig ikke",rc); net_fail(now,w); return; }
-        net_log("init-scriptet faerdigt (rc=%d): " NET_IF " findes",rc);
+        if(!p->iface){ char w[72]; snprintf(w,sizeof w,"init script rc=%d, " NET_IF " still does not exist",rc); net_fail(now,w); return; }
+        net_log("init script finished (rc=%d): " NET_IF " exists",rc);
         net_wpa_begin(now); return;
     }
     if(net.step==NB_WPA){
         if(now-net.t_step<NET_WPA_SETTLE_MS) return;
-        if(!wpa){ net_fail(now,"wpa_supplicant koerer ikke efter start"); return; }
+        if(!wpa){ net_fail(now,"wpa_supplicant not running after start"); return; }
         net.step=NB_NONE; net.state=NS_CONNECTING; net.t_noip=now; net.carrier_was=p->carrier; net.dhcp_wait=0;
-        if(p->dhcp_pid) net_log("wpa_supplicant pid %d koerer; udhcpc pid %d koerer allerede",p->wpa_pid,p->dhcp_pid);
-        else if(net_ipok(p)) net_log("wpa_supplicant pid %d koerer; " NET_IF " har stadig ip %s%s - beholdes (ingen udhcpc)",p->wpa_pid,net_ipstr(p->ip,ipb,sizeof ipb),p->gw?" og default-rute":"");
-        else { char w[64]; snprintf(w,sizeof w,"wpa_supplicant pid %d koerer",p->wpa_pid); net_dhcp(now,w); }
+        if(p->dhcp_pid) net_log("wpa_supplicant pid %d running; udhcpc pid %d already running",p->wpa_pid,p->dhcp_pid);
+        else if(net_ipok(p)) net_log("wpa_supplicant pid %d running; " NET_IF " still has ip %s%s - kept (no udhcpc)",p->wpa_pid,net_ipstr(p->ip,ipb,sizeof ipb),p->gw?" and default route":"");
+        else { char w[64]; snprintf(w,sizeof w,"wpa_supplicant pid %d running",p->wpa_pid); net_dhcp(now,w); }
         return;
     }
-    if(wpa&&p->ifup&&p->carrier&&net_ipok(p)){              /* sund: roeres ikke */
+    if(wpa&&p->ifup&&p->carrier&&net_ipok(p)){              /* healthy: not touched */
         if(net.state!=NS_UP){
             int ms=(int)(now-net.t_down); net_ipstr(p->ip,ipb,sizeof ipb);
-            if(first) net_log("OPPE ved start: wpa_supplicant pid %d, ip %s%s - stakken er sund og roeres ikke",p->wpa_pid,ipb,p->gw?", default-rute":"");
-            else if(net.acted&&net.was_up){ net.n_heal++; net.heal_ms=ms; net_log("SELV-HEAL faerdig paa %d ms: wpa_supplicant pid %d, ip %s (heal nr. %d)",ms,p->wpa_pid,ipb,net.n_heal); }
-            else if(net.acted){ net.n_boot++; net.heal_ms=ms; net_log("OPPE %d ms efter opstart: wpa_supplicant pid %d, ip %s",ms,p->wpa_pid,ipb); }
-            else net_log("OPPE igen efter %d ms uden indgreb: wpa_supplicant pid %d, ip %s",ms,p->wpa_pid,ipb);
+            if(first) net_log("UP at start: wpa_supplicant pid %d, ip %s%s - the stack is healthy and is not touched",p->wpa_pid,ipb,p->gw?", default route":"");
+            else if(net.acted&&net.was_up){ net.n_heal++; net.heal_ms=ms; net_log("SELF-HEAL done in %d ms: wpa_supplicant pid %d, ip %s (heal no. %d)",ms,p->wpa_pid,ipb,net.n_heal); }
+            else if(net.acted){ net.n_boot++; net.heal_ms=ms; net_log("UP %d ms after startup: wpa_supplicant pid %d, ip %s",ms,p->wpa_pid,ipb); }
+            else net_log("UP again after %d ms without intervention: wpa_supplicant pid %d, ip %s",ms,p->wpa_pid,ipb);
         }
         net.state=NS_UP; net.was_up=1; net.acted=0; net.dead=0; net.backoff=0; net.t_retry=0; net.dhcp_wait=0; net.ifdown=0; net.carrier_was=1; return;
     }
-    if(net.state==NS_UP||first) net.t_down=now;               /* udfaldet begynder her */
-    if(wpa){                                                  /* supplicanten lever: den draebes ALDRIG */
+    if(net.state==NS_UP||first) net.t_down=now;               /* the outage starts here */
+    if(wpa){                                                  /* the supplicant is alive: it is NEVER killed */
         net.dead=0;
         if(net.state!=NS_CONNECTING){
             net.state=NS_CONNECTING; net.t_noip=now; net.carrier_was=p->carrier; net.dhcp_wait=0;
-            net_log("wpa_supplicant pid %d lever, men %s - afventer (supplicanten roeres ikke)",p->wpa_pid,
-                    !p->iface?NET_IF " mangler":!p->ifup?NET_IF " er nede":!p->carrier?"ingen carrier":!p->ip?"ingen IP":"ingen default-rute");
+            net_log("wpa_supplicant pid %d alive, but %s - waiting (the supplicant is not touched)",p->wpa_pid,
+                    !p->iface?NET_IF " missing":!p->ifup?NET_IF " is down":!p->carrier?"no carrier":!p->ip?"no IP":"no default route");
         }
-        if(p->iface&&!p->ifup){                               /* "ifconfig wlan0 down": supplicanten venter blot -> op igen (MI_WLAN_Open) */
+        if(p->iface&&!p->ifup){                               /* "ifconfig wlan0 down": the supplicant just waits -> up again (MI_WLAN_Open) */
             if(!net.ifdown){ net.ifdown=1; net.t_ifdown=now; }
             if(now-net.t_ifdown<NET_IFDOWN_MS) return;
             net.acted=1; net.n_ifup++; net.t_ifdown=now; nh_iface_up();
-            net_log(NET_IF " har vaeret nede i %d s med levende supplicant: ifconfig " NET_IF " up (som MI_WLAN_Open)",NET_IFDOWN_MS/1000);
+            net_log(NET_IF " has been down for %d s with a live supplicant: ifconfig " NET_IF " up (like MI_WLAN_Open)",NET_IFDOWN_MS/1000);
             return;
         }
         net.ifdown=0;
-        if(p->carrier&&!net.carrier_was) net.t_noip=now;      /* tiden til udhcpc maales fra carrier */
+        if(p->carrier&&!net.carrier_was) net.t_noip=now;      /* the time until udhcpc is measured from carrier */
         net.carrier_was=p->carrier;
         if(net_ipok(p)||p->dhcp_pid){ net.t_noip=now; return; }
-        if(p->ip&&!p->carrier) return;                        /* IP men ingen rute/carrier: en udhcpc nu ville kun tage IP'en */
+        if(p->ip&&!p->carrier) return;                        /* IP but no route/carrier: a udhcpc now would only take the IP away */
         int wait=net.dhcp_wait?net.dhcp_wait:(p->ip?NET_NOGW_MS:NET_NOIP_MS);
         if(now-net.t_noip<wait) return;
         net_cfg_load(); if(net.cfg!=NC_OK){ net.t_noip=now; return; }
         net.acted=1; net.dhcp_wait=wait*2>NET_DHCP_MAX_MS?NET_DHCP_MAX_MS:wait*2;
-        char w[80]; snprintf(w,sizeof w,p->ip?"ingen default-rute i %d s og ingen udhcpc":"ingen IP i %d s og ingen udhcpc",wait/1000);
+        char w[80]; snprintf(w,sizeof w,p->ip?"no default route for %d s and no udhcpc":"no IP for %d s and no udhcpc",wait/1000);
         net_dhcp(now,w);
         return;
     }
-    if(!net.dead){                                            /* supplicanten er vaek */
+    if(!net.dead){                                            /* the supplicant is gone */
         net.dead=1; net.t_dead=now; if(net.state!=NS_OFF) net.state=NS_DOWN;
-        net_log("wpa_supplicant koerer ikke (" NET_IF " %s, carrier %d, ip %s)",p->iface?(p->ifup?"findes":"findes, nede"):"mangler",p->carrier,net_ipstr(p->ip,ipb,sizeof ipb));
+        net_log("wpa_supplicant not running (" NET_IF " %s, carrier %d, ip %s)",p->iface?(p->ifup?"exists":"exists, down"):"missing",p->carrier,net_ipstr(p->ip,ipb,sizeof ipb));
     }
     if(net.state==NS_OFF&&now<net.t_cfg) return;
     if(!first&&now-net.t_dead<NET_DEAD_MS) return;
@@ -1170,7 +1170,7 @@ static void net_eval(ms_t now){
 static void net_step(ms_t now){
     if(!net.on||now<net.t_probe) return;
     net_now=now;
-    if(net.orphan){ int rc=0; if(nh_job_done(net.orphan,&rc)){ net_log("det efterladte init-script (pid %d) sluttede (rc=%d)",net.orphan,rc); net.orphan=0; } }
+    if(net.orphan){ int rc=0; if(nh_job_done(net.orphan,&rc)){ net_log("the orphaned init script (pid %d) ended (rc=%d)",net.orphan,rc); net.orphan=0; } }
     nh_probe(&net.p,now,1);
     net_eval(now);
     int idle=net.step==NB_NONE&&(net.state==NS_OFF||(net.state==NS_DOWN&&now<net.t_retry));
@@ -1180,20 +1180,20 @@ static void net_start(ms_t now,int enable){
     memset(&net,0,sizeof net); net_now=now; net.cfg_logged=-1; net.on=enable;
     if(!enable) return;
     net_cfg_load();
-    net_log("net-vagt startet (" OURUI_VERSION "): %s; ssid-laengde %d, password-laengde %d",NC_TXT[net.cfg],net.ssid_n,(int)strlen(net.psk));
+    net_log("net-vagt startet (" OURUI_VERSION "): %s; ssid length %d, password length %d",NC_TXT[net.cfg],net.ssid_n,(int)strlen(net.psk));   /* "net-vagt startet" stays: tools/merakiplus.py greps the net log for it */
 }
 
 
 /* ====================================================================== */
-/* ================= PRODUKTNAVN + I18N (v6.3) ========================== */
+/* ================= PRODUCT NAME + I18N (v6.3) ========================= */
 /* ====================================================================== */
-/* Produktnavnet står ÉT sted. UI-strenge bruger PRODUCT; ordmærket tegnes som BRAND_WORD +
- * "+"-badge (brand_at()). "ourui" er kun kode-navn: stier, proces-navn, logs. */
+/* The product name lives in ONE place. UI strings use PRODUCT; the word mark is drawn as BRAND_WORD +
+ * "+" badge (brand_at()). "ourui" is only the code name: paths, process name, logs. */
 #define BRAND_WORD  "MERAKI"
 #define BRAND_BADGE "+"
 #define PRODUCT     BRAND_WORD BRAND_BADGE
 
-/* styretegn i UI-strenge (fortolkes af glyph_next): kode-spænd m. små bogstaver + ikoner */
+/* control characters in UI strings (interpreted by glyph_next): code spans w. lowercase letters + icons */
 #define LC "\x0e"
 #define UC "\x0f"
 #define IC_BEAN "\x01"
@@ -1206,19 +1206,19 @@ static void net_start(ms_t now,int enable){
 #define IC_WARN "\x08"
 #define IC_BOLT "\x09"
 
-/* boot-stier (indgår i strengene nedenfor; logikken står i BOOT-SLOT-afsnittet) */
+/* boot paths (used in the strings below; the logic is in the BOOT-SLOT section) */
 #define BOOT_FLAG  "/customer/new"
 #define SLOT_A_EXE "/customer/demo_v9"
 #define SLOT_B_EXE "/new_customer/demo_v9"
 #define SLOT_B_MNT "/new_customer"
-#define SW_LOG     "/tmp/switcher.log"            /* skrives af switcher-daemonen (boot/switcher.c) */
+#define SW_LOG     "/tmp/switcher.log"            /* written by the switcher daemon (boot/switcher.c) */
 
-/* STRENG-TABELLEN — eneste sted en synlig tekst må stå. X(id, klasse, EN, DA).
- *   klasse = hvor teksten vises; selftesten måler HVER streng i BEGGE sprog mod klassens
- *   pixel-budget (K0 = måles i sin sammenhæng af layout-testene, KCON = konsol).
- *   Regler (håndhæves af --selftest): begge sprog udfyldt; samme printf-konverteringer;
- *   samme tal/tegnsætning for tal og enheder; kun tegn som stroke-fonten har; intet
- *   generations-navn; kode-navnet "ourui" kun inde i kode-spænd (LC … UC) eller på konsollen. */
+/* THE STRING TABLE — the only place a visible text may live. X(id, class, EN, DA).
+ *   class = where the text is shown; the selftest measures EVERY string in BOTH languages against the class's
+ *   pixel budget (K0 = measured in context by the layout tests, KCON = console).
+ *   Rules (enforced by --selftest): both languages filled in; the same printf conversions;
+ *   the same numbers/punctuation for numbers and units; only characters the stroke font has; no
+ *   generation name; the code name "ourui" only inside code spans (LC … UC) or on the console. */
 enum { LANG_EN=0, LANG_DA, NLANG };
 enum { K0=0, KT, KSUB, KLAB, KCHIP, KBTN, KBTNS, KTITLE, KPSUB, KSPL, KDL, KDV, KDF, KNOTE, KF1, KF2, KXSUB, KST, KCON, NKLASS };
 #define STR_TABLE(X) \
@@ -1625,7 +1625,7 @@ enum { K0=0, KT, KSUB, KLAB, KCHIP, KBTN, KBTNS, KTITLE, KPSUB, KSPL, KDL, KDV, 
  X(TX_O_RESTART, KCON, "== ourui: STOCK UI NEEDS A RESTART OF demo_v9 FOR NEW VALUES:   kill $(pidof demo_v9)\n==        (config.json changed by ourui; the watchdog restarts it, the boot push syncs the controller)\n", "== ourui: STOCK-UI KRAEVER GENSTART AF demo_v9 FOR NYE VAERDIER:   kill $(pidof demo_v9)\n==        (config.json aendret af ourui; watchdog genstarter, boot-push synker controlleren)\n") \
  X(TX_O_CFGCHANGED, KCON, "== ourui: config.json changed %d time(s) - no paused stock UI is waiting; the next stock start reads it itself\n", "== ourui: config.json aendret %d gang(e) - intet pauset stock-UI venter; naeste stock-start laeser den selv\n") \
  X(TX_O_BLOCKED, KCON, "== ourui: %ld cmd6 frame(s) rejected by the frame policy (see UI_v6.md)\n", "== ourui: %ld cmd6-frame(s) afvist af frame-politikken (se UI_v6.md)\n") \
- /* slut */
+ /* end */
 
 enum {
 #define X(id,k,en,da) id,
@@ -1658,23 +1658,23 @@ static const unsigned char STR_K[NSTR]={
 };
 #endif
 static int ui_lang=LANG_EN;
-/* opslag pr. render: aldrig cachet på tværs af et sprogskift. Ukendt id/sprog -> engelsk. */
+/* lookup per render: never cached across a language switch. Unknown id/language -> English. */
 static const char* TR(int id){
     if(id<0||id>=NSTR) id=TX_NONE;
     const char*s=STR[(ui_lang>=0&&ui_lang<NLANG)?ui_lang:LANG_EN][id];
     return s?s:STR[LANG_EN][id];
 }
 
-/* ---- sprog-filen: ourui's EGEN indstilling (ikke stock-UI'ets config.language) ----
- * Indhold: præcis "en" eller "da" (ren tekst; ved læsning tåles blanktegn/linjeskift og
- * store bogstaver, så `echo da > lang` også virker). Mangler filen, kan den ikke læses,
- * eller står der noget andet: ENGELSK. Skrives atomisk: tmp i samme mappe + fsync +
- * genlæs/sammenlign + rename() + fsync af mappen. */
+/* ---- the language file: ourui's OWN setting (not the stock UI's config.language) ----
+ * Content: exactly "en" or "da" (plain text; on read, whitespace/newlines and
+ * upper case are tolerated, so `echo da > lang` also works). If the file is missing, cannot be read,
+ * or contains anything else: ENGLISH. Written atomically: tmp in the same directory + fsync +
+ * re-read/compare + rename() + fsync of the directory. */
 static char lang_path[256]="/new_customer/ourui/lang";
 static const char*const LANG_CODE[NLANG]={"en","da"};
-enum { LS_DEFAULT=0, LS_FILE, LS_UNKNOWN, LS_SESSION };   /* hvor det aktive sprog kommer fra (DIAGNOSE) */
+enum { LS_DEFAULT=0, LS_FILE, LS_UNKNOWN, LS_SESSION };   /* where the active language comes from (DIAGNOSTICS) */
 static int lang_src=LS_DEFAULT;
-static int static_dirty;                                   /* (defineret i compositor-afsnittet) */
+static int static_dirty;                                   /* (defined in the compositor section) */
 static int lang_parse(const char*b,int n){
     while(n>0&&isspace((unsigned char)b[n-1])) n--;
     while(n>0&&isspace((unsigned char)*b)){ b++; n--; }
@@ -1688,12 +1688,12 @@ static int lang_load(void){
     if(fd<0) lang_src=LS_DEFAULT;
     else {
         int n=(int)read(fd,b,sizeof b); close(fd);
-        if(n<0) lang_src=LS_DEFAULT;                       /* ulæselig (fx en mappe) */
+        if(n<0) lang_src=LS_DEFAULT;                       /* unreadable (e.g. a directory) */
         else { l=(n>0&&n<(int)sizeof b)?lang_parse(b,n):-1; lang_src=l<0?LS_UNKNOWN:LS_FILE; }
     }
     lang_set(l<0?LANG_EN:l); return ui_lang;
 }
-/* retur 1 = filen indeholder nu sproget; 0 = intet ændret på disk (gammel fil er intakt) */
+/* returns 1 = the file now contains the language; 0 = nothing changed on disk (the old file is intact) */
 static int lang_save(int l){
     if(l<0||l>=NLANG) return 0;
     char tmp[280],chk[8]; const char*d=LANG_CODE[l]; int n=(int)strlen(d);
@@ -1706,22 +1706,22 @@ static int lang_save(int l){
 }
 
 /* ====================================================================== */
-/* ================= BOOT-SLOT + RUNTIME-SKIFT (v6.2) =================== */
+/* ================= BOOT SLOT + RUNTIME SWITCH (v6.2) ================== */
 /* ====================================================================== */
-/* Vendor-boot (artifacts/demo.sh): flag-filen /customer/new vælger slot B (/new_customer)
- * frem for slot A (/customer). Watchdog'en /customer/test.sh ser kun på om der findes en
- * proces, hvis ps-linje indeholder "demo_v9". I boot-integrationen ligger ourui som
- * /new_customer/demo_v9 (slot B); stock-UI'et er /customer/demo_v9 (slot A).
+/* Vendor boot (artifacts/demo.sh): the flag file /customer/new selects slot B (/new_customer)
+ * over slot A (/customer). The watchdog /customer/test.sh only checks whether there is a
+ * process whose ps line contains "demo_v9". In the boot integration ourui lives as
+ * /new_customer/demo_v9 (slot B); the stock UI is /customer/demo_v9 (slot A).
  *
- *   BOOT-UI (persistent)  = opret/fjern /customer/new. Gælder NÆSTE genstart. Kun tilladt
- *                           når /new_customer er mountet OG dens demo_v9 er ourui — ellers
- *                           tilhører flaget vendor'ens OTA-mekanik, og vi rører det ikke.
- *   SKIFT TIL ORIGINAL NU = runtime, uden reboot (BOOT.md §9.2): ourui lukker UART/fb/touch,
- *                           starter /customer/demo_v9 direkte og afslutter 400 ms senere.
- * ourui sender ALDRIG et signal til nogen proces — hverken kill, SIGSTOP eller SIGCONT. */
-/* (BOOT_FLAG, SLOT_*_EXE, SLOT_B_MNT og SW_LOG er defineret ved streng-tabellen ovenfor) */
-/* what(1)-mærke: sådan genkender BOOT-UI-vagten en ourui-binær i slot B (de første 10 tegn
- * er nålen). v6.1 havde intet mærke og genkendes på en streng fra dens exit-besked. */
+ *   BOOT UI (persistent)  = create/remove /customer/new. Applies to the NEXT reboot. Only allowed
+ *                           when /new_customer is mounted AND its demo_v9 is ourui — otherwise
+ *                           the flag belongs to the vendor's OTA mechanism, and we do not touch it.
+ *   SWITCH TO ORIGINAL NOW = runtime, without reboot (BOOT.md §9.2): ourui closes UART/fb/touch,
+ *                           starts /customer/demo_v9 directly and exits 400 ms later.
+ * ourui NEVER sends a signal to any process — neither kill, SIGSTOP nor SIGCONT. */
+/* (BOOT_FLAG, SLOT_*_EXE, SLOT_B_MNT and SW_LOG are defined at the string table above) */
+/* what(1) marker: this is how the BOOT UI guard recognises an ourui binary in slot B (the first 10 characters
+ * are the needle). v6.1 had no marker and is recognised by a string from its exit message. */
 static const char OURUI_MARK[]="@(#)ourui " OURUI_VERSION " meraki-plus display-ui";
 #define OURUI_MARK_N 10
 static const char OURUI_MARK_V61[]="== ourui: config.json aendret";
@@ -1730,15 +1730,15 @@ enum { SLOT_OTHER=0, SLOT_A, SLOT_B };
 enum { BL_OK=0, BL_NOMOUNT, BL_NOBIN, BL_VENDOR };
 #define STOCK_MAX 4
 static struct {
-    int flag;                       /* /customer/new findes */
-    int b_mnt, b_bin, b_ours, lock; /* slot B: mountet / demo_v9 kørbar / er ourui / BL_* */
-    int a_bin;                      /* /customer/demo_v9 findes og er kørbar */
+    int flag;                       /* /customer/new exists */
+    int b_mnt, b_bin, b_ours, lock; /* slot B: mounted / demo_v9 executable / is ourui / BL_* */
+    int a_bin;                      /* /customer/demo_v9 exists and is executable */
     int self_pid, self_slot; char self_exe[128];
-    int stock[STOCK_MAX], n_stock, stock_run;   /* /customer/demo_v9-processer; stock_run = antal IKKE-stoppede */
-    int sw_pid;                     /* pidof switcher (0 = kører ikke) */
-    int sw_log; char sw_evt[100];   /* 0 = log ikke læsbar, 1 = ingen skift-linje, 2 = hændelse */
+    int stock[STOCK_MAX], n_stock, stock_run;   /* /customer/demo_v9 processes; stock_run = number NOT stopped */
+    int sw_pid;                     /* pidof switcher (0 = not running) */
+    int sw_log; char sw_evt[100];   /* 0 = log not readable, 1 = no switch line, 2 = event */
     ms_t t;
-    dev_t m_dev; ino_t m_ino; off_t m_size; time_t m_mtime; int m_ours, m_valid;   /* mærke-cache */
+    dev_t m_dev; ino_t m_ino; off_t m_size; time_t m_mtime; int m_ours, m_valid;   /* marker cache */
 } bs={.t=-100000};
 
 static int slot_b_mounted(void){
@@ -1747,7 +1747,7 @@ static int slot_b_mounted(void){
     while(fgets(ln,sizeof ln,f)) if(sscanf(ln,"%159s %159s",dev,mnt)==2&&!strcmp(mnt,SLOT_B_MNT)) hit=1;
     fclose(f); return hit;
 }
-/* indeholder filen ourui-mærket? (cachet på dev/ino/size/mtime — binæren læses kun når den er skiftet) */
+/* does the file contain the ourui marker? (cached on dev/ino/size/mtime — the binary is only read when it has changed) */
 static int bin_is_ourui(const char*path){
     struct stat st; if(stat(path,&st)!=0||!S_ISREG(st.st_mode)){ bs.m_valid=0; return 0; }
     if(bs.m_valid&&st.st_dev==bs.m_dev&&st.st_ino==bs.m_ino&&st.st_size==bs.m_size&&st.st_mtime==bs.m_mtime) return bs.m_ours;
@@ -1764,8 +1764,8 @@ static int bin_is_ourui(const char*path){
     bs.m_dev=st.st_dev; bs.m_ino=st.st_ino; bs.m_size=st.st_size; bs.m_mtime=st.st_mtime; bs.m_ours=ours; bs.m_valid=1;
     return ours;
 }
-/* /proc/<pid>/stat: tilstand (felt 3) og starttid i sekunder siden boot (felt 22 / 100) */
-static int64_t proc_stat(int pid,char*state){   /* v6.6: 64 bit — starttiden er i ticks (100/s) og passerer 2^31 efter 248 døgns oppetid */
+/* /proc/<pid>/stat: state (field 3) and start time in seconds since boot (field 22 / 100) */
+static int64_t proc_stat(int pid,char*state){   /* v6.6: 64 bit — the start time is in ticks (100/s) and passes 2^31 after 248 days of uptime */
     char p[420],b[640]; snprintf(p,sizeof p,"%s/proc/%d/stat",sysroot,pid);
     int fd=open(p,O_RDONLY); if(fd<0) return -1; int n=read(fd,b,sizeof b-1); close(fd); if(n<=0) return -1; b[n]=0;
     char*q=strrchr(b,')'); if(!q) return -1; q++;
@@ -1785,7 +1785,7 @@ static void proc_scan(void){
         char p[420],l[200]; snprintf(p,sizeof p,"%s/proc/%d/exe",sysroot,pid);
         ssize_t r=readlink(p,l,sizeof l-1);
         if(r>0){ l[r]=0;
-            size_t al=strlen(SLOT_A_EXE);                 /* også ".../demo_v9 (deleted)" = binæren skiftet under en kørende proces */
+            size_t al=strlen(SLOT_A_EXE);                 /* also ".../demo_v9 (deleted)" = the binary replaced under a running process */
             if(!strncmp(l,SLOT_A_EXE,al)&&(l[al]==0||l[al]==' ')&&bs.n_stock<STOCK_MAX){ char stt='?'; proc_stat(pid,&stt); bs.stock[bs.n_stock++]=pid; if(stt!='T'&&stt!='t') bs.stock_run++; } }
         snprintf(p,sizeof p,"%s/proc/%d/comm",sysroot,pid);
         int fd=open(p,O_RDONLY);
@@ -1797,19 +1797,25 @@ static void utf8_trim(char*s){
     int L=(int)strlen(s), i=L; while(i>0&&((unsigned char)s[i-1]&0xC0)==0x80) i--;
     if(i>0){ unsigned char c=(unsigned char)s[i-1]; int need=c>=0xF0?4:(c>=0xE0?3:(c>=0xC0?2:1)); if(L-(i-1)<need) s[i-1]=0; }
 }
-/* seneste skift-hændelse i switcher.log: sidste linje m. "skift" eller "GESTUS" -> "HH:MM:SS tekst" */
+/* a switch event in switcher.log: "switch A→B …" / "switch FAILED …" / "GESTURE TRIGGERED …";
+ * "skift …" / "GESTUS …" are the same lines from switcher builds before the English log text */
+static int swlog_is_event(const char*p){
+    const char*t=p; if(p[0]=='['){ const char*q=strstr(p,"] "); if(q) t=q+2; }
+    return !strncmp(t,"switch ",7)||strstr(t,"GESTURE TRIGGERED")||strstr(t,"skift")||strstr(t,"GESTUS");
+}
+/* latest switch event in switcher.log: the last event line -> "HH:MM:SS text" */
 static void swlog_scan(void){
     bs.sw_log=0; bs.sw_evt[0]=0;
     int fd=open(rp(SW_LOG),O_RDONLY); if(fd<0) return;
     static char buf[4097]; off_t sz=lseek(fd,0,SEEK_END); off_t st=sz>4096?sz-4096:0; lseek(fd,st,SEEK_SET);
     int n=read(fd,buf,4096); close(fd); if(n<0) return; buf[n]=0; bs.sw_log=1;
     char*last=NULL;
-    for(char*p=buf;p&&*p;){ char*e=strchr(p,'\n'); if(e)*e=0; if((st==0||p!=buf)&&(strstr(p,"skift")||strstr(p,"GESTUS"))) last=p; p=e?e+1:NULL; }
+    for(char*p=buf;p&&*p;){ char*e=strchr(p,'\n'); if(e)*e=0; if((st==0||p!=buf)&&swlog_is_event(p)) last=p; p=e?e+1:NULL; }
     if(!last) return;
-    /* "[YYYY-MM-DD HH:MM:SS UTC] tekst" */
+    /* "[YYYY-MM-DD HH:MM:SS UTC] text" */
     if(last[0]=='['&&strlen(last)>26&&last[11]==' '&&last[24]==']') snprintf(bs.sw_evt,sizeof bs.sw_evt-4,"%.8s %s",last+12,last+26);
     else snprintf(bs.sw_evt,sizeof bs.sw_evt-4,"%s",last);
-    utf8_trim(bs.sw_evt);                                  /* snprintf kan have klippet midt i et tegn */
+    utf8_trim(bs.sw_evt);                                  /* snprintf may have cut in the middle of a character */
     bs.sw_log=2;
 }
 static void boot_refresh(void){
@@ -1832,83 +1838,83 @@ static void boot_log(const char*fmt,...){
     fprintf(f,"%s ",ts); va_list ap; va_start(ap,fmt); vfprintf(f,fmt,ap); va_end(ap); fputc('\n',f);
     fflush(f); fsync(fileno(f)); fclose(f);
 }
-/* BOOT-UI: sæt (want_b=1, touch) eller fjern (want_b=0, rm) flaget. Idempotent. Vagten
- * gælder BEGGE retninger. Retur 1 = flaget står som ønsket; 0 = intet ændret (boot_err sat). */
+/* BOOT UI: set (want_b=1, touch) or remove (want_b=0, rm) the flag. Idempotent. The guard
+ * applies to BOTH directions. Returns 1 = the flag is as requested; 0 = nothing changed (boot_err set). */
 static char boot_err[72]="";
 static int boot_flag_set(int want_b){
     boot_refresh(); boot_err[0]=0;
-    if(bs.lock!=BL_OK){ snprintf(boot_err,sizeof boot_err,"laast (%s)",bs.lock==BL_NOMOUNT?"/new_customer ikke mountet":(bs.lock==BL_NOBIN?"demo_v9 mangler i slot B":"slot B er ikke ourui")); return 0; }
+    if(bs.lock!=BL_OK){ snprintf(boot_err,sizeof boot_err,"locked (%s)",bs.lock==BL_NOMOUNT?"/new_customer not mounted":(bs.lock==BL_NOBIN?"demo_v9 missing in slot B":"slot B is not ourui")); return 0; }
     int before=bs.flag; const char*p=rp(BOOT_FLAG); struct stat st;
     if(want_b){ int fd=open(p,O_WRONLY|O_CREAT,0644); if(fd<0){ snprintf(boot_err,sizeof boot_err,"touch: %s",strerror(errno)); return 0; } fsync(fd); close(fd); }
     else if(unlink(p)!=0&&errno!=ENOENT){ snprintf(boot_err,sizeof boot_err,"rm: %s",strerror(errno)); return 0; }
-    fsync_dir(p); SYS_SYNC                                 /* BOOT.md §9.1: open(O_CREAT)/unlink + sync() (SIM: ingen global sync) */
+    fsync_dir(p); SYS_SYNC                                 /* BOOT.md §9.1: open(O_CREAT)/unlink + sync() (SIM: no global sync) */
     bs.flag=stat(p,&st)==0;
-    if(bs.flag!=(want_b!=0)){ snprintf(boot_err,sizeof boot_err,"verifikation fejlede"); return 0; }
-    if(before!=bs.flag) boot_log("BOOT-UI: flag %s %s (%d->%d): %s ved naeste genstart",BOOT_FLAG,bs.flag?"oprettet":"fjernet",before,bs.flag,bs.flag?"OURUI (slot B)":"ORIGINAL (slot A)");
+    if(bs.flag!=(want_b!=0)){ snprintf(boot_err,sizeof boot_err,"verification failed"); return 0; }
+    if(before!=bs.flag) boot_log("BOOT-UI: flag %s %s (%d->%d): %s at next reboot",BOOT_FLAG,bs.flag?"created":"removed",before,bs.flag,bs.flag?"OURUI (slot B)":"ORIGINAL (slot A)");
     return 1;
 }
-/* venter et stock-UI med gammelt RAM-spejl? Sandt når RESTART_NEEDED findes OG der kører en
- * /customer/demo_v9, som blev startet FØR seneste GEM (samme boot). Et frisk startet
- * stock-UI har selv læst config.json — så er der intet at minde om. */
+/* is a stock UI with an old RAM mirror waiting? True when RESTART_NEEDED exists AND a
+ * /customer/demo_v9 is running that was started BEFORE the latest SAVE (same boot). A freshly started
+ * stock UI has read config.json itself — then there is nothing to remind about. */
 static int restart_pending(void){
     char p[340],b[1024]; snprintf(p,sizeof p,"%s/RESTART_NEEDED",cfg_bakdir);
     int fd=open(p,O_RDONLY); if(fd<0) return 0; int n=read(fd,b,sizeof b-1); close(fd); if(n<0)n=0; b[n]=0;
     if(bs.n_stock==0) return 0;
     char*q=strstr(b,"boot_id="),*m=strstr(b,"mono_s="); char was[64]="",cur[64];
-    if(!q||!m||sscanf(q+8,"%63s",was)!=1||!strcmp(was,"?")) return 1;       /* v6.1-flag uden stempel: antag at det gælder */
+    if(!q||!m||sscanf(q+8,"%63s",was)!=1||!strcmp(was,"?")) return 1;       /* v6.1 flag without a stamp: assume it applies */
     boot_id_read(cur,sizeof cur); if(!cur[0]) return 1;
-    if(strcmp(cur,was)) return 0;                                           /* maskinen er genstartet siden GEM */
+    if(strcmp(cur,was)) return 0;                                           /* the machine has rebooted since the SAVE */
     int64_t t=atoll(m+7);
     for(int i=0;i<bs.n_stock;i++){ int64_t s=proc_stat(bs.stock[i],NULL); if(s<0||s<=t) return 1; }
     return 0;
 }
 
-/* ---- runtime-skift: LD_LIBRARY_PATH for slot A ----
- * BOOT.md §9.2 angiver "/customer/libs:/config/wifi". demo.sh's A-gren sætter dog
- * "$LD_LIBRARY_PATH:/customer/libs:/config/wifi" — dvs. boot-miljøets præfiks bevares. Vi gør
- * det samme: arver vores egen sti, fjerner slot-komponenterne (B's og A's libs + /config/wifi)
- * og hægter A's på. Uden præfiks (fx når switcher'en har startet os) er resultatet PRÆCIS
- * "/customer/libs:/config/wifi"; med præfiks er det hvad en ægte A-boot ville give stock-UI'et. */
+/* ---- runtime switch: LD_LIBRARY_PATH for slot A ----
+ * BOOT.md §9.2 specifies "/customer/libs:/config/wifi". demo.sh's A branch however sets
+ * "$LD_LIBRARY_PATH:/customer/libs:/config/wifi" — i.e. the boot environment's prefix is kept. We do
+ * the same: inherit our own path, remove the slot components (B's and A's libs + /config/wifi)
+ * and append A's. Without a prefix (e.g. when the switcher has started us) the result is EXACTLY
+ * "/customer/libs:/config/wifi"; with a prefix it is what a real A boot would give the stock UI. */
 static void ld_path_for_a(const char*inh,char*out,size_t n){
     size_t o=0; out[0]=0;
     static const char*const drop[]={"/new_customer/libs","/customer/libs","/config/wifi"};
     for(const char*p=inh;p&&*p;){
         const char*e=strchr(p,':'); size_t l=e?(size_t)(e-p):strlen(p); int skip=(l==0);
         for(unsigned k=0;k<3&&!skip;k++) if(l==strlen(drop[k])&&!memcmp(p,drop[k],l)) skip=1;
-        for(size_t i=0;i<l&&!skip;i++){ unsigned char c=(unsigned char)p[i]; if(c=='\''||c<0x21||c==0x7F) skip=1; }   /* må kunne stå i '...' */
+        for(size_t i=0;i<l&&!skip;i++){ unsigned char c=(unsigned char)p[i]; if(c=='\''||c<0x21||c==0x7F) skip=1; }   /* must be able to sit inside '...' */
         if(!skip&&o+l+1+32<n){ memcpy(out+o,p,l); o+=l; out[o++]=':'; out[o]=0; }
         p=e?e+1:NULL;
     }
     snprintf(out+o,n-o,"/customer/libs:/config/wifi");
 }
-/* ---- runtime-skift B->A: BOOT.md §9.2 trin 2 + 3 ----
- * Kaldes EFTER at ourui har lukket UART/fb/touch (trin 1, se do_switch). Barnet: egen session
- * (setsid), cwd /customer, slot A's LD_LIBRARY_PATH, stdio -> /dev/null og ALLE øvrige fds
- * lukket (en arvet touch-fd ville holde EVIOCGRAB i live inde i stock-UI'et), derefter
- * execl("/customer/demo_v9","./demo_v9") — argv0 indeholder "demo_v9", så watchdog-grep'en
- * matcher. Forælderen venter 400 ms, mens A initialiserer fb/UART; er barnet allerede dødt,
- * meldes fejl, og ourui tager skærmen tilbage. Retur: stock-pid (>0) eller 0 m. err sat. */
+/* ---- runtime switch B->A: BOOT.md §9.2 steps 2 + 3 ----
+ * Called AFTER ourui has closed UART/fb/touch (step 1, see do_switch). The child: own session
+ * (setsid), cwd /customer, slot A's LD_LIBRARY_PATH, stdio -> /dev/null and ALL other fds
+ * closed (an inherited touch fd would keep EVIOCGRAB alive inside the stock UI), then
+ * execl("/customer/demo_v9","./demo_v9") — argv0 contains "demo_v9", so the watchdog grep
+ * matches. The parent waits 400 ms while A initialises fb/UART; if the child has already died,
+ * an error is reported, and ourui takes the screen back. Returns: stock pid (>0) or 0 w. err set. */
 #define SW_WAIT_MS 400
 enum { SWM_LAUNCH=0, SWM_CONT };
-static int sw_dry=0;                                       /* OURUI_SWITCH_DRY=1: log kun */
-static char sw_ldp[512]="";                                /* LD_LIBRARY_PATH givet til stock (log/selftest) */
-static int switch_mode(void){ return bs.n_stock>0?SWM_CONT:SWM_LAUNCH; }   /* SWM_CONT = run.sh-tilstand: stock findes (pauset) */
-static int switch_locked(void){ return bs.n_stock==0&&!bs.a_bin; }         /* intet stock-UI at skifte til */
-/* hvad demo.sh starter ved næste boot, givet flag + slot B's tilstand. Flaget alene er ikke
- * nok: uden mount starter slot A, og med en vendor-binær i slot B er det IKKE ourui. */
+static int sw_dry=0;                                       /* OURUI_SWITCH_DRY=1: log only */
+static char sw_ldp[512]="";                                /* LD_LIBRARY_PATH given to stock (log/selftest) */
+static int switch_mode(void){ return bs.n_stock>0?SWM_CONT:SWM_LAUNCH; }   /* SWM_CONT = run.sh mode: stock exists (paused) */
+static int switch_locked(void){ return bs.n_stock==0&&!bs.a_bin; }         /* no stock UI to switch to */
+/* what demo.sh starts at the next boot, given the flag + slot B's state. The flag alone is not
+ * enough: without a mount slot A starts, and with a vendor binary in slot B it is NOT ourui. */
 enum { BN_ORIGINAL=0, BN_OURS, BN_SLOTB };
-_Static_assert(TX_BN_OURS==TX_BN_ORIGINAL+BN_OURS&&TX_BN_SLOTB==TX_BN_ORIGINAL+BN_SLOTB,"TX_BN_* skal foelge BN_*");
+_Static_assert(TX_BN_OURS==TX_BN_ORIGINAL+BN_OURS&&TX_BN_SLOTB==TX_BN_ORIGINAL+BN_SLOTB,"TX_BN_* must follow BN_*");
 static int boot_next_kind(void){
     if(!bs.flag||bs.lock==BL_NOMOUNT) return BN_ORIGINAL;
     return bs.lock==BL_OK?BN_OURS:BN_SLOTB;
 }
 static const char* boot_next_name(void){ return TR(TX_BN_ORIGINAL+boot_next_kind()); }
 enum { SWF_NONE=0, SWF_NOBIN, SWF_FORK, SWF_DIED };
-static int sw_fail=SWF_NONE;                               /* hvorfor seneste launch fejlede (-> lokaliseret toast; err går i loggen) */
+static int sw_fail=SWF_NONE;                               /* why the latest launch failed (-> localised toast; err goes to the log) */
 static int switch_launch(char*err,size_t en){
     char exe[420],dir[420]; snprintf(exe,sizeof exe,"%s",rp(SLOT_A_EXE)); snprintf(dir,sizeof dir,"%s",rp("/customer"));
     ld_path_for_a(getenv("LD_LIBRARY_PATH"),sw_ldp,sizeof sw_ldp); sw_fail=SWF_NONE;
-    if(access(exe,X_OK)!=0){ sw_fail=SWF_NOBIN; snprintf(err,en,"%s mangler",SLOT_A_EXE); return 0; }
+    if(access(exe,X_OK)!=0){ sw_fail=SWF_NOBIN; snprintf(err,en,"%s missing",SLOT_A_EXE); return 0; }
     fflush(stdout); fflush(stderr);
     pid_t c=fork(); if(c<0){ sw_fail=SWF_FORK; snprintf(err,en,"fork: %s",strerror(errno)); return 0; }
     if(c==0){
@@ -1920,31 +1926,31 @@ static int switch_launch(char*err,size_t en){
         execl(exe,"./demo_v9",(char*)NULL);
         _exit(127);
     }
-    for(ms_t t0=now_ms();now_ms()-t0<SW_WAIT_MS;){          /* ur-styret: 400 ms uanset timer-opløsning */
+    for(ms_t t0=now_ms();now_ms()-t0<SW_WAIT_MS;){          /* clock-driven: 400 ms regardless of timer resolution */
         struct timespec sl={0,10*1000*1000}; nanosleep(&sl,NULL);
-        int st; if(waitpid(c,&st,WNOHANG)==c){ sw_fail=SWF_DIED; snprintf(err,en,"stock-UI stoppede straks (rc %d)",WIFEXITED(st)?WEXITSTATUS(st):-1); return 0; }
+        int st; if(waitpid(c,&st,WNOHANG)==c){ sw_fail=SWF_DIED; snprintf(err,en,"stock UI exited immediately (rc %d)",WIFEXITED(st)?WEXITSTATUS(st):-1); return 0; }
     }
     return (int)c;
 }
 
-/* ================= settings-model =================
- * ÉN tabel = eneste sandhed for label/felt/ord/grænser. Controlleren har INGEN
- * range-checks (PARITY §0.10) -> min/max/step håndhæves her og i frame_policy().
- * Alle grænser er afstemt mod PARITY.md §2 / parity_spec.json (rå config-enheder);
- * parity_check.py sammenligner tabellen maskinelt med spec'en (--dump-table).
- *   ptier = spec'ens tier (1 kerne / 2 komfort / 3 system); tier = ourui-side.
- *   SF_EST: min+trin er bevist, men max er et SKØN (stock-pickerens option-antal er
- *           ikke kortlagt, PARITY §6.6). UI viser en synlig hint, og en værdi som
- *           stock-UI'et selv har gemt (<= hard) udvider intervallet.
- *   SF_LOCK: vises, men har ingen editor (årsag i note).
- *   SF_SENSOR: read-only måleværdi fra reg[def] — ingen config-nøgle, ingen write.
- *   SF_LOCAL (v6.3): ourui's EGEN indstilling (UI-sprog) — ingen config-nøgle, intet MCU-ord,
- *           ikke en spec-parameter (udelades af --dump-table); gemmes i sin egen fil.
- * label/unit/note/hint og enum-navne er streng-id'er (TX_*), aldrig tekst — se STR_TABLE. */
+/* ================= settings model =================
+ * ONE table = the single source of truth for label/field/word/limits. The controller has NO
+ * range checks (PARITY §0.10) -> min/max/step are enforced here and in frame_policy().
+ * All limits are reconciled against PARITY.md §2 / parity_spec.json (raw config units);
+ * parity_check.py compares the table with the spec automatically (--dump-table).
+ *   ptier = the spec's tier (1 core / 2 comfort / 3 system); tier = ourui page.
+ *   SF_EST: min+step are proven, but max is an ESTIMATE (the stock picker's option count is
+ *           not mapped, PARITY §6.6). The UI shows a visible hint, and a value that
+ *           the stock UI itself has saved (<= hard) widens the interval.
+ *   SF_LOCK: shown, but has no editor (reason in note).
+ *   SF_SENSOR: read-only measured value from reg[def] — no config key, no write.
+ *   SF_LOCAL (v6.3): ourui's OWN setting (UI language) — no config key, no MCU word,
+ *           not a spec parameter (left out of --dump-table); saved in its own file.
+ * label/unit/note/hint and enum names are string ids (TX_*), never text — see STR_TABLE. */
 enum { K_NUM=0, K_ENUM };
 enum { M_NONE=0, M_W4, M_W23, M_W11, M_W112, M_W113, M_W114, M_W25, M_W14, M_W17, M_W2 };
-#define SF_TEMP10 1   /* værdi i 0,1 °C */
-#define SF_TEMP1  2   /* værdi i hele °C */
+#define SF_TEMP10 1   /* value in 0.1 °C */
+#define SF_TEMP1  2   /* value in whole °C */
 #define SF_LOCK   4
 #define SF_BL     8   /* live preview: backlight */
 #define SF_EST    16
@@ -1955,24 +1961,24 @@ typedef struct {
     int tier, ptier, min, max, step, dec, kind;
     const short *opts;
     int mcu, flags, def, hard;
-    short note, hint;             /* hint 0 (TX_NONE) = intet hint */
-    int val, loaded, lo, hi;      /* runtime: værdi, indlæst?, effektivt interval */
+    short note, hint;             /* hint 0 (TX_NONE) = no hint */
+    int val, loaded, lo, hi;      /* runtime: value, loaded?, effective interval */
 } Setting;
 static const short OPT_OFFON[]={TX_E_OFF,TX_E_ON};
-static const short OPT_GRINDM[]={TX_E_WEIGHT,TX_E_TIME};                /* 1=vægt-auto, 2=tid   [PARITY #12] */
-static const short OPT_HOTM[]={TX_E_AUTO,TX_E_MANUAL};                  /* 1=auto, 2=manuel     [PARITY #13] */
+static const short OPT_GRINDM[]={TX_E_WEIGHT,TX_E_TIME};                /* 1=weight auto, 2=time [PARITY #12] */
+static const short OPT_HOTM[]={TX_E_AUTO,TX_E_MANUAL};                  /* 1=auto, 2=manual     [PARITY #13] */
 static const short OPT_GEAR[]={TX_E_GENTLE,TX_E_MILD,TX_E_MEDIUM,TX_E_STRONG};   /* Gentle/Mild/Medium/Strong = 1..4 [0xdd028] */
 static const short OPT_TIME[]={TX_E_24H,TX_E_12H};                      /* 0 -> "%02d:%02d", !=0 -> A.M./P.M. [update_time 0xd5978] */
 static const short OPT_TUNIT[]={TX_U_F,TX_U_C};                         /* 0=°F, 1=°C           [PARITY #17] */
-static const short OPT_LANG[]={TX_LG_EN,TX_LG_DE,TX_LG_FR,TX_LG_IT,TX_LG_ES,TX_LG_PL,TX_LG_AR,TX_LG_ZHS,TX_LG_ZHT,TX_LG_KO,TX_LG_JA};   /* stock: index 0..10 [strenge @0x166d84] */
+static const short OPT_LANG[]={TX_LG_EN,TX_LG_DE,TX_LG_FR,TX_LG_IT,TX_LG_ES,TX_LG_PL,TX_LG_AR,TX_LG_ZHS,TX_LG_ZHT,TX_LG_KO,TX_LG_JA};   /* stock: index 0..10 [strings @0x166d84] */
 static const short OPT_UILANG[]={TX_UL_EN,TX_UL_DA};                    /* v6.3: = LANG_EN, LANG_DA */
-_Static_assert(TX_UL_DA==TX_UL_EN+LANG_DA,"TX_UL_* skal foelge LANG_*");
+_Static_assert(TX_UL_DA==TX_UL_EN+LANG_DA,"TX_UL_* must follow LANG_*");
 enum { S_GRINDW=0, S_GRINDMODE, S_BREWW, S_BREWT, S_PISW, S_PITIME, S_PIPRESS, S_BREAK, S_HEADT,
        S_STEAMT, S_STEAMG, S_HOTW, S_HOTMODE, S_HOTT,
        S_UILANG, S_BL, S_VOL, S_TUNIT, S_LANG, S_HOTSC, S_DST, S_CLEARTIP, S_TIMEMODE, S_AUTOTIME, S_TZ, NSET };
 static Setting SET[NSET]={
- /*              key                   label            unit    side,spec-tier  min   max step dec kind   opts        mcu    flags                    def hard  note, hint */
- /* ---- side BRYG (spec tier 1) ---- */
+ /*              key                   label            unit    page,spec-tier  min   max step dec kind   opts        mcu    flags                    def hard  note, hint */
+ /* ---- page BREW (spec tier 1) ---- */
  [S_GRINDW]   ={"autoGrindWeight",    TX_SL_GRINDW,    TX_U_G,   0,1,   10, 309,  1, 1,K_NUM, 0,         M_W4,  0,                      180, 309,TX_SN_GRINDW,0},
  [S_GRINDMODE]={"grindMode",          TX_SL_GRINDMODE, TX_NONE,  0,1,    1,   2,  1, 0,K_ENUM,OPT_GRINDM,M_W2,  0,                        1,   2,TX_SN_GRINDMODE,0},
  [S_BREWW]    ={"autobrewWeight",     TX_SL_BREWW,     TX_U_G,   0,1,  100, 990, 10,-1,K_NUM, 0,         M_W23, 0,                      360, 990,TX_SN_BREWW,0},
@@ -1982,14 +1988,14 @@ static Setting SET[NSET]={
  [S_PIPRESS]  ={"preInfusionPressure",TX_SL_PIPRESS,   TX_U_BAR, 0,1,    3,   4,  1, 0,K_NUM, 0,         M_W112,0,                        4,   4,TX_SN_PIPRESS,0},
  [S_BREAK]    ={"breakTime",          TX_SL_BREAK,     TX_U_S,   0,1,    0, 255,  1, 0,K_NUM, 0,         M_W113,SF_LOCK,                  5, 255,TX_SN_BREAK,0},
  [S_HEADT]    ={"headTemper",         TX_SL_HEADT,     TX_U_C,   0,1,   30,  80, 10, 0,K_NUM, 0,         M_W114,SF_TEMP1|SF_EST,         50, 100,TX_SN_HEADT,TX_SH_EST},
- /* ---- side DAMP · VAND (spec tier 1) ---- */
+ /* ---- page STEAM · WATER (spec tier 1) ---- */
  [S_STEAMT]   ={"AtuoSteamTarge",     TX_SL_STEAMT,    TX_U_C,   1,1,  450, 700, 10, 1,K_NUM, 0,         M_W25, SF_TEMP10,              550, 700,TX_SN_STEAMT,0},
  [S_STEAMG]   ={"steamGears",         TX_SL_STEAMG,    TX_NONE,  1,1,    1,   4,  1, 0,K_ENUM,OPT_GEAR,  M_W14, 0,                        4,   4,TX_SN_STEAMG,0},
  [S_HOTW]     ={"autoHotWaterTarget", TX_SL_HOTW,      TX_U_G,   1,1,  300,5000,100,-1,K_NUM, 0,         M_W17, 0,                     3600,5000,TX_SN_HOTW,0},
  [S_HOTMODE]  ={"hotWaterMode",       TX_SL_HOTMODE,   TX_NONE,  1,1,    1,   2,  1, 0,K_ENUM,OPT_HOTM,  M_NONE,0,                        1,   2,TX_SN_HOTMODE,0},
  [S_HOTT]     ={0,                    TX_SL_HOTT,      TX_U_C,   1,1,  200,1200,  1, 1,K_NUM, 0,         M_NONE,SF_SENSOR|SF_LOCK|SF_TEMP10,40,  0,TX_SN_HOTT,0},
- /* ---- side SYSTEM: først ourui's eget UI-sprog (v6.3; ikke en spec-parameter), derefter
-  *      spec tier 2 og tier 3 — alle kun config, ingen MCU-write ---- */
+ /* ---- page SYSTEM: first ourui's own UI language (v6.3; not a spec parameter), then
+  *      spec tier 2 and tier 3 — all config only, no MCU write ---- */
  [S_UILANG]   ={0,                    TX_SL_UILANG,    TX_NONE,  2,0,    0,   1,  1, 0,K_ENUM,OPT_UILANG,M_NONE,SF_LOCAL,                 0,   1,TX_SN_UILANG,0},
  [S_BL]       ={"backlight",          TX_SL_BL,        TX_NONE,  2,2,    1,  10,  1, 0,K_NUM, 0,         M_NONE,SF_BL,                    8,  10,TX_SN_BL,0},
  [S_VOL]      ={"volume",             TX_SL_VOL,       TX_NONE,  2,2,    0, 100,  1, 0,K_NUM, 0,         M_NONE,0,                       40, 100,TX_SN_VOL,TX_SH_VOL},
@@ -2005,79 +2011,79 @@ static Setting SET[NSET]={
 static const short TIER_NAME[3]={TX_PG_BREW,TX_PG_STEAM,TX_PG_SYSTEM};
 static const short TIER_SUB[3]={TX_PS_BREW,TX_PS_STEAM,TX_PS_SYSTEM};
 static int sv(int i){ return SET[i].val; }
-/* v6.10: tryk-estimat (konstanterne og forbeholdene står ved P_ANCHOR_RAW øverst). Anker-trykket er config preInfusionPressure,
- * så en ændret config ændrer skalaen; uden for 1..15 bar (eller ingen config: default 4) bruges P_ANCHOR_BAR_DEF. */
+/* v6.10: pressure estimate (the constants and caveats are at P_ANCHOR_RAW at the top). The anchor pressure is config preInfusionPressure,
+ * so a changed config changes the scale; outside 1..15 bar (or no config: default 4) P_ANCHOR_BAR_DEF is used. */
 static int p_anchor_bar(void){ int v=sv(S_PIPRESS); return (v>=1&&v<=15)?v:P_ANCHOR_BAR_DEF; }
 static float p_k(void){ return (float)p_anchor_bar()/(float)P_ANCHOR_RAW; }
-/* rå ord 51 -> bar-estimat; -1 = over P_EST_MAX: en deadhead-/vedligehold-puls, ikke et fysisk tryk — vises aldrig som tal */
+/* raw word 51 -> bar estimate; -1 = above P_EST_MAX: a deadhead/maintenance pulse, not a physical pressure — never shown as a number */
 static float p_bar(float raw){ float b=raw*p_k(); return b>P_EST_MAX?-1.f:(b<0.f?0.f:b); }
 static int clampi(int v,int lo,int hi){ return v<lo?lo:(v>hi?hi:v); }
 static int set_valid(const Setting*s,int v){ return v>=s->lo && v<=s->hi; }
-/* indlæst værdi uden for spec-intervallet (kun mulig hvis config er ændret uden om stock-UI'et) */
+/* loaded value outside the spec interval (only possible if config was changed behind the stock UI's back) */
 static int set_oor(const Setting*s){ return s->loaded && !(s->flags&SF_SENSOR) && !set_valid(s,s->val); }
 
-/* indlæs alle settings fra config.json. Intervallet udvides ALDRIG for beviste grænser:
- * en værdi uden for spec vises som den er, markeres, og spærrer aktivitets-start,
- * indtil brugeren har valgt en gyldig værdi. */
+/* load all settings from config.json. The interval is NEVER widened for proven limits:
+ * a value outside spec is shown as it is, marked, and blocks activity start
+ * until the user has chosen a valid value. */
 static void settings_load(void){
     cfg_read();
     for(int i=0;i<NSET;i++){
         Setting*s=&SET[i]; int v;
         s->lo=s->min; s->hi=s->max;
         if(s->flags&SF_SENSOR){ s->val=0; s->loaded=0; continue; }
-        if(s->flags&SF_LOCAL){ s->val=ui_lang; s->loaded=1; continue; }      /* v6.3: UI-sprog kommer fra lang-filen, ikke config.json */
+        if(s->flags&SF_LOCAL){ s->val=ui_lang; s->loaded=1; continue; }      /* v6.3: the UI language comes from the lang file, not config.json */
         if(cfg_get_int(s->key,&v)){ s->val=v; s->loaded=1; }
         else { s->val=s->def; s->loaded=0; }
         if(s->flags&SF_LOCK){ s->lo=s->hi=s->val; continue; }
         if((s->flags&SF_EST)&&s->loaded&&s->val>s->hi&&s->val<=s->hard) s->hi=s->val;
     }
 }
-/* ord 112/113/114-pakning [PARITY §3.7; demo_v9 model_data_init 0xcf284..0xcf43c, onClick 0xeb1ac/0x103858]:
- *   ord112 = (preInfusionSwitch ? 0x0100 : 0) | (preInfusionPressure & 0xFF)
- *   ord113 = (preInfusionTime << 8) | (breakTime & 0xFF)          ord114 = headTemper (hele °C; MCU x10)
- * MCU-opskriften 0x1E10 læser ord112 lo (kun 3/4 håndteres), kopierer ord113 hi -> lo
- * (breakTime overskrives) og bruger ord13 + ord113_lo som pre-infusions-varighed. */
+/* word 112/113/114 packing [PARITY §3.7; demo_v9 model_data_init 0xcf284..0xcf43c, onClick 0xeb1ac/0x103858]:
+ *   word112 = (preInfusionSwitch ? 0x0100 : 0) | (preInfusionPressure & 0xFF)
+ *   word113 = (preInfusionTime << 8) | (breakTime & 0xFF)          word114 = headTemper (whole °C; MCU x10)
+ * The MCU recipe 0x1E10 reads word112 lo (only 3/4 are handled), copies word113 hi -> lo
+ * (breakTime is overwritten) and uses word13 + word113_lo as the pre-infusion duration. */
 static uint16_t pack112(int sw,int press){ return (uint16_t)((sw?0x0100:0)|(press&0xFF)); }
 static uint16_t pack113(int t,int brk){ return (uint16_t)(((t&0xFF)<<8)|(brk&0xFF)); }
 
-/* ---- frame-politik (erklæret ved write-køen): pr.-ord spec-interval + trigger-ord ---- */
+/* ---- frame policy (declared at the write queue): per-word spec interval + trigger words ---- */
 static int word_in(int si,int v){ return set_valid(&SET[si],v); }
 static int word_ok(int idx,uint16_t v){
     switch(idx){
-    case 0:   return v<=1;                               /* power: 1 = PowerOn; 0 = PowerOff kun m. I_POWEROFF (frame_policy) — v6.14 */
-    case 1:   return v==0;                               /* 0=vågen; 1 (sleep/drain) sendes aldrig */
+    case 0:   return v<=1;                               /* power: 1 = PowerOn; 0 = PowerOff only w. I_POWEROFF (frame_policy) — v6.14 */
+    case 1:   return v==0;                               /* 0=awake; 1 (sleep/drain) is never sent */
     case 2:   return word_in(S_GRINDMODE,v);
-    case 3: case 6: case 9: case 16: case 22: case 24: return v<=1;   /* start-ord (intent tjekkes i frame_policy) */
+    case 3: case 6: case 9: case 16: case 22: case 24: return v<=1;   /* start words (intent checked in frame_policy) */
     case 4:   return word_in(S_GRINDW,v);
-    case 5: case 13: case 15: return v==60;              /* hardcodede opskrifts-ord [fuart_thread 0x146810] */
+    case 5: case 13: case 15: return v==60;              /* hardcoded recipe words [fuart_thread 0x146810] */
     case 11:  return word_in(S_BREWT,v);
     case 14:  return word_in(S_STEAMG,v);
     case 17:  return word_in(S_HOTW,v);
     case 23:  return word_in(S_BREWW,v);
     case 25:  return word_in(S_STEAMT,v);
     case 112: return (v>>8)<=1 && word_in(S_PIPRESS,v&0xFF);
-    case 113: return word_in(S_PITIME,v>>8);             /* lo-byte = breakTime: vilkårlig byte, uden effekt */
+    case 113: return word_in(S_PITIME,v>>8);             /* lo byte = breakTime: arbitrary byte, no effect */
     case 114: return word_in(S_HEADT,v);
-    default:  return v==0;                               /* 7,8,10,12,18..21,26..31: altid 0 */
+    default:  return v==0;                               /* 7,8,10,12,18..21,26..31: always 0 */
     }
 }
 static int frame_policy(uint8_t sub,const uint16_t*w,int len,uint32_t intent){
     if(intent&(TRIG_NEVER|~(TRIG_START|I_POWEROFF))) return WJ_TRIG;
     for(int k=0;k<len;k++){
         int idx=sub+k; uint16_t v=w[k];
-        if(idx==0&&v==0&&!(intent&I_POWEROFF)) return WJ_TRIG;                    /* v6.14: PowerOff kun m. eksplicit intent */
+        if(idx==0&&v==0&&!(intent&I_POWEROFF)) return WJ_TRIG;                    /* v6.14: PowerOff only w. explicit intent */
         if(idx<32&&v!=0){
-            if(TRIG_NEVER&WBIT(idx)) return WJ_TRIG;                              /* kalibrering/reboot: aldrig */
-            if((TRIG_START&WBIT(idx))&&!(intent&WBIT(idx))) return WJ_TRIG;       /* start-ord uden intent */
+            if(TRIG_NEVER&WBIT(idx)) return WJ_TRIG;                              /* calibration/reboot: never */
+            if((TRIG_START&WBIT(idx))&&!(intent&WBIT(idx))) return WJ_TRIG;       /* start word without intent */
         }
         if(!word_ok(idx,v)) return WJ_RANGE;
     }
     return 0;
 }
 
-/* køer cmd6-write(s) for setting i med ny værdi v. Retur: 1=køet, 0=ingen MCU-del, -1=fejl.
- * Kun enkelt-ord-/pre-infusions-blokke fra PARITY §3.7-3.8 — aldrig et trigger-ord i framen
- * (grindMode sendes som sub2 len1; stock's sub2 len2 ville medsende start-ordet 3). */
+/* queues cmd6 write(s) for setting i with new value v. Returns: 1=queued, 0=no MCU part, -1=error.
+ * Only single-word/pre-infusion blocks from PARITY §3.7-3.8 — never a trigger word in the frame
+ * (grindMode is sent as sub2 len1; stock's sub2 len2 would also send start word 3). */
 static int setting_mcu_push(int i,int v){
     uint16_t w[2];
     switch(SET[i].mcu){
@@ -2090,7 +2096,7 @@ static int setting_mcu_push(int i,int v){
     case M_W17:  w[0]=(uint16_t)v; return wq_push(17,w,1)?1:-1;
     case M_W2:   w[0]=(uint16_t)v; return wq_push(2,w,1)?1:-1;
     case M_W114: w[0]=(uint16_t)v; return wq_push(114,w,1)?1:-1;
-    case M_W112: /* stock: usart_send(6,112,2) — ord112+113 sammen [0xeb570/0x103bc8] */
+    case M_W112: /* stock: usart_send(6,112,2) — word112+113 together [0xeb570/0x103bc8] */
         w[0]=pack112(i==S_PISW?v:sv(S_PISW), i==S_PIPRESS?v:sv(S_PIPRESS));
         w[1]=pack113(sv(S_PITIME),sv(S_BREAK));
         return wq_push(112,w,2)?1:-1;
@@ -2101,29 +2107,29 @@ static int setting_mcu_push(int i,int v){
     return -1;
 }
 
-/* ================= aktivitets-recepter (PARITY §3.1-3.4; observerede frames, byte-for-byte) =================
- * GRIND  [L BREW.md W1]     cmd6 sub3 len4  : 1, dosis, 60, 1
- * BREW   [L BREW.md W3]     cmd6 sub5 len18 : 60,0,0,0,1,0,temp,0,60,gear,60,0,vand,0,0,0,0,1
- * VAND   [L HOTWATER.md W1] cmd6 sub9 len11 : 1,0,temp,0,60,gear,60,1,vand,0,0
- * DAMP   [S SESSION.md §10] cmd6 sub24 len8 : 1,mål,0,0,0,0,0,0   (stop: ord24=0)
- * Kun de config-afledte felter substitueres; alle øvrige ord er som i atlasset. Hver
- * start-frame angiver eksplicit hvilke start-ord den må sætte (I_*); ord 26/27/30 i
- * damp-blokken er konstante 0 og kan ikke blive andet (frame_policy). */
+/* ================= activity recipes (PARITY §3.1-3.4; observed frames, byte-for-byte) =================
+ * GRIND  [L BREW.md W1]     cmd6 sub3 len4  : 1, dose, 60, 1
+ * BREW   [L BREW.md W3]     cmd6 sub5 len18 : 60,0,0,0,1,0,temp,0,60,gear,60,0,water,0,0,0,0,1
+ * WATER  [L HOTWATER.md W1] cmd6 sub9 len11 : 1,0,temp,0,60,gear,60,1,water,0,0
+ * STEAM  [S SESSION.md §10] cmd6 sub24 len8 : 1,target,0,0,0,0,0,0   (stop: word24=0)
+ * Only the config-derived fields are substituted; all other words are as in the atlas. Each
+ * start frame states explicitly which start words it may set (I_*); words 26/27/30 in the
+ * steam block are constant 0 and cannot become anything else (frame_policy). */
 enum { ACT_NONE=-1, ACT_GRIND=0, ACT_BREW, ACT_WATER, ACT_STEAM };
 static int act_push(int kind){
     uint16_t w[18];
     switch(kind){
     case ACT_GRIND: { uint16_t g[4]={1,(uint16_t)sv(S_GRINDW),60,1}; return wq_push_t(3,g,4,I_GRIND); }
     case ACT_BREW: {
-        /* sync kun hvis MCU-spejlet afviger fra config (stock pusher sit spejl ved boot).
-         * ord113 sammenlignes kun på hi-byten: lo-byten overskriver MCU'en selv (0x1E1E). */
+        /* sync only if the MCU mirror differs from config (stock pushes its mirror at boot).
+         * word113 is compared on the hi byte only: the MCU overwrites the lo byte itself (0x1E1E). */
         if(reg_seen[23] && reg[23]!=(uint16_t)sv(S_BREWW)){ w[0]=(uint16_t)sv(S_BREWW); if(!wq_push(23,w,1)) return 0; }
         if(reg_seen[112]&&reg_seen[113]&&reg_seen[114]){
             uint16_t p[3]={pack112(sv(S_PISW),sv(S_PIPRESS)),pack113(sv(S_PITIME),sv(S_BREAK)),(uint16_t)sv(S_HEADT)};
             if(p[0]!=reg[112]||(p[1]>>8)!=(reg[113]>>8)||p[2]!=reg[114]){ if(!wq_push(112,p,3)){ wq.n=0; return 0; } }
         }
         uint16_t b[18]={60,0,0,0,1,0,(uint16_t)sv(S_BREWT),0,60,(uint16_t)sv(S_STEAMG),60,0,(uint16_t)sv(S_HOTW),0,0,0,0,1};
-        if(!wq_push_t(5,b,18,I_BREW)){ wq.n=0; return 0; }      /* aldrig halve sekvenser */
+        if(!wq_push_t(5,b,18,I_BREW)){ wq.n=0; return 0; }      /* never half sequences */
         return 1;
     }
     case ACT_WATER: { uint16_t h[11]={1,0,(uint16_t)sv(S_BREWT),0,60,(uint16_t)sv(S_STEAMG),60,1,(uint16_t)sv(S_HOTW),0,0}; return wq_push_t(9,h,11,I_WATER); }
@@ -2131,32 +2137,32 @@ static int act_push(int kind){
     }
     return 0;
 }
-/* STOP må aldrig kunne afvises af politikken: mål-ordet klemmes ind i spec-intervallet */
+/* STOP must never be rejectable by the policy: the target word is clamped into the spec interval */
 static int act_push_steam_stop(void){
     uint16_t s[8]={0,(uint16_t)clampi(sv(S_STEAMT),SET[S_STEAMT].lo,SET[S_STEAMT].hi),0,0,0,0,0,0};
     return wq_push(24,s,8);
 }
-/* ================= v6.13: manuel STOP for kværn / bryg / vand (UI_v6.md §18 + CHANGES-v6.13) =================
- * Brugerfejl i v6.12: varmt vand kunne ikke stoppes fra skærmen — kun damp havde en STOP-knap. Stop-ordene er reverset fra
- * MCU-firmwaren (MEM03_V514_260923.bin) og krydstjekket mod stock-UI'ets egne stop-kald (demo_v9, symboler bevaret):
- *   KVÆRN cmd6 sub6  len1: ord 6  = 0   aa 55 06 06 01 00 00 c4 47
- *         MCU grind-ctl 0x19C6: kværnen kører, mens ord 6 != 0 (0x1AA2: work_sta |= 0x40, ellers &= ~0x40). MCU'ens egne
- *         stop — vægt-mål 0x1A68, timeout 0x1A72, fejl 0x1A3E/0x1A8C — skriver netop ord 6 = 0. Stock: onClick 0x10928C
- *         usart_send(6,6,1), efter at spejl-ord 6 er vendt til 0 (start-grenen 0x109278 sender sub3 len4).
- *   BRYG  cmd6 sub22 len1: ord 22 = 0   aa 55 06 16 01 00 00 c0 87
- *         MCU brew-ctl 0x1E9C: ved hver ÆNDRING af ord 22 bliver running = (ord 22 != 0) (0x1F94..0x1FC6). MCU'ens vægt-stop
- *         skriver selv ord 22 = 0 (0x1F92) — samme vej, inkl. ventil-pulsen på bit 2 bagefter (0x20B2..0x20EC). Stock:
- *         onClick 0x109694 vender spejl-ord 22 til 0 og sender HELE blokken usart_send(6,5,18); ourui skriver kun det ord,
- *         der ændres (ord 5..21 i stock's blok er MCU'ens egne, pollede værdier — for MCU'en en no-op; cmd6 = memcpy).
- *   VAND  cmd6 sub16 len1: ord 16 = 0   aa 55 06 10 01 00 00 c0 0f   (+ sub19 len1 ord 19 = 0 — kun hvis ord 19 != 0)
- *         MCU hotwater-ctl 0x1B8C: aktiv = (ord 19 | ord 16) != 0, genberegnet hver omgang (0x1C44..0x1C4E). MCU'ens vægt-stop
- *         skriver selv ord 16 = 0 (0x1C80). Stock: hotWaterStartStop 0x11468C usart_send(6,16,1) (auto-tilstand, = ourui's
- *         start) og 0x114720 usart_send(6,19,1) (manuel tilstand; ourui starter aldrig den, men stopper den, hvis den ses).
- *   DAMP  cmd6 sub24 len8: ord 24 = 0   (uændret fra v6)
- * En stop-frame indeholder kun nuller: frame_policy afviser den ikke (start-ord <= 1, øvrige == 0), og den kan aldrig starte
- * noget. Samme write-kø som alt andet: CRC + ACK-vent + én retransmit. AUTO-STOP er uændret: ourui sender intet, når MCU'en
- * selv stopper. Bekræftelse (stop_step): aktivitetens work_sta-bits er ryddet — kværn bit 6; bryg bits 1+2 (bit 2 + 12 ryddes
- * i første omgang efter stop, 0x20C4); vand bits 1+3 (bit 3 ryddes altid, 0x1C9A; bits 1+9 deles med kedel-påfyldningen). */
+/* ================= v6.13: manual STOP for grind / brew / water (UI_v6.md §18 + CHANGES-v6.13) =================
+ * User-reported bug in v6.12: hot water could not be stopped from the screen — only steam had a STOP button. The stop words are reversed from
+ * the MCU firmware (MEM03_V514_260923.bin) and cross-checked against the stock UI's own stop calls (demo_v9, symbols preserved):
+ *   GRIND cmd6 sub6  len1: word 6  = 0   aa 55 06 06 01 00 00 c4 47
+ *         MCU grind-ctl 0x19C6: the grinder runs while word 6 != 0 (0x1AA2: work_sta |= 0x40, else &= ~0x40). The MCU's own
+ *         stops — weight target 0x1A68, timeout 0x1A72, error 0x1A3E/0x1A8C — write exactly word 6 = 0. Stock: onClick 0x10928C
+ *         usart_send(6,6,1), after mirror word 6 has been flipped to 0 (the start branch 0x109278 sends sub3 len4).
+ *   BREW  cmd6 sub22 len1: word 22 = 0   aa 55 06 16 01 00 00 c0 87
+ *         MCU brew-ctl 0x1E9C: on every CHANGE of word 22, running = (word 22 != 0) (0x1F94..0x1FC6). The MCU's weight stop
+ *         itself writes word 22 = 0 (0x1F92) — same path, incl. the valve pulse on bit 2 afterwards (0x20B2..0x20EC). Stock:
+ *         onClick 0x109694 flips mirror word 22 to 0 and sends the WHOLE block usart_send(6,5,18); ourui writes only the word
+ *         that changes (words 5..21 in stock's block are the MCU's own polled values — a no-op for the MCU; cmd6 = memcpy).
+ *   WATER cmd6 sub16 len1: word 16 = 0   aa 55 06 10 01 00 00 c0 0f   (+ sub19 len1 word 19 = 0 — only if word 19 != 0)
+ *         MCU hotwater-ctl 0x1B8C: active = (word 19 | word 16) != 0, recomputed every cycle (0x1C44..0x1C4E). The MCU's weight stop
+ *         itself writes word 16 = 0 (0x1C80). Stock: hotWaterStartStop 0x11468C usart_send(6,16,1) (auto mode, = ourui's
+ *         start) and 0x114720 usart_send(6,19,1) (manual mode; ourui never starts it, but stops it if it is seen).
+ *   STEAM cmd6 sub24 len8: word 24 = 0   (unchanged from v6)
+ * A stop frame contains only zeros: frame_policy does not reject it (start words <= 1, others == 0), and it can never start
+ * anything. Same write queue as everything else: CRC + ACK wait + one retransmit. AUTO-STOP is unchanged: ourui sends nothing when the MCU
+ * stops by itself. Confirmation (stop_step): the activity's work_sta bits are cleared — grind bit 6; brew bits 1+2 (bits 2 + 12 are cleared
+ * in the first cycle after stop, 0x20C4); water bits 1+3 (bit 3 is always cleared, 0x1C9A; bits 1+9 are shared with boiler refill). */
 static int act_push_stop(int kind){
     uint16_t z=0; int n0=wq.n;
     switch(kind){
@@ -2164,18 +2170,18 @@ static int act_push_stop(int kind){
     case ACT_BREW:  return wq_push(22,&z,1);
     case ACT_WATER:
         if(!wq_push(16,&z,1)) return 0;
-        if(reg_seen[19]&&reg[19]!=0&&!wq_push(19,&z,1)){ wq.n=n0; return 0; }   /* aldrig en halv vand-stop */
+        if(reg_seen[19]&&reg[19]!=0&&!wq_push(19,&z,1)){ wq.n=n0; return 0; }   /* never a half water stop */
         return 1;
     case ACT_STEAM: return act_push_steam_stop();
     }
     return 0;
 }
-#define STOP_CONFIRM_MS 5000   /* så længe ventes der på, at bits'ene ryddes (målt: ACK ~20-280 ms + MCU-omgang 10 ms + poll <= 0,5 s) */
+#define STOP_CONFIRM_MS 5000   /* how long to wait for the bits to clear (measured: ACK ~20-280 ms + MCU cycle 10 ms + poll <= 0.5 s) */
 static struct { int kind, active; ms_t t_req; long seq, n_req, n_ok, n_fail; } stp={ACT_NONE,0,0,0,0,0,0};
 
-/* ================= faser (work_sta ord 33; SESSION.md §6) ================= */
+/* ================= phases (work_sta word 33; SESSION.md §6) ================= */
 enum { PH_OFFLINE=0, PH_SLEEP, PH_ERROR, PH_HEAT, PH_READY, PH_GRIND, PH_PRE, PH_EXT, PH_WATER, PH_STEAM, PH_DONE, NPHASE };
-_Static_assert(TX_PH_DONE-TX_PH_OFFLINE==NPHASE-1,"TX_PH_* skal foelge PH_*");
+_Static_assert(TX_PH_DONE-TX_PH_OFFLINE==NPHASE-1,"TX_PH_* must follow PH_*");
 static const char* ph_name(int p){ return TR(TX_PH_OFFLINE+((p>=0&&p<NPHASE)?p:PH_OFFLINE)); }
 static int link_up(ms_t now){ return now-last_rx_ms<1500; }
 static int phase_raw(ms_t now){
@@ -2183,7 +2189,7 @@ static int phase_raw(ms_t now){
     uint16_t ws=reg[33];
     if((ws&0x4020)==0x4020) return PH_STEAM;                 /* bits 5+14 */
     if(ws&0x0040) return PH_GRIND;                           /* bit 6 */
-    if((ws&0x0006)==0x0006) return (ws&0x0200)?PH_EXT:PH_PRE;/* bits 1+2 (+9 = ekstraktion) */
+    if((ws&0x0006)==0x0006) return (ws&0x0200)?PH_EXT:PH_PRE;/* bits 1+2 (+9 = extraction) */
     if((ws&0x000A)==0x000A) return PH_WATER;                 /* bits 1+3 */
     if(reg[34]||reg[35]||reg[36]) return PH_ERROR;
     if((reg_seen[1]&&reg[1]==1) || (reg_seen[33]&&!(ws&0x0100))) return PH_SLEEP;
@@ -2191,36 +2197,36 @@ static int phase_raw(ms_t now){
     return PH_READY;
 }
 static int phase_active(int p){ return p>=PH_GRIND&&p<=PH_STEAM; }
-/* ---- v6.6: fase-semantik efter STEAMLIVE.md (live-bevist) ----
- * (1) TO DAMP-VEJE, begge = work_sta bits 5+14 (0x4020):
- *     AUTO (latchet)  ord 24 != 0 — UI-start (cmd6 sub24 len8, ord24=1). MCU'en stopper SELV, når mælken
- *                     (ord 48) når målet (ord 25), rydder bits 5+14 og nulstiller ord 24. Ingen stop-write.
- *                     Proben stiger ca. 4 °C videre i ~11 s efter stop (termisk inerti) — kun oplysning.
- *     WAND (momentan) ord 24 == 0 — den fysiske wand-kontakt (ord 44 bit0, ord 46 = 1 følger ca. 0,4 s
- *                     efter). INGEN auto-stop, heller ikke over målet: stopper, når wand'en slippes.
- *                     Sender ingen UART-frames; en STOP-write (ord24=0) ville intet gøre.
- *     Klassen afgøres af ord 24, mens bits 5+14 er sat, og er KLÆBENDE for AUTO: efter en manuel
- *     STOP-write står ord 24 = 0 (ACK-echo) et øjeblik, før MCU'en rydder bits'ene — det er stadig AUTO.
- *     Er ord 24 endnu ikke læst: UKENDT (neutral tekst; STOP-knappen vises — den er altid sikker).
- * (2) SAMTIDIGE FASER: bryg-bits (1+2+9+12) og damp-bits (5+14) er disjunkte og kan være sat sammen
- *     (0x5327 = flush under bryg). HJEM viser da BEGGE: hoved-aktiviteten (kværn/bryg/vand: gauge,
- *     vægt, tid) + et damp-mærke, og mælke-temperaturen står i stat-rækken.
- * phase_raw() er UÆNDRET (state-kontrakten: damp først). phase_main() er det, HJEM viser som
- * hoved-aktivitet: kværn/bryg/vand går forud for damp. Vagterne bruger fortsat phase_raw(): enhver
- * aktivitet — også en wand-flush — spærrer start, GEM, SKIFT NU og boot-push. */
+/* ---- v6.6: phase semantics per STEAMLIVE.md (proven live) ----
+ * (1) TWO STEAM PATHS, both = work_sta bits 5+14 (0x4020):
+ *     AUTO (latched)  word 24 != 0 — UI start (cmd6 sub24 len8, word24=1). The MCU stops BY ITSELF when the milk
+ *                     (word 48) reaches the target (word 25), clears bits 5+14 and resets word 24. No stop write.
+ *                     The probe keeps rising approx. 4 °C for ~11 s after stop (thermal inertia) — info only.
+ *     WAND (momentary) word 24 == 0 — the physical wand switch (word 44 bit0, word 46 = 1 follows approx. 0.4 s
+ *                     later). NO auto-stop, not even above the target: stops when the wand is released.
+ *                     Sends no UART frames; a STOP write (word24=0) would do nothing.
+ *     The class is decided by word 24 while bits 5+14 are set, and is STICKY for AUTO: after a manual
+ *     STOP write, word 24 = 0 (ACK echo) for a moment before the MCU clears the bits — it is still AUTO.
+ *     If word 24 has not been read yet: UNKNOWN (neutral text; the STOP button is shown — it is always safe).
+ * (2) CONCURRENT PHASES: brew bits (1+2+9+12) and steam bits (5+14) are disjoint and can be set together
+ *     (0x5327 = flush during brew). HOME then shows BOTH: the main activity (grind/brew/water: gauge,
+ *     weight, time) + a steam marker, and the milk temperature is in the stat row.
+ * phase_raw() is UNCHANGED (the state contract: steam first). phase_main() is what HOME shows as the
+ * main activity: grind/brew/water take precedence over steam. The guards still use phase_raw(): any
+ * activity — including a wand flush — blocks start, SAVE, SWITCH NOW and boot push. */
 enum { SK_NONE=0, SK_UNKNOWN, SK_AUTO, SK_WAND };
-static struct { int kind, last_kind, wand; ms_t t0; } stm;   /* kind: igangværende damp; last_kind: den seneste afsluttede; wand: kontakten set */
+static struct { int kind, last_kind, wand; ms_t t0; } stm;   /* kind: ongoing steam; last_kind: the most recently finished; wand: the switch was seen */
 static int steam_bits(void){ return (reg[33]&0x4020)==0x4020; }
 static int wand_sw(void){ return (reg_seen[44]&&(reg[44]&1))||(reg_seen[46]&&reg[46]!=0); }
 static void steam_track(ms_t now){
     if(!link_up(now)||!steam_bits()){ if(stm.kind!=SK_NONE){ stm.last_kind=stm.kind; stm.kind=SK_NONE; } return; }
     if(stm.kind==SK_NONE){ stm.kind=SK_UNKNOWN; stm.t0=now; stm.wand=0; }
     if(wand_sw()) stm.wand=1;
-    if(reg_seen[24]&&reg[24]!=0) stm.kind=SK_AUTO;                         /* latchet — klæbende til bits'ene ryddes */
-    else if(reg_seen[24]&&stm.kind!=SK_AUTO) stm.kind=SK_WAND;             /* ord 24 = 0: wand-vejen */
+    if(reg_seen[24]&&reg[24]!=0) stm.kind=SK_AUTO;                         /* latched — sticky until the bits clear */
+    else if(reg_seen[24]&&stm.kind!=SK_AUTO) stm.kind=SK_WAND;             /* word 24 = 0: the wand path */
 }
-static int steam_stop_visible(void){ return stm.kind==SK_AUTO||stm.kind==SK_UNKNOWN; }   /* WAND: STOP ville være en no-op */
-static int steam_target(void);                                                           /* ord 25 (MCU'ens mål), ellers config */
+static int steam_stop_visible(void){ return stm.kind==SK_AUTO||stm.kind==SK_UNKNOWN; }   /* WAND: STOP would be a no-op */
+static int steam_target(void);                                                           /* word 25 (the MCU's target), else config */
 static int phase_main(ms_t now){
     if(!link_up(now)) return PH_OFFLINE;
     uint16_t ws=reg[33];
@@ -2230,9 +2236,9 @@ static int phase_main(ms_t now){
     return phase_raw(now);
 }
 static const char* steam_label(int k){ return TR(k==SK_AUTO?TX_PH_STEAM_AUTO:(k==SK_WAND?TX_PH_STEAM_WAND:TX_PH_STEAM)); }
-/* v6.13: hvilke STOP-knapper HJEM viser. Hoved-aktiviteten (phase_main: kværn / bryg / vand) har ALTID en STOP-knap, så længe
- * dens bits står; latchet damp har sin som før. Samtidig hoved-aktivitet + latchet damp = to knapper side om side (venstre =
- * hoved-aktiviteten, højre = damp). Wand/flush har stadig ingen (en STOP-write ville intet gøre). Retur: antal knapper (0..2). */
+/* v6.13: which STOP buttons HOME shows. The main activity (phase_main: grind / brew / water) ALWAYS has a STOP button as long
+ * as its bits are set; latched steam has its own as before. Concurrent main activity + latched steam = two buttons side by side (left =
+ * the main activity, right = steam). Wand/flush still has none (a STOP write would do nothing). Returns: number of buttons (0..2). */
 static int stop_main_kind(ms_t now){
     switch(phase_main(now)){ case PH_GRIND: return ACT_GRIND; case PH_PRE: case PH_EXT: return ACT_BREW; case PH_WATER: return ACT_WATER; default: return ACT_NONE; }
 }
@@ -2242,7 +2248,7 @@ static int stop_btns(ms_t now,int k[2]){
     if(steam_stop_visible()) k[n++]=ACT_STEAM;
     return n;
 }
-/* står aktivitetens work_sta-bits stadig? (samme masker som phase_raw/phase_main) */
+/* are the activity's work_sta bits still set? (same masks as phase_raw/phase_main) */
 static int stop_running(int kind){
     uint16_t ws=reg[33];
     switch(kind){ case ACT_GRIND: return (ws&0x0040)!=0; case ACT_BREW: return (ws&0x0006)==0x0006; case ACT_WATER: return (ws&0x000A)==0x000A; case ACT_STEAM: return steam_bits(); }
@@ -2260,8 +2266,8 @@ static const char* err_text(void){
     if(e2&0x10) return TR(TX_ER_E2_MILK);
     return TR(TX_ER_UNKNOWN);
 }
-/* v6.11: fejlkoden (E1/E2/E3) staar ikke laengere i HJEM-underlinjen (den er klart sprog); den vises nedtonet i chart-feltet
- * med en henvisning til DIAGNOSE (E1 / E2 / E3-cellen). Samme prioritet som err_text(). */
+/* v6.11: the error code (E1/E2/E3) is no longer in the HOME subline (that is plain language); it is shown dimmed in the chart area
+ * with a pointer to DIAGNOSE (the E1 / E2 / E3 cell). Same priority as err_text(). */
 static const char* err_code(void){
     uint16_t e1=reg[34],e2=reg[35],e3=reg[36];
     if(e3&0x30) return "E3";
@@ -2270,39 +2276,39 @@ static const char* err_code(void){
     return "?";
 }
 
-/* ================= v6.9: visnings-konditionering (KUN det der tegnes) =================
- * Brugerens klage: store udsving får grafen til at se ustabil ud — på enheden (ADC-støj ±9..±40, vedligehold-/deadhead-
- * pulser på ord 51 op til 15-16k i 0,1..1 s, BREW.md §6 / STEAMLIVE.md §5.3) og i SIM'en. Rettelsen ligger i UI'et,
- * så den gælder begge steder (sim/mcu_sim.py's 'calm' er en separat demo-hjælp, default FRA, og bruges ikke her).
- *  RÅ   : reg[] og ringbufferen g_p/g_w/g_m er uændrede. AL styring (writes, auto-stop-forventninger, vagter, tærskler,
- *         fase-logik, DIAGNOSE-tællere) læser fortsat de rå værdier — v6.9 ændrer ingen af dem.
- *  CHART: pr. sample (10 Hz) median af de 3 seneste (fjerner enkelt-sample-spikes) -> EMA, alpha CD_A_CHART = 0,18
- *         (tidskonstant -1/ln(1-0,18) = 5,0 samples = 0,50 s). Gemmes ved siden af det rå i g_pd/g_wd/g_md.
- *         Filtrene følger median-3 direkte i 2 samples, når aktiviteten skifter (start/stop smøres ikke ud; se SKIFT).
- *  SKALA: y-toppen = max(mål/gulv x 1,08, P x CD_HEAD (1,15)), P = CD_PCT-percentilen (p90) af vinduets AKTIVE rå samples
- *         (dem over støjgulvet: tryk >= 40, vægt/mælk > 0). Korte pulser (deadhead efter bryg, vedligehold i ro) er få
- *         samples og flader derfor ikke kurven ud; når et rå sample ligger over toppen, tegnes en lille streg i
- *         overkanten (informationen skjules ikke). Kun AKTIVE samples, fordi en p90 over HELE 40-s-vinduet er 0 i de
- *         første ca. 4 s af en ekstraktion (vinduet er mest tomgang) og ville klemme kurven op i loftet — selftesten
- *         måler begge dele. cd.scale=CS_HOLD (højeste niveau holdt i CD_HOLD samples) og CS_MAX (v6.8) kan vælges i SIM.
- *  RO   : tryk-kurven tegnes kun for samples taget under bryg/præ-inf./vand (g_a). Uden for en aktivitet er ord 51
- *         vedligehold-/pumpe-pulser (små varmecyklusser 400-900 i 0,5-1,5 s, deadhead 3000-16670 i 0,1-0,25 s) — de vises
- *         som små streger på grundlinjen. Chartet er "aktivt" i ro, så længe 40-s-vinduet har et bryg/vand (v6.8: ét rå
- *         sample >= 40 — så hver vedligehold-puls tændte et spike-chart i ro). Vægt-linjen tegnes hele vejen.
- *  GATE : tryk-kurven har desuden en puls-gate: springer median-3 til > 2 x den viste værdi + 400, holdes den viste værdi
- *         i op til CD_GATE = 3 samples (0,3 s); varer springet længere, er det ægte og følges. Median-3 alene fjerner kun
- *         1-sample-pulser — en 2-sample-deadhead-puls (15500) ville ellers vise sig som en 1,5 s lang pukkel i loftet.
- *  SKIFT: når aktiviteten (eller vægt-kilden) skifter, følger chart-filtrene median-3 direkte i 2 samples (CD_FAST) i stedet
- *         for EMA — trinnet smøres ikke ud, og et puls-sample lige ved skiftet slipper ikke igennem.
- *  HERO : hero-tallet (+ gauge og BAR-feltet, som viser samme størrelse) = median-3 + EMA alpha CD_A_HERO = 0,25 (0,35 s),
- *         opdateret i 10-Hz-takt uanset frame-rate. Springer til rå-værdien ved fase-skift (inkl. FÆRDIG), skift af
- *         kilde (vægt/mælk/kedel), skift af set-punkt/mål, et median-spring > CD_HERO_JUMP og efter > 0,5 s uden opdatering.
- *  VÆGT : (v6.9, brugerens klage over periodiske vægt-spikes i ro) kilden er LATCHET (wsl, se "stabil vægt-kilde") i stedet
- *         for at følge fasen sample for sample, og den viste vægt (hero, chart, stat-felt) har et DØDBÅND: |vægt| < 0,25 g
- *         (|ord| < CD_WDB = 2,5 i 0,1 g) vises som 0. Ord 38/39 er SIGNED (tara 0xFFFD = -3): al filtrering sker på int16-
- *         værdier (s16) — et ord fortolket som unsigned ville smøre en tara på -0,3 g ud mod 6553,3 g.
- *  TUNING: -DCD_A_CHART=… -DCD_A_HERO=… -DCD_MED=1|3 -DCD_PCT=… -DCD_HOLD=… -DCD_HEAD=… -DCD_WDB=… ved build; i SIM live via
- *         ctrl {"cmd":"cond", ...}; DIAGNOSE → GRAF skifter til rå (ukonditioneret) serie + værdier — kun denne session. */
+/* ================= v6.9: display conditioning (ONLY what is drawn) =================
+ * User complaint: large swings make the graph look unstable — on the device (ADC noise ±9..±40, maintenance/deadhead
+ * pulses on word 51 up to 15-16k for 0.1..1 s, BREW.md §6 / STEAMLIVE.md §5.3) and in the SIM. The fix lives in the UI,
+ * so it applies in both places (sim/mcu_sim.py's 'calm' is a separate demo aid, default OFF, and is not used here).
+ *  RAW  : reg[] and the ring buffer g_p/g_w/g_m are unchanged. ALL control (writes, auto-stop expectations, guards, thresholds,
+ *         phase logic, DIAGNOSE counters) still reads the raw values — v6.9 changes none of them.
+ *  CHART: per sample (10 Hz) median of the last 3 (removes single-sample spikes) -> EMA, alpha CD_A_CHART = 0.18
+ *         (time constant -1/ln(1-0.18) = 5.0 samples = 0.50 s). Stored next to the raw values in g_pd/g_wd/g_md.
+ *         The filters follow median-3 directly for 2 samples when the activity changes (start/stop is not smeared; see SWITCH).
+ *  SCALE: y top = max(target/floor x 1.08, P x CD_HEAD (1.15)), P = the CD_PCT percentile (p90) of the window's ACTIVE raw samples
+ *         (those above the noise floor: pressure >= 40, weight/milk > 0). Short pulses (deadhead after brew, maintenance at rest) are few
+ *         samples and therefore do not flatten the curve; when a raw sample lies above the top, a small tick is drawn at
+ *         the top edge (the information is not hidden). Only ACTIVE samples, because a p90 over the WHOLE 40 s window is 0 in the
+ *         first approx. 4 s of an extraction (the window is mostly idle) and would squash the curve up into the ceiling — the selftest
+ *         measures both. cd.scale=CS_HOLD (highest level held for CD_HOLD samples) and CS_MAX (v6.8) can be selected in the SIM.
+ *  IDLE : the pressure curve is drawn only for samples taken during brew/pre-inf./water (g_a). Outside an activity, word 51 is
+ *         maintenance/pump pulses (small heating cycles 400-900 for 0.5-1.5 s, deadhead 3000-16670 for 0.1-0.25 s) — they are shown
+ *         as small ticks on the baseline. The chart is "active" at rest as long as the 40 s window contains a brew/water (v6.8: one raw
+ *         sample >= 40 — so every maintenance pulse turned on a spike chart at rest). The weight line is drawn all the way.
+ *  GATE : the pressure curve also has a pulse gate: if median-3 jumps to > 2 x the shown value + 400, the shown value is held
+ *         for up to CD_GATE = 3 samples (0.3 s); if the jump lasts longer, it is real and is followed. Median-3 alone only removes
+ *         1-sample pulses — a 2-sample deadhead pulse (15500) would otherwise show up as a 1.5 s long hump at the ceiling.
+ *  SWITCH: when the activity (or the weight source) changes, the chart filters follow median-3 directly for 2 samples (CD_FAST) instead
+ *         of EMA — the step is not smeared, and a pulse sample right at the switch does not get through.
+ *  HERO : the hero number (+ gauge and the BAR field, which show the same quantity) = median-3 + EMA alpha CD_A_HERO = 0.25 (0.35 s),
+ *         updated at a 10 Hz rate regardless of frame rate. Snaps to the raw value on phase change (incl. DONE), change of
+ *         source (weight/milk/boiler), change of setpoint/target, a median jump > CD_HERO_JUMP and after > 0.5 s without update.
+ *  WEIGHT: (v6.9, user complaint about periodic weight spikes at rest) the source is LATCHED (wsl, see "stable weight source") instead
+ *         of following the phase sample by sample, and the shown weight (hero, chart, stat field) has a DEADBAND: |weight| < 0.25 g
+ *         (|word| < CD_WDB = 2.5 in 0.1 g) is shown as 0. Words 38/39 are SIGNED (tare 0xFFFD = -3): all filtering is done on int16
+ *         values (s16) — a word interpreted as unsigned would smear a tare of -0.3 g out towards 6553.3 g.
+ *  TUNING: -DCD_A_CHART=… -DCD_A_HERO=… -DCD_MED=1|3 -DCD_PCT=… -DCD_HOLD=… -DCD_HEAD=… -DCD_WDB=… at build; in the SIM live via
+ *         ctrl {"cmd":"cond", ...}; DIAGNOSE → GRAPH switches to the raw (unconditioned) series + values — this session only. */
 #ifndef CD_A_CHART
 #define CD_A_CHART 0.18f
 #endif
@@ -2322,75 +2328,75 @@ static const char* err_code(void){
 #define CD_HEAD 1.15f
 #endif
 #ifndef CD_WDB
-#define CD_WDB 2.5f          /* vægt-dødbånd: |vægt| < 0,25 g vises som 0 (brugerens ønske) — kun visning */
+#define CD_WDB 2.5f          /* weight deadband: |weight| < 0.25 g is shown as 0 (user's request) — display only */
 #endif
 #ifndef CD_GATE
-#define CD_GATE 3            /* puls-gate (kun chartets tryk): median > 2 x vist + CD_GATE_ABS holdes i op til 3 samples (0,3 s) */
+#define CD_GATE 3            /* pulse gate (chart pressure only): median > 2 x shown + CD_GATE_ABS is held for up to 3 samples (0.3 s) */
 #endif
 #define CD_GATE_ABS 400.f
-#define CD_W_JUMP 20.f       /* vægt-serien: median-spring > 2,0 g på ét sample = kop af/på -> snap (støj ±0,2 g; et bryg stiger ca. 0,2 g/sample) */
-#define CD_HERO_JUMP 150     /* hero: median-spring > 15,0 enheder (g / °) på 0,1 s = et ægte trin (kop af/på) -> snap, ingen glidning */
+#define CD_W_JUMP 20.f       /* weight series: median jump > 2.0 g in one sample = cup off/on -> snap (noise ±0.2 g; a brew rises approx. 0.2 g/sample) */
+#define CD_HERO_JUMP 150     /* hero: median jump > 15.0 units (g / °) in 0.1 s = a real step (cup off/on) -> snap, no gliding */
 enum { CS_HOLD=0, CS_PCT, CS_MAX };
 static struct { float a_chart,a_hero,head; int med,hold,pct,scale,raw,gate; } cd={CD_A_CHART,CD_A_HERO,CD_HEAD,CD_MED,CD_HOLD,CD_PCT,CS_PCT,0,CD_GATE};
 #if defined(OURUI_SIM)||defined(OURUI_PREVIEW)
-static const char*const CS_KEY[]={"hold","pct","max"};     /* ctrl "cond" + state-JSON (kun SIM/preview) */
+static const char*const CS_KEY[]={"hold","pct","max"};     /* ctrl "cond" + state JSON (SIM/preview only) */
 #endif
-/* vægt-dødbåndet (kun visning; RÅ-visningen fra DIAGNOSE har intet dødbånd) */
+/* the weight deadband (display only; the RAW view from DIAGNOSE has no deadband) */
 static float wdb(float v){ return (cd.raw||fabsf(v)>=CD_WDB)?v:0.f; }
 static int wdbi(int v){ return (int)wdb((float)v); }
-typedef struct { int h[3],m,fast,held; float y; } Cond;  /* de 3 seneste rå samples, seneste median, median-følge-tæller, gate-tæller, EMA-værdien */
+typedef struct { int h[3],m,fast,held; float y; } Cond;  /* the 3 latest raw samples, latest median, median-follow counter, gate counter, the EMA value */
 static int med3(int a,int b,int c){ int lo=a<b?a:b, hi=a<b?b:a; return c<lo?lo:(c>hi?hi:c); }
 static void cond_snap(Cond*c,int x){ c->h[0]=c->h[1]=c->h[2]=c->m=x; c->y=(float)x; c->fast=0; c->held=0; }
-/* aktivitets-skift i chartet: de næste CD_FAST samples følger median-3 DIREKTE (ingen EMA-udsmøring af trinnet), men et
- * enkelt puls-sample lige ved skiftet slipper ikke igennem (en ren snap til rå-værdien ville tage pulsen med og lade den
- * klinge langsomt af — sådan så v6.9-wip ud, når et bryg sluttede i en deadhead-puls) */
+/* activity switch in the chart: the next CD_FAST samples follow median-3 DIRECTLY (no EMA smearing of the step), but a
+ * single pulse sample right at the switch does not get through (a plain snap to the raw value would take the pulse along and let it
+ * decay slowly — that is what v6.9-wip looked like when a brew ended in a deadhead pulse) */
 #define CD_FAST 2
 static void cond_rearm(Cond*c){ c->fast=CD_FAST; c->held=0; }
 static float cond_stepg(Cond*c,int x,float a,int gate){
     c->h[0]=c->h[1]; c->h[1]=c->h[2]; c->h[2]=x;
     c->m=cd.med>=3?med3(c->h[0],c->h[1],c->h[2]):x;
     if(c->fast>0){ c->fast--; c->y=(float)c->m; return c->y; }
-    if((gate&1)&&cd.gate>0&&(float)c->m>c->y*2.f+CD_GATE_ABS){ if(c->held<cd.gate){ c->held++; return c->y; } }  /* puls-gate: hold */
+    if((gate&1)&&cd.gate>0&&(float)c->m>c->y*2.f+CD_GATE_ABS){ if(c->held<cd.gate){ c->held++; return c->y; } }  /* pulse gate: hold */
     else c->held=0;
-    if((gate&2)&&fabsf((float)c->m-c->y)>CD_W_JUMP){ c->y=(float)c->m; return c->y; }      /* vægt: ægte trin (kop af/på) -> snap */
+    if((gate&2)&&fabsf((float)c->m-c->y)>CD_W_JUMP){ c->y=(float)c->m; return c->y; }      /* weight: real step (cup off/on) -> snap */
     c->y+=a*((float)c->m-c->y);
-    if(fabsf((float)c->m-c->y)<0.5f) c->y=(float)c->m;      /* halen lander præcist (ellers kryber en EMA i det uendelige) */
+    if(fabsf((float)c->m-c->y)<0.5f) c->y=(float)c->m;      /* the tail lands exactly (otherwise an EMA creeps forever) */
     return c->y;
 }
 static float cond_step(Cond*c,int x,float a){ return cond_stepg(c,x,a,0); }
 
-/* ================= historik (60 s @ 10 Hz) ================= */
+/* ================= history (60 s @ 10 Hz) ================= */
 #define GN 640
-static ms_t g_t[GN]; static int g_p[GN], g_w[GN], g_m[GN];   /* RÅ — det eneste styring/tests/DIAGNOSE læser */
-static unsigned char g_a[GN];                                  /* v6.9: sample taget under bryg/præ-inf./vand (tryk-kurven hører til dér) */
-static float g_pd[GN], g_wd[GN], g_md[GN];                    /* v6.9: konditioneret (kun til tegning) */
+static ms_t g_t[GN]; static int g_p[GN], g_w[GN], g_m[GN];   /* RAW — the only thing control/tests/DIAGNOSE read */
+static unsigned char g_a[GN];                                  /* v6.9: sample taken during brew/pre-inf./water (that is where the pressure curve belongs) */
+static float g_pd[GN], g_wd[GN], g_md[GN];                    /* v6.9: conditioned (for drawing only) */
 static int g_n=0,g_head=0;
 static Cond cf_p,cf_w,cf_m; static int cf_ph=-1, g_lsrc=39;
-/* src = vægt-ordet (38/39), valgt af den latchede kilde (wsrc_tick). Vægten læses SIGNED (int16). Filtrene springer til
- * rå-værdien, når AKTIVITETEN (kværn/præ-inf./ekstraktion/vand/damp vs. ro) eller kilden skifter — ikke ved skift mellem
- * ro-faserne (KLAR/OPVARMER/SOVER …), så et tærskel-flimmer i ro ikke nulstiller udjævningen. */
+/* src = the weight word (38/39), chosen by the latched source (wsrc_tick). The weight is read SIGNED (int16). The filters snap to
+ * the raw value when the ACTIVITY (grind/pre-inf./extraction/water/steam vs. idle) or the source changes — not on switches between
+ * the idle phases (READY/HEATING/SLEEPING …), so threshold flicker at rest does not reset the smoothing. */
 static void graph_push(ms_t t,int p,int src){
     int w=(int)(int16_t)reg[src], m=reg[48], pm=phase_main(t), key=(phase_active(pm)?pm:0)<<8|src;
-    if(cf_ph<0){ cond_snap(&cf_p,p); cond_snap(&cf_w,w); cond_snap(&cf_m,m); cf_p.fast=cf_w.fast=cf_m.fast=CD_FAST+1; }   /* første sample (evt. en puls: væk igen efter 2 samples, ingen hale) */
-    else if(key!=cf_ph){ cond_rearm(&cf_p); cond_rearm(&cf_m);                                         /* aktivitets-skift: ingen udsmøring */
-        if(src!=g_lsrc) cond_snap(&cf_w,w); else cond_rearm(&cf_w); }                                 /* kilde-skift: et ANDET vægt-ord — ingen historik at bære over */
+    if(cf_ph<0){ cond_snap(&cf_p,p); cond_snap(&cf_w,w); cond_snap(&cf_m,m); cf_p.fast=cf_w.fast=cf_m.fast=CD_FAST+1; }   /* first sample (possibly a pulse: gone again after 2 samples, no tail) */
+    else if(key!=cf_ph){ cond_rearm(&cf_p); cond_rearm(&cf_m);                                         /* activity switch: no smearing */
+        if(src!=g_lsrc) cond_snap(&cf_w,w); else cond_rearm(&cf_w); }                                 /* source switch: a DIFFERENT weight word — no history to carry over */
     cf_ph=key; g_lsrc=src; g_a[g_head]=(unsigned char)(pm==PH_PRE||pm==PH_EXT||pm==PH_WATER);
     g_t[g_head]=t; g_p[g_head]=p; g_w[g_head]=w; g_m[g_head]=m;
     g_pd[g_head]=cond_stepg(&cf_p,p,cd.a_chart,1); g_wd[g_head]=cond_stepg(&cf_w,w,cd.a_chart,2); g_md[g_head]=cond_step(&cf_m,m,cd.a_chart);
     g_head=(g_head+1)%GN; if(g_n<GN)g_n++;
 }
-static struct { Cond f; int key,set,ok,n_snap; ms_t t; } hf;   /* hero-filteret (hero_v() ved HJEM-modellen) */
+static struct { Cond f; int key,set,ok,n_snap; ms_t t; } hf;   /* the hero filter (hero_v() near the HOME model) */
 #if defined(OURUI_SIM)||defined(OURUI_PREVIEW)
-static void cond_reset(void){ cf_ph=-1; }                     /* næste sample snapper alle tre chart-filtre (ctrl "cond" / sim_reset) */
+static void cond_reset(void){ cf_ph=-1; }                     /* the next sample snaps all three chart filters (ctrl "cond" / sim_reset) */
 #endif
-/* seneste konditionerede tryk (gauge + BAR-felt under bryg); rå, når visningen er sat til RÅ eller historikken er tom/gammel */
+/* latest conditioned pressure (gauge + BAR field during brew); raw when the view is set to RAW or the history is empty/stale */
 static float p_disp(ms_t now){
     if(cd.raw||g_n==0) return reg[51];
     int i=(g_head+GN-1)%GN; if(now-g_t[i]>400||now<g_t[i]) return reg[51];
     return g_pd[i];
 }
-/* seneste konditionerede vægt fra kilde-ordet src (stat-feltet i ro), m. dødbånd; rå (s16) når visningen er RÅ, historikken
- * er tom/gammel eller seneste sample kom fra det andet vægt-ord */
+/* latest conditioned weight from source word src (the stat field at rest), w. deadband; raw (s16) when the view is RAW, the history
+ * is empty/stale or the latest sample came from the other weight word */
 static int w_disp(int src,ms_t now){
     int raw=(int)(int16_t)reg[src];
     if(cd.raw||g_n==0||g_lsrc!=src) return wdbi(raw);
@@ -2398,10 +2404,10 @@ static int w_disp(int src,ms_t now){
     return (int)lroundf(wdb(g_wd[i]));
 }
 
-/* backlight live-preview (kun device; mapping duty=100-7v verificeret i WRITETEST.md) */
+/* backlight live preview (device only; mapping duty=100-7v verified in WRITETEST.md) */
 static int bl_enabled=1;
 #ifdef SIM_RT
-static int sim_bl=-1;                                      /* seneste lysstyrke-preview (kun til state-JSON; sysfs skrives ALDRIG i SIM) */
+static int sim_bl=-1;                                      /* latest brightness preview (for state JSON only; sysfs is NEVER written in SIM) */
 #endif
 static void bl_set(int v){
 #ifdef DEVICE_RT
@@ -2415,11 +2421,11 @@ static void bl_set(int v){
     (void)v;
 #endif
 }
-/* v6.14: baggrundslyset helt AF / PÅ (tænd/sluk-knappen). Stock powerOff 0x1490C0: uikit_os_back_light_off (= pwm2/enable 0,
- * 0xC2278) og derefter blpwm_set_dutycycle(2,0). ourui skriver duty 99 (= svageste, mapping duty = 100 - 7v) FØR enable 0: med
- * "polarity inversed" er stock's duty 0 det KRAFTIGSTE lys, hvis enable 0 ikke skulle slå igennem. PÅ: duty fra config's
- * lysstyrke og så enable 1 (stock: app-genstart -> uikit_os_back_light_set + back_light_on 0xC2298). bl_is_off er sandheden
- * for exit-vejene: et ourui, der lukker med slukket lys, tænder det igen (ellers ville stock-UI'et efter run.sh stå mørkt). */
+/* v6.14: backlight fully OFF / ON (the power button). Stock powerOff 0x1490C0: uikit_os_back_light_off (= pwm2/enable 0,
+ * 0xC2278) and then blpwm_set_dutycycle(2,0). ourui writes duty 99 (= dimmest, mapping duty = 100 - 7v) BEFORE enable 0: with
+ * "polarity inversed", stock's duty 0 is the BRIGHTEST light if enable 0 should fail to take effect. ON: duty from config's
+ * brightness and then enable 1 (stock: app restart -> uikit_os_back_light_set + back_light_on 0xC2298). bl_is_off is the ground truth
+ * for the exit paths: an ourui that exits with the light off turns it back on (otherwise the stock UI would be dark after run.sh). */
 static int bl_is_off=0;
 static void bl_power(int on){
     bl_is_off=!on;
@@ -2433,7 +2439,7 @@ static void bl_power(int on){
 }
 
 /* ====================================================================== */
-/* ================= GRAFIK: canvas, circle-clip, AA-primitiver ========= */
+/* ================= GRAPHICS: canvas, circle clip, AA primitives ====== */
 /* ====================================================================== */
 typedef struct { short x0,y0,x1,y1; } Rect;      /* [x0,x1) x [y0,y1) */
 #define RL_MAX 16
@@ -2442,7 +2448,7 @@ static const Rect FULL={0,0,W,H};
 
 static uint32_t *canvas,*bgpure,*bgbase,*slay,*snapA,*snapB,*tbuf,*cv;
 static Rect clipr={0,0,W,H};
-static int cx0[H], cx1[H];   /* chord-mask: sikker x-interval pr. række (GLOBAL CIRCLE-CLIP) */
+static int cx0[H], cx1[H];   /* chord mask: safe x interval per row (GLOBAL CIRCLE CLIP) */
 
 static void clip_init(void){
     for(int y=0;y<H;y++){
@@ -2464,7 +2470,7 @@ static inline float clampf(float v,float lo,float hi){ return v<lo?lo:(v>hi?hi:v
 static void set_clip(Rect r){ clipr=r; if(clipr.x0<0)clipr.x0=0; if(clipr.y0<0)clipr.y0=0; if(clipr.x1>W)clipr.x1=W; if(clipr.y1>H)clipr.y1=H; }
 static Rect R(int x,int y,int w,int h){ Rect r={(short)x,(short)y,(short)(x+w),(short)(y+h)}; return r; }
 
-/* pset: ALLE primitiver ender her eller i hspan -> intet uden for cirklen, nogensinde */
+/* pset: ALL primitives end here or in hspan -> nothing outside the circle, ever */
 static inline void pset(int x,int y,uint32_t c,int a){
     if(a<=0||y<clipr.y0||y>=clipr.y1||x<clipr.x0||x>=clipr.x1) return;
     if(x<cx0[y]||x>cx1[y]) return;
@@ -2479,7 +2485,7 @@ static void hspan(int y,int x0,int x1,uint32_t c,int a){
     else for(int x=x0;x<x1;x++) p[x]=mix(p[x],c,a);
 }
 static void fill_rect(int x,int y,int w,int h,uint32_t c,int a){ for(int j=0;j<h;j++) hspan(y+j,x,x+w,c,a); }
-/* afrundet rektangel m. AA-hjørner og lodret gradient ct->cb */
+/* rounded rectangle w. AA corners and vertical gradient ct->cb */
 static void rrect_g(int x,int y,int w,int h,float r,uint32_t ct,uint32_t cb,int a){
     if(w<=0||h<=0) return;
     if(r>h/2.f) r=h/2.f; if(r>w/2.f) r=w/2.f; int ri=(int)ceilf(r);
@@ -2534,7 +2540,7 @@ static inline float seg_dist(float px,float py,float x0,float y0,float x1,float 
     float l2=vx*vx+vy*vy; float t=l2>0? (wx*vx+wy*vy)/l2 : 0; if(t<0)t=0; if(t>1)t=1;
     float dx=wx-t*vx, dy=wy-t*vy; return sqrtf(dx*dx+dy*dy);
 }
-/* tyk AA-linje m. runde ender */
+/* thick AA line w. round caps */
 static void capsule(float x0,float y0,float x1,float y1,float hw,uint32_t c,int a){
     int xa=(int)floorf(fminf(x0,x1)-hw-1), xb=(int)ceilf(fmaxf(x0,x1)+hw+1);
     int ya=(int)floorf(fminf(y0,y1)-hw-1), yb=(int)ceilf(fmaxf(y0,y1)+hw+1);
@@ -2544,7 +2550,7 @@ static void capsule(float x0,float y0,float x1,float y1,float hw,uint32_t c,int 
         if(cov<=0) continue; if(cov>1)cov=1; pset(x,y,c,(int)(a*cov));
     }
 }
-/* generisk AA-bue (grader, skærm-koord: 0=højre, 90=ned), runde ender; til små buer */
+/* generic AA arc (degrees, screen coords: 0=right, 90=down), round caps; for small arcs */
 static void arc_aa(float cx,float cy,float r,float hw,float a0,float a1,uint32_t c,int a){
     if(a1<=a0) return;
     float sx=cx+r*cosf(a0*(float)M_PI/180), sy=cy+r*sinf(a0*(float)M_PI/180);
@@ -2570,7 +2576,7 @@ static void arc_aa(float cx,float cy,float r,float hw,float a0,float a1,uint32_t
     }
 }
 
-/* ================= baggrund: radial vignette m. ordered dither (ingen banding) ================= */
+/* ================= background: radial vignette w. ordered dither (no banding) ================= */
 static void bg_build(void){
     static const uint8_t B4[16]={0,8,2,10,12,4,14,6,3,11,1,9,15,7,13,5};
     for(int y=0;y<H;y++) for(int x=0;x<W;x++){
@@ -2578,7 +2584,7 @@ static void bg_build(void){
         if(x<cx0[y]||x>cx1[y]){ *p=0xFF000000u; continue; }
         float dx=x+0.5f-CX, dy=y+0.5f-CY; float d=sqrtf(dx*dx+dy*dy)/RSAFE;
         float t=powf(d,1.7f);
-        /* let lys-offset opad (blød top-highlight) */
+        /* slight light offset upwards (soft top highlight) */
         float lift=clampf(0.5f-dy/480.f,0,1)*0.35f;
         float r=(23-17*t)+3*lift*(1-t), g=(25-18*t)+3*lift*(1-t), b=(31-21*t)+4*lift*(1-t);
         float th=(B4[(y&3)*4+(x&3)]+0.5f)/16.f-0.5f;
@@ -2587,13 +2593,13 @@ static void bg_build(void){
     }
 }
 
-/* ================= STROKE-FONT (egen; AA via afstandsfelt, glyph-cache) =================
- * Glyffer er stregtegninger i et 10-enheders versal-gitter: M x,y | L x,y | E cx,cy,rx,ry,a0,a1.
- * Rasteriseres pr. (stil, glyf) første gang og caches som 8-bit alpha. Tal er tabulære
- * (alle cifre adv=6). Kun versaler + tal + ÆØÅ + symboler/ikoner — typografien er
- * bevidst versal m. spatiering. */
+/* ================= STROKE FONT (custom; AA via distance field, glyph cache) =================
+ * Glyphs are stroke drawings on a 10-unit capital grid: M x,y | L x,y | E cx,cy,rx,ry,a0,a1.
+ * Rasterized per (style, glyph) the first time and cached as 8-bit alpha. Digits are tabular
+ * (all digits adv=6). Only capitals + digits + ÆØÅ + symbols/icons — the typography is
+ * deliberately all-caps w. letter spacing. */
 #define NG 160
-#define G_LC 128            /* a..z i kode-spænd (stier/kommandoer): G_LC + (c - 'a') */
+#define G_LC 128            /* a..z in code spans (paths/commands): G_LC + (c - 'a') */
 enum { G_AE=96, G_OE, G_AA, G_DEG, G_MDOT, G_BEAN, G_CUP, G_DROP, G_STEAM, G_CHECK, G_CROSS, G_MOON, G_WARN, G_APPROX, G_BOLT, G_ELL, G_SECT };
 typedef struct { float adv; const char*path; } GDef;
 static const GDef GD[NG]={
@@ -2656,7 +2662,7 @@ static const GDef GD[NG]={
  [G_DEG]={2.8f,"E1.4,1.5,1.4,1.5,0,360"},
  [G_MDOT]={0,"M0,5 L0,5.1"},
  [G_APPROX]={5,"E1.25,4,1.25,1,180,360 E3.75,4,1.25,1,0,180 E1.25,7,1.25,1,180,360 E3.75,7,1.25,1,0,180"},
- /* ikoner (10x10-boks) */
+ /* icons (10x10 box) */
  [G_BEAN]={10,"E5,5,3.7,4.9,0,360 E3.7,2.7,1.5,2.4,-72,72 E6.3,7.3,1.5,2.4,108,252"},
  [G_CUP]={10.2f,"M1,3 L1,5.6 E4.6,5.6,3.6,3.4,0,180 M8.2,5.6 L8.2,3 M0.2,3 L9,3 E8.6,4.9,1.5,1.5,280,440 M2.2,10 L7,10"},
  [G_DROP]={10,"M5,0.4 L2.25,4.58 M5,0.4 L7.75,4.58 E5,6.4,3.3,3.3,326.6,573.4"},
@@ -2670,8 +2676,8 @@ static const GDef GD[NG]={
  ['$']={6,"E3,2.55,2.8,2.55,90,325 E3,7.45,3,2.55,270,505 M3,-1.3 L3,11.3"},
  [G_SECT]={5.6f,"E2.8,1.8,2.4,1.8,95,325 E2.8,5,2.7,1.6,0,360 E2.8,8.2,2.4,1.8,275,505"},
  ['\'']={0,"M0,0 L0,2.6"},
- /* små bogstaver (x-højde 3.6..10, underlængde til 12.8) — KUN i kode-spænd (LC ... UC):
-  * shell er versal-følsom, så stier og kommandoer vises som de skal skrives. */
+ /* lowercase letters (x-height 3.6..10, descender to 12.8) — ONLY in code spans (LC ... UC):
+  * the shell is case-sensitive, so paths and commands are shown as they must be typed. */
  [G_LC+0] ={5.2f,"E2.6,6.8,2.6,3.2,0,360 M5.2,3.6 L5.2,10"},
  [G_LC+1] ={5.2f,"M0,0 L0,10 E2.6,6.8,2.6,3.2,0,360"},
  [G_LC+2] ={4.7f,"E2.6,6.8,2.6,3.2,52,308"},
@@ -2711,11 +2717,11 @@ static const FStyle FS[NFONT]={
  [F_XXL]={66, 7.2f, 0.11f,0},
  [F_IC] ={20, 2.1f, 0.10f,0},
  [F_ICL]={30, 2.8f, 0.10f,0},
- [F_H]  ={34, 4.3f, 0.14f,0.2f},     /* v6.2: ord-hero mellem −/+ (OURUI / ORIGINAL) */
+ [F_H]  ={34, 4.3f, 0.14f,0.2f},     /* v6.2: word hero between −/+ (OURUI / ORIGINAL) */
 };
 #define GSEG_MAX 128
 static float *gseg[NG]; static int gnseg[NG]; static char gparsed[NG];
-typedef struct { uint8_t*a; short w,h,ox,oy; float adv; char st; } GBmp;   /* st: 0=ikke bygget, 1=ok, 2=tom */
+typedef struct { uint8_t*a; short w,h,ox,oy; float adv; char st; } GBmp;   /* st: 0=not built, 1=ok, 2=empty */
 static GBmp gcache[NFONT][NG];
 
 static void glyph_parse(int g){
@@ -2766,9 +2772,9 @@ static GBmp* glyph_get(int f,int g){
     }
     b->st=1; return b;
 }
-/* UTF-8 -> glyf-id (versalisering; ÆØÅ, °, ·, ≈; \x01.. = ikoner).
- * LC/UC (\x0e/\x0f) åbner/lukker et kode-spænd, hvor a..z IKKE versaliseres; de fylder
- * intet selv (retur -1). Tilstanden nulstilles af text_wf()/text_at() ved hver streng. */
+/* UTF-8 -> glyph id (uppercasing; ÆØÅ, °, ·, ≈; \x01.. = icons).
+ * LC/UC (\x0e/\x0f) open/close a code span in which a..z are NOT uppercased; they take up
+ * no space themselves (return -1). The state is reset by text_wf()/text_at() for each string. */
 static int g_lc=0;
 static int glyph_next(const unsigned char**pp){
     const unsigned char*p=*pp; int c=*p++;
@@ -2804,7 +2810,7 @@ static void glyph_blit(const GBmp*b,int gx,int gy,uint32_t c,int a){
         for(int x=xa;x<xb;x++){ int v=src[x]; if(!v) continue; v=(v*a+127)/255; dst[x]= v>=255? c : mix(dst[x],c,v); }
     }
 }
-/* tekst: (x,y) = venstre kant / versal-top */
+/* text: (x,y) = left edge / cap top */
 static float text_at(float x,int y,const char*s,int f,uint32_t c,int a){
     const unsigned char*p=(const unsigned char*)s; g_lc=0;
     while(*p){ int g=glyph_next(&p); if(g<0) continue; GBmp*b=glyph_get(f,g); if(b->st==1) glyph_blit(b,(int)lroundf(x)+b->ox,y+b->oy,c,a); x+=b->adv; }
@@ -2812,7 +2818,7 @@ static float text_at(float x,int y,const char*s,int f,uint32_t c,int a){
 }
 static void text_c(int cx,int y,const char*s,int f,uint32_t c,int a){ text_at(cx-text_wf(s,f)/2,y,s,f,c,a); }
 static void text_r(int xr,int y,const char*s,int f,uint32_t c,int a){ text_at(xr-text_wf(s,f),y,s,f,c,a); }
-/* afkort s (buffer m. >= 4 bytes luft) med "…" til den fylder <= maxw px; klipper på UTF-8-grænser */
+/* truncate s (buffer w. >= 4 bytes of headroom) with "…" until it is <= maxw px wide; cuts at UTF-8 boundaries */
 static void fit_text(char*s,int f,int maxw){
     if(text_w(s,f)<=maxw) return;
     size_t n=strlen(s);
@@ -2823,7 +2829,7 @@ static void font_prewarm(void){
     for(const char*p=dig;*p;p++){ glyph_get(F_XXL,*p); glyph_get(F_XL,*p); glyph_get(F_L,*p); glyph_get(F_M,*p); glyph_get(F_MB,*p); }
 }
 
-/* ================= dirty-rect-lister ================= */
+/* ================= dirty rect lists ================= */
 static int r_empty(Rect r){ return r.x1<=r.x0||r.y1<=r.y0; }
 static int r_touch(Rect a,Rect b){ return a.x0<=b.x1&&b.x0<=a.x1&&a.y0<=b.y1&&b.y0<=a.y1; }
 static int r_isect(Rect a,Rect b){ return a.x0<b.x1&&b.x0<a.x1&&a.y0<b.y1&&b.y0<a.y1; }
@@ -2846,19 +2852,19 @@ static void blit_rect(uint32_t*dst,const uint32_t*src,Rect r){
     for(int y=r.y0;y<r.y1;y++) memcpy(dst+y*W+r.x0,src+y*W+r.x0,(size_t)(r.x1-r.x0)*4);
 }
 
-/* ================= GAUGE-BUE m. LUT (track + glød + ticks) =================
- * Geometrien forudberegnes pr. pixel én gang (vinkel-fraktion t, dækning, glød).
- * Pr. frame genberegnes KUN pixels i det ændrede vinkel-interval, direkte i det
- * semi-statiske lag 'slay' — det ændrede bbox meldes som damage. */
+/* ================= GAUGE ARC w. LUT (track + glow + ticks) =================
+ * The geometry is precomputed per pixel once (angle fraction t, coverage, glow).
+ * Per frame, ONLY pixels in the changed angle interval are recomputed, directly in the
+ * semi-static layer 'slay' — the changed bbox is reported as damage. */
 typedef struct { uint32_t off; float t; short x,y; uint8_t cov,glow,kind; } AEnt;
 typedef struct {
     float rm,hw,gw,a0,sweep; int nt; AEnt*e; int n;
-    float f_d,f_t,f_drawn;                 /* vist / mål / senest tegnet fyld (0..1) */
-    uint32_t c_lo,c_hi,d_lo,d_hi;          /* fyld-farve (mål) / senest tegnet */
-    float mark,mark_drawn;                 /* mål-markør (0..1; <0 = ingen) */
+    float f_d,f_t,f_drawn;                 /* shown / target / last drawn fill (0..1) */
+    uint32_t c_lo,c_hi,d_lo,d_hi;          /* fill colour (target) / last drawn */
+    float mark,mark_drawn;                 /* target marker (0..1; <0 = none) */
     int vis,vis_drawn; uint32_t track; Rect mrect;
 } Arc;
-static Arc garc, parc;                      /* yder-gauge + tynd fremskridts-ring */
+static Arc garc, parc;                      /* outer gauge + thin progress ring */
 #define COL_TICK_MIN rgb(50,55,66)
 #define COL_TICK_MAJ rgb(98,106,122)
 static void arc_build(Arc*a,float rm,float hw,float gw,float a0,float sweep,int nticks,float tr0,float tr1){
@@ -2902,7 +2908,7 @@ static void arc_build(Arc*a,float rm,float hw,float gw,float a0,float sweep,int 
 static void arc_pt(const Arc*a,float f,float r,float*x,float*y){
     float ang=(a->a0+a->sweep*f)*(float)M_PI/180; *x=CX+r*cosf(ang); *y=CY+r*sinf(ang);
 }
-/* tegn ændret interval ind i slay; returnér damage-bbox i *out (tom hvis intet) */
+/* draw the changed interval into slay; return the damage bbox in *out (empty if nothing) */
 static int arc_paint(Arc*a,int force,Rect*out){
     int all=force||a->vis!=a->vis_drawn||a->c_lo!=a->d_lo||a->c_hi!=a->d_hi||a->mark!=a->mark_drawn||a->f_drawn<0;
     if(!all&&a->f_d==a->f_drawn) return 0;
@@ -2943,7 +2949,7 @@ static int arc_paint(Arc*a,int force,Rect*out){
         slay[e->off]=p;
         if(e->x<bb.x0)bb.x0=e->x; if(e->x+1>bb.x1)bb.x1=e->x+1; if(e->y<bb.y0)bb.y0=e->y; if(e->y+1>bb.y1)bb.y1=e->y+1;
     }
-    /* hoved-highlight + mål-markør tegnes oven på (i slay) */
+    /* head highlight + target marker are drawn on top (in slay) */
     uint32_t*save=cv; Rect sc=clipr; cv=slay; set_clip(FULL);
     if(lit&&a->hw>=4){ disc(ex,ey,a->hw-2.2f,rgb(255,255,255),215); }
     if(a->vis&&a->mark>=0){
@@ -2956,22 +2962,22 @@ static int arc_paint(Arc*a,int force,Rect*out){
     if(r_empty(bb)) return 0;
     *out=bb; return 1;
 }
-/* eased fyld: eksponentiel tilnærmelse (tau ~110 ms) */
+/* eased fill: exponential approach (tau ~110 ms) */
 static int arc_ease(Arc*a,float dt_ms){
     float d=a->f_t-a->f_d; if(d==0) return 0;
     if(fabsf(d)<0.0012f){ a->f_d=a->f_t; return 1; }
     a->f_d+=d*(1-expf(-dt_ms/110.f)); return 1;
 }
 
-/* ================= compositor: slay-lag + widgets + overlays + present ================= */
+/* ================= compositor: slay layer + widgets + overlays + present ================= */
 #define NWID 96
 static RL dmg, pres, pres_prev;
 static uint32_t wsig[NWID];
-static int force_all=1, static_dirty=1;      /* static_dirty er forud-erklæret ved lang_set() */
+static int force_all=1, static_dirty=1;      /* static_dirty is forward-declared at lang_set() */
 static uint32_t hs(uint32_t h,const char*s){ while(*s){ h^=(unsigned char)*s++; h*=16777619u; } return h; }
 static uint32_t hi(uint32_t h,int v){ for(int k=0;k<4;k++){ h^=(v>>(8*k))&0xFF; h*=16777619u; } return h; }
 #define H0 2166136261u
-/* widget: tegnes kun hvis signaturen er ændret eller dens rect rammes af damage */
+/* widget: drawn only if the signature has changed or its rect is hit by damage */
 static int W_begin(int id,Rect r,uint32_t sig){
     if(sig==0) sig=1;
     if(!force_all&&wsig[id]==sig&&!rl_hits(&dmg,r)) return 0;
@@ -2982,9 +2988,9 @@ static void W_end(void){ set_clip(FULL); }
 /* ---- framebuffer (device) ---- */
 static int ffd=-1; static uint32_t *fbmem=NULL; static long fblen=0; static int line_px=W; static int curpage=0;
 #ifdef SIM_RT
-/* SIM: fb = én 480x480 BGRA-buffer i hukommelsen (samme pixel-format som enheden; ingen page-flip).
- * fb_present() kopierer KUN de rects compositoren melder som ændret — præcis som enheden — så en
- * fejl i dirty-rect-logikken også ville kunne ses i SIM-billederne. sim_frame() skriver bufferen til fil. */
+/* SIM: fb = one 480x480 BGRA buffer in memory (same pixel format as the device; no page flip).
+ * fb_present() copies ONLY the rects the compositor reports as changed — exactly like the device — so a
+ * bug in the dirty-rect logic would also be visible in the SIM images. sim_frame() writes the buffer to a file. */
 static long sim_fb_seq=0;
 static void fb_open(void){
     (void)line_px; (void)curpage;
@@ -3007,12 +3013,12 @@ static void fb_open(void){
     fbmem=mmap(NULL,fblen,PROT_READ|PROT_WRITE,MAP_SHARED,ffd,0);
     if(fbmem==MAP_FAILED){ perror("mmap fb"); exit(1); }
     curpage = (vi.yoffset/H)&1;
-    /* ryd BEGGE fb-sider helt (også uden for cirklen) til ren sort */
+    /* clear BOTH fb pages completely (also outside the circle) to pure black */
     int pages=(int)(vi.yres_virtual/H); if(pages>2)pages=2;
     for(int pg=0;pg<pages;pg++){ uint32_t*p=fbmem+(long)pg*H*line_px; for(long i=0;i<(long)H*line_px;i++) p[i]=0xFF000000u; }
 }
 #endif
-/* present: back-siden mangler ændringer fra forrige OG denne frame -> kopier unionen, flip */
+/* present: the back page lacks changes from the previous AND this frame -> copy the union, flip */
 static void fb_present(const uint32_t*src,const RL*now){
 #ifdef DEVICE_RT
     if(now->n==0&&pres_prev.n==0) return;
@@ -3035,7 +3041,7 @@ static void fb_present(const uint32_t*src,const RL*now){
     pres_prev=*now;
 }
 
-/* ---- overgange: slide (sideskift) + crossfade (detalje/splash) ---- */
+/* ---- transitions: slide (page change) + crossfade (detail/splash) ---- */
 enum { TR_NONE=0, TR_SLIDE, TR_FADE };
 static struct { int type; ms_t t0; int dur; int dir; } tr;
 static float ease_out(float t){ float u=1-t; return 1-u*u*u; }
@@ -3073,13 +3079,13 @@ static void gfx_init(void){
 }
 
 /* ====================================================================== */
-/* ================= UI: design-tokens, tilstand, sider ================= */
+/* ================= UI: design tokens, state, pages ==================== */
 /* ====================================================================== */
 #define C_TXT    rgb(242,244,247)
-/* v6.11: kontrast hævet (WCAG 2.x, målt i selftesten): C_TXT2 >= 7:1 på bund/flader, C_TXT3 (små billedtekster i F_XS) >= 4,5:1
- * på bund, C_SURF og C_SURF2 (v6.10: 104,111,126 = 3,4:1 på bund og 2,9:1 på listerækker). Det, der før lå på 3,4:1, men er en
- * DEAKTIVERET tilstand (ikoner, stepper-glyf, låste værdier, offline-hero), tegnes i C_DIS — deaktiveret UI er undtaget i WCAG og skal
- * netop se slukket ud. */
+/* v6.11: contrast raised (WCAG 2.x, measured in the selftest): C_TXT2 >= 7:1 on background/surfaces, C_TXT3 (small captions in F_XS) >= 4.5:1
+ * on background, C_SURF and C_SURF2 (v6.10: 104,111,126 = 3.4:1 on background and 2.9:1 on list rows). What used to be at 3.4:1 but is a
+ * DISABLED state (icons, stepper glyph, locked values, offline hero) is drawn in C_DIS — disabled UI is exempt in WCAG and is
+ * meant to look switched off. */
 #define C_TXT2   rgb(176,183,196)
 #define C_TXT3   rgb(140,147,162)
 #define C_DIS    rgb(98,105,120)
@@ -3087,12 +3093,12 @@ static void gfx_init(void){
 #define C_SURF2  rgb(37,41,51)
 #define C_SURF3  rgb(52,57,70)
 #define C_LINE   rgb(56,61,73)
-#define C_ACC    rgb(244,192,122)     /* crema — eneste UI-accent */
+#define C_ACC    rgb(244,192,122)     /* crema — the only UI accent */
 #define C_ACCD   rgb(46,34,18)
 #define C_OK     rgb(98,222,168)
 #define C_ERR    rgb(255,96,96)
 #define C_WARN   rgb(255,190,84)
-/* semantiske fase-farver (hi = lys ende af gradient, lo = mørk ende) */
+/* semantic phase colours (hi = light end of gradient, lo = dark end) */
 static uint32_t ph_hi(int p){
     switch(p){
     case PH_OFFLINE: return rgb(124,130,144); case PH_SLEEP: return rgb(136,144,222);
@@ -3116,48 +3122,48 @@ static uint32_t ph_lo(int p){
 static const int ACT_PH[4]={PH_GRIND,PH_EXT,PH_WATER,PH_STEAM};
 static const char*const ACT_ICON[4]={IC_BEAN,IC_CUP,IC_DROP,IC_STEAM};
 static const short ACT_NAME[4]={TX_A_GRIND,TX_A_BREW,TX_A_WATER,TX_A_STEAM};
-/* v6.13: STOP-knap, "STOPPER …"-toast og "… STOPPET"-toast pr. aktivitet (indeks = ACT_*) */
+/* v6.13: STOP button, "STOPPING …" toast and "… STOPPED" toast per activity (index = ACT_*) */
 static const short STOP_BTN[4]={TX_B_STOP_GRIND,TX_B_STOP_BREW,TX_B_STOP_WATER,TX_B_STOP_STEAM};
 static const short STOP_SENT[4]={TX_T_STOP_GRIND,TX_T_STOP_BREW,TX_T_STOP_WATER,TX_T_STOP_SENT};
 static const short STOP_DONE[4]={TX_T_STOPPED_GRIND,TX_T_STOPPED_BREW,TX_T_STOPPED_WATER,TX_T_STOPPED_STEAM};
 
-enum { V_SPLASH=0, V_MAIN, V_DETAIL, V_SYS, V_BYE, V_OFF };   /* v6.14: V_OFF = tænd/sluk-knappens SLUKKER / SLUKKET / TÆNDER */   /* V_SYS: boot-/skift-/exit-visning (xsel); V_BYE: sidste frame før runtime-skift */
+enum { V_SPLASH=0, V_MAIN, V_DETAIL, V_SYS, V_BYE, V_OFF };   /* v6.14: V_OFF = the power button's TURNING OFF / OFF / TURNING ON */   /* V_SYS: boot/switch/exit view (xsel); V_BYE: last frame before runtime switch */
 enum { PG_HOME=0, PG_T0, PG_T1, PG_T2, PG_DIAG, NPAGE };
-enum { T_NONE=0, T_ACT0, T_ACT1, T_ACT2, T_ACT3, T_STOP, T_MINUS, T_PLUS, T_SAVE, T_CANCEL, T_EDGE_L, T_EDGE_R, T_GRAPH, T_PINFO, T_GEAR, T_BACK, T_STOPS, T_ROW0=32 };   /* v6.11: T_GEAR (HJEM -> indstillinger), T_BACK (luk-chevron i detalje/system) */
-static int pinfo_hit(int x,int y);   /* v6.10: tryk paa chartet / BAR-feltet -> toast m. grundlaget for ≈BAR (defineret ved draw_chart) */
+enum { T_NONE=0, T_ACT0, T_ACT1, T_ACT2, T_ACT3, T_STOP, T_MINUS, T_PLUS, T_SAVE, T_CANCEL, T_EDGE_L, T_EDGE_R, T_GRAPH, T_PINFO, T_GEAR, T_BACK, T_STOPS, T_ROW0=32 };   /* v6.11: T_GEAR (HOME -> settings), T_BACK (close chevron in detail/system) */
+static int pinfo_hit(int x,int y);   /* v6.10: tap on the chart / BAR field -> toast w. the basis for ≈BAR (defined at draw_chart) */
 #define SPLASH_MS 1500
 #define HOLD_MS 650
 
 static int view=V_SPLASH, page=PG_HOME, sel=-1, edit_val=0, edit_orig=0;
 static float scroll[NPAGE];
 static ms_t ui_start=-1, ui_last=0; static int ui_anim=1; static volatile int run=1;
-static int ui_kick=0; static float ft_last=0, ft_max=0;   /* frame-tid (ms) målt på device, vises på DIAGNOSE */
+static int ui_kick=0; static float ft_last=0, ft_max=0;   /* frame time (ms) measured on device, shown on DIAGNOSE */
 static struct { int down,x0,y0,x,y,moved,target,scrolling,fired,rep_n,axis; ms_t t0,rep_next; float scroll0; } tch;
 static struct { char msg[96]; ms_t t0; int dur; uint32_t col; } toast;
 static struct { float x,y; ms_t t0; int on; } rip;
 static Rect ov_prev[2];
 static struct { int raw,ph,last_ph,pending,gkind; ms_t t_act0,t_done,done_ms,t_req; long seq; uint32_t c_from_hi,c_from_lo; ms_t t_col; } act={PH_OFFLINE,PH_OFFLINE,PH_READY,ACT_NONE,-1,0,-100000,0,0,0,0,0,0};
-/* ---- v6.9: STABIL VÆGT-KILDE til chart, hero og stat-felt (ord 38 = kværn-vægt, ord 39 = bryg-vægt; begge signed 0,1 g) ----
- * Brugeren så periodiske vægt-spikes, også når maskinen ikke blev rørt. Til og med v6.9-wip valgte grafen vægt-ordet pr.
- * sample efter fasen (phase_main()==KVÆRN ? 38 : 39), og hero'en efter den viste fase — så ethvert fase-flimmer (et enkelt
- * forkert work_sta-sample, et link-hul, vedligehold-pulserne 0x0400/0x0800/0x2000/0x0C00/0x2800 i ro) kunne lægge ét sample
- * af det ANDET vægt-ord ind i kurven (fx 18,7 g kværn-vægt midt i 36,7 g bryg-vægt). Nu er kilden en LATCH:
- *  - standard = bryg-vægten (ord 39);
- *  - kværn-vægten (ord 38) kun mens en kværning ER i gang (work_sta bit 6) og mens dens FÆRDIG-skærm står (8 s) — det
- *    sidste kun, hvis kilden allerede var latchet til 38 (en ægte kværning, ikke ét forkert sample);
- *  - et skift kræver, at den ønskede kilde har stået i >= WSRC_DEB_MS (300 ms) — ét afvigende sample skifter aldrig;
- *  - undtagelse: har UI'et selv startet aktiviteten (act_request, < 4 s siden), og er aktivitetens bits sat, skiftes
- *    straks — aktiviteten er ægte (vi bad om den, og MCU'en har sat sine bits).
- * KUN visning: styring, frame-politik, auto-stop-forventninger, vagter og DIAGNOSE læser ord 38/39 direkte og rå. */
+/* ---- v6.9: STABLE WEIGHT SOURCE for chart, hero and stat field (word 38 = grind weight, word 39 = brew weight; both signed 0.1 g) ----
+ * The user saw periodic weight spikes, even when the machine was not touched. Up to and including v6.9-wip the graph chose the weight word per
+ * sample by phase (phase_main()==GRIND ? 38 : 39), and the hero by the shown phase — so any phase flicker (a single
+ * wrong work_sta sample, a link gap, the maintenance pulses 0x0400/0x0800/0x2000/0x0C00/0x2800 at rest) could put one sample
+ * of the OTHER weight word into the curve (e.g. 18.7 g grind weight in the middle of 36.7 g brew weight). Now the source is a LATCH:
+ *  - default = the brew weight (word 39);
+ *  - the grind weight (word 38) only while a grind IS running (work_sta bit 6) and while its DONE screen is shown (8 s) — the
+ *    latter only if the source was already latched to 38 (a real grind, not one wrong sample);
+ *  - a switch requires the wanted source to have held for >= WSRC_DEB_MS (300 ms) — one deviating sample never switches;
+ *  - exception: if the UI itself started the activity (act_request, < 4 s ago) and the activity's bits are set, it switches
+ *    immediately — the activity is real (we asked for it, and the MCU has set its bits).
+ * DISPLAY ONLY: control, frame policy, auto-stop expectations, guards and DIAGNOSE read words 38/39 directly and raw. */
 #define WSRC_DEB_MS 300
 static struct { int src,cand,n_sw,req; ms_t t_cand,t_req; } wsl={39,39,0,ACT_NONE,0,-100000};
 static int wsrc_want(ms_t now){
     int pm=phase_main(now);
-    if(pm==PH_GRIND) return 38;                                              /* bit 6: kværnen kører */
-    if(pm==PH_PRE||pm==PH_EXT||pm==PH_WATER) return 39;                      /* bryg-/vand-bits */
-    if(wsl.src==38&&(act.ph==PH_DONE||act.ph==PH_GRIND)&&act.last_ph==PH_GRIND) return 38;   /* kværn-resultatet står på skærmen (FÆRDIG) —
-                                                                             kun efter en ÆGTE kværning (kilden var allerede latchet);
-                                                                             ét bit-6-sample giver ellers 8 s "FÆRDIG" m. kværn-vægt */
+    if(pm==PH_GRIND) return 38;                                              /* bit 6: the grinder is running */
+    if(pm==PH_PRE||pm==PH_EXT||pm==PH_WATER) return 39;                      /* brew/water bits */
+    if(wsl.src==38&&(act.ph==PH_DONE||act.ph==PH_GRIND)&&act.last_ph==PH_GRIND) return 38;   /* the grind result is on screen (DONE) —
+                                                                             only after a REAL grind (the source was already latched);
+                                                                             otherwise one bit-6 sample gives 8 s of "DONE" w. grind weight */
     return 39;
 }
 static int wsrc_tick(ms_t now){
@@ -3170,18 +3176,18 @@ static int wsrc_tick(ms_t now){
     return wsl.src;
 }
 static struct { int active,stage,idx,val,rollback; long seq; } sav;
-/* v6.2: system-handlinger. X_BOOTUI + X_SWITCH er rækker nederst på SYSTEM; X_EXIT er exit-påmindelsen */
+/* v6.2: system actions. X_BOOTUI + X_SWITCH are rows at the bottom of SYSTEM; X_EXIT is the exit reminder */
 enum { X_BOOTUI=0, X_SWITCH, X_EXIT };
 #define NXROW 2
-#define XGAP 30            /* luft + overskrift mellem settings-rækker og system-handlinger */
+#define XGAP 30            /* spacing + heading between settings rows and system actions */
 static int xsel=-1, x_edit=0, x_orig=0, x_from_switch=0, x_pending=0, bye_mode=0;
-static int sw_sim=0;       /* kun preview: SKIFT NU starter ingen proces */
-/* enheds-kroge til BOOT.md §9.2 trin 1: slip UART/touch/fb FØR stock startes; tag dem igen ved fejl */
+static int sw_sim=0;       /* preview only: SWITCH NOW starts no process */
+/* device hooks for BOOT.md §9.2 step 1: release UART/touch/fb BEFORE stock is started; reacquire them on failure */
 static void (*dev_release)(void)=NULL;
 static void (*dev_reacquire)(void)=NULL;
 static int sw_child=0, sw_seq=0, sw_seq_frame=0, sw_seq_release=0, sw_seq_launch=0;
 
-#define TOAST_TW 312       /* tekst-bredde der kan stå i toast-pillen (356 - 44); længere tekst afkortes m. … */
+#define TOAST_TW 312       /* text width that fits in the toast pill (356 - 44); longer text is truncated w. … */
 static void toast_show(const char*m,uint32_t col,ms_t now){
     snprintf(toast.msg,sizeof toast.msg-4,"%s",m); utf8_trim(toast.msg); fit_text(toast.msg,F_XS,TOAST_TW);
     toast.t0=now; toast.dur=2400; toast.col=col;
@@ -3197,19 +3203,19 @@ static int tier_item(int t,int k){ for(int i=0;i<NSET;i++) if(SET[i].tier==t){ i
 #define LIST_VY1 394
 static int page_xrows(int pg){ return pg==PG_T2?NXROW:0; }
 static int page_rows(int pg){ return tier_count(tier_of_page(pg))+page_xrows(pg); }
-static int row_y0(int pg,int k){ return LIST_Y0+k*ROW_P+(k>=tier_count(tier_of_page(pg))?XGAP:0); }   /* indholds-koordinat (før scroll) */
+static int row_y0(int pg,int k){ return LIST_Y0+k*ROW_P+(k>=tier_count(tier_of_page(pg))?XGAP:0); }   /* content coordinate (before scroll) */
 #define DG_Y0 94
 #define DG_P 42
-/* v6.11: DIAGNOSE er grupperet. Øverst STATUS (4 rækker: link, fase, fejlkoder, vågen, net, version, boot-push) — det, man kigger
- * efter først; så BOOT · SLOT · SWITCHER, NET, GRAF og TRYK · ESTIMAT som før; RÅ TÆLLERE (rx, crc, work_sta, cmd6, strøm,
- * frame-tid, spejl, config-md5) har fået deres egen sektion under tryk-estimatet; OM nederst. Cellernes indhold er uændret
- * (diag_top_text, indeks 0..15) — kun placeringen (DG_SLOT) er ny. */
-#define DG_BOOT (DG_Y0+4*DG_P+32)          /* første boot-række på DIAGNOSE (v6.11: 4 status-rækker øverst; v6.5-v6.10: 8) */
-#define DG_GRAPH (DG_BOOT+7*DG_P)          /* v6.9: GRAF-rækken (glat / rå) — eneste tryk-mål på DIAGNOSE */
-#define DG_PRESS (DG_BOOT+8*DG_P+6)        /* v6.10: TRYK · ESTIMAT-blokkens overskrift (anker, nu-værdi, 2 note-linjer) — der, hvor OM stod i v6.9 */
-#define DG_RAW (DG_PRESS+28+2*DG_P+52)      /* v6.11: RÅ TÆLLERE-overskriften (der, hvor OM stod i v6.10); 4 rækker under den */
-#define DG_PWR (DG_RAW+28+4*DG_P+10)        /* v6.14: TÆND/SLUK-KNAP (tilstand, ord 0, tryk, seneste knap, node) — der, hvor OM stod i v6.13 */
-#define DG_ABOUT (DG_PWR+28+3*DG_P+10)      /* v6.14: + TÆND/SLUK-KNAP. v6.11: + RÅ TÆLLERE. v6.3: OM-blokkens overskrift (UI-sprog, ordmærke, tagline); v6.7: + NET-linjen; v6.9: + GRAF-rækken; v6.10: + TRYK · ESTIMAT */
+/* v6.11: DIAGNOSE is grouped. At the top STATUS (4 rows: link, phase, error codes, awake, net, version, boot push) — what you look
+ * for first; then BOOT · SLOT · SWITCHER, NET, GRAPH and PRESSURE · ESTIMATE as before; RAW COUNTERS (rx, crc, work_sta, cmd6, current,
+ * frame time, mirror, config md5) got their own section below the pressure estimate; ABOUT at the bottom. The cells' content is unchanged
+ * (diag_top_text, index 0..15) — only the placement (DG_SLOT) is new. */
+#define DG_BOOT (DG_Y0+4*DG_P+32)          /* first boot row on DIAGNOSE (v6.11: 4 status rows at the top; v6.5-v6.10: 8) */
+#define DG_GRAPH (DG_BOOT+7*DG_P)          /* v6.9: the GRAPH row (smooth / raw) — the only tap target on DIAGNOSE */
+#define DG_PRESS (DG_BOOT+8*DG_P+6)        /* v6.10: heading of the PRESSURE · ESTIMATE block (anchor, current value, 2 note lines) — where ABOUT was in v6.9 */
+#define DG_RAW (DG_PRESS+28+2*DG_P+52)      /* v6.11: the RAW COUNTERS heading (where ABOUT was in v6.10); 4 rows below it */
+#define DG_PWR (DG_RAW+28+4*DG_P+10)        /* v6.14: POWER BUTTON (state, word 0, press, last button, node) — where ABOUT was in v6.13 */
+#define DG_ABOUT (DG_PWR+28+3*DG_P+10)      /* v6.14: + POWER BUTTON. v6.11: + RAW COUNTERS. v6.3: heading of the ABOUT block (UI language, wordmark, tagline); v6.7: + the NET line; v6.9: + the GRAPH row; v6.10: + PRESSURE · ESTIMATE */
 #define DG_BOTTOM (DG_ABOUT+76+24+11+22)
 static float scroll_max(int pg){
     if(pg==PG_DIAG) return DG_BOTTOM-(LIST_VY1-14);
@@ -3217,14 +3223,14 @@ static float scroll_max(int pg){
     int n=page_rows(pg); float m=n*ROW_P-8+(page_xrows(pg)?XGAP:0)-(LIST_VY1-LIST_VY0-20); return m>0?m:0;
 }
 
-/* ---- formatering ---- */
+/* ---- formatting ---- */
 static int use_c(void){ return sv(S_TUNIT)!=0; }
 static void fmt_fix(char*b,size_t n,int v,int dec){
     if(dec==1) snprintf(b,n,"%s%d.%d",v<0?"-":"",abs(v)/10,abs(v)%10);
     else if(dec==-1) snprintf(b,n,"%d",(v+(v<0?-5:5))/10);
     else snprintf(b,n,"%d",v);
 }
-static void fmt_t10(char*b,size_t n,int v10,int dec){   /* temperatur i 0,1 °C -> tekst i valgt enhed */
+static void fmt_t10(char*b,size_t n,int v10,int dec){   /* temperature in 0.1 °C -> text in the selected unit */
     if(!use_c()) v10=v10*9/5+320;
     fmt_fix(b,n,v10,dec?1:-1);
 }
@@ -3240,7 +3246,7 @@ static void set_fmt(int i,int v,char*b,size_t n){
 static const char* set_unit(int i){ const Setting*s=&SET[i]; if(s->flags&(SF_TEMP10|SF_TEMP1)) return t_unit(); return TR(s->unit); }
 static int s16(int r){ return (int)(int16_t)reg[r]; }
 
-/* ---- aktivitets-vagter (UI er eneste vagt) ---- */
+/* ---- activity guards (the UI is the only guard) ---- */
 static const char* act_guard(int kind,ms_t now){
     if(ro_mode) return TR(TX_G_RO);
     int p=phase_raw(now);
@@ -3249,7 +3255,7 @@ static const char* act_guard(int kind,ms_t now){
     if(p==PH_SLEEP)   return TR(TX_G_SLEEP);
     if(phase_active(p)) return TR(TX_G_BUSY);
     if(wq_busy()||act.pending!=ACT_NONE||sav.active) return TR(TX_G_WAIT);
-    /* alle config-værdier der indgår i en cmd6-frame skal være indlæst og inden for spec */
+    /* all config values that go into a cmd6 frame must be loaded and within spec */
     for(int i=0;i<NSET;i++){
         const Setting*s=&SET[i]; if(s->mcu==M_NONE) continue;
         if(!s->loaded) return TR(TX_G_NOCFG);
@@ -3265,10 +3271,10 @@ static void act_request(int kind,ms_t now){
     long seq=wq.seq;
     if(!act_push(kind)){ toast_show(TR(wq_rej==WJ_TRIG||wq_rej==WJ_RANGE?TX_T_POLICY:TX_T_QFULL),C_ERR,now); return; }
     act.pending=kind; act.t_req=now; act.seq=seq;
-    wsl.req=kind; wsl.t_req=now;                                    /* v6.9: UI-startet aktivitet -> vægt-kilden må skifte straks */
+    wsl.req=kind; wsl.t_req=now;                                    /* v6.9: UI-started activity -> the weight source may switch immediately */
 }
 
-/* ---- gem-flow: MCU-write (ACK) -> config.json (atomisk) ; alt-eller-intet ---- */
+/* ---- save flow: MCU write (ACK) -> config.json (atomic) ; all-or-nothing ---- */
 static void detail_close(ms_t now);
 static void boot_push_resave(void);
 static void save_begin(ms_t now){
@@ -3277,10 +3283,10 @@ static void save_begin(ms_t now){
     if(s->flags&SF_LOCK) return;
     if(edit_val==s->val){ detail_close(now); return; }
     if(!set_valid(s,edit_val)){ toast_show(TR(TX_T_RANGE),C_ERR,now); return; }
-    if(s->flags&SF_LOCAL){   /* v6.3: UI-sprog — egen fil; ingen MCU-write, ingen config.json, ingen RESTART_NEEDED */
+    if(s->flags&SF_LOCAL){   /* v6.3: UI language — own file; no MCU write, no config.json, no RESTART_NEEDED */
         int ok=lang_save(edit_val);
-        s->val=edit_val; lang_set(edit_val); if(!ok) lang_src=LS_SESSION;      /* sproget gælder under alle omstændigheder nu */
-        toast_show(TR(ok?TX_T_LANG_SAVED:TX_T_LANG_NOFILE),ok?C_OK:C_WARN,now); /* kvittering på det NYE sprog */
+        s->val=edit_val; lang_set(edit_val); if(!ok) lang_src=LS_SESSION;      /* the language applies now in any case */
+        toast_show(TR(ok?TX_T_LANG_SAVED:TX_T_LANG_NOFILE),ok?C_OK:C_WARN,now); /* confirmation in the NEW language */
         detail_close(now); return;
     }
     if(!cfg_ok||!s->loaded){ toast_show(TR(TX_T_CFG_UNAVAIL),C_ERR,now); return; }
@@ -3310,7 +3316,7 @@ static void save_step(ms_t now){
             toast_show(TR(s->mcu!=M_NONE?TX_T_SAVED_MCU:TX_T_SAVED_CFG),C_OK,now);
             if(view==V_DETAIL) detail_close(now);
         } else {
-            /* config fejlede: rul MCU tilbage til gammel værdi, så begge sider er uændrede */
+            /* config failed: roll the MCU back to the old value so both sides are unchanged */
             if(s->mcu!=M_NONE){ sav.seq=wq.seq; if(setting_mcu_push(sav.idx,s->val)>0) sav.stage=3; else sav.active=0; }
             else sav.active=0;
             toast_show(TR(TX_T_CFG_ERR),C_ERR,now);
@@ -3320,7 +3326,7 @@ static void save_step(ms_t now){
     } else if(sav.stage==3){ if(wq.seq!=sav.seq) sav.active=0; }
 }
 
-/* ---- sidenavigation / overgange ---- */
+/* ---- page navigation / transitions ---- */
 static void compose(ms_t now);
 static void arc_targets(ms_t now);
 static void go_page(int np,int dir,ms_t now){
@@ -3338,12 +3344,12 @@ static void detail_open(int i,ms_t now){
 }
 static void detail_close(ms_t now){
     if(sel>=0&&(SET[sel].flags&SF_BL)) bl_set(SET[sel].val);
-    if(sel>=0&&(SET[sel].flags&SF_LOCAL)) lang_set(SET[sel].val);          /* ANNULLER: tilbage til det gemte sprog */
+    if(sel>=0&&(SET[sel].flags&SF_LOCAL)) lang_set(SET[sel].val);          /* CANCEL: back to the saved language */
     memcpy(snapA,canvas,(size_t)W*H*4);
     view=V_MAIN; sel=-1; static_dirty=1; act.gkind=-1; arc_targets(now); compose(now);
     memcpy(snapB,canvas,(size_t)W*H*4); fade_to(now,200);
 }
-/* ---- v6.2: system-handlinger (BOOT-UI, SKIFT TIL ORIGINAL NU, exit-påmindelse) ---- */
+/* ---- v6.2: system actions (BOOT UI, SWITCH TO ORIGINAL NOW, exit reminder) ---- */
 static int sys_locked(void){ return xsel==X_BOOTUI? bs.lock!=BL_OK : (xsel==X_SWITCH? switch_locked() : 0); }
 static void boot_poll(ms_t now){ boot_refresh(); bs.t=now; x_pending=restart_pending(); }
 static void sys_open(int x,ms_t now){
@@ -3362,24 +3368,24 @@ static const char* switch_guard(ms_t now){
     if(wq_busy()||sav.active||act.pending!=ACT_NONE) return TR(TX_G_WAIT);
     return NULL;
 }
-static void bye(int mode){ bye_mode=mode; view=V_BYE; xsel=-1; tr.type=TR_NONE; rip.on=0; toast.dur=0; static_dirty=1; run=0; }   /* sidste frame fryser: ingen ripple/toast */
-/* SKIFT TIL ORIGINAL NU — BOOT.md §9.2, i den rækkefølge specifikationen kræver:
- *   (0) sidste frame på skærmen   (1) stop egen aktivitet: luk UART, touch-grab og fb
- *   (2) fork + setsid + chdir /customer + LD_LIBRARY_PATH + execl ./demo_v9   (3) vent 400 ms, exit
- *   (4) flaget røres ikke; ingen signaler   (5) exit slipper resten   (6) log m. tid + årsag.
- * Kan stock-UI'et ikke startes, tager ourui UART/fb/touch tilbage og kører videre.
- * run.sh-tilstand (stock findes, pauset): intet startes — ourui afslutter, run.sh SIGCONT'er. */
+static void bye(int mode){ bye_mode=mode; view=V_BYE; xsel=-1; tr.type=TR_NONE; rip.on=0; toast.dur=0; static_dirty=1; run=0; }   /* the last frame freezes: no ripple/toast */
+/* SWITCH TO ORIGINAL NOW — BOOT.md §9.2, in the order the specification requires:
+ *   (0) last frame on screen   (1) stop own activity: close UART, touch grab and fb
+ *   (2) fork + setsid + chdir /customer + LD_LIBRARY_PATH + execl ./demo_v9   (3) wait 400 ms, exit
+ *   (4) the flag is not touched; no signals   (5) exit releases the rest   (6) log w. time + reason.
+ * If the stock UI cannot be started, ourui takes UART/fb/touch back and keeps running.
+ * run.sh mode (stock exists, paused): nothing is started — ourui exits, run.sh SIGCONTs. */
 static const uint32_t* ui_frame(ms_t now);
 static void do_switch(ms_t now){
     char err[72]="", rn[340]; int mode=switch_mode();
     if(sw_sim){ bye(mode); return; }
     if(mode==SWM_CONT){
-        boot_log("RUNTIME-SKIFT til original: aarsag=bruger-knap, run.sh-tilstand (stock-UI pid %d er pauset): ourui afslutter, intet startes",bs.stock[0]);
+        boot_log("RUNTIME SWITCH to original: reason=user-button, run.sh mode (stock UI pid %d is paused): ourui exits, nothing is started",bs.stock[0]);
         bye(mode); return;
     }
     if(sw_dry){
         ld_path_for_a(getenv("LD_LIBRARY_PATH"),sw_ldp,sizeof sw_ldp);
-        boot_log("RUNTIME-SKIFT DRY-RUN: ville lukke UART/touch/fb, starte %s (cwd /customer, LD_LIBRARY_PATH=%s), vente %d ms og afslutte",SLOT_A_EXE,sw_ldp,SW_WAIT_MS);
+        boot_log("RUNTIME SWITCH DRY-RUN: would close UART/touch/fb, start %s (cwd /customer, LD_LIBRARY_PATH=%s), wait %d ms and exit",SLOT_A_EXE,sw_ldp,SW_WAIT_MS);
         SIM_DRY_BYE(mode,now)
         toast_show(TR(TX_T_DRYRUN),C_WARN,now); return;
     }
@@ -3390,13 +3396,13 @@ static void do_switch(ms_t now){
     if(hp<=0){
         if(dev_reacquire) dev_reacquire();
         run=1; view=v0; xsel=x0; static_dirty=1; force_all=1;
-        toast_show(TR(sw_fail==SWF_NOBIN?TX_T_SW_FAIL_NOBIN:(sw_fail==SWF_FORK?TX_T_SW_FAIL_FORK:TX_T_SW_FAIL_DIED)),C_ERR,now);   /* detaljen (err) står i loggen */
-        boot_log("RUNTIME-SKIFT FEJLEDE: %s — ourui fortsaetter",err);
+        toast_show(TR(sw_fail==SWF_NOBIN?TX_T_SW_FAIL_NOBIN:(sw_fail==SWF_FORK?TX_T_SW_FAIL_FORK:TX_T_SW_FAIL_DIED)),C_ERR,now);   /* the detail (err) is in the log */
+        boot_log("RUNTIME SWITCH FAILED: %s — ourui continues",err);
         return;
     }
     sw_child=hp;
-    snprintf(rn,sizeof rn,"%s/RESTART_NEEDED",cfg_bakdir); int had=unlink(rn)==0;    /* stock er startet frisk og læser config selv */
-    boot_log("RUNTIME-SKIFT B->A: aarsag=bruger-knap, stock-UI pid %d (%s, argv0 ./demo_v9), LD_LIBRARY_PATH=%s%s",hp,SLOT_A_EXE,sw_ldp,had?", RESTART_NEEDED fjernet":"");
+    snprintf(rn,sizeof rn,"%s/RESTART_NEEDED",cfg_bakdir); int had=unlink(rn)==0;    /* stock has started fresh and reads config itself */
+    boot_log("RUNTIME SWITCH B->A: reason=user-button, stock UI pid %d (%s, argv0 ./demo_v9), LD_LIBRARY_PATH=%s%s",hp,SLOT_A_EXE,sw_ldp,had?", RESTART_NEEDED removed":"");
 }
 static void sys_confirm(ms_t now){
     if(xsel==X_BOOTUI){
@@ -3408,24 +3414,24 @@ static void sys_confirm(ms_t now){
         const char*g=switch_guard(now); if(g){ toast_show(g,C_WARN,now); return; }
         boot_poll(now);
         if(switch_locked()){ static_dirty=1; return; }
-        if(bs.n_stock>0&&x_pending){ x_from_switch=1; sys_open(X_EXIT,now); return; }   /* pauset stock-UI m. gammelt spejl: sig det først */
+        if(bs.n_stock>0&&x_pending){ x_from_switch=1; sys_open(X_EXIT,now); return; }   /* paused stock UI w. stale mirror: say so first */
         do_switch(now);
     } else if(xsel==X_EXIT){
         if(x_from_switch) do_switch(now); else run=0;
     }
 }
-/* v6.8: REVERT-knappen på HJEM er fjernet. Samme vej ud findes på SYSTEM: "SKIFT TIL ORIGINAL NU" er i run.sh-
- * tilstand en ren exit (run.sh SIGCONT'er; påmindelsen først, hvis config er gemt), og i slot B-boot starter den
- * stock-UI'et. Dertil switcher-gestussen og run.sh's trap. */
+/* v6.8: the REVERT button on HOME has been removed. The same way out exists on SYSTEM: "SWITCH TO ORIGINAL NOW" is, in run.sh
+ * mode, a plain exit (run.sh SIGCONTs; the reminder first if config has been saved), and in slot B boot it starts the
+ * stock UI. In addition there is the switcher gesture and run.sh's trap. */
 static void edit_step(int dir,int mult){
     Setting*s=&SET[sel]; if(s->flags&SF_LOCK) return;
     int v=edit_val+dir*s->step*mult;
-    if(mult>1) v=(v/(s->step*mult))*(s->step*mult);   /* snap til groft gitter under acceleration */
+    if(mult>1) v=(v/(s->step*mult))*(s->step*mult);   /* snap to coarse grid during acceleration */
     v=clampi(v,s->lo,s->hi);
-    v=s->lo+((v-s->lo)/s->step)*s->step;              /* altid på stock-pickerens trin-gitter */
+    v=s->lo+((v-s->lo)/s->step)*s->step;              /* always on the stock picker's step grid */
     edit_val=v;
     if(s->flags&SF_BL) bl_set(edit_val);
-    if(s->flags&SF_LOCAL) lang_set(edit_val);          /* v6.3: live preview — hele UI'et skifter sprog straks; GEM gør det varigt */
+    if(s->flags&SF_LOCAL) lang_set(edit_val);          /* v6.3: live preview — the whole UI switches language immediately; SAVE makes it permanent */
 }
 
 /* ---- hit-test ---- */
@@ -3435,13 +3441,13 @@ static const int ACT_X[4]={150,210,270,330};
 #define ACT_Y 372
 #define GEAR_Y 448
 #define GEAR_HW 32
-#define BACK_X0 (CX-44)    /* v6.11: luk-chevron i detalje/system: 88 x 46 px tryk-felt over titlen */
+#define BACK_X0 (CX-44)    /* v6.11: close chevron in detail/system: 88 x 46 px tap area above the title */
 #define BACK_Y0 34
 #define BACK_W 88
 #define BACK_H 46
-/* v6.13: STOP-knappernes tryk-felter (hit) og tegnede piller. ÉN knap: samme tryk-felt som v6.6's STOP DAMP (180 x 56), pillen
- * 160 x 44 i F_S (v6.6-v6.12: 150 — "STOP WATER" / "STOP KVÆRN" er 123 / 122 px og skal have 14 px luft i hver side).
- * TO knapper (hoved-aktivitet + latchet damp): to felter á 148 x 56 side om side, uden hul imellem; pillerne 136 x 44 i F_XS. */
+/* v6.13: the STOP buttons' tap areas (hit) and drawn pills. ONE button: same tap area as v6.6's STOP STEAM (180 x 56), the pill
+ * 160 x 44 in F_S (v6.6-v6.12: 150 — "STOP WATER" / "STOP KVÆRN" are 123 / 122 px and need 14 px of space on each side).
+ * TWO buttons (main activity + latched steam): two areas of 148 x 56 each side by side, no gap between; the pills 136 x 44 in F_XS. */
 #define STOP_PILL1_W 160
 #define STOP_PILL2_W 136
 #define STOP_Y 344
@@ -3451,7 +3457,7 @@ static Rect stop_pill(int n,int i){ if(n<=1) return R(CX-STOP_PILL1_W/2,350,STOP
 static int stop_font(int n){ return n>1?F_XS:F_S; }
 static int hit_test(int x,int y,ms_t now){
     if(view==V_SPLASH||view==V_BYE||view==V_OFF||tr.type) return T_NONE;
-    if((view==V_SYS||view==V_DETAIL)&&in_r(x,y,BACK_X0,BACK_Y0,BACK_W,BACK_H)) return T_BACK;   /* v6.11: luk-chevron øverst */
+    if((view==V_SYS||view==V_DETAIL)&&in_r(x,y,BACK_X0,BACK_Y0,BACK_W,BACK_H)) return T_BACK;   /* v6.11: close chevron at the top */
     if(view==V_SYS){
         if(sys_locked()){ if(in_r(x,y,170,284,140,64)) return T_CANCEL; return T_NONE; }
         if(xsel==X_BOOTUI){ if(in_c(x,y,84,184,42)) return T_MINUS; if(in_c(x,y,396,184,42)) return T_PLUS; }
@@ -3460,7 +3466,7 @@ static int hit_test(int x,int y,ms_t now){
         return T_NONE;
     }
     if(view==V_DETAIL){
-        if(SET[sel].flags&SF_LOCK){ if(in_r(x,y,170,284,140,64)) return T_CANCEL; return T_NONE; }   /* låst/sensor: kun TILBAGE */
+        if(SET[sel].flags&SF_LOCK){ if(in_r(x,y,170,284,140,64)) return T_CANCEL; return T_NONE; }   /* locked/sensor: BACK only */
         if(in_c(x,y,84,184,42)) return T_MINUS;
         if(in_c(x,y,396,184,42)) return T_PLUS;
         if(in_r(x,y,100,284,136,64)) return T_CANCEL;
@@ -3469,39 +3475,39 @@ static int hit_test(int x,int y,ms_t now){
     }
     if(page==PG_HOME){
         int p=phase_raw(now), sk[2], sn=stop_btns(now,sk);
-        if(sn){ for(int i=0;i<sn;i++){ Rect r=stop_hit(sn,i); if(in_r(x,y,r.x0,r.y0,r.x1-r.x0,r.y1-r.y0)) return i?T_STOPS:T_STOP; } }   /* v6.13: STOP for kværn/bryg/vand + latchet damp */
+        if(sn){ for(int i=0;i<sn;i++){ Rect r=stop_hit(sn,i); if(in_r(x,y,r.x0,r.y0,r.x1-r.x0,r.y1-r.y0)) return i?T_STOPS:T_STOP; } }   /* v6.13: STOP for grind/brew/water + latched steam */
         else if(!phase_active(p)) for(int i=0;i<4;i++) if(in_c(x,y,ACT_X[i],ACT_Y,30)) return T_ACT0+i;
         if(pinfo_hit(x,y)) return T_PINFO;
-        if(in_r(x,y,CX-GEAR_HW,GEAR_Y-22,2*GEAR_HW,46)) return T_GEAR;          /* v6.11: tandhjul -> BRYG-listen */
+        if(in_r(x,y,CX-GEAR_HW,GEAR_Y-22,2*GEAR_HW,46)) return T_GEAR;          /* v6.11: gear -> the BREW list */
     }
     if(page>=PG_T0&&page<=PG_T2){
         if(y>=LIST_VY0&&y<LIST_VY1&&x>=64&&x<416){
             int n=page_rows(page);
             for(int k=0;k<n;k++){ float ry=row_y0(page,k)-scroll[page]; if(y>=ry-4&&y<ry+ROW_H+4) return T_ROW0+k; }
         }
-        if(y>=150&&y<=330){ if(x<64) return T_EDGE_L; if(x>=416) return T_EDGE_R; }   /* v6.11: kant-tryk skifter side også på listerne (som HJEM/DIAGNOSE) */
+        if(y>=150&&y<=330){ if(x<64) return T_EDGE_L; if(x>=416) return T_EDGE_R; }   /* v6.11: edge tap switches page on the lists too (like HOME/DIAGNOSE) */
         return T_NONE;
     }
-    if(page==PG_DIAG&&y>=LIST_VY0&&y<LIST_VY1){                      /* v6.9: GRAF-pillen (glat / rå) */
-        float py=DG_GRAPH+12-scroll[PG_DIAG]; if(x>=CX-150&&x<CX+150&&y>=py-8&&y<py+36) return T_GRAPH;   /* v6.11: 44 px hoejt (v6.10: 40) */
+    if(page==PG_DIAG&&y>=LIST_VY0&&y<LIST_VY1){                      /* v6.9: the GRAPH pill (smooth / raw) */
+        float py=DG_GRAPH+12-scroll[PG_DIAG]; if(x>=CX-150&&x<CX+150&&y>=py-8&&y<py+36) return T_GRAPH;   /* v6.11: 44 px high (v6.10: 40) */
     }
     if(y>=150&&y<=330){ if(x<70) return T_EDGE_L; if(x>410) return T_EDGE_R; }
     return T_NONE;
 }
-/* v6.13: STOP trykket (eller ctrl-krogen). Køer stop-frame(s) og viser "STOPPER …"; stop_step() bekræfter, når bits'ene er
- * ryddet ("… STOPPET"), eller melder fejl (intet ACK efter retransmit / ikke ryddet inden STOP_CONFIRM_MS). */
+/* v6.13: STOP pressed (or the ctrl hook). Queues stop frame(s) and shows "STOPPING …"; stop_step() confirms when the bits are
+ * cleared ("… STOPPED"), or reports an error (no ACK after retransmit / not cleared within STOP_CONFIRM_MS). */
 static void stop_request(int kind,ms_t now){
     if(kind<ACT_GRIND||kind>ACT_STEAM) return;
     if(ro_mode){ toast_show(TR(TX_G_RO),C_WARN,now); return; }
-    if(stp.active&&stp.kind==kind&&wq_busy()){ toast_show(TR(STOP_SENT[kind]),C_TXT,now); return; }   /* stop-framen er allerede i køen */
+    if(stp.active&&stp.kind==kind&&wq_busy()){ toast_show(TR(STOP_SENT[kind]),C_TXT,now); return; }   /* the stop frame is already in the queue */
     if(!act_push_stop(kind)){ stp.n_fail++; toast_show(TR(TX_T_STOP_FAIL),C_ERR,now); return; }
     stp.n_req++; stp.kind=kind; stp.t_req=now; stp.seq=wq.seq;
-    stp.active=link_up(now)&&stop_running(kind);            /* kun en kørende aktivitet kan bekræftes (ctrl-krogen kan sende uden) */
+    stp.active=link_up(now)&&stop_running(kind);            /* only a running activity can be confirmed (the ctrl hook can send without one) */
     toast_show(TR(STOP_SENT[kind]),C_TXT,now);
 }
 static void stop_step(ms_t now){
     if(!stp.active) return;
-    if(!link_up(now)){ stp.active=0; return; }                                                       /* OFFLINE-visningen tager over */
+    if(!link_up(now)){ stp.active=0; return; }                                                       /* the OFFLINE view takes over */
     if(!stop_running(stp.kind)){ stp.active=0; stp.n_ok++; toast_show(TR(STOP_DONE[stp.kind]),C_OK,now); return; }
     if(wq.seq!=stp.seq&&wq.result==WR_FAIL&&!wq_busy()){ stp.active=0; stp.n_fail++; toast_show(TR(TX_T_STOP_NOACK),C_ERR,now); return; }
     if(now-stp.t_req>=STOP_CONFIRM_MS){ stp.active=0; stp.n_fail++; toast_show(TR(TX_T_STOP_UNCONF),C_WARN,now); }
@@ -3511,76 +3517,76 @@ static void activate(int t,ms_t now){
     if(t>=T_ACT0&&t<=T_ACT3){ const char*g=act_guard(t-T_ACT0,now); toast_show(g?g:TR(TX_T_HOLD_HINT),g?C_WARN:C_TXT,now); return; }
     if(t==T_EDGE_L){ go_page((page+NPAGE-1)%NPAGE,-1,now); return; }
     if(t==T_GEAR){ go_page(PG_T0,1,now); return; }                                   /* v6.11 */
-    if(t==T_BACK) t=T_CANCEL;                                                        /* v6.11: chevron = ANNULLER/TILBAGE */
-    if(t==T_GRAPH){ cd.raw=!cd.raw; hf.ok=0; return; }          /* v6.9: kun visningen — ingen config, ingen frames, glemmes ved genstart */
-    if(t==T_PINFO){ char b[96]; snprintf(b,sizeof b,TR(TX_T_PINFO),p_anchor_bar(),P_ANCHOR_RAW); toast_show(b,C_TXT,now); return; }   /* v6.10: grundlaget for ≈BAR */
+    if(t==T_BACK) t=T_CANCEL;                                                        /* v6.11: chevron = CANCEL/BACK */
+    if(t==T_GRAPH){ cd.raw=!cd.raw; hf.ok=0; return; }          /* v6.9: display only — no config, no frames, forgotten on restart */
+    if(t==T_PINFO){ char b[96]; snprintf(b,sizeof b,TR(TX_T_PINFO),p_anchor_bar(),P_ANCHOR_RAW); toast_show(b,C_TXT,now); return; }   /* v6.10: the basis for ≈BAR */
     if(t==T_EDGE_R){ go_page((page+1)%NPAGE,1,now); return; }
     if(t==T_CANCEL){ if(view==V_SYS){ sys_close(now); return; } if(!sav.active) detail_close(now); return; }
     if(t==T_SAVE){ if(view==V_SYS){ sys_confirm(now); return; } save_begin(now); return; }
     if(t>=T_ROW0){
         int k=t-T_ROW0, ns=tier_count(tier_of_page(page));
-        if(k>=ns){ sys_open(k-ns,now); return; }                       /* system-handling (kun SYSTEM-siden) */
+        if(k>=ns){ sys_open(k-ns,now); return; }                       /* system action (SYSTEM page only) */
         int i=tier_item(tier_of_page(page),k); if(i>=0) detail_open(i,now); return;
     }
 }
 enum { TE_DOWN, TE_MOVE, TE_UP };
-/* v6.11: SWIPE-VAGT. Side-skift kun for en gestus, der STARTEDE vandret (akse-lås ved de første 14 px), er >= 60 px lang og
- * højst ~30° fra vandret (|dx| >= 1,7·|dy|). v6.10 tillod |dy| <= 50 uanset retning, så et skråt træk (fx dx 70, dy 45) på en
- * liste, der begyndte en anelse vandret, skiftede side. En gestus, der starter lodret, kan aldrig skifte side — heller ikke
- * på sider uden rulning (HJEM). */
+/* v6.11: SWIPE GUARD. Page switch only for a gesture that STARTED horizontally (axis lock at the first 14 px), is >= 60 px long and
+ * at most ~30° from horizontal (|dx| >= 1.7·|dy|). v6.10 allowed |dy| <= 50 regardless of direction, so a diagonal drag (e.g. dx 70, dy 45) on a
+ * list that started slightly horizontal switched page. A gesture that starts vertically can never switch page — not even
+ * on pages without scrolling (HOME). */
 static int swipe_h(int axis,int dx,int dy){ return axis==1&&abs(dx)>=60&&10*abs(dx)>=17*abs(dy); }
-/* v6.11: stryg NED (>= 70 px, lodret-låst, |dy| >= 1,7·|dx|) lukker detalje-/system-visningen som ANNULLER — ikke hvis
- * gestussen startede på −/+ (der har tryk-ned allerede ændret værdien) */
+/* v6.11: swipe DOWN (>= 70 px, vertically locked, |dy| >= 1.7·|dx|) closes the detail/system view like CANCEL — not if
+ * the gesture started on −/+ (there the press-down has already changed the value) */
 static int swipe_down(int axis,int target,int dx,int dy){ return axis==2&&dy>=70&&10*dy>=17*abs(dx)&&target!=T_MINUS&&target!=T_PLUS; }
-/* ================= v6.14: den fysiske TÆND/SLUK-KNAP (UI_v6.md §19 + CHANGES-v6.14) =================
- * Fejlen: knappen gjorde intet i ourui — kun touch-noden (event0) blev læst. Knappen er k62091-noden (/dev/input/event1,
- * "Handlers=kbd event1", EV=3 = SYN+KEY, én tast). Stock-semantikken, reverset fra demo_v9 (symboler bevaret) + MCU-firmwaren:
- *  - app_powerKey_thread 0x140AB4: open("/dev/input/event1", O_RDWR) — INGEN EVIOCGRAB; læser struct input_event; for HVER
- *    EV_KEY (koden tjekkes ikke) gemmes value i app+0x15A8 (1 = nede, 0 = sluppet).
- *  - SleepRefresh 0x149268 (lv_timer, 100 ms): kun når sekundet skifter, og kun hvis isExtractionOrSteamSwitchOn 0x1481E0 er
- *    falsk (work_sta bit 12 / bit 14, ord 22, ord 24, ord 6 = bryg/damp/kværn), tælles e60 op, mens knappen er nede; derefter
- *    dealPowerState 0x14911C(value) hver omgang: e60 > 1 (= nede hen over TO sekund-skift, dvs. 1-2 s) og spejl-ord 0 != 0 ->
- *    powerOff 0x149074. Slip før det = kort tryk (vækker kun stock's pauseskærm). Kører en aktivitet, sker der INTET —
- *    stock stopper aldrig en aktivitet ved sluk; knappen virker først, når bryg/damp/kværn er slut (varmt vand spærrer ikke).
- *  - powerOff: spejl-ord 0 = 0; performSleepActions 0x148324 -> powerOffSend 0x14700C(0,0,0) = cmd8 (15 bytes: år u16, måned,
- *    dag, time, minut, sekund, alarm-dag/-time/-minut = 0/0/0 = ingen alarm; CRC) + usleep(80 ms); usart_send(6,0,2) = cmd6
- *    sub0 len2 [ord 0 = 0, ord 1 = spejlet (0 = vågen)]; baggrundslys af (pwm2 enable 0 + duty 0); sluk-siden.
- *    1,5 s senere: fb lukkes, "echo mem > /sys/power/state" (SoC-suspend); efter resume "killall demo_v9" -> watchdog genstarter
- *    stock -> app_init 0xD9170 PowerOn (ord 0 = 1).
- *  - MCU (MEM03_V514_260923.bin): status-tasken ser ord 0 = 0 (0x29D4, hvert 500 ms) og starter "sleep" (0x2F52), som SLETTER
- *    boiler_heat, head_heat, status (= RX-parser + svar: controlleren er tavs, mens den sover) og run, sætter work_sta = 0 og
- *    nulstiller udgangene (0x2F0C). Den vågner KUN ved et hold på knappen (egen GPIO PC.8; 8 x 100 ms lav efter et slip) eller
- *    alarmen -> 0x326 "reset muc" (CPU-reset; ord 0 starter som 1, 0x89-runden kommer -> ourui's re-push sender config igen).
- * ourui spejler det: HOLD 1,5 s -> samme to frames (cmd8 m. alarm 0/0/0, 80 ms, cmd6 sub0 len2 = [0,0] m. I_POWEROFF) ->
- * SLUKKER… -> ACK -> SLUKKET; baggrundslyset slukkes 1,5 s efter tryk; keep-awake står stille, mens der er slukket.
- * Spærret som hos stock (bryg/damp/kværn kører: toast, intet sendes) — og uden forbindelse / med ord 0 = 0 / read-only.
- * Tænd: knappen igen -> lys + TÆNDER… (MCU'en vågner selv af samme hold); svarer controlleren med ord 0 = 1 -> PowerOn
- * (sub0=[1] + sub1=[0], præcis som ved opstart) -> HJEM. Ellers efter 10 s tilbage til SLUKKET. Svarer controlleren af sig selv
- * med ord 0 = 1, mens ourui står i SLUKKET (alarm, eller knappen blev holdt, mens ourui ikke så den), tændes der på samme måde.
- * Tryk på den slukkede skærm viser SLUKKET-siden i 8 s — ingen frames (MCU'en kan ikke modtage noget, mens den sover).
- * Bevidst afvigelse: ingen SoC-suspend og ingen "killall" — kun baggrundslyset; net-vagten og telnet lever videre. */
+/* ================= v6.14: the physical POWER BUTTON (UI_v6.md §19 + CHANGES-v6.14) =================
+ * The bug: the button did nothing in ourui — only the touch node (event0) was read. The button is the k62091 node (/dev/input/event1,
+ * "Handlers=kbd event1", EV=3 = SYN+KEY, one key). The stock semantics, reversed from demo_v9 (symbols preserved) + the MCU firmware:
+ *  - app_powerKey_thread 0x140AB4: open("/dev/input/event1", O_RDWR) — NO EVIOCGRAB; reads struct input_event; for EVERY
+ *    EV_KEY (the code is not checked) value is stored in app+0x15A8 (1 = down, 0 = released).
+ *  - SleepRefresh 0x149268 (lv_timer, 100 ms): only when the second changes, and only if isExtractionOrSteamSwitchOn 0x1481E0 is
+ *    false (work_sta bit 12 / bit 14, word 22, word 24, word 6 = brew/steam/grind), e60 is counted up while the button is down; then
+ *    dealPowerState 0x14911C(value) every cycle: e60 > 1 (= down across TWO second ticks, i.e. 1-2 s) and mirror word 0 != 0 ->
+ *    powerOff 0x149074. Release before that = short press (only wakes stock's screensaver). If an activity is running, NOTHING happens —
+ *    stock never stops an activity on power-off; the button only works once brew/steam/grind has ended (hot water does not block).
+ *  - powerOff: mirror word 0 = 0; performSleepActions 0x148324 -> powerOffSend 0x14700C(0,0,0) = cmd8 (15 bytes: year u16, month,
+ *    day, hour, minute, second, alarm day/hour/minute = 0/0/0 = no alarm; CRC) + usleep(80 ms); usart_send(6,0,2) = cmd6
+ *    sub0 len2 [word 0 = 0, word 1 = the mirror (0 = awake)]; backlight off (pwm2 enable 0 + duty 0); the power-off page.
+ *    1.5 s later: fb is closed, "echo mem > /sys/power/state" (SoC suspend); after resume "killall demo_v9" -> watchdog restarts
+ *    stock -> app_init 0xD9170 PowerOn (word 0 = 1).
+ *  - MCU (MEM03_V514_260923.bin): the status task sees word 0 = 0 (0x29D4, every 500 ms) and starts "sleep" (0x2F52), which DELETES
+ *    boiler_heat, head_heat, status (= RX parser + replies: the controller is silent while it sleeps) and run, sets work_sta = 0 and
+ *    resets the outputs (0x2F0C). It wakes ONLY on a hold of the button (own GPIO PC.8; 8 x 100 ms low after a release) or
+ *    the alarm -> 0x326 "reset muc" (CPU reset; word 0 starts as 1, the 0x89 round comes -> ourui's re-push sends config again).
+ * ourui mirrors this: HOLD 1.5 s -> the same two frames (cmd8 w. alarm 0/0/0, 80 ms, cmd6 sub0 len2 = [0,0] w. I_POWEROFF) ->
+ * TURNING OFF… -> ACK -> OFF; the backlight is turned off 1.5 s after the press; keep-awake is paused while off.
+ * Blocked as in stock (brew/steam/grind running: toast, nothing is sent) — and without link / with word 0 = 0 / read-only.
+ * Power on: the button again -> light + TURNING ON… (the MCU wakes by itself from the same hold); if the controller answers with word 0 = 1 -> PowerOn
+ * (sub0=[1] + sub1=[0], exactly as at startup) -> HOME. Otherwise back to OFF after 10 s. If the controller answers by itself
+ * with word 0 = 1 while ourui is in OFF (alarm, or the button was held while ourui did not see it), it powers on the same way.
+ * A tap on the dark screen shows the OFF page for 8 s — no frames (the MCU cannot receive anything while it sleeps).
+ * Deliberate deviation: no SoC suspend and no "killall" — only the backlight; the net guard and telnet keep running. */
 enum { PW_ON=0, PW_OFFING, PW_OFF, PW_WAKING };
-#define PW_HOLD_MS  1500    /* stock: 2 sekund-skift (1,0-2,0 s); midten */
+#define PW_HOLD_MS  1500    /* stock: 2 second ticks (1.0-2.0 s); the middle */
 #define PW_GAP_MS     80    /* stock performSleepActions: cmd8 ... usleep(80000) ... cmd6 sub0 len2 */
-#define PW_BL_MS    1500    /* stock: 1,5 s efter powerOff -> fb/lys/suspend (lv_tick_elaps > 0x5DC); ourui: lyset slukkes */
-#define PW_PEEK_MS  8000    /* tryk på den slukkede skærm: SLUKKET-siden vises så længe */
-#define PW_WAKE_MS 10000    /* TÆNDER…: så længe ventes der på ord 0 = 1 fra controlleren */
-#define PW_SEEN_MS   600    /* ord 0 = 1 set (m. forbindelse) så længe -> controlleren er vågen */
+#define PW_BL_MS    1500    /* stock: 1.5 s after powerOff -> fb/light/suspend (lv_tick_elaps > 0x5DC); ourui: the light is turned off */
+#define PW_PEEK_MS  8000    /* tap on the dark screen: the OFF page is shown this long */
+#define PW_WAKE_MS 10000    /* TURNING ON…: how long to wait for word 0 = 1 from the controller */
+#define PW_SEEN_MS   600    /* word 0 = 1 seen (w. link) this long -> the controller is awake */
 static struct { int state, key_down, key_fired, blk_shown, kbd_ok, key_code, key_val, f8_ok, push_set;
                 ms_t t_press, t_down, t_req, t_state, t_peek, t_on1, t_key; long push_seq;
                 long n_ev, n_press, n_short, n_off, n_on, n_blk, n_fail, n_ack8, n_auto, n_wto;
                 uint8_t f8[15]; char node[64]; } pw;
 static void proto_keepawake(ms_t now,int first);
-/* stock isExtractionOrSteamSwitchOn 0x1481E0: GetMaichinState(0x1000) | GetMaichinState(0x4000) | spejl-ord 22 | 24 | 6.
- * ourui's egen start, der er på vej (act.pending), tæller med for de samme tre aktiviteter. */
+/* stock isExtractionOrSteamSwitchOn 0x1481E0: GetMaichinState(0x1000) | GetMaichinState(0x4000) | mirror word 22 | 24 | 6.
+ * ourui's own start in flight (act.pending) counts too, for the same three activities. */
 static int pw_busy(void){
     uint16_t ws=reg_seen[33]?reg[33]:0;
     return (ws&0x1000)||(ws&0x4000)||(reg_seen[22]&&reg[22])||(reg_seen[24]&&reg[24])||(reg_seen[6]&&reg[6])
          ||act.pending==ACT_GRIND||act.pending==ACT_BREW||act.pending==ACT_STEAM;
 }
-/* cmd8 som stock's powerOffSend 0x14700C: AA 55 08 | år lo, år hi | måned 1-12 | dag | time | minut | sekund | alarm dag, time,
- * minut | CRC lo, hi (CRC_GetModbus16 over 13 bytes). MCU 0x9C88 kopierer de 10 bytes til 0x20000E18 og svarer 0x88 m. echo;
- * sleep-tasken bruger kun alarmen (dag + time + minut = 0 -> ingen) — dato/tid overskrives dér fra MCU'ens eget RTC. */
+/* cmd8 like stock's powerOffSend 0x14700C: AA 55 08 | year lo, year hi | month 1-12 | day | hour | minute | second | alarm day, hour,
+ * minute | CRC lo, hi (CRC_GetModbus16 over 13 bytes). MCU 0x9C88 copies the 10 bytes to 0x20000E18 and replies 0x88 w. echo;
+ * the sleep task only uses the alarm (day + hour + minute = 0 -> none) — date/time there is overwritten from the MCU's own RTC. */
 static int pw_cmd8(uint8_t b[15],const struct tm*tm,int ad,int ah,int am){
     int y=tm->tm_year+1900;
     b[0]=0xAA; b[1]=0x55; b[2]=0x08; b[3]=(uint8_t)(y&0xFF); b[4]=(uint8_t)(y>>8); b[5]=(uint8_t)(tm->tm_mon+1); b[6]=(uint8_t)tm->tm_mday;
@@ -3589,13 +3595,13 @@ static int pw_cmd8(uint8_t b[15],const struct tm*tm,int ad,int ah,int am){
 }
 static void pw_now_tm(struct tm*tm){
 #ifdef OURUI_PREVIEW
-    memset(tm,0,sizeof *tm); tm->tm_year=126; tm->tm_mon=10; tm->tm_mday=18; tm->tm_hour=16; tm->tm_min=35; tm->tm_sec=28;   /* fast i selftesten */
+    memset(tm,0,sizeof *tm); tm->tm_year=126; tm->tm_mon=10; tm->tm_mday=18; tm->tm_hour=16; tm->tm_min=35; tm->tm_sec=28;   /* fixed in the selftest */
 #else
     time_t t=time(NULL); localtime_r(&t,tm);
 #endif
 }
 static void pw_ack8(const uint8_t*p){ if(pw.f8_ok&&!memcmp(p,pw.f8+3,10)) pw.n_ack8++; }
-/* til SLUKKET-visningen: en åben detalje fortrydes (lys-/sprog-preview tilbage), ingen overgang, ingen ripple, ingen holdt start */
+/* for the OFF view: an open detail is reverted (light/language preview back), no transition, no ripple, no held start */
 static void pw_view(int v){
     if(view==V_DETAIL&&sel>=0){ if(SET[sel].flags&SF_BL) bl_set(SET[sel].val); if(SET[sel].flags&SF_LOCAL) lang_set(SET[sel].val); }
     view=v; sel=-1; xsel=-1; tr.type=TR_NONE; rip.on=0; memset(&tch,0,sizeof tch); stp.active=0;
@@ -3607,46 +3613,46 @@ static void pw_off_begin(ms_t now){
     pw.state=PW_OFFING; pw.t_req=pw.t_state=now; pw.push_set=0; pw.t_peek=0; pw.t_on1=0; pw.n_off++;
     toast.dur=0; pw_view(V_OFF);
 }
-static void pw_fail(ms_t now){   /* PowerOff kom ikke igennem: tilbage til TÆNDT (lyset er ikke slukket endnu) */
+static void pw_fail(ms_t now){   /* PowerOff did not get through: back to ON (the light has not been turned off yet) */
     pw.state=PW_ON; pw.t_state=now; pw.n_fail++; if(bl_is_off) bl_power(1); pw_view(V_MAIN); toast_show(TR(TX_T_PW_NOACK),C_ERR,now);
 }
 static void pw_on(ms_t now){
     pw.state=PW_ON; pw.t_state=now; pw.t_on1=0; pw.t_peek=0; pw.n_on++;
     if(bl_is_off) bl_power(1);
-    proto_keepawake(now,1);              /* PowerOn (sub0=[1]) + vågen (sub1=[0]) — samme to frames som ved opstart (stock: app_init PowerOn) */
+    proto_keepawake(now,1);              /* PowerOn (sub0=[1]) + awake (sub1=[0]) — the same two frames as at startup (stock: app_init PowerOn) */
     pw_view(V_MAIN); toast_show(TR(TX_T_PW_ON),C_OK,now);
 }
 static void pw_wake(ms_t now){ pw.state=PW_WAKING; pw.t_state=now; pw.t_on1=0; pw.t_peek=0; if(bl_is_off) bl_power(1); static_dirty=1; ui_kick=1; }
-/* knap-hændelse fra k62091-noden (alle EV_KEY-koder, som stock); value 2 (autorepeat) findes ikke på noden og ignoreres */
+/* button event from the k62091 node (all EV_KEY codes, like stock); value 2 (autorepeat) does not exist on the node and is ignored */
 static void pw_key(int code,int val,ms_t now){
     pw.n_ev++; pw.key_code=code; pw.key_val=val; pw.t_key=now; ui_kick=1;
     if(val==1&&!pw.key_down){
         pw.key_down=1; pw.t_press=pw.t_down=now; pw.key_fired=0; pw.blk_shown=0; pw.n_press++;
         if(pw.state==PW_OFF){ pw.key_fired=1; pw_wake(now); }
     } else if(val==0&&pw.key_down){
-        pw.key_down=0; if(pw.state==PW_ON&&!pw.key_fired) pw.n_short++;    /* kort tryk: stock vækker kun sin pauseskærm — ourui har ingen */
+        pw.key_down=0; if(pw.state==PW_ON&&!pw.key_fired) pw.n_short++;    /* short press: stock only wakes its screensaver — ourui has none */
         pw.key_fired=0;
     }
 }
-/* tryk på skærmen, mens der er slukket: slugt (ingen navigation); SLUKKET-siden vises i 8 s */
+/* tap on the screen while off: swallowed (no navigation); the OFF page is shown for 8 s */
 static int pw_touch(int ev,ms_t now){
     if(pw.state==PW_ON) return 0;
     if(ev==TE_DOWN&&pw.state==PW_OFF){ pw.t_peek=now+PW_PEEK_MS; if(bl_is_off) bl_power(1); }
     return 1;
 }
-/* controlleren svarer med ord 0 = 1 (og har gjort det i PW_SEEN_MS): den er vågen */
+/* the controller answers with word 0 = 1 (and has done so for PW_SEEN_MS): it is awake */
 static int pw_mcu_on(ms_t now){
     if(link_up(now)&&reg_seen[0]&&reg[0]==1){ if(!pw.t_on1) pw.t_on1=now; return now-pw.t_on1>=PW_SEEN_MS; }
     pw.t_on1=0; return 0;
 }
 static void pw_step(ms_t now){
     if(pw.state==PW_ON&&pw.key_down&&!pw.key_fired){
-        if(pw_busy()){ pw.t_down=now;                 /* stock: e60 tæller ikke, mens aktiviteten kører -> et nyt fuldt hold efter den */
+        if(pw_busy()){ pw.t_down=now;                 /* stock: e60 does not count while the activity runs -> a new full hold after it */
             if(now-pw.t_press>=PW_HOLD_MS&&!pw.blk_shown){ pw.blk_shown=1; pw.n_blk++; toast_show(TR(TX_T_PW_BUSY),C_WARN,now); ui_kick=1; } }
-        else if(now-pw.t_down<PW_HOLD_MS||view==V_SPLASH||view==V_BYE||sav.active){ /* holdes endnu / vent: opstart, skift eller GEM i gang */ }
+        else if(now-pw.t_down<PW_HOLD_MS||view==V_SPLASH||view==V_BYE||sav.active){ /* still held / wait: startup, switch or SAVE in progress */ }
         else { pw.key_fired=1; ui_kick=1;
             if(ro_mode) toast_show(TR(TX_G_RO),C_WARN,now);
-            else if(!link_up(now)||!reg_seen[0]||reg[0]==0){ pw.n_fail++; toast_show(TR(TX_T_PW_NOLINK),C_WARN,now); }   /* stock: spejl-ord 0 == 0 -> intet */
+            else if(!link_up(now)||!reg_seen[0]||reg[0]==0){ pw.n_fail++; toast_show(TR(TX_T_PW_NOLINK),C_WARN,now); }   /* stock: mirror word 0 == 0 -> nothing */
             else pw_off_begin(now); }
     }
     switch(pw.state){
@@ -3671,66 +3677,66 @@ static void pw_step(ms_t now){
 }
 static void ui_touch(int ev,int x,int y,ms_t now){
     ui_kick=1;
-    if(pw_touch(ev,now)) return;                                     /* v6.14: slukket — skærmen viser kun SLUKKET-siden */
+    if(pw_touch(ev,now)) return;                                     /* v6.14: off — the screen shows only the OFF page */
     if(ev==TE_DOWN){
         memset(&tch,0,sizeof tch); tch.down=1; tch.x0=tch.x=x; tch.y0=tch.y=y; tch.t0=now;
         tch.target=hit_test(x,y,now); tch.scroll0=scroll[page];
         if(tch.target){ rip.x=x; rip.y=y; rip.t0=now; rip.on=1; }
         if((tch.target==T_MINUS||tch.target==T_PLUS)&&!sav.active){
-            if(view==V_SYS) x_edit=(tch.target==T_PLUS);               /* BOOT-UI: − = ORIGINAL, + = OURUI */
+            if(view==V_SYS) x_edit=(tch.target==T_PLUS);               /* BOOT UI: − = ORIGINAL, + = OURUI */
             else { edit_step(tch.target==T_PLUS?1:-1,1); tch.rep_next=now+420; }
         }
     } else if(ev==TE_MOVE&&tch.down){
         tch.x=x; tch.y=y; int dx=x-tch.x0, dy=y-tch.y0;
         if(!tch.moved&&(abs(dx)>14||abs(dy)>14)){
-            tch.moved=1; tch.axis=abs(dy)>abs(dx)?2:1;                       /* v6.11: akse-lås ved første bevægelse (1 = vandret, 2 = lodret) */
-            if(view==V_MAIN&&page>=PG_T0&&page<=PG_DIAG&&tch.axis==2) tch.scrolling=1;   /* lister + DIAGNOSE */
+            tch.moved=1; tch.axis=abs(dy)>abs(dx)?2:1;                       /* v6.11: axis lock at first movement (1 = horizontal, 2 = vertical) */
+            if(view==V_MAIN&&page>=PG_T0&&page<=PG_DIAG&&tch.axis==2) tch.scrolling=1;   /* lists + DIAGNOSE */
         }
         if(tch.scrolling) scroll[page]=clampf(tch.scroll0-dy,0,scroll_max(page));
     } else if(ev==TE_UP&&tch.down){
         tch.down=0; int dx=tch.x-tch.x0, dy=tch.y-tch.y0;
         if(tch.scrolling) return;
         if(view==V_MAIN&&!tr.type&&swipe_h(tch.axis,dx,dy)){ if(dx<0) go_page((page+1)%NPAGE,1,now); else go_page((page+NPAGE-1)%NPAGE,-1,now); return; }
-        if((view==V_DETAIL||view==V_SYS)&&!tr.type&&swipe_down(tch.axis,tch.target,dx,dy)){ activate(T_CANCEL,now); return; }   /* v6.11: stryg ned = luk */
+        if((view==V_DETAIL||view==V_SYS)&&!tr.type&&swipe_down(tch.axis,tch.target,dx,dy)){ activate(T_CANCEL,now); return; }   /* v6.11: swipe down = close */
         if(!tch.moved&&tch.target&&!tch.fired&&tch.target!=T_MINUS&&tch.target!=T_PLUS&&hit_test(tch.x,tch.y,now)==tch.target) activate(tch.target,now);
     }
 }
 static int pressed(int t){ return tch.down&&!tch.moved&&tch.target==t; }
 
-/* ================= pr.-frame logik ================= */
+/* ================= per-frame logic ================= */
 static int gauge_kind(int ph){ switch(ph){ case PH_GRIND: case PH_WATER: return 1; case PH_PRE: case PH_EXT: return 2; case PH_STEAM: return 3; default: return 0; } }
 typedef struct { int ph,eff; uint32_t hi,lo; char hero[16]; const char*unit; char label[64],sub[80]; const char*sl[3]; char svv[3][16]; float gf,gmark,pf; int pvis;
                  int sk,conc; const char*chip,*badge;
-                 char hint1[72]; const char*hint2; uint32_t hc1; } HomeM;   /* v6.11: tom-tilstands-hint i chart-feltet (kun naar chartet er inaktivt) */   /* v6.6: damp-klasse, samtidig damp, chip-tekst, damp-mærke (NULL = intet) */
-/* de tre stat-labels pr. HJEM-tilstand (selftesten måler hver trio mod kolonnerne, i begge sprog) */
-enum { SS_IDLE=0, SS_BREW, SS_GRIND, SS_WATER, SS_STEAM, SS_BREW_M, SS_GRIND_M, SS_WATER_M, NSS };   /* _M: samtidig damp — 3. felt er mælke-temperaturen */
-_Static_assert(SS_GRIND_M-SS_GRIND==SS_BREW_M-SS_BREW&&SS_WATER_M-SS_WATER==SS_BREW_M-SS_BREW,"SS_*_M skal ligge i samme afstand fra SS_*");
+                 char hint1[72]; const char*hint2; uint32_t hc1; } HomeM;   /* v6.11: empty-state hint in the chart area (only when the chart is inactive) */   /* v6.6: steam class, concurrent steam, chip text, steam marker (NULL = none) */
+/* the three stat labels per HOME state (the selftest measures each trio against the columns, in both languages) */
+enum { SS_IDLE=0, SS_BREW, SS_GRIND, SS_WATER, SS_STEAM, SS_BREW_M, SS_GRIND_M, SS_WATER_M, NSS };   /* _M: concurrent steam — the 3rd field is the milk temperature */
+_Static_assert(SS_GRIND_M-SS_GRIND==SS_BREW_M-SS_BREW&&SS_WATER_M-SS_WATER==SS_BREW_M-SS_BREW,"SS_*_M must be at the same offset from SS_*");
 static const short STAT_SET[NSS][3]={
  [SS_IDLE] ={TX_ST_GROUP,TX_ST_STEAMBOILER,TX_ST_WEIGHT},
  [SS_BREW] ={TX_ST_TIME,TX_ST_BAR,TX_ST_FLOW},
  [SS_GRIND]={TX_ST_TIME,TX_ST_CURRENT,TX_ST_GRINDSTEP},
  [SS_WATER]={TX_ST_TIME,TX_ST_FLOW,TX_ST_BOILER},
- [SS_STEAM]={TX_ST_TIME,TX_ST_BOILER,TX_ST_LEVEL},          /* v6.11: KEDEL (damp-konteksten) — "DAMP" ved siden af "NIVEAU" laeses som "DAMP-NIVEAU" */
+ [SS_STEAM]={TX_ST_TIME,TX_ST_BOILER,TX_ST_LEVEL},          /* v6.11: BOILER (the steam context) — "STEAM" next to "LEVEL" reads as "STEAM LEVEL" */
  [SS_BREW_M] ={TX_ST_TIME,TX_ST_BAR,TX_ST_MILK},
  [SS_GRIND_M]={TX_ST_TIME,TX_ST_CURRENT,TX_ST_MILK},
  [SS_WATER_M]={TX_ST_TIME,TX_ST_FLOW,TX_ST_MILK},
 };
 #define STAT_PITCH 94
-#define STAT_GAP 16        /* v6.11: mindste luft mellem to stat-labels (v6.10: 6 px — "GROUP STEAM BOILER WEIGHT" læstes som én linje) */
-#define SUB_X0 72          /* HJEM-underlinjens felt (v6.3: 336 px — også plads til °F-værdier og de engelske tekster) */
+#define STAT_GAP 16        /* v6.11: minimum space between two stat labels (v6.10: 6 px — "GROUP STEAM BOILER WEIGHT" read as one line) */
+#define SUB_X0 72          /* the HOME subline's area (v6.3: 336 px — also room for °F values and the English texts) */
 #define SUB_W 336
-#define HINT_W 304         /* v6.11: chart-feltets hint-linjer (chartet selv er 244 bredt; hint-teksten maa bruge 304) */
+#define HINT_W 304         /* v6.11: the chart area's hint lines (the chart itself is 244 wide; the hint text may use 304) */
 static HomeM hm;
 static int steam_target(void){ return reg_seen[25]?reg[25]:sv(S_STEAMT); }
-#define MILK_RISE10 39     /* mælke-proben stiger ca. 3,9 °C videre efter auto-stop (STEAMLIVE §5.2: 650 -> 689 paa ~11 s) */
-/* v6.9: hero-filteret (median-3 + EMA i 10-Hz-takt). key = fase<<8 | kilde-ord, set = set-punkt/mål: skifter en af dem,
- * springer tallet til rå-værdien. Returnerer den viste værdi i rå enheder (afrundet) — RÅ når DIAGNOSE → GRAF er RÅ. */
+#define MILK_RISE10 39     /* the milk probe keeps rising approx. 3.9 °C after auto-stop (STEAMLIVE §5.2: 650 -> 689 in ~11 s) */
+/* v6.9: the hero filter (median-3 + EMA at a 10 Hz rate). key = phase<<8 | source word, set = setpoint/target: if either changes,
+ * the number snaps to the raw value. Returns the shown value in raw units (rounded) — RAW when DIAGNOSE → GRAPH is RAW. */
 static int hero_v(int key,int raw,int set,ms_t now){
     if(cd.raw){ hf.ok=0; return raw; }
     if(!hf.ok||key!=hf.key||set!=hf.set||now-hf.t>500||now<hf.t){ cond_snap(&hf.f,raw); hf.key=key; hf.set=set; hf.t=now; hf.ok=1; hf.n_snap++; return raw; }
     while(now-hf.t>=100){
         hf.t+=100; cond_step(&hf.f,raw,cd.a_hero);
-        if(abs(hf.f.m-(int)lroundf(hf.f.y))>CD_HERO_JUMP){ cond_snap(&hf.f,hf.f.m); hf.n_snap++; }   /* ægte trin (median'en har flyttet sig langt): ingen glidning */
+        if(abs(hf.f.m-(int)lroundf(hf.f.y))>CD_HERO_JUMP){ cond_snap(&hf.f,hf.f.m); hf.n_snap++; }   /* real step (the median has moved far): no gliding */
     }
     return (int)lroundf(hf.f.y);
 }
@@ -3742,7 +3748,7 @@ static void home_model(ms_t now){
     char a[16],b[16]; int ss=SS_IDLE;
     if(e==PH_GRIND||e==PH_WATER||e==PH_PRE||e==PH_EXT){
         int tgt=(e==PH_GRIND)?sv(S_GRINDW):(e==PH_WATER?sv(S_HOTW):sv(S_BREWW));
-        int src=wsl.src, w=wdbi(hero_v(ph<<8|src,s16(src),tgt,now)); if(w<0&&w>-30)w=0; if(w<-999)w=-999; if(w>9999)w=9999;   /* v6.9: latchet kilde, konditioneret, dødbånd */
+        int src=wsl.src, w=wdbi(hero_v(ph<<8|src,s16(src),tgt,now)); if(w<0&&w>-30)w=0; if(w<-999)w=-999; if(w>9999)w=9999;   /* v6.9: latched source, conditioned, deadband */
         fmt_fix(m->hero,sizeof m->hero,w,1); m->unit=TR(TX_U_G);
         fmt_fix(a,sizeof a,tgt,1);
         snprintf(m->label,sizeof m->label,TR(e==PH_GRIND?TX_H_DOSE_TGT:TX_H_CUP_TGT),a);
@@ -3750,11 +3756,11 @@ static void home_model(ms_t now){
         else snprintf(m->sub,sizeof m->sub,TR(TX_H_AUTOSTOP_G),a);
         float fr=tgt>0? (float)w/tgt : 0;
         if(e==PH_PRE||e==PH_EXT){
-            float pd=p_disp(now);                                   /* v6.9: gauge + BAR = konditioneret tryk (som chartet) */
+            float pd=p_disp(now);                                   /* v6.9: gauge + BAR = conditioned pressure (like the chart) */
             m->gf=clampf(pd/1600.f,0,1); m->pf=clampf(fr,0,1); m->pvis=1; ss=SS_BREW;
             snprintf(m->svv[0],16,"%s",tb);
-            if(cd.raw) snprintf(m->svv[1],16,"%d",(int)lroundf(pd));   /* v6.10: RÅ-visningen = ord 51 som rå tal (label TRYK RÅ) */
-            else { float pb=p_bar(pd); if(pb<0) snprintf(m->svv[1],16,"%s",TR(TX_ST_PULSE)); else snprintf(m->svv[1],16,"%.1f",pb); }   /* v6.10: ≈bar, puls > 20 bar = intet tal */
+            if(cd.raw) snprintf(m->svv[1],16,"%d",(int)lroundf(pd));   /* v6.10: the RAW view = word 51 as a raw number (label PRESSURE RAW) */
+            else { float pb=p_bar(pd); if(pb<0) snprintf(m->svv[1],16,"%s",TR(TX_ST_PULSE)); else snprintf(m->svv[1],16,"%.1f",pb); }   /* v6.10: ≈bar, pulse > 20 bar = no number */
             snprintf(m->svv[2],16,"%u",reg[52]);
         } else {
             m->gf=clampf(fr/1.15f,0,1); m->gmark=1/1.15f;
@@ -3762,21 +3768,21 @@ static void home_model(ms_t now){
             if(e==PH_GRIND){ ss=SS_GRIND; snprintf(m->svv[1],16,"%u",reg[58]); snprintf(m->svv[2],16,"%u",reg[37]); }
             else { ss=SS_WATER; snprintf(m->svv[1],16,"%u",reg[52]); fmt_t10(b,sizeof b,reg[40],1); snprintf(m->svv[2],16,"%s°",b); }
         }
-        /* v6.6: damp SAMTIDIG med hoved-aktiviteten (fx flush under bryg, work_sta 5327): vægt og gauge
-         * bliver stående, damp-mærket vises, og 3. stat-felt bliver mælke-temperaturen */
+        /* v6.6: steam CONCURRENT with the main activity (e.g. flush during brew, work_sta 5327): weight and gauge
+         * stay, the steam marker is shown, and the 3rd stat field becomes the milk temperature */
         if(stm.kind!=SK_NONE&&phase_active(ph)){ m->conc=1; m->sk=stm.kind; ss+=SS_BREW_M-SS_BREW; fmt_t10(b,sizeof b,reg[48],1); snprintf(m->svv[2],16,"%s°",b); }
     } else if(e==PH_STEAM){
         int sk=(ph==PH_DONE)?stm.last_kind:stm.kind, tgt=steam_target(); m->sk=sk;
-        int mk=hero_v(ph<<8|48,reg[48],tgt*4+sk,now);              /* v6.9: konditioneret mælke-temperatur */
+        int mk=hero_v(ph<<8|48,reg[48],tgt*4+sk,now);              /* v6.9: conditioned milk temperature */
         fmt_t10(m->hero,sizeof m->hero,mk,1); m->unit=t_unit(); ss=SS_STEAM;
         fmt_t10(a,sizeof a,tgt,1);
         m->gf=clampf((mk-200)/600.f,0,1);
-        if(sk==SK_WAND){            /* momentan wand/flush: intet mål, ingen auto-stop-forventning — heller ikke over målet */
+        if(sk==SK_WAND){            /* momentary wand/flush: no target, no auto-stop expectation — not even above the target */
             snprintf(m->label,sizeof m->label,"%s",TR(TX_H_MILK_PROBE));
             if(ph==PH_DONE) snprintf(m->sub,sizeof m->sub,TR(TX_H_DONE_IN),tb);
             else snprintf(m->sub,sizeof m->sub,"%s",TR(TX_H_WAND_NOSTOP));
             m->gmark=-1;
-        } else {                    /* latchet (AUTO) — eller ord 24 endnu ikke læst: målet vises, men uden løfte om auto-stop */
+        } else {                    /* latched (AUTO) — or word 24 not read yet: the target is shown, but without a promise of auto-stop */
             snprintf(m->label,sizeof m->label,TR(TX_H_MILK_TGT),a);
             if(ph==PH_DONE){
                 if(sk==SK_AUTO){ fmt_fix(b,sizeof b,use_c()?MILK_RISE10:MILK_RISE10*9/5,-1); snprintf(m->sub,sizeof m->sub,TR(TX_H_DONE_RISE),tb,b); }
@@ -3790,7 +3796,7 @@ static void home_model(ms_t now){
     } else {
         int set=reg_seen[11]?reg[11]:sv(S_BREWT);
         if(ph==PH_OFFLINE){ snprintf(m->hero,sizeof m->hero,"--.-"); m->gf=0; }
-        else { int bt=hero_v(ph<<8|40,reg[40],set,now);           /* v6.9: konditioneret kedel-temperatur */
+        else { int bt=hero_v(ph<<8|40,reg[40],set,now);           /* v6.9: conditioned boiler temperature */
                fmt_t10(m->hero,sizeof m->hero,bt,1); m->gf=clampf((bt-200)/1000.f,0,1); m->gmark=clampf((set-200)/1000.f,0,1); }
         m->unit=t_unit(); fmt_t10(a,sizeof a,set,1);
         snprintf(m->label,sizeof m->label,"%s",TR(TX_H_BOILER));
@@ -3803,24 +3809,24 @@ static void home_model(ms_t now){
         }
         fmt_t10(b,sizeof b,reg[42],0); snprintf(m->svv[0],16,"%s°",b);
         fmt_t10(b,sizeof b,reg[47],0); snprintf(m->svv[1],16,"%s°",b);
-        int w=s16(39); if(w<-50||ph==PH_OFFLINE) snprintf(m->svv[2],16,"--"); else { fmt_fix(b,sizeof b,w_disp(39,now),1); snprintf(m->svv[2],16,"%s %s",b,TR(TX_U_G)); }   /* v6.9: konditioneret + dødbånd ("--"-grænsen på rå) */
+        int w=s16(39); if(w<-50||ph==PH_OFFLINE) snprintf(m->svv[2],16,"--"); else { fmt_fix(b,sizeof b,w_disp(39,now),1); snprintf(m->svv[2],16,"%s %s",b,TR(TX_U_G)); }   /* v6.9: conditioned + deadband (the "--" threshold on raw) */
         if(ph==PH_OFFLINE){ snprintf(m->svv[0],16,"--"); snprintf(m->svv[1],16,"--"); }
     }
     for(int i=0;i<3;i++) m->sl[i]=TR(STAT_SET[ss][i]);
-    /* v6.11: hint i det tomme chart-felt — hvad brugeren kan GØRE nu (erstatter v6.10's "INGEN AKTIVITET", som gentog fase-chippen).
-     * Kan der startes: "HOLD ET IKON FOR AT STARTE"; ellers grunden (vagtens tekst) — og ved fejl/offline en henvisning til DIAGNOSE,
-     * hvor den rå kode (E1/E2/E3) og link-tællerne står. Linje 2 peger på indstillingerne (swipe + tandhjulet). */
+    /* v6.11: hint in the empty chart area — what the user can DO now (replaces v6.10's "NO ACTIVITY", which repeated the phase chip).
+     * If a start is possible: "HOLD AN ICON TO START"; otherwise the reason (the guard's text) — and on error/offline a pointer to DIAGNOSE,
+     * where the raw code (E1/E2/E3) and the link counters are. Line 2 points to the settings (swipe + the gear). */
     { const char*g=act_guard(ACT_BREW,now); m->hint2=TR(TX_C_HINT2); m->hc1=C_TXT2;
       if(!g) snprintf(m->hint1,sizeof m->hint1,"%s",TR(TX_C_HINT));
       else if(ph==PH_ERROR) snprintf(m->hint1,sizeof m->hint1,TR(TX_C_ERRCODE),err_code());
       else if(ph==PH_OFFLINE) snprintf(m->hint1,sizeof m->hint1,"%s",TR(TX_C_DIAGREF));
-      else if(ph==PH_SLEEP) m->hint1[0]=0;                                   /* underlinjen siger allerede "VÅGNER…" */
+      else if(ph==PH_SLEEP) m->hint1[0]=0;                                   /* the subline already says "WAKING UP…" */
       else { snprintf(m->hint1,sizeof m->hint1,"%s",g); if(g==TR(TX_G_NOCFG)||g==TR(TX_G_OOR)||g==TR(TX_G_RO)) m->hc1=C_WARN; } }
-    if(cd.raw&&(ss==SS_BREW||ss==SS_BREW_M)) m->sl[1]=TR(TX_ST_PRAW);   /* v6.10: RÅ-visningen viser rå tal — så står der ikke ≈BAR over det */
+    if(cd.raw&&(ss==SS_BREW||ss==SS_BREW_M)) m->sl[1]=TR(TX_ST_PRAW);   /* v6.10: the RAW view shows raw numbers — so ≈BAR is not shown above them */
     m->chip=(ph==PH_STEAM)?steam_label(stm.kind):ph_name(ph);
     m->badge=m->conc?steam_label(m->sk):NULL;
-    /* pending / hold overstyrer under-linjen. v6.6: også damp er "STARTER …" — display-damp starter af sig
-     * selv ca. 0,2 s efter start-writen, uden at wand-kontakten aktiveres (STEAMLIVE §3 + §6.3) */
+    /* pending / hold override the subline. v6.6: steam is "STARTING …" too — display steam starts by
+     * itself approx. 0.2 s after the start write, without the wand switch being activated (STEAMLIVE §3 + §6.3) */
     if(act.pending!=ACT_NONE&&!phase_active(ph)) snprintf(m->sub,sizeof m->sub,TR(TX_H_STARTING),TR(ACT_NAME[act.pending]));
     else if(tch.down&&!tch.moved&&tch.target>=T_ACT0&&tch.target<=T_ACT3&&!act_guard(tch.target-T_ACT0,now)){
         int k=tch.target-T_ACT0;
@@ -3830,7 +3836,7 @@ static void home_model(ms_t now){
         else { fmt_t10(a,sizeof a,sv(S_STEAMT),1); snprintf(m->sub,sizeof m->sub,TR(TX_H_HOLD_STEAM),a); }
     }
 }
-/* gauge-mål for aktuel visning (kaldes pr. frame OG før snapshot ved overgange) */
+/* gauge targets for the current view (called per frame AND before the snapshot on transitions) */
 static void arc_targets(ms_t now){
     if(view==V_SPLASH){
         float t=clampf((now-ui_start)/(float)(SPLASH_MS-250),0,1);
@@ -3842,7 +3848,7 @@ static void arc_targets(ms_t now){
         garc.mark=(span>0&&!(s->flags&SF_SENSOR))? clampf((edit_orig-s->lo)/span,0,1) : -1;
     } else if(view==V_SYS){
         parc.vis=0; garc.vis=1; garc.mark=-1;
-        if(xsel==X_EXIT){ garc.c_hi=C_WARN; garc.c_lo=rgb(128,80,24); garc.f_t=1; }            /* fuld advarsels-ring */
+        if(xsel==X_EXIT){ garc.c_hi=C_WARN; garc.c_lo=rgb(128,80,24); garc.f_t=1; }            /* full warning ring */
         else {
             garc.c_hi=C_ACC; garc.c_lo=rgb(120,80,36); garc.f_t=0;
             if(xsel==X_BOOTUI&&!sys_locked()){ garc.f_t=x_edit?1:0; garc.mark=x_orig?1:0; }
@@ -3850,18 +3856,18 @@ static void arc_targets(ms_t now){
     } else if(view==V_BYE||view==V_OFF){ garc.vis=0; parc.vis=0;
     } else if(page==PG_HOME){
         home_model(now);
-        int gk=gauge_kind(hm.eff); if(gk!=act.gkind){ act.gkind=gk; garc.f_d=0; }   /* sweep fra nul ved ny størrelse */
+        int gk=gauge_kind(hm.eff); if(gk!=act.gkind){ act.gkind=gk; garc.f_d=0; }   /* sweep from zero on a new quantity */
         float ct=clampf((now-act.t_col)/300.f,0,1);
         garc.vis=1; garc.f_t=hm.gf; garc.mark=hm.gmark;
         if(ct<1){ int q=(int)(ct*8); garc.c_hi=lerpc(act.c_from_hi,hm.hi,q/8.f); garc.c_lo=lerpc(act.c_from_lo,hm.lo,q/8.f); ui_anim=1; }
         else { garc.c_hi=hm.hi; garc.c_lo=hm.lo; }
-        parc.vis=hm.pvis; parc.c_hi=C_TXT; parc.c_lo=rgb(160,167,180);   /* v6.11: v6.10's C_TXT2 — fremskridts-ringen er uaendret (C_TXT2 er hævet for tekst) */ parc.f_t=hm.pf; parc.mark=-1;
+        parc.vis=hm.pvis; parc.c_hi=C_TXT; parc.c_lo=rgb(160,167,180);   /* v6.11: v6.10's C_TXT2 — the progress ring is unchanged (C_TXT2 was raised for text) */ parc.f_t=hm.pf; parc.mark=-1;
     } else { garc.vis=0; parc.vis=0; }
 }
 static void ui_update(ms_t now){
     if(ui_start<0){ ui_start=now; ui_last=now; }
     float dt=(float)(now-ui_last); if(dt>200)dt=200; ui_last=now; ui_anim=0;
-    /* fase-sporing (v6.6: damp-klassen først; hoved-fasen er phase_main — kværn/bryg/vand går forud for damp) */
+    /* phase tracking (v6.6: the steam class first; the main phase is phase_main — grind/brew/water take precedence over steam) */
     steam_track(now);
     int p=phase_main(now);
     if(p!=act.raw){
@@ -3872,34 +3878,34 @@ static void ui_update(ms_t now){
     if(phase_active(p)) act.last_ph=p;
     int ph=p; if(p>=PH_HEAT&&!phase_active(p)&&now-act.t_done<8000) ph=PH_DONE;
     if(ph!=act.ph){ act.c_from_hi=garc.c_hi; act.c_from_lo=garc.c_lo; act.t_col=now; act.ph=ph; }
-    /* pending aktivitet: ACK-resultat / start-timeout */
+    /* pending activity: ACK result / start timeout */
     if(act.pending!=ACT_NONE){
         if(wq.seq!=act.seq&&wq.result==WR_FAIL&&!wq_busy()){ act.pending=ACT_NONE; toast_show(TR(TX_T_NOACK),C_ERR,now); }
         else if(now-act.t_req>(act.pending==ACT_STEAM?15000:3500)){ act.pending=ACT_NONE; toast_show(TR(TX_T_NOSTART),C_WARN,now); }
     }
-    stop_step(now);                                                  /* v6.13: manuel STOP — bekræftelse / fejl */
+    stop_step(now);                                                  /* v6.13: manual STOP — confirmation / failure */
     save_step(now);
-    /* boot-tilstand er live (stat + /proc), men kun mens den faktisk vises */
+    /* boot state is live (stat + /proc), but only while it is actually shown */
     if((view==V_SYS||(view==V_MAIN&&(page==PG_T2||page==PG_DIAG)))&&(now-bs.t>=1000||now<bs.t)){
         int l0=(view==V_SYS)?sys_locked():0, m0=switch_mode(), n0=boot_next_kind();
         boot_poll(now);
         if(view==V_SYS){
             if(xsel==X_BOOTUI){ if(x_edit==x_orig) x_edit=bs.flag; x_orig=bs.flag; }
-            if(sys_locked()!=l0||switch_mode()!=m0||boot_next_kind()!=n0) static_dirty=1;     /* statisk tekst afhænger af tilstanden */
+            if(sys_locked()!=l0||switch_mode()!=m0||boot_next_kind()!=n0) static_dirty=1;     /* static text depends on the state */
         }
     }
-    /* sensor-rækker (read-only) følger controller-registret */
+    /* sensor rows (read-only) follow the controller register */
     for(int i=0;i<NSET;i++){
         Setting*s=&SET[i]; if(!(s->flags&SF_SENSOR)) continue;
         s->loaded=link_up(now)&&reg_seen[s->def]; s->val=s->loaded?reg[s->def]:0;
         if(view==V_DETAIL&&sel==i) edit_val=edit_orig=s->val;
     }
-    /* splash -> hjem */
+    /* splash -> home */
     if(view==V_SPLASH&&now-ui_start>=SPLASH_MS&&!tr.type){
         memcpy(snapA,canvas,(size_t)W*H*4); view=V_MAIN; static_dirty=1; garc.f_d=0; act.gkind=-1; arc_targets(now); garc.f_d=0; compose(now);
         memcpy(snapB,canvas,(size_t)W*H*4); fade_to(now,320);
     }
-    /* hold-for-start + stepper-repeat m. acceleration */
+    /* hold-to-start + stepper repeat w. acceleration */
     if(tch.down&&!tch.moved){
         if(tch.target>=T_ACT0&&tch.target<=T_ACT3){
             ui_anim=1;
@@ -3922,10 +3928,10 @@ static void ui_update(ms_t now){
     if(sav.active||tr.type||tch.scrolling) ui_anim=1;
 }
 
-/* ================= tegning: fælles dele ================= */
-/* Ordmærket: BRAND_WORD + "+"-badge. Store skrifter (versalhøjde >= 24 px): crema-skive med
- * mørkt plus, hævet som et superscript. Små skrifter: plus-glyffen i accent-farven.
- * brand_at() returnerer x efter mærket (inkl. normal bogstav-luft), så tekst kan fortsætte. */
+/* ================= drawing: shared parts ================= */
+/* The wordmark: BRAND_WORD + "+" badge. Large fonts (cap height >= 24 px): crema disc with
+ * a dark plus, raised like a superscript. Small fonts: the plus glyph in the accent colour.
+ * brand_at() returns x after the mark (incl. normal letter spacing), so text can continue. */
 static int brand_disc(int f){ return FS[f].cap>=24; }
 static float brand_wf(int f){
     if(!brand_disc(f)) return text_wf(PRODUCT,f);
@@ -3949,7 +3955,7 @@ static void draw_dots(int y){
 }
 static void draw_pill_btn(Rect r,const char*txt,int font,uint32_t bg_t,uint32_t bg_b,uint32_t fg,int press){
     int w=r.x1-r.x0,h=r.y1-r.y0;
-    rrect_g(r.x0,r.y0+2,w,h,h/2.f,rgb(0,0,0),rgb(0,0,0),70);              /* blød skygge */
+    rrect_g(r.x0,r.y0+2,w,h,h/2.f,rgb(0,0,0),rgb(0,0,0),70);              /* soft shadow */
     rrect_g(r.x0,r.y0,w,h,h/2.f,bg_t,bg_b,255);
     if(press) rrect(r.x0,r.y0,w,h,h/2.f,rgb(255,255,255),36);
     text_c((r.x0+r.x1)/2,r.y0+(h-(int)FS[font].cap)/2,txt,font,fg,255);
@@ -3982,12 +3988,12 @@ static void overlays_draw(ms_t now){
     set_clip(FULL);
 }
 
-/* ================= side: HJEM ================= */
+/* ================= page: HOME ================= */
 enum { W_CHIP=1, W_LABEL, W_HERO, W_SUB, W_CHART, W_STATS, W_ACT, W_FOOT, W_LIST, W_SCROLL, W_DHERO, W_DCHG, W_MINUS, W_PLUS, W_CANCEL, W_SAVE, W_DIAG, W_SPL, W_XNOTE, W_XFOOT, W_BYE, W_GEAR, W_BACKCH, W_OFF };
-/* v6.9: seneste chart-skala (state-JSON "chart" + selftest) */
+/* v6.9: latest chart scale (state JSON "chart" + selftest) */
 static struct { int mode,active,full,top,raw_max,disp_max,ticks,bticks,n,clip,na; } cst;
 static int cmp_int(const void*a,const void*b){ int x=*(const int*)a,y=*(const int*)b; return (x>y)-(x<y); }
-/* v6.10: chartet, når det viser tryk (seneste tegning: aktivt, mode 0), og BAR-feltet under bryg er tryk-mål for grundlags-toasten */
+/* v6.10: the chart, when it shows pressure (latest drawing: active, mode 0), and the BAR field during brew are tap targets for the basis toast */
 static int pinfo_hit(int x,int y){
     if(cst.active&&cst.mode==0&&in_r(x,y,118,240,244,54)) return 1;
     return (hm.eff==PH_PRE||hm.eff==PH_EXT)&&in_r(x,y,CX-STAT_PITCH/2,298,STAT_PITCH,40);
@@ -3995,65 +4001,65 @@ static int pinfo_hit(int x,int y){
 static void draw_chart(Rect r,ms_t now,const HomeM*m){
     int x0=r.x0+4, w=r.x1-r.x0-8, yb=r.y1-5, h=r.y1-r.y0-20, raw=cd.raw;
     static int c1[260], c2[260], cr[260], ci[260], vs[GN], rs[GN];
-    /* serie-valg pr. fase: bryg/vand = tryk (flade) + vægt (linje); kværn = vægt; damp = mælk-temp */
+    /* series choice per phase: brew/water = pressure (area) + weight (line); grind = weight; steam = milk temp */
     int mode=(m->eff==PH_GRIND)?1:(m->eff==PH_STEAM?2:0);
     for(int i=0;i<w;i++){ c1[i]=-1; c2[i]=-100000; cr[i]=-1; ci[i]=-1; }
     ms_t t0=now-40000; int m1=0,m2=0,mr=0,nv=0,nact=0;
     for(int i=0;i<g_n;i++){
         int idx=(g_head+GN-g_n+i)%GN; ms_t t=g_t[idx]; if(t<t0||t>now) continue;
         int c=(int)((t-t0)*(w-1)/40000); if(c<0||c>=w) continue;
-        int r1= mode==1? (g_w[idx]<0?0:g_w[idx]) : (mode==2? (g_m[idx]>200?g_m[idx]-200:0) : g_p[idx]);          /* rå */
-        /* v6.9: tryk-kurven (mode 0) tegnes kun for samples under bryg/præ-inf./vand (g_a). Uden for aktiviteten er ord 51
-         * vedligehold-/pumpe-pulser (BREW.md §5-7, STEAMLIVE.md §5.3) — de vises som små streger på grundlinjen. */
+        int r1= mode==1? (g_w[idx]<0?0:g_w[idx]) : (mode==2? (g_m[idx]>200?g_m[idx]-200:0) : g_p[idx]);          /* raw */
+        /* v6.9: the pressure curve (mode 0) is drawn only for samples during brew/pre-inf./water (g_a). Outside the activity, word 51 is
+         * maintenance/pump pulses (BREW.md §5-7, STEAMLIVE.md §5.3) — they are shown as small ticks on the baseline. */
         int ia= mode!=0||g_a[idx];
-        int v1= raw? r1 : (!ia? 0 : (int)lroundf(mode==1? fmaxf(wdb(g_wd[idx]),0) : (mode==2? fmaxf(g_md[idx]-200,0) : g_pd[idx])));   /* det der tegnes (vægt: dødbånd) */
+        int v1= raw? r1 : (!ia? 0 : (int)lroundf(mode==1? fmaxf(wdb(g_wd[idx]),0) : (mode==2? fmaxf(g_md[idx]-200,0) : g_pd[idx])));   /* what is drawn (weight: deadband) */
         if(ia){ if(r1>cr[c]) cr[c]=r1; } else if(r1>ci[c]) ci[c]=r1;
         if(r1>mr) mr=r1; if(mode==0&&g_a[idx]) nact++;
         if(v1>c1[c]) c1[c]=v1; if(v1>m1) m1=v1;
         vs[nv]=v1; rs[nv]=raw||ia?r1:0; nv++;
         if(mode==0){ int w2=raw?g_w[idx]:(int)lroundf(wdb(g_wd[idx])); if(w2>c2[c]) c2[c]=w2; if(w2>m2) m2=w2; }
     }
-    int active=phase_active(m->ph)||m->ph==PH_DONE||(mode==0&&(raw?mr>=40:nact>0));   /* v6.9: ro-chartet er "aktivt", når vinduet har et bryg/vand */
+    int active=phase_active(m->ph)||m->ph==PH_DONE||(mode==0&&(raw?mr>=40:nact>0));   /* v6.9: the idle chart is "active" when the window contains a brew/water */
     cst.mode=mode; cst.active=active; cst.raw_max=mr; cst.disp_max=m1; cst.n=nv; cst.ticks=0; cst.bticks=0; cst.clip=0; cst.na=0;
     if(!active){
         for(int x=x0+2;x<x0+w;x+=8) hspan(yb,x,x+3,C_SURF3,255);
-        if(!raw) for(int i=0;i<w;i++) if(mode==0&&ci[i]>=40){ cst.bticks++; for(int yy=yb-4;yy<yb;yy++) pset(x0+i,yy,C_DIS,200); }   /* pulser i ro: små streger på grundlinjen */
-        if(m->hint1[0]){ text_c(CX,r.y0+8,m->hint1,F_XS,m->hc1,255); text_c(CX,r.y0+26,m->hint2,F_XS,C_TXT3,255); }   /* v6.11: hint i stedet for "INGEN AKTIVITET" */
+        if(!raw) for(int i=0;i<w;i++) if(mode==0&&ci[i]>=40){ cst.bticks++; for(int yy=yb-4;yy<yb;yy++) pset(x0+i,yy,C_DIS,200); }   /* pulses at rest: small ticks on the baseline */
+        if(m->hint1[0]){ text_c(CX,r.y0+8,m->hint1,F_XS,m->hc1,255); text_c(CX,r.y0+26,m->hint2,F_XS,C_TXT3,255); }   /* v6.11: hint instead of "NO ACTIVITY" */
         else text_c(CX,r.y0+17,m->hint2,F_XS,C_TXT3,255);
         cst.full=cst.top=0;
         return;
     }
     hspan(yb,x0,x0+w,C_LINE,255);
-    int stgt=steam_target(), tline=(mode==1)||(mode==2&&m->sk!=SK_WAND);   /* wand/flush har intet mål: ingen mål-linje */
+    int stgt=steam_target(), tline=(mode==1)||(mode==2&&m->sk!=SK_WAND);   /* wand/flush has no target: no target line */
     int floor1= mode==0? 400 : (mode==1? sv(S_GRINDW) : stgt-200);
     int full1=floor1; float top;
     if(raw||cd.scale==CS_MAX){ if(m1>full1) full1=m1; if(full1<1) full1=1; top=full1*1.08f; }   /* v6.8 */
     else {
         int lv=0;
-        if(cd.scale==CS_PCT){ int na=0; for(int i=0;i<nv;i++) if(rs[i]>=(mode==0?40:1)) vs[na++]=rs[i];   /* p90 af de AKTIVE rå samples */
+        if(cd.scale==CS_PCT){ int na=0; for(int i=0;i<nv;i++) if(rs[i]>=(mode==0?40:1)) vs[na++]=rs[i];   /* p90 of the ACTIVE raw samples */
                               if(na>0){ qsort(vs,(size_t)na,sizeof vs[0],cmp_int); lv=vs[(na-1)*cd.pct/100]; } cst.na=na; }
-        else { int k=cd.hold<1?1:cd.hold; for(int i=k-1;i<nv;i++){ int mn=rs[i]; for(int j=1;j<k;j++) if(rs[i-j]<mn) mn=rs[i-j]; if(mn>lv) lv=mn; } }   /* højeste niveau HOLDT i k samples */
+        else { int k=cd.hold<1?1:cd.hold; for(int i=k-1;i<nv;i++){ int mn=rs[i]; for(int j=1;j<k;j++) if(rs[i-j]<mn) mn=rs[i-j]; if(mn>lv) lv=mn; } }   /* highest level HELD for k samples */
         if(full1<1) full1=1;
         top=fmaxf(full1*1.08f,lv*cd.head); if(lv>full1) full1=lv;
     }
     cst.full=full1; cst.top=(int)top;
     float s1=h/top, s2=h/((m2<100?100:m2)*1.08f);
     uint32_t pc=m->hi;
-    if(tline){  /* mål-linje (auto-stop-niveau) */
+    if(tline){  /* target line (auto-stop level) */
         int ty=yb-(int)((mode==1?sv(S_GRINDW):stgt-200)*s1);
         for(int x=x0;x<x0+w;x+=7) hspan(ty,x,x+3,C_TXT2,200);
     }
     int last=-1; float ly=0, ytop=(float)(yb-h);
     for(int i=0;i<w;i++){
         if(c1[i]<0) continue;
-        float y=yb-c1[i]*s1; if(y<ytop){ y=ytop; cst.clip++; }   /* v6.9: over toppen -> klippes i loftet (v6.8-skalaen kommer aldrig herop) */
+        float y=yb-c1[i]*s1; if(y<ytop){ y=ytop; cst.clip++; }   /* v6.9: above the top -> clipped at the ceiling (the v6.8 scale never gets up here) */
         for(int yy=(int)y;yy<yb;yy++) pset(x0+i,yy,pc,22+(yy-(int)y<40?40-(yy-(int)y):0));
         if(last>=0&&i-last<=3) capsule(x0+last+0.5f,ly,x0+i+0.5f,y,0.9f,pc,255);
         last=i; ly=y;
     }
     if(!raw) for(int i=0;i<w;i++){
-        if(cr[i]>top){ cst.ticks++; for(int yy=yb-h;yy<yb-h+3;yy++) pset(x0+i,yy,pc,170); }               /* rå sample over toppen: lille streg lige under loftet (ikke i overskrifterne) */
-        if(ci[i]>=40){ cst.bticks++; for(int yy=yb-4;yy<yb;yy++) pset(x0+i,yy,C_DIS,200); } }           /* pulser uden for aktiviteten: grundlinjen */
+        if(cr[i]>top){ cst.ticks++; for(int yy=yb-h;yy<yb-h+3;yy++) pset(x0+i,yy,pc,170); }               /* raw sample above the top: small tick just below the ceiling (not in the headings) */
+        if(ci[i]>=40){ cst.bticks++; for(int yy=yb-4;yy<yb;yy++) pset(x0+i,yy,C_DIS,200); } }           /* pulses outside the activity: the baseline */
     last=-1;
     if(mode==0) for(int i=0;i<w;i++){
         if(c2[i]<=-100000) continue; int v=c2[i]<0?0:c2[i]; float y=yb-v*s2;
@@ -4061,20 +4067,20 @@ static void draw_chart(Rect r,ms_t now,const HomeM*m){
         last=i; ly=y;
     }
     { const char*cap=TR(mode==0?TX_C_PRESS:(mode==1?TX_C_WEIGHT:TX_C_MILK)); text_at(r.x0+4,r.y0+1,cap,F_XS,pc,235); }
-    if(raw) text_r(r.x1-4,r.y0+1,TR(TX_C_RAW),F_XS,C_WARN,235);                  /* v6.9: rå visning er markeret (i stedet for højre-overskriften) */
+    if(raw) text_r(r.x1-4,r.y0+1,TR(TX_C_RAW),F_XS,C_WARN,235);                  /* v6.9: the raw view is marked (instead of the right-hand heading) */
     else if(mode==0||tline) text_r(r.x1-4,r.y0+1,TR(mode==0?TX_C_WEIGHT:TX_C_TARGET),F_XS,C_TXT2,235);
 }
-/* v6.11: underlinjen i ro (MÅL 87.0°, INGEN FORBINDELSE …, fejl i klart sprog) er skærmens vigtigste besked -> F_S, når den kan
- * stå i feltet; under aktiviteter (AUTO-STOP VED …) og ved for lang tekst F_XS som før */
+/* v6.11: the sub-line at idle (TARGET 87.0°, NO CONNECTION …, errors in plain language) is the screen's most important message -> F_S when it
+ * fits in the field; during activities (AUTO-STOP AT …) and for too-long text F_XS as before */
 static int sub_font(const HomeM*m){ return (!phase_active(m->ph)&&m->ph!=PH_DONE&&text_wf(m->sub,F_S)<=SUB_W-8)?F_S:F_XS; }
-/* v6.11: tandhjul (indstillinger) tegnet med primitiver — ingen ny glyf i fonten */
+/* v6.11: gear (settings) drawn with primitives — no new glyph in the font */
 static void draw_gear(float cx,float cy,float r,uint32_t c,uint32_t hole){
     for(int k=0;k<8;k++){ float a=k*(float)M_PI/4.f, ca=cosf(a), sa=sinf(a); capsule(cx+ca*r*0.55f,cy+sa*r*0.55f,cx+ca*r*0.92f,cy+sa*r*0.92f,r*0.16f,c,255); }
     disc(cx,cy,r*0.70f,c,255); disc(cx,cy,r*0.30f,hole,255);
 }
 static void draw_home(ms_t now){
     const HomeM*m=&hm; uint32_t h; char b[64];
-    /* fase-chip (+ CRC-advarsel) */
+    /* phase chip (+ CRC warning) */
     int crc=now-last_bad_ms<10000&&rx_bad>0;
     h=hi(hs(H0,m->chip),crc?(int)rx_bad:0);
     if(W_begin(W_CHIP,R(110,74,260,32),h)){
@@ -4084,8 +4090,8 @@ static void draw_home(ms_t now){
         if(crc){ snprintf(b,sizeof b,TR(TX_H_CRC),rx_bad); int cw2=text_w(b,F_XS)+20; rrect(x+w+8,78,cw2,24,12,mix(C_SURF,C_WARN,44),255); text_at(x+w+18,85,b,F_XS,C_WARN,255); }
         W_end();
     }
-    /* v6.6: under samtidig damp står damp-mærket (DAMP·WAND / DAMP·AUTO) på label-linjen — hoved-aktivitetens
-     * mål står fortsat i under-linjen ("AUTO-STOP VED … G"), så begge aktiviteter er navngivet på skærmen */
+    /* v6.6: during concurrent steam the steam badge (STEAM·WAND / STEAM·AUTO) sits on the label line — the main activity's
+     * target stays in the sub-line ("AUTO-STOP AT … G"), so both activities are named on screen */
     if(W_begin(W_LABEL,R(110,110,260,18),hi(hs(hs(H0,m->label),m->badge?m->badge:""),m->conc))){
         if(m->badge){
             uint32_t sc=ph_hi(PH_STEAM); int bw=text_w(m->badge,F_XS)+30, bx=CX-bw/2;
@@ -4109,21 +4115,21 @@ static void draw_home(ms_t now){
         for(int i=0;i<3;i++){ int x=CX+(i-1)*STAT_PITCH; text_c(x,300,m->sl[i],F_XS,C_TXT3,255); text_c(x,317,m->svv[i],F_M,C_TXT,255); }
         W_end();
     }
-    /* aktions-række */
+    /* action row */
     int running=phase_active(m->ph); int akind=m->ph==PH_GRIND?0:(m->ph==PH_WATER?2:(m->ph==PH_STEAM?3:1));
-    int st_on=stm.kind!=SK_NONE, sk[2], sn=stop_btns(now,sk);   /* v6.6: damp-STOP kun for latchet damp; v6.13: + STOP for kværn/bryg/vand */
+    int st_on=stm.kind!=SK_NONE, sk[2], sn=stop_btns(now,sk);   /* v6.6: steam STOP only for latched steam; v6.13: + STOP for grind/brew/water */
     float hp=0; int hk=-1;
     if(tch.down&&!tch.moved&&tch.target>=T_ACT0&&tch.target<=T_ACT3){ hk=tch.target-T_ACT0; hp=clampf((now-tch.t0)/(float)HOLD_MS,0,1); }
     h=hi(hi(hi(hi(H0,m->ph),hk),(int)(hp*40)),act.pending); h=hi(h,pressed(T_STOP)); h=hi(h,pressed(T_STOPS)); h=hi(h,sn*25+(sk[0]+1)*5+sk[1]+1); h=hi(h,stm.kind); if(running) h=hi(h,(int)((now/66)&0x7FFFFFFF)); h=hi(h,sv(S_GRINDMODE)*4+sv(S_HOTMODE)); for(int i=0;i<NSET;i++) h=hi(h,set_oor(&SET[i]));
-    if(W_begin(W_ACT,R(92,340,296,64),h)){                        /* v6.13: 296 bred (to STOP-knapper); v6.6-v6.12: 256 */
+    if(W_begin(W_ACT,R(92,340,296,64),h)){                        /* v6.13: 296 wide (two STOP buttons); v6.6-v6.12: 256 */
         if(sn){
             for(int i=0;i<sn;i++) draw_pill_btn(stop_pill(sn,i),TR(STOP_BTN[sk[i]]),stop_font(sn),rgb(120,40,44),rgb(92,28,34),rgb(255,214,214),pressed(i?T_STOPS:T_STOP));
         } else {
             for(int i=0;i<4;i++){
                 int en=!running&&!act_guard(i,now); uint32_t ac=ph_hi(ACT_PH[i]); int pr=(hk==i);
-                if(running&&(i==akind||(i==ACT_STEAM&&st_on))){   /* aktiv aktivitet (v6.6: også damp oven i en anden): fyldt knap + pulserende ring */
+                if(running&&(i==akind||(i==ACT_STEAM&&st_on))){   /* active activity (v6.6: also steam on top of another): filled button + pulsing ring */
                     uint32_t on_c=(i==ACT_STEAM)?ph_hi(PH_STEAM):m->hi;
-                    float pu=0.5f+0.5f*sinf((float)(now&0xFFFFFF)/260.f);   /* v6.6: fasen tages af de nederste 24 bit — en float kan ikke holde et ur paa flere doegn i ms */
+                    float pu=0.5f+0.5f*sinf((float)(now&0xFFFFFF)/260.f);   /* v6.6: the phase is taken from the lower 24 bits — a float can't hold a clock of several days in ms */
                     ring(ACT_X[i],ACT_Y,27.5f+pu*2,29.5f+pu*2,on_c,(int)(150-90*pu));
                     disc(ACT_X[i],ACT_Y,25,on_c,255);
                     float iw2=text_wf(ACT_ICON[i],F_IC); text_at(ACT_X[i]-iw2/2,ACT_Y-10,ACT_ICON[i],F_IC,rgb(16,18,22),255);
@@ -4139,8 +4145,8 @@ static void draw_home(ms_t now){
         }
         W_end();
     }
-    if(W_begin(W_FOOT,R(180,408,120,24),hi(H0,page))){ draw_dots(420); W_end(); }   /* v6.8: kun side-prikkerne (som de andre sider) — ingen REVERT-pille */
-    /* v6.11: synlig vej til indstillingerne (før kun swipe / usynlige kant-zoner): tandhjuls-knap under prikkerne */
+    if(W_begin(W_FOOT,R(180,408,120,24),hi(H0,page))){ draw_dots(420); W_end(); }   /* v6.8: only the page dots (like the other pages) — no REVERT pill */
+    /* v6.11: visible path to the settings (before: only swipe / invisible edge zones): gear button below the dots */
     if(W_begin(W_GEAR,R(CX-22,GEAR_Y-20,44,40),hi(H0,pressed(T_GEAR)))){
         int pr=pressed(T_GEAR); uint32_t bg=pr?C_SURF3:C_SURF2;
         disc(CX,GEAR_Y+1,15,rgb(0,0,0),60); disc(CX,GEAR_Y,15,bg,255); ring(CX,GEAR_Y,14,15.2f,C_LINE,255);
@@ -4148,8 +4154,8 @@ static void draw_home(ms_t now){
     }
 }
 
-/* ================= side: SETTINGS-LISTE ================= */
-/* HJEM: diskret titellinje øverst inden for gauge-ringen — ordmærket m. "+"-badge */
+/* ================= page: SETTINGS LIST ================= */
+/* HOME: discreet title line at the top inside the gauge ring — the wordmark w/ "+" badge */
 #define HOME_BRAND_Y 54
 static void static_home(void){ brand_c(CX,HOME_BRAND_Y,F_XS,C_TXT3,255); }
 static void static_list(void){
@@ -4157,7 +4163,7 @@ static void static_list(void){
     text_c(CX,38,TR(TIER_NAME[t]),F_M,C_TXT,255);
     text_c(CX,65,TR(TIER_SUB[t]),F_XS,C_TXT3,255);
 }
-/* bløde kanter: fade mod baggrund øverst/nederst i et scroll-felt */
+/* soft edges: fade to background at top/bottom of a scroll field */
 static void edge_fade(Rect vr,int top,int bottom){
     for(int j=0;j<14;j++){
         int a=255-j*255/14;
@@ -4169,7 +4175,7 @@ static void edge_fade(Rect vr,int top,int bottom){
         }
     }
 }
-/* scroll-indikator: kort bue i højre kant */
+/* scroll indicator: short arc at the right edge */
 static void draw_scroll_ind(float content_h){
     float mx=scroll_max(page); int sc=(int)lroundf(scroll[page]);
     if(W_begin(W_SCROLL,R(444,140,30,200),hi(hi(hi(H0,sc),(int)mx),page))){
@@ -4181,16 +4187,16 @@ static void draw_scroll_ind(float content_h){
         W_end();
     }
 }
-/* v6.2: tekster til system-handlings-rækkerne nederst på SYSTEM (delt m. selftestens layout-tjek) */
-/* kort = liste-rækkens underlinje (<= 300 px); lang = detalje-visningens note m. den faktiske sti */
+/* v6.2: texts for the system-action rows at the bottom of SYSTEM (shared w/ the selftest's layout check) */
+/* short = the list row's sub-line (<= 300 px); long = the detail view's note w/ the actual path */
 static const char* boot_lock_text(int l,int lng){
     if(l==BL_NOMOUNT) return TR(lng?TX_BL_NOMOUNT_L:TX_BL_NOMOUNT);
     if(l==BL_NOBIN)   return TR(lng?TX_BL_NOBIN_L:TX_BL_NOBIN);
     return TR(lng?TX_BL_VENDOR_L:TX_BL_VENDOR);
 }
-/* BOOT.md §9.1: "findes -> vores UI (B) ved boot; findes ikke -> original (A) ved boot" — men aldrig
- * "vores UI", hvis slot B ikke er mountet (så starter A) eller ikke indeholder ourui. Fra v6.3
- * står produktnavnet i stedet for "vores UI". */
+/* BOOT.md §9.1: "exists -> our UI (B) at boot; does not exist -> original (A) at boot" — but never
+ * "our UI" if slot B is not mounted (then A starts) or does not contain ourui. From v6.3
+ * the product name is shown instead of "our UI". */
 static const char* boot_state_text(void){
     int k=boot_next_kind();
     return TR(k==BN_OURS?TX_BS_OURS:(k==BN_ORIGINAL?TX_BS_ORIG:TX_BS_SLOTB));
@@ -4204,7 +4210,7 @@ static void xrow_text(int x,const char**label,const char**sub,const char**val,in
         *sub=TR(*lock?TX_SW_LOCK:TX_X_SWITCH_SUB);
     }
 }
-/* liste-række: skrift til en enum-værdi — størst mulige der kan stå til højre for label'en */
+/* list row: font for an enum value — the largest that fits to the right of the label */
 static int row_val_font(const char*label,const char*val,int xr,int*room){
     *room=xr-(94+text_w(label,F_S)+12);
     if(text_w(val,F_M)<=*room) return F_M;
@@ -4223,18 +4229,18 @@ static void draw_list(ms_t now){
             int i=tier_item(t,k); const Setting*s=&SET[i]; int lock=(s->flags&SF_LOCK)!=0;
             int oor=set_oor(s); const char*lab=TR(s->label);
             rrect_g(72,y,336,ROW_H,16,k==prow?C_SURF3:C_SURF2,k==prow?C_SURF2:C_SURF,255);
-            if(oor) rrect(72,y,336,ROW_H,16,C_ERR,34);                                        /* uden for spec: rød tone */
+            if(oor) rrect(72,y,336,ROW_H,16,C_ERR,34);                                        /* out of spec: red tint */
             text_at(94,y+18,lab,F_S,lock?C_TXT2:C_TXT,255);
             set_fmt(i,s->val,b,sizeof b-4); const char*u=set_unit(i);
             int xr=lock?388:372;
             if(*u&&s->kind==K_NUM){ int uw=text_w(u,F_XS); text_r(xr,y+21,u,F_XS,C_TXT3,255); xr-=uw+6; }
             int vf=F_M, room=0;
-            if(s->kind==K_ENUM){ vf=row_val_font(lab,b,xr,&room); if(vf==F_XS) fit_text(b,F_XS,room); }   /* lange enum-navne: M -> S -> XS -> … */
+            if(s->kind==K_ENUM){ vf=row_val_font(lab,b,xr,&room); if(vf==F_XS) fit_text(b,F_XS,room); }   /* long enum names: M -> S -> XS -> … */
             text_r(xr,y+(vf==F_M?16:(vf==F_S?18:20)),b,vf,oor?C_ERR:(lock?C_TXT3:C_ACC),255); xr-=text_w(b,vf);
-            if(s->hint&&!lock&&!oor) text_r(xr-7,y+21,"≈",F_XS,C_WARN,255);                   /* skøn-markør */
+            if(s->hint&&!lock&&!oor) text_r(xr-7,y+21,"≈",F_XS,C_WARN,255);                   /* estimate marker */
             if(!lock) text_at(380,y+19,">",F_XS,C_TXT3,255);
         }
-        if(nx){   /* v6.2: system-handlinger — to-linjers rækker (label + forklaring) under en overskrift */
+        if(nx){   /* v6.2: system actions — two-line rows (label + explanation) under a heading */
             int yc=LIST_Y0+n*ROW_P-8+14-sc;
             if(yc+11>=LIST_VY0&&yc<=LIST_VY1){
                 const char*cap=TR(TX_X_CAP); int tw=text_w(cap,F_XS);
@@ -4258,26 +4264,26 @@ static void draw_list(ms_t now){
     if(W_begin(W_FOOT,R(180,408,120,24),hi(H0,page))){ draw_dots(420); W_end(); }
 }
 
-/* ================= side: STEPPER-DETALJE ================= */
-/* tekster til detalje-visningen (delt m. selftestens layout-tjek) */
+/* ================= page: STEPPER DETAIL ================= */
+/* texts for the detail view (shared w/ the selftest's layout check) */
 static void detail_text(int i,char*l,size_t n,const char**l1,const char**l2){
     const Setting*s=&SET[i]; char a[24],b[24]; int lock=(s->flags&SF_LOCK)!=0, sens=(s->flags&SF_SENSOR)!=0;
     if(sens) snprintf(l,n,"%s",TR(TX_D_MEASURED));
     else if(lock) snprintf(l,n,"%s",TR(TX_D_NOEDIT));
     else if(s->kind==K_ENUM){ if(s->max-s->min==1) snprintf(l,n,"%s / %s",TR(s->opts[0]),TR(s->opts[1])); else snprintf(l,n,TR(TX_D_NOPTS),s->max-s->min+1); }
     else { const char*u=set_unit(i); set_fmt(i,s->lo,a,sizeof a); set_fmt(i,s->hi,b,sizeof b); snprintf(l,n,*u?"%s - %s %s":"%s - %s",a,b,u); }
-    /* reload-semantik (PARITY §1.4): controlleren får værdien ved GEM; stock-UI'et læser
-     * config KUN ved opstart og boot-pusher den så selv til controlleren. */
+    /* reload semantics (PARITY §1.4): the controller gets the value on SAVE; the stock UI reads
+     * config ONLY at startup and then boot-pushes it to the controller itself. */
     if(sens){ *l1=TR(TX_D_LIVE); *l2=TR(TX_D_SAMESENSOR); }
     else if(lock){ *l1=TR(TX_D_FROMCFG); *l2=TR(TX_D_STOCKEDIT); }
-    else if(s->flags&SF_LOCAL){ *l1=TR(TX_D_LANG_L1); *l2=TR(TX_D_LANG_L2); }           /* v6.3: egen fil; stock-UI'ets sprog er et andet felt */
+    else if(s->flags&SF_LOCAL){ *l1=TR(TX_D_LANG_L1); *l2=TR(TX_D_LANG_L2); }           /* v6.3: own file; the stock UI's language is a different field */
     else { *l1=TR(s->mcu!=M_NONE?TX_D_MCU_CFG:TX_D_CFGONLY); *l2=TR(TX_D_STOCK_RESTART); }
 }
 static void static_detail(void){
     const Setting*s=&SET[sel]; char l[72]; const char*l1,*l2; int lock=(s->flags&SF_LOCK)!=0, sens=(s->flags&SF_SENSOR)!=0;
     detail_text(sel,l,sizeof l,&l1,&l2);
     text_c(CX,82,TR(s->label),F_S,C_TXT2,255);
-    /* interval-linje (+ synlig hint når max/mapping er et skøn, PARITY §6.6) */
+    /* range line (+ visible hint when max/mapping is an estimate, PARITY §6.6) */
     if(s->hint&&!lock){
         const char*hint=TR(s->hint);
         float w1=text_wf(l,F_XS), w2=text_wf(" · ",F_XS), w3=text_wf(hint,F_XS); float x=CX-(w1+w2+w3)/2;
@@ -4287,8 +4293,8 @@ static void static_detail(void){
     text_c(CX,398,l1,F_XS,C_TXT3,255);
     text_c(CX,416,l2,F_XS,C_TXT3,255);
 }
-/* v6.11: luk-chevron øverst i detalje-/system-visningen (tryk = ANNULLER/TILBAGE; stryg ned gør det samme). Ned-pilen er
- * "træk ned for at lukke"-håndtaget; tryk-feltet er 88 x 46 px (BACK_*). */
+/* v6.11: close chevron at the top of the detail/system view (tap = CANCEL/BACK; swiping down does the same). The down arrow is
+ * the "pull down to close" handle; the tap field is 88 x 46 px (BACK_*). */
 static void draw_backch(void){
     int pr=pressed(T_BACK);
     if(W_begin(W_BACKCH,R(CX-26,42,52,30),hi(H0,pr))){
@@ -4304,7 +4310,7 @@ static void draw_detail(ms_t now){
     int eoor=!lock&&!set_valid(s,edit_val);
     if(W_begin(W_DHERO,R(122,128,236,90),hi(hs(hs(H0,b),u),eoor))){
         float uw=(*u&&s->kind==K_NUM)?text_wf(u,F_M)+10:0;
-        int f=(s->kind==K_NUM)?F_XXL:F_XL;                       /* største skrift der passer i feltet */
+        int f=(s->kind==K_NUM)?F_XXL:F_XL;                       /* largest font that fits in the field */
         while(f>F_M&&text_wf(b,f)+uw>228) f=(f==F_XXL)?F_XL:(f==F_XL?F_L:F_M);
         float nw=text_wf(b,f); float x=CX-(nw+uw)/2; int y=173-(int)FS[f].cap/2;
         text_at(x,y,b,f,eoor?C_ERR:(lock?C_TXT2:C_TXT),255);
@@ -4344,10 +4350,10 @@ static void draw_detail(ms_t now){
     }
 }
 
-/* ================= v6.2: SYSTEM-HANDLING (BOOT-UI / SKIFT / EXIT-PÅMINDELSE) =================
- * Samme geometri som stepper-detaljen: titel 82, underlinje 106, hero 128..218, status 228,
- * note 254, knapper 286..346, to fodlinjer 398/416. Al tekst hentes fra sys_text(), som
- * selftesten også måler mod cirklens korde. */
+/* ================= v6.2: SYSTEM ACTION (BOOT UI / SWITCH / EXIT REMINDER) =================
+ * Same geometry as the stepper detail: title 82, sub-line 106, hero 128..218, status 228,
+ * note 254, buttons 286..346, two footer lines 398/416. All text comes from sys_text(), which
+ * the selftest also measures against the circle's chord. */
 typedef struct { const char*title,*sub,*hero,*status,*note,*l1,*l2,*ok,*cancel; uint32_t c_status,c_note,c_l1; } SysT;
 static void sys_text(SysT*t){
     static char st[96],nt[96],sb[96]; int lock=sys_locked();
@@ -4360,10 +4366,10 @@ static void sys_text(SysT*t){
         else t->status=TR(TX_Y_SAVEDCHOICE);
         t->note=lock?boot_lock_text(bs.lock,1):TR(TX_BH1); if(lock) t->c_note=C_WARN;
         if(lock){ t->l1=TR(bs.flag?TX_Y_FLAG_YES:TX_Y_FLAG_NO); t->l2=TR(TX_Y_FLAG_HANDSOFF); }
-        else { t->l1=TR(TX_BH2); t->l2=TR(TX_BH3); }               /* §9.1-hjælpeteksten */
+        else { t->l1=TR(TX_BH2); t->l2=TR(TX_BH3); }               /* the §9.1 help text */
     } else if(xsel==X_SWITCH){
         int cont=switch_mode()==SWM_CONT;
-        snprintf(sb,sizeof sb,TR(TX_Y_NEXT),boot_next_name());      /* runtime-skiftet rører ikke boot-valget */
+        snprintf(sb,sizeof sb,TR(TX_Y_NEXT),boot_next_name());      /* the runtime switch does not touch the boot choice */
         t->title=TR(TX_X_SWITCH); t->sub=sb; t->hero=TR(TX_BN_ORIGINAL); t->ok=TR(TX_B_SWITCH);
         if(lock){ t->status=TR(TX_D_LOCKED); t->note=TR(TX_SW_LOCK_L); t->c_note=C_WARN; t->l1=TR(TX_Y_NOSTOCK); t->l2=TR(TX_Y_STAYS); return; }
         t->status=TR(cont?TX_Y_CLOSE_CONT:TX_Y_CLOSE_START); t->c_status=C_TXT2;
@@ -4382,8 +4388,8 @@ static void sys_text(SysT*t){
         t->l1=TR(TX_Y_EXIT_F1); t->l2=TR(TX_Y_EXIT_F2); t->c_l1=C_TXT3;
     }
 }
-/* exit-påmindelsens brødtekst (v6.1-integrationsnoten): TX_Y_EXIT_L1 / _L2 + kommandoen TX_Y_EXIT_CMD */
-static int sys_hero_font(const char*hero){ if(xsel==X_BOOTUI) return F_H; int f=F_XL; while(f>F_M&&text_wf(hero,f)>296) f=(f==F_XL)?F_L:F_M; return f; }   /* BOOT-UI: begge valg i SAMME skrift */
+/* the exit reminder's body text (the v6.1 integration note): TX_Y_EXIT_L1 / _L2 + the command TX_Y_EXIT_CMD */
+static int sys_hero_font(const char*hero){ if(xsel==X_BOOTUI) return F_H; int f=F_XL; while(f>F_M&&text_wf(hero,f)>296) f=(f==F_XL)?F_L:F_M; return f; }   /* BOOT UI: both choices in the SAME font */
 static void static_sys(void){
     SysT t; sys_text(&t);
     if(xsel==X_EXIT){
@@ -4405,7 +4411,7 @@ static void draw_sys(ms_t now){
         }
     } else {
         int f=sys_hero_font(t.hero);
-        /* BOOT-UI: hero-feltet må ikke overlappe −/+ (x 46..122 / 358..434) — ellers visker en hero-gentegning knap-kanterne ud */
+        /* BOOT UI: the hero field must not overlap −/+ (x 46..122 / 358..434) — otherwise a hero redraw erases the button edges */
         if(W_begin(W_DHERO,xsel==X_BOOTUI?R(122,128,236,90):R(92,128,296,90),hi(hi(hs(H0,t.hero),lock),xsel))){
             text_c(CX,173-(int)FS[f].cap/2,t.hero,f,lock?C_TXT2:C_TXT,255);
             W_end();
@@ -4439,7 +4445,7 @@ static void draw_sys(ms_t now){
         text_c(CX,398,t.l1,F_XS,t.c_l1,255); text_c(CX,416,t.l2,F_XS,C_TXT3,255); W_end();
     }
 }
-/* sidste frame før runtime-skiftet: bliver stående på skærmen, til stock-UI'et tegner */
+/* last frame before the runtime switch: stays on screen until the stock UI draws */
 static const char* bye_sub(void){ return TR(bye_mode==SWM_CONT?TX_Y_BYE_CONT:TX_Y_BYE_START); }
 static void draw_bye(void){
     if(W_begin(W_BYE,R(60,150,360,180),hi(hi(H0,bye_mode),ui_lang))){
@@ -4451,16 +4457,16 @@ static void draw_bye(void){
     }
 }
 
-/* ================= v6.14: SLUKKER… / SLUKKET / TÆNDER… (tænd/sluk-knappen) =================
- * Sort side, tænd/sluk-symbol (ring m. åbning foroven + streg), titel og én-to linjer. Lyset slukkes 1,5 s efter sluk-trykket
- * (som stock), så SLUKKET-siden ses kun et øjeblik — eller i 8 s efter et tryk på skærmen. */
+/* ================= v6.14: TURNING OFF… / OFF / TURNING ON… (the power button) =================
+ * Black page, power symbol (ring w/ opening at the top + bar), title and one or two lines. The backlight goes off 1.5 s after the off press
+ * (like stock), so the OFF page is only seen for a moment — or for 8 s after a tap on the screen. */
 #define OFF_IC_Y 178
 static void draw_off(ms_t now){
     (void)now; int st=pw.state;
     if(W_begin(W_OFF,R(60,120,360,210),hi(hi(H0,st),ui_lang))){
         uint32_t ic=st==PW_OFF?C_DIS:C_ACC;
-        arc_aa(CX,OFF_IC_Y,30,3.0f,-50,230,ic,255);                                   /* ringen: åben fra -130° til -50° (foroven) */
-        capsule(CX,OFF_IC_Y-40,CX,OFF_IC_Y-6,3.0f,ic,255);                            /* stregen */
+        arc_aa(CX,OFF_IC_Y,30,3.0f,-50,230,ic,255);                                   /* the ring: open from -130° to -50° (at the top) */
+        capsule(CX,OFF_IC_Y-40,CX,OFF_IC_Y-6,3.0f,ic,255);                            /* the bar */
         text_c(CX,232,TR(st==PW_OFFING?TX_PW_OFFING:(st==PW_WAKING?TX_PW_WAKING:TX_PW_OFF)),F_M,st==PW_OFF?C_TXT2:C_TXT,255);
         text_c(CX,268,TR(st==PW_OFFING?TX_PW_SUB_OFFING:(st==PW_WAKING?TX_PW_SUB_WAKING:TX_PW_SUB_OFF)),F_XS,C_TXT3,255);
         if(st==PW_OFF) text_c(CX,290,TR(TX_PW_NOTE_OFF),F_XS,C_DIS,255);
@@ -4468,7 +4474,7 @@ static void draw_off(ms_t now){
     }
 }
 
-/* ================= side: DIAGNOSE ================= */
+/* ================= page: DIAGNOSE ================= */
 static void static_diag(void){
     text_c(CX,38,TR(TX_PG_DIAG),F_M,C_TXT,255);
     text_c(CX,65,TR(TX_PS_DIAG),F_XS,C_TXT3,255);
@@ -4478,16 +4484,16 @@ static void static_diag(void){
 #define DG_FULL_W 336
 #define DG_COL_L 154
 #define DG_COL_R 326
-/* v6.11: celle i -> plads (0..7 = STATUS-blokken øverst, 8..15 = RÅ TÆLLERE); lige = venstre kolonne */
+/* v6.11: cell i -> slot (0..7 = the STATUS block at the top, 8..15 = RAW COUNTERS); even = left column */
 static const signed char DG_SLOT[DG_N]={0,1,8,9,10,2,11,3,4,12,13,14,15,5,6,7};
 static int dg_cell_y(int i){ int k=DG_SLOT[i]; return k<8? DG_Y0+(k/2)*DG_P : DG_RAW+28+((k-8)/2)*DG_P; }
 static const short DG_LAB[DG_N+DG_NB]={TX_DL_LINK,TX_DL_PHASE,TX_DL_RXOK,TX_DL_RXCRC,TX_DL_WORKSTA,TX_DL_E123,TX_DL_CMD6,TX_DL_AWAKE,TX_DL_MAINS,TX_DL_CURRENT,TX_DL_FRAMEMS,TX_DL_MIRROR,TX_DL_CFGMD5,TX_DL_VERSION,TX_DL_BP_A,TX_DL_BP_B,
                                        TX_DL_FLAG,TX_DL_NEXTBOOT,TX_DL_STARTED,TX_DL_SLOTB,TX_DL_SWITCHER,TX_DL_STOCK};
-/* boot-blokkens tekster (delt m. selftesten). v[0..5] = celler, exe/evt = fuldbredde-linjer */
+/* the boot block's texts (shared w/ the selftest). v[0..5] = cells, exe/evt = full-width lines */
 static void diag_boot_text(char v[DG_NB][28],uint32_t col[DG_NB],char*exe,size_t en,char*evt,size_t vn,char*pids,size_t pn){
     for(int i=0;i<DG_NB;i++) col[i]=C_TXT;
     snprintf(v[0],28,"%s",TR(bs.flag?TX_DV_FLAG_YES:TX_DV_FLAG_NO));
-    snprintf(v[1],28,"%s",boot_next_name()); if(bs.flag&&bs.lock!=BL_OK) col[1]=C_WARN;       /* flag sat, men slot B er ikke ourui */
+    snprintf(v[1],28,"%s",boot_next_name()); if(bs.flag&&bs.lock!=BL_OK) col[1]=C_WARN;       /* flag set, but slot B is not ourui */
     snprintf(v[2],28,"%s",TR(bs.self_slot==SLOT_B?TX_DV_SLOTB:(bs.self_slot==SLOT_A?TX_DV_SLOTA:(bs.self_exe[0]?TX_DV_RUNSH:TX_DV_UNKNOWN))));
     snprintf(v[3],28,"%s",TR(bs.lock==BL_OK?TX_DV_B_OK:(bs.lock==BL_NOMOUNT?TX_DV_B_NOMOUNT:(bs.lock==BL_NOBIN?TX_DV_B_NOBIN:TX_DV_B_VENDOR)))); col[3]=bs.lock==BL_OK?C_OK:C_WARN;
     snprintf(v[4],28,"%s",TR(bs.sw_pid?TX_DV_RUNNING:TX_DV_NOTRUNNING)); col[4]=bs.sw_pid?C_OK:C_WARN;
@@ -4496,11 +4502,11 @@ static void diag_boot_text(char v[DG_NB][28],uint32_t col[DG_NB],char*exe,size_t
       snprintf(pids,pn,"%d / %s%s / %s",bs.self_pid,a,bs.n_stock>1?" +":"",b); }
     if(bs.self_exe[0]) snprintf(exe,en-4,LC "%s",bs.self_exe); else snprintf(exe,en-4,"%s",TR(TX_DG_NOEXE));
     utf8_trim(exe); fit_text(exe,F_XS,DG_FULL_W);
-    /* hændelses-teksten kommer ordret fra switcher-daemonens log (boot/switcher.c) og oversættes ikke */
+    /* the event text comes verbatim from the switcher daemon's log (boot/switcher.c) and is not translated */
     snprintf(evt,vn-4,"%s",bs.sw_log==2?bs.sw_evt:TR(bs.sw_log==1?TX_DG_NOEVT:TX_DG_NOLOG));
     utf8_trim(evt); fit_text(evt,F_XS,DG_FULL_W);
 }
-/* v6.5: boot-push-status pr. blok (0 = sub1 len30, 1 = sub112 len3) */
+/* v6.5: boot-push status per block (0 = sub1 len30, 1 = sub112 len3) */
 static const char* bp_text(int blk,uint32_t*col){
     int r=blk?bp.rb:bp.ra, sent=blk?bp.state==BP_B:bp.state==BP_A; *col=C_TXT;
     if(r==BPR_OK){ *col=C_OK; return TR(TX_DV_OK); }
@@ -4511,7 +4517,7 @@ static const char* bp_text(int blk,uint32_t*col){
     if(bp.state==BP_OFF) return TR(TX_DV_BP_OFF);
     return TR(sent?TX_DV_BP_SENT:TX_DV_BP_WAIT);
 }
-/* de 16 øverste celler (delt m. selftesten) */
+/* the top 16 cells (shared w/ the selftest) */
 static void diag_top_text(char v[DG_N][28],uint32_t col[DG_N],ms_t now){
     int up=link_up(now);
     snprintf(v[0],28,"%s",TR(up?TX_DV_OK:TX_DV_DOWN)); snprintf(v[1],28,"%s",act.ph==PH_STEAM?steam_label(stm.kind):ph_name(act.ph));
@@ -4526,22 +4532,22 @@ static void diag_top_text(char v[DG_N][28],uint32_t col[DG_N],ms_t now){
     uint32_t bc[2]; snprintf(v[14],28,"%s",bp_text(0,&bc[0])); snprintf(v[15],28,"%s",bp_text(1,&bc[1]));
     for(int i=0;i<DG_N;i++){ uint32_t c=C_TXT; if(i==0) c=up?C_OK:C_ERR; if(i==3&&(rx_bad||rx_resync)) c=C_WARN; if(i>=14) c=bc[i-14]; if(i==5&&(reg[34]|reg[35]|reg[36])) c=C_ERR; if(i==6&&(wq.n_fail||wq.n_block)) c=C_WARN; if(i==1) c=ph_hi(act.ph); col[i]=c; }
 }
-/* v6.6: celle-label. Efter en re-push hedder boot-push-rækken "RE-PUSH 2 · 1-30" | "112-114" (2 = boot-pushen er sendt
- * forfra to gange efter en MCU-genstart), den første i accent-farven; cellerne viser udfaldet af den SENESTE push.
- * Uden re-push — og for alle andre celler — er label'en tabellens tekst. */
+/* v6.6: cell label. After a re-push the boot-push row is labelled "RE-PUSH 2 · 1-30" | "112-114" (2 = the boot push has been resent
+ * from scratch twice after an MCU restart), the first in the accent colour; the cells show the outcome of the LATEST push.
+ * Without a re-push — and for all other cells — the label is the table's text. */
 static uint32_t diag_label(int i,char*o,size_t n){
     int rc=repush_count(); if(rc>999) rc=999;
     if(i==14&&rc>0){ snprintf(o,n,TR(TX_DL_BP_A_RE),rc); return C_ACC; }
     if(i==15&&rc>0){ snprintf(o,n,"%s",TR(TX_DL_BP_B_RE)); return C_TXT3; }
     snprintf(o,n,"%s",TR(DG_LAB[i])); return C_TXT3;
 }
-/* OM-blokken nederst: hvilket UI-sprog der er aktivt, og hvor det kommer fra */
+/* the ABOUT block at the bottom: which UI language is active, and where it comes from */
 static void diag_lang_text(char*o,size_t n){
     static const short f[]={[LS_DEFAULT]=TX_DG_LANG_DEFAULT,[LS_FILE]=TX_DG_LANG_FILE,[LS_UNKNOWN]=TX_DG_LANG_UNKNOWN,[LS_SESSION]=TX_DG_LANG_SESSION};
     snprintf(o,n,TR(f[lang_src]),TR(TX_UL_EN+ui_lang));
 }
-/* v6.7: NET-linjen (delt m. selftesten): wpa_supplicant-pid / IP / net-vagtens tilstand. F_S; bliver linjen for bred
- * (5-cifret pid + 15-tegns IP + FORBINDER), tegnes den i F_XS, saa den aldrig klippes af cirklen. */
+/* v6.7: the NET line (shared w/ the selftest): wpa_supplicant pid / IP / net watchdog state. F_S; if the line gets too wide
+ * (5-digit pid + 15-char IP + CONNECTING), it is drawn in F_XS so it is never clipped by the circle. */
 static int diag_net_font(const char*t){ return text_wf(t,F_S)<=DG_FULL_W?F_S:F_XS; }
 static void diag_net_text(char*o,size_t n,uint32_t*col){
     char ipb[20],pid[16]="-"; int s=net.on?net.state:NS_OFF;
@@ -4549,8 +4555,8 @@ static void diag_net_text(char*o,size_t n,uint32_t*col){
     snprintf(o,n,"%s / %s / %s",pid,net_ipstr(net.p.ip,ipb,sizeof ipb),TR(TX_NS_OFF+s));
     *col=s==NS_UP?C_OK:(s==NS_OFF?C_TXT2:C_WARN);
 }
-/* v6.10: TRYK · ESTIMAT-blokken (delt m. selftesten): anker-linjen, nu-linjen (rå ord 51 -> ≈bar; over P_EST_MAX en puls —
- * i ro "VEDLIGEHOLD-PULS", under en aktivitet "PULS, IKKE TRYK", aldrig et bar-tal) og note-linje 2 (grænsen) */
+/* v6.10: the PRESSURE · ESTIMATE block (shared w/ the selftest): the anchor line, the now line (raw word 51 -> ≈bar; above P_EST_MAX a pulse —
+ * at idle "MAINTENANCE PULSE", during an activity "PULSE, NO PRESSURE", never a bar value) and note line 2 (the limit) */
 static void diag_press_text(char*anc,size_t an,char*nw,size_t nn,uint32_t*col,char*n2,size_t n2n){
     snprintf(anc,an,TR(TX_DV_PANCH),p_anchor_bar(),P_ANCHOR_RAW,(double)p_k());
     int r=reg[51]; float b=p_bar((float)r);
@@ -4562,14 +4568,14 @@ static void dg_caption(int yc,const char*cap,Rect vr){
     int tw=text_w(cap,F_XS);
     if(yc+11>=vr.y0&&yc<=vr.y1){ text_c(CX,yc,cap,F_XS,C_ACC,255); hspan(yc+5,84,CX-tw/2-12,C_LINE,255); hspan(yc+5,CX+tw/2+12,396,C_LINE,255); }
 }
-/* v6.14: TÆND/SLUK-KNAP-blokkens tekster (delt m. selftesten) */
+/* v6.14: the POWER BUTTON block's texts (shared w/ the selftest) */
 static void diag_pw_text(char st[28],uint32_t*stc,char w0[28],char cnt[28],char key[40],char*node,size_t nn,ms_t now){
     static const short S[4]={TX_DV_PW_ON,TX_DV_PW_OFFING,TX_DV_PW_OFF,TX_DV_PW_WAKING};
     snprintf(st,28,"%s",TR(S[pw.state])); *stc=pw.state==PW_ON?C_OK:(pw.state==PW_OFF?C_TXT2:C_WARN);
     if(link_up(now)&&reg_seen[0]) snprintf(w0,28,"%u",(unsigned)reg[0]); else snprintf(w0,28,"%s",TR(TX_DV_PW_NOREPLY));
     snprintf(cnt,28,"%ld · %ld · %ld",pw.n_press,pw.n_off,pw.n_on);
     if(pw.n_ev) snprintf(key,40,TR(TX_DV_PW_KEY),pw.key_code,pw.key_val,(long)((now-pw.t_key)/1000)); else snprintf(key,40,"%s",TR(TX_DV_PW_NOKEY));
-    if(pw.kbd_ok) snprintf(node,nn,LC "%s",pw.node); else snprintf(node,nn,"%s",TR(TX_DV_PW_NONODE));   /* stien som kode-spaend (smaa bogstaver) */
+    if(pw.kbd_ok) snprintf(node,nn,LC "%s",pw.node); else snprintf(node,nn,"%s",TR(TX_DV_PW_NONODE));   /* the path as a code span (lower case) */
 }
 static void draw_diag(ms_t now){
     char v[DG_N+DG_NB][28]; uint32_t col[DG_N+DG_NB]; char exe[160],evt[128],pids[48],lng[96],nets[64],panc[64],pnow[64],pn2[64]; uint32_t netc,pcol;
@@ -4588,39 +4594,39 @@ static void draw_diag(ms_t now){
             { char lb[48]; uint32_t lc=diag_label(i,lb,sizeof lb); text_c(cx,y,lb,F_XS,lc,255); }
             text_c(cx,y+16,v[i],F_S,col[i],255);
         }
-        dg_caption(DG_BOOT-28-sc,TR(TX_DG_CAP),vr);                               /* sektions-overskrift */
-        for(int k=0;k<3;k++){   /* fuldbredde-linjer: PID'er, exe-sti, seneste skift */
+        dg_caption(DG_BOOT-28-sc,TR(TX_DG_CAP),vr);                               /* section heading */
+        for(int k=0;k<3;k++){   /* full-width lines: PIDs, exe path, latest switch */
             int y=DG_BOOT+(3+k)*DG_P-sc; if(y+30<vr.y0||y>vr.y1) continue;
             text_c(CX,y,TR(k==0?TX_DG_L_PID:(k==1?TX_DG_L_EXE:TX_DG_L_EVT)),F_XS,C_TXT3,255);
             if(k==0) text_c(CX,y+16,pids,F_S,C_TXT,255);
             else text_c(CX,y+16,k==2?evt:exe,F_XS,(k==2&&bs.sw_log!=2)?C_TXT2:C_TXT,255);
         }
-        { int y=DG_BOOT+6*DG_P-sc;                                                  /* v6.7: NET — wpa-pid / IP / tilstand */
+        { int y=DG_BOOT+6*DG_P-sc;                                                  /* v6.7: NET — wpa pid / IP / state */
           if(y+30>=vr.y0&&y<=vr.y1){ text_c(CX,y,TR(TX_DG_L_NET),F_XS,C_TXT3,255); text_c(CX,y+16,nets,diag_net_font(nets),netc,255); } }
-        { int y=DG_GRAPH-sc;                                                        /* v6.9: GRAF — glat / rå (tryk) */
+        { int y=DG_GRAPH-sc;                                                        /* v6.9: GRAPH — smooth / raw (tap) */
           if(y+40>=vr.y0&&y<=vr.y1){ text_c(CX,y,TR(TX_DG_L_GRAPH),F_XS,C_TXT3,255);
               uint32_t gc=cd.raw?C_WARN:C_TXT; rrect(CX-150,y+12,300,26,13,cd.raw?mix(C_SURF,C_WARN,40):C_SURF2,255);
               if(pressed(T_GRAPH)) rrect(CX-150,y+12,300,26,13,rgb(255,255,255),36);
               text_c(CX,y+18,TR(cd.raw?TX_DV_G_RAW:TX_DV_G_SMOOTH),F_XS,gc,255); } }
-        /* v6.10: TRYK · ESTIMAT — anker (pre-infusion i optagelsen = config-tryk), nu-værdi (rå -> ≈bar / puls), forbehold */
+        /* v6.10: PRESSURE · ESTIMATE — anchor (pre-infusion in the capture = config pressure), current value (raw -> ≈bar / pulse), caveat */
         dg_caption(DG_PRESS-sc,TR(TX_DG_PCAP),vr);
         { int y=DG_PRESS+28-sc;
           if(y+30>=vr.y0&&y<=vr.y1){ text_c(CX,y,TR(TX_DG_L_PANCH),F_XS,C_TXT3,255); text_c(CX,y+16,panc,F_S,C_TXT,255); }
           y+=DG_P; if(y+30>=vr.y0&&y<=vr.y1){ text_c(CX,y,TR(TX_DG_L_PNOW),F_XS,C_TXT3,255); text_c(CX,y+16,pnow,F_S,pcol,255); }
           y+=DG_P; if(y+11>=vr.y0&&y<=vr.y1) text_c(CX,y,TR(TX_DG_PNOTE1),F_XS,C_TXT2,255);
           y+=16;   if(y+11>=vr.y0&&y<=vr.y1) text_c(CX,y,pn2,F_XS,C_TXT2,255); }
-        dg_caption(DG_RAW-sc,TR(TX_DG_RAWCAP),vr);                               /* v6.11: RÅ TÆLLERE (cellerne tegnes i løkken ovenfor) */
-        /* v6.14: TÆND/SLUK-KNAP — tilstand, controllerens ord 0, tryk/sluk/tænd, seneste knap-hændelse, node */
+        dg_caption(DG_RAW-sc,TR(TX_DG_RAWCAP),vr);                               /* v6.11: RAW COUNTERS (the cells are drawn in the loop above) */
+        /* v6.14: POWER BUTTON — state, the controller's word 0, press/off/on, latest key event, node */
         dg_caption(DG_PWR-sc,TR(TX_DG_PWCAP),vr);
         { static const short L[4]={TX_DL_PW_STATE,TX_DL_PW_W0,TX_DL_PW_COUNT,TX_DL_PW_LAST}; const char*vv[4]={pst,pw0,pcnt,pkey};
           for(int k=0;k<4;k++){ int cx=(k&1)?DG_COL_R:DG_COL_L, y=DG_PWR+28+(k/2)*DG_P-sc; if(y+30<vr.y0||y>vr.y1) continue;
               text_c(cx,y,TR(L[k]),F_XS,C_TXT3,255); text_c(cx,y+16,vv[k],k==3?F_XS:F_S,k==0?pstc:C_TXT,255); }
           int y=DG_PWR+28+2*DG_P-sc;
           if(y+30>=vr.y0&&y<=vr.y1){ text_c(CX,y,TR(TX_DG_L_PWNODE),F_XS,C_TXT3,255); text_c(CX,y+16,pnode,F_XS,pw.kbd_ok?C_TXT:C_WARN,255); } }
-        /* v6.3: OM — UI-sprog (+ kilde), ordmærke m. version, tagline */
+        /* v6.3: ABOUT — UI language (+ source), wordmark w/ version, tagline */
         dg_caption(DG_ABOUT-sc,TR(TX_DG_ABOUT),vr);
         { int y=DG_ABOUT+28-sc;
-          if(y+30>=vr.y0&&y<=vr.y1){ text_c(CX,y,TR(TX_DG_L_LANG),F_XS,C_TXT3,255); text_c(CX,y+16,lng,F_S,(lang_src==LS_UNKNOWN||lang_src==LS_SESSION)?C_WARN:C_TXT,255); }   /* rav: filen har en ukendt værdi / kunne ikke skrives */
+          if(y+30>=vr.y0&&y<=vr.y1){ text_c(CX,y,TR(TX_DG_L_LANG),F_XS,C_TXT3,255); text_c(CX,y+16,lng,F_S,(lang_src==LS_UNKNOWN||lang_src==LS_SESSION)?C_WARN:C_TXT,255); }   /* amber: the file has an unknown value / could not be written */
           y=DG_ABOUT+76-sc;
           if(y+36>=vr.y0&&y<=vr.y1){
               float w=text_wf(PRODUCT " " OURUI_VERSION,F_S), x=brand_at(CX-w/2,y,F_S,C_TXT,255);
@@ -4634,7 +4640,7 @@ static void draw_diag(ms_t now){
     if(W_begin(W_FOOT,R(180,408,120,24),hi(H0,page))){ draw_dots(420); W_end(); }
 }
 
-/* ================= boot-splash ================= */
+/* ================= boot splash ================= */
 #define SPLASH_W 300
 static void splash_status(char*b,size_t n){ snprintf(b,n,OURUI_VERSION " · %s",TR(cfg_ok?TX_SPL_CFG_OK:TX_SPL_CFG_MISSING)); }
 static void draw_splash(ms_t now){
@@ -4643,7 +4649,7 @@ static void draw_splash(ms_t now){
         int a=(int)(255*clampf(t*3,0,1));
         float y=4*(1-ease_out(clampf(t*2.2f,0,1)));
         float iw=text_wf(IC_BEAN,F_ICL); text_at(CX-iw/2,152+(int)y,IC_BEAN,F_ICL,C_ACC,a);
-        brand_c(CX,204+(int)y,F_XL,C_TXT,a);                       /* ordmærke: MERAKI + "+"-badge */
+        brand_c(CX,204+(int)y,F_XL,C_TXT,a);                       /* wordmark: MERAKI + "+" badge */
         int a2=(int)(255*clampf(t*3-0.6f,0,1)); char b[96];
         text_c(CX,270,TR(TX_TAGLINE),F_XS,C_TXT2,a2);
         splash_status(b,sizeof b); text_c(CX,296,b,F_XS,cfg_ok?C_TXT3:C_WARN,a2);
@@ -4651,11 +4657,11 @@ static void draw_splash(ms_t now){
     }
 }
 
-/* ================= komposition ================= */
+/* ================= composition ================= */
 static void static_build(void){
     memcpy(bgbase,bgpure,(size_t)W*H*4);
     cv=bgbase; set_clip(FULL);
-    if(view==V_OFF) memset(bgbase,0,(size_t)W*H*4);                   /* v6.14: SLUKKET-siden er sort (lyset er alligevel slukket) */
+    if(view==V_OFF) memset(bgbase,0,(size_t)W*H*4);                   /* v6.14: the OFF page is black (the backlight is off anyway) */
     else if(view==V_DETAIL) static_detail();
     else if(view==V_SYS) static_sys();
     else if(view==V_MAIN){
@@ -4688,7 +4694,7 @@ static void compose(ms_t now){
     force_all=0;
 }
 static int tr_was=0;
-/* én UI-frame: opdatér, komponér, present. Returnerer buffer der blev vist. */
+/* one UI frame: update, compose, present. Returns the buffer that was shown. */
 static const uint32_t* ui_frame(ms_t now){
     ui_update(now);
     if(tr.type){ tr_was=1; if(trans_frame(now)) return tbuf; }
@@ -4698,11 +4704,11 @@ static const uint32_t* ui_frame(ms_t now){
     return canvas;
 }
 
-/* protokol-vedligehold: keep-awake = ord1 skrives 0 (FIX: v4 skrev 1 = sleep/drain) */
+/* protocol maintenance: keep-awake = word1 written as 0 (FIX: v4 wrote 1 = sleep/drain) */
 static ms_t ka_next=0;
 static void proto_keepawake(ms_t now,int first){
     if(ro_mode) return;
-    if(pw.state!=PW_ON) return;            /* v6.14: slukket med knappen — keep-awake kæmper ikke imod (MCU'en sover og svarer ikke) */
+    if(pw.state!=PW_ON) return;            /* v6.14: switched off with the button — keep-awake does not fight it (the MCU is asleep and does not reply) */
     SIM_KA_HOLD
     if(first){ uint16_t on=1, awake=0; wq_push(0,&on,1); wq_push(1,&awake,1); ka_next=now+30000; return; }
     int asleep=link_up(now)&&reg_seen[1]&&reg[1]!=0;
@@ -4711,93 +4717,93 @@ static void proto_keepawake(ms_t now,int first){
     }
 }
 
-/* ---- BOOT-PUSH (PARITY §1.4) — v6.4: SIM/preview; v6.5: OGSÅ ENHEDEN ----
- * Stock-UI'ets fuart_thread sender ved opstart sit config-spejl til controlleren:
- *     cmd6 sub1 len30 (ord 1..30)   +   cmd6 sub112 len3 (ord 112..114)
- * ourui gør nu det samme i alle build-typer. Uden den står controlleren efter en slot B-boot
- * (hvor stock-UI'et aldrig starter) på sine egne startværdier (REGISTERMAP §2: ord 11 = 920,
- * ord 114 = 50, ord 14 = 4, ord 25 = 550 …) i stedet for config'ens. I run.sh-tilstand har det
- * pausede stock-UI allerede sendt blokkene; ourui sender så de samme værdier igen (uden virkning).
- * Ord-layoutet er stock's (model_data_init 0xcef40 + fuart_thread 0x146810): ord 2/4/11/14/17/23/25
- * fra config, ord 5/13/15 = 60, alle andre ord i 1..30 = 0, ord 112/113 pakket, ord 114 = headTemper.
- * Blokkene går gennem SAMME port som alt andet (wq_push uden intent -> frame-politik): start-ord
- * og ord 26/27/30 er 0, og en config-værdi uden for spec får HELE blokken afvist og talt (BLOK) —
- * den sendes aldrig. Hver blok sendes én gang (m. køens ACK-vent + ene retransmit); udebliver
- * ACK'en, fortsættes med næste blok. Resultatet står på DIAGNOSE (og i SIM'ens state-JSON).
- * Efter et gennemført GEM gentages en push, der blev afvist, ikke blev ACK'et eller manglede config.
+/* ---- BOOT-PUSH (PARITY §1.4) — v6.4: SIM/preview; v6.5: ALSO THE DEVICE ----
+ * At startup the stock UI's fuart_thread sends its config mirror to the controller:
+ *     cmd6 sub1 len30 (words 1..30)   +   cmd6 sub112 len3 (words 112..114)
+ * ourui now does the same in all build types. Without it, after a slot B boot (where the stock UI
+ * never starts) the controller sits on its own power-on defaults (REGISTERMAP §2: word 11 = 920,
+ * word 114 = 50, word 14 = 4, word 25 = 550 …) instead of the config's. In run.sh mode the
+ * paused stock UI has already sent the blocks; ourui then sends the same values again (no effect).
+ * The word layout is stock's (model_data_init 0xcef40 + fuart_thread 0x146810): words 2/4/11/14/17/23/25
+ * from config, words 5/13/15 = 60, all other words in 1..30 = 0, words 112/113 packed, word 114 = headTemper.
+ * The blocks go through the SAME gate as everything else (wq_push without intent -> frame policy): start words
+ * and words 26/27/30 are 0, and a config value out of spec gets the WHOLE block rejected and counted (BLOK) —
+ * it is never sent. Each block is sent once (w/ the queue's ACK wait + single retransmit); if the
+ * ACK does not arrive, it continues with the next block. The result is shown on DIAGNOSE (and in the SIM's state JSON).
+ * After a completed SAVE, a push that was rejected, not ACKed or lacked config is repeated.
  *
- * AKTIVITETS-VAGT (guard, enheden): blokken skriver start-ordene 3/6/9/16/22/24 til 0 og ville
- * dermed kunne afbryde et bryg, der allerede kører — fx når run.sh startes midt i en aktivitet,
- * eller ourui genstartes under en. Derfor afgøres det ÉN gang, første gang linket er oppe og
- * work_sta (ord 33) er læst: kører kværn/bryg/vand/damp (phase_active), SPRINGES pushen OVER
- * (BPR_SKIP) — den udskydes ikke og gentages ikke af et senere GEM. Controlleren har da de
- * værdier, den aktivitet blev startet med; hvert GEM og hver start-blok skriver fortsat sine ord.
- * Uden vagten (SIM-kontrakten, uændret fra v6.4) UDSKYDES pushen i stedet, til aktiviteten er slut.
- * En aktivitet, der starter EFTER afgørelsen, udskyder de blokke, der mangler (begge tilstande). */
-/* v6.7 — ORD 113 I BOOT-PUSHEN: lo-byten (breakTime) sendes som 0, ikke som config's breakTime. Stock's egen
- * boot-push er optaget paa enheden (boot/ondevice/GROUND-TRUTH.md): sub112 len3 = 04 01 | 00 06 | 46 00, dvs.
- * ord 113 = 0x0600 med breakTime = 5 i config — fuart_thread nulstiller lo-byten ved boot. PARITY §1.3's
- * pakning (tid<<8 | breakTime) gaelder GEM-vejen (setting_mcu_push / act_push), som er uaendret. Uden effekt
- * paa bryg: controlleren (0x1E10) overskriver selv lo-byten ved naeste bryg. Hi-byten (pre-inf.-tid >= 5)
- * holder ordet != 0, saa re-push-signaturen (ord 112 = 0 og ord 113 = 0) er fortsat entydig. */
-static void boot_push_words(uint16_t a[30],uint16_t p[3]){   /* a[k] = ord k+1 */
+ * ACTIVITY GUARD (guard, device): the block writes the start words 3/6/9/16/22/24 as 0 and could
+ * thereby abort a brew that is already running — e.g. when run.sh is started in the middle of an activity,
+ * or ourui is restarted during one. Hence it is decided ONCE, the first time the link is up and
+ * work_sta (word 33) has been read: if grind/brew/water/steam is running (phase_active), the push is SKIPPED
+ * (BPR_SKIP) — it is not deferred and not repeated by a later SAVE. The controller then has the
+ * values that activity was started with; every SAVE and every start block still writes its words.
+ * Without the guard (the SIM contract, unchanged from v6.4) the push is instead DEFERRED until the activity has ended.
+ * An activity that starts AFTER the decision defers the remaining blocks (both modes). */
+/* v6.7 — WORD 113 IN THE BOOT PUSH: the lo byte (breakTime) is sent as 0, not as config's breakTime. Stock's own
+ * boot push was captured on the device (boot/ondevice/GROUND-TRUTH.md): sub112 len3 = 04 01 | 00 06 | 46 00, i.e.
+ * word 113 = 0x0600 with breakTime = 5 in config — fuart_thread clears the lo byte at boot. PARITY §1.3's
+ * packing (time<<8 | breakTime) applies to the SAVE path (setting_mcu_push / act_push), which is unchanged. No effect
+ * on brewing: the controller (0x1E10) overwrites the lo byte itself on the next brew. The hi byte (pre-inf. time >= 5)
+ * keeps the word != 0, so the re-push signature (word 112 = 0 and word 113 = 0) is still unambiguous. */
+static void boot_push_words(uint16_t a[30],uint16_t p[3]){   /* a[k] = word k+1 */
     memset(a,0,30*sizeof a[0]);
     a[1-1]=0; a[2-1]=(uint16_t)sv(S_GRINDMODE); a[4-1]=(uint16_t)sv(S_GRINDW); a[5-1]=60;
     a[11-1]=(uint16_t)sv(S_BREWT); a[13-1]=60; a[14-1]=(uint16_t)sv(S_STEAMG); a[15-1]=60;
     a[17-1]=(uint16_t)sv(S_HOTW); a[23-1]=(uint16_t)sv(S_BREWW); a[25-1]=(uint16_t)sv(S_STEAMT);
-    p[0]=pack112(sv(S_PISW),sv(S_PIPRESS)); p[1]=pack113(sv(S_PITIME),0); p[2]=(uint16_t)sv(S_HEADT);   /* v6.7: ord 113 lo = 0 — se nedenfor */
+    p[0]=pack112(sv(S_PISW),sv(S_PIPRESS)); p[1]=pack113(sv(S_PITIME),0); p[2]=(uint16_t)sv(S_HEADT);   /* v6.7: word 113 lo = 0 — see below */
 }
 static int boot_push_cfg_ok(void){ for(int i=0;i<NSET;i++) if(SET[i].mcu!=M_NONE&&!SET[i].loaded) return 0; return 1; }
 static void boot_push_start(int guard){ bp.state=BP_WAIT_A; bp.ra=bp.rb=BPR_NONE; bp.guard=guard; bp.t0_set=0; }
-#define BP_LEFT(now) do{ if(!bp.t0_set){ bp.t0=(now); bp.t0_set=1; } }while(0)   /* første blok køet / pushen afgjort */
+#define BP_LEFT(now) do{ if(!bp.t0_set){ bp.t0=(now); bp.t0_set=1; } }while(0)   /* first block queued / push decided */
 static void boot_push_step(ms_t now){
     if(bp.state==BP_OFF||bp.state==BP_DONE||ro_mode) return;
     if(bp.state==BP_A||bp.state==BP_B){
-        if(wq.seq==bp.seq) return;                         /* venter på ACK / timeout */
+        if(wq.seq==bp.seq) return;                         /* waiting for ACK / timeout */
         int r=(wq.result==WR_OK)?BPR_OK:BPR_NOACK;
         if(bp.state==BP_A){ bp.ra=r; bp.state=BP_WAIT_B; } else { bp.rb=r; bp.state=BP_DONE; bp.runs++; }
         return;
     }
-    if(bp.guard){                                          /* aktivitets-vagt: afgøres én gang, når work_sta er kendt */
+    if(bp.guard){                                          /* activity guard: decided once, when work_sta is known */
         if(!link_up(now)||!reg_seen[33]) return;
         bp.guard=0;
         if(phase_active(phase_raw(now))){ bp.ra=bp.rb=BPR_SKIP; bp.state=BP_DONE; bp.runs++; BP_LEFT(now); return; }
     }
     if(!link_up(now)||wq_busy()||sav.active||act.pending!=ACT_NONE||phase_active(phase_raw(now))) return;
-    if(!boot_push_cfg_ok()){ bp.ra=bp.rb=BPR_NOCFG; bp.state=BP_DONE; bp.runs++; BP_LEFT(now); return; }   /* ingen config = intet at pushe */
+    if(!boot_push_cfg_ok()){ bp.ra=bp.rb=BPR_NOCFG; bp.state=BP_DONE; bp.runs++; BP_LEFT(now); return; }   /* no config = nothing to push */
     uint16_t a[30],p[3]; boot_push_words(a,p); long seq=wq.seq;
     BP_LEFT(now);
     if(bp.state==BP_WAIT_A){ if(wq_push(1,a,30)){ bp.seq=seq; bp.state=BP_A; } else { bp.ra=BPR_BLOCKED; bp.state=BP_WAIT_B; } }
     else { if(wq_push(112,p,3)){ bp.seq=seq; bp.state=BP_B; } else { bp.rb=BPR_BLOCKED; bp.state=BP_DONE; bp.runs++; } }
 }
-/* et GEM er gået igennem: en push, der blev afvist / ikke ACK'et / manglede config, prøves igen
- * (config kan nu være i spec). En push, vagten sprang over, gentages ikke. */
+/* a SAVE has gone through: a push that was rejected / not ACKed / lacked config is retried
+ * (config may now be in spec). A push that the guard skipped is not repeated. */
 static int bp_failed(int r){ return r==BPR_NOACK||r==BPR_BLOCKED||r==BPR_NOCFG; }
 static void boot_push_resave(void){ if(bp_on&&bp.state==BP_DONE&&(bp_failed(bp.ra)||bp_failed(bp.rb))) boot_push_start(0); }
 
-/* ---- MCU-GENSTART -> RE-PUSH (v6.6; det åbne punkt i CHANGES-v6.5 pkt. 8) ----
- * Controllerens registerfil ligger i RAM og får faste startværdier ved hver MCU-opstart (REGISTERMAP §2:
- * ord 4 = 180, 11 = 920, 14 = 4, 17 = 360, 23 = 360, 25 = 550, 112 = 0, 113 = 0, 114 = 50). Genstarter
- * MCU'en, mens ourui kører, er boot-pushen væk. Stock-UI'et har samme hul; ourui lukker det:
- *  (a) VERSIONS-FORESPØRGSLEN KOMMER IGEN. MCU'en sender cmd 0x89 hvert 20. ms fra sin opstart, til den
- *      har fået svar (PROTOCOL §2.2) — og kun dér (0 stk. i 12 min. live-trafik, STEAMLIVE §2). En 0x89,
- *      der ankommer mere end RP_STRAY_MS efter, at boot-pushen forlod VENTER, er derfor en MCU-opstart
- *      EFTER vores push. (Det første håndtryk ligger før pushen; en efternøler fra det ligger inden for
- *      RP_STRAY_MS.) Når runden er faldet til ro (RP_SETTLE_MS uden en ny 0x89), og en evt. igangværende
- *      push er færdig, startes boot-pushen forfra.
- *  (b) STARTVÆRDI-SIGNATUREN: ord 112 = 0 OG ord 113 = 0. Det er MCU'ens startværdier, og de kan aldrig
- *      være config-værdier inden for spec (ord 112 lo = pre-inf.-tryk 3..4; ord 113 hi = pre-inf.-tid >= 5)
- *      — så signaturen siger entydigt, at ord 112..114 ikke er skrevet siden MCU'ens opstart. Den skal
- *      stå i RP_SIG_READS friske læsninger i træk (poll hvert 1 s), mens maskinen er ledig og config er
- *      i spec. Fanger en genstart, hvor 0x89-runden blev tabt — og en boot-push, vagten sprang over,
- *      mens controlleren faktisk stod på startværdierne (slot B-boot med wand'en åben).
- * Re-pushen ER boot-pushen: samme blokke (sub1 len30 + sub112 len3), samme frame-politik, samme
- * write-kø (ACK-vent + én retransmit) og SAMME AKTIVITETS-VAGT — afgjort på en work_sta læst EFTER
- * genstarten (reg_seen[33] ryddes). Kører en aktivitet i det øjeblik, springes den over; står
- * signaturen der stadig bagefter, prøver (b) igen, når maskinen er ledig.
- * Begrænsning: mindst RP_MIN_MS mellem to re-push, og højst RP_BUDGET signatur-udløste pr.
- * RP_WINDOW_MS (en controller, der ikke tager imod, giver ikke en uendelig strøm af writes).
- * Tælles på DIAGNOSE (rækken hedder da "RE-PUSH 2 · 1-30" | "112-114") og i SIM'ens state-JSON. */
+/* ---- MCU RESTART -> RE-PUSH (v6.6; the open item in CHANGES-v6.5 item 8) ----
+ * The controller's register file lives in RAM and gets fixed power-on defaults at every MCU startup (REGISTERMAP §2:
+ * word 4 = 180, 11 = 920, 14 = 4, 17 = 360, 23 = 360, 25 = 550, 112 = 0, 113 = 0, 114 = 50). If the MCU
+ * restarts while ourui is running, the boot push is gone. The stock UI has the same gap; ourui closes it:
+ *  (a) THE VERSION QUERY COMES BACK. The MCU sends cmd 0x89 every 20 ms from its startup until it
+ *      has received a reply (PROTOCOL §2.2) — and only then (0 of them in 12 min of live traffic, STEAMLIVE §2). A 0x89
+ *      arriving more than RP_STRAY_MS after the boot push left WAITING is therefore an MCU startup
+ *      AFTER our push. (The first handshake precedes the push; a straggler from it falls within
+ *      RP_STRAY_MS.) Once the burst has settled (RP_SETTLE_MS without a new 0x89) and any push in progress
+ *      has finished, the boot push is restarted from scratch.
+ *  (b) THE DEFAULTS SIGNATURE: word 112 = 0 AND word 113 = 0. These are the MCU's power-on defaults, and they can never
+ *      be in-spec config values (word 112 lo = pre-inf. pressure 3..4; word 113 hi = pre-inf. time >= 5)
+ *      — so the signature unambiguously says that words 112..114 have not been written since the MCU's startup. It must
+ *      hold for RP_SIG_READS fresh reads in a row (poll every 1 s) while the machine is idle and config is
+ *      in spec. Catches a restart where the 0x89 burst was lost — and a boot push the guard skipped
+ *      while the controller was actually on its defaults (slot B boot with the wand open).
+ * The re-push IS the boot push: same blocks (sub1 len30 + sub112 len3), same frame policy, same
+ * write queue (ACK wait + one retransmit) and the SAME ACTIVITY GUARD — decided on a work_sta read AFTER
+ * the restart (reg_seen[33] is cleared). If an activity is running at that moment it is skipped; if
+ * the signature is still there afterwards, (b) tries again when the machine is idle.
+ * Rate limit: at least RP_MIN_MS between two re-pushes, and at most RP_BUDGET signature-triggered ones per
+ * RP_WINDOW_MS (a controller that does not accept them does not cause an endless stream of writes).
+ * Counted on DIAGNOSE (the row is then labelled "RE-PUSH 2 · 1-30" | "112-114") and in the SIM's state JSON. */
 #define RP_STRAY_MS  200
 #define RP_SETTLE_MS 300
 #define RP_MIN_MS    5000
@@ -4806,44 +4812,44 @@ static void boot_push_resave(void){ if(bp_on&&bp.state==BP_DONE&&(bp_failed(bp.r
 #define RP_WINDOW_MS 600000
 enum { RPC_NONE=0, RPC_VER, RPC_DEF };
 static struct { unsigned vn, sig_n0; int armed, sig_on, started, last, n_ver, n_def, def_k; ms_t t_start, def_t[RP_BUDGET]; } rps;
-static int bp_guard_cfg=1;             /* vagten for en re-push: enheden 1; SIM følger OURUI_SIM_BOOTPUSH_GUARD */
+static int bp_guard_cfg=1;             /* the guard for a re-push: device 1; SIM follows OURUI_SIM_BOOTPUSH_GUARD */
 static int repush_count(void){ return rps.n_ver+rps.n_def; }
 static int repush_cfg_sane(void){ for(int i=0;i<NSET;i++){ const Setting*q=&SET[i]; if(q->mcu!=M_NONE&&(!q->loaded||set_oor(q))) return 0; } return 1; }
 static int mcu_defaults_sig(void){ return reg_seen[112]&&reg_seen[113]&&reg[112]==0&&reg[113]==0; }
 static void repush_begin(int cause,ms_t now){
     rps.armed=0; rps.sig_on=0; rps.last=cause; rps.started=1; rps.t_start=now;
     if(cause==RPC_VER) rps.n_ver++; else { rps.n_def++; rps.def_t[rps.def_k++%RP_BUDGET]=now; }
-    reg_seen[33]=0;                    /* vagten afgøres på en work_sta, der er læst EFTER genstarten */
+    reg_seen[33]=0;                    /* the guard is decided on a work_sta read AFTER the restart */
     boot_push_start(bp_guard_cfg);
 }
 static void repush_step(ms_t now){
     if(!bp_on||ro_mode||bp.state==BP_OFF) return;
     if(ver_n!=rps.vn){ rps.vn=ver_n; if(bp.t0_set&&ver_ms-bp.t0>=RP_STRAY_MS) rps.armed=1; }       /* (a) */
-    if(bp.state!=BP_DONE){ rps.sig_on=0; return; }                                               /* en push ad gangen */
+    if(bp.state!=BP_DONE){ rps.sig_on=0; return; }                                               /* one push at a time */
     if(rps.started&&now-rps.t_start<RP_MIN_MS){ rps.sig_on=0; return; }
     if(rps.armed){ if(now-ver_ms>=RP_SETTLE_MS) repush_begin(RPC_VER,now); return; }
     int sig=link_up(now)&&mcu_defaults_sig()&&repush_cfg_sane()&&!phase_active(phase_raw(now))&&!wq_busy()&&!sav.active&&act.pending==ACT_NONE;   /* (b) */
     if(!sig){ rps.sig_on=0; return; }
     if(!rps.sig_on){ rps.sig_on=1; rps.sig_n0=rx_n112; return; }
-    if(rx_n112-rps.sig_n0<RP_SIG_READS) return;                                                  /* 3 friske læsninger, alle mens maskinen er ledig */
-    if(rps.def_k>=RP_BUDGET&&now-rps.def_t[rps.def_k%RP_BUDGET]<RP_WINDOW_MS) return;              /* budgettet er brugt */
+    if(rx_n112-rps.sig_n0<RP_SIG_READS) return;                                                  /* 3 fresh reads, all while the machine is idle */
+    if(rps.def_k>=RP_BUDGET&&now-rps.def_t[rps.def_k%RP_BUDGET]<RP_WINDOW_MS) return;              /* the budget is used up */
     repush_begin(RPC_DEF,now);
 }
 
-/* ---- main-loopets timere (v6.6) ----
- * Samlet ét sted og i 64 bit, så selftesten kører PRÆCIS den kode, main() kører (omløbs-testen
- * driver loop_poll / loop_graph / loop_render_due / loop_rendered hen over 2^31 og 2^32 ms).
- * Fristerne er absolutte tidspunkter i ms_t; med 32-bit-uret til og med v6.5 kunne en frist i
- * urets sidste millisekunder blive sprunget over og først være sand igen 49,7 døgn senere. */
+/* ---- the main loop's timers (v6.6) ----
+ * Gathered in one place and in 64 bits, so the selftest runs EXACTLY the code main() runs (the wraparound test
+ * drives loop_poll / loop_graph / loop_render_due / loop_rendered across 2^31 and 2^32 ms).
+ * The deadlines are absolute times in ms_t; with the 32-bit clock up to and including v6.5 a deadline in
+ * the clock's last milliseconds could be skipped and only become true again 49.7 days later. */
 static struct { ms_t poll, slow, ext, render, graph, ft_reset; unsigned alt; } lt;
-/* poll: sub0/sub33 @50 ms skiftevis + sub56 @200 ms (~10 Hz, som v4) + ord 112..114 @1 s */
+/* poll: sub0/sub33 @50 ms alternating + sub56 @200 ms (~10 Hz, like v4) + words 112..114 @1 s */
 static void loop_poll(ms_t now){
     if(now>=lt.poll){ lt.poll=now+50; if(lt.alt++&1) frame_query(33,7); else frame_query(0,56); }
     if(now>=lt.slow){ lt.slow=now+200; frame_query(56,56); }
     if(now>=lt.ext){ lt.ext=now+1000; frame_query(112,3); }
 }
 static void loop_graph(ms_t now){
-    if(reg_seen[51]&&now-lt.graph>=100){ lt.graph=now; graph_push(now,reg[51],wsrc_tick(now)); }   /* v6.9: latchet vægt-kilde */
+    if(reg_seen[51]&&now-lt.graph>=100){ lt.graph=now; graph_push(now,reg[51],wsrc_tick(now)); }   /* v6.9: latched weight source */
 }
 static int loop_render_due(ms_t now){ if(ui_kick){ ui_kick=0; lt.render=now; } return now>=lt.render; }
 static void loop_rendered(ms_t now,float ft){
@@ -4857,7 +4863,7 @@ static void loop_rendered(ms_t now,float ft){
 static void onsig(int s){ (void)s; SIM_SIG(s) run=0; }
 
 #ifndef OURUI_PREVIEW
-/* ---- touch: rå events -> DOWN/MOVE/UP pr. SYN_REPORT ---- */
+/* ---- touch: raw events -> DOWN/MOVE/UP per SYN_REPORT ---- */
 static int ifd=-1;
 static int absx_min=0,absx_max=4095,absy_min=0,absy_max=4095;
 static int in_x=-1,in_y=-1,in_down=0,in_pdown=0,in_pup=0,in_moved=0;
@@ -4870,15 +4876,15 @@ static void inp_open(void){
     if(ioctl(ifd,EVIOCGABS(ABS_Y),&ai)==0){ absy_min=ai.minimum; absy_max=ai.maximum; }
     if(ioctl(ifd,EVIOCGABS(ABS_MT_POSITION_X),&ai)==0){ absx_min=ai.minimum; absx_max=ai.maximum; }
     if(ioctl(ifd,EVIOCGABS(ABS_MT_POSITION_Y),&ai)==0){ absy_min=ai.minimum; absy_max=ai.maximum; }
-    /* EVIOCGRAB: eksklusiv input mens ourui kører, så den SIGSTOP'ede demo_v9 ikke
-     * får vores tryk i sin evdev-kø og afspiller dem efter SIGCONT (fantom-tryk i
-     * stock-UI). Frigives automatisk ved close/exit. OURUI_NOGRAB=1 slår fra
-     * (nødvendigt for tinj-injektion fra en anden proces). */
+    /* EVIOCGRAB: exclusive input while ourui runs, so the SIGSTOPped demo_v9 does not
+     * get our touches in its evdev queue and replay them after SIGCONT (phantom touches in
+     * the stock UI). Released automatically on close/exit. OURUI_NOGRAB=1 disables it
+     * (needed for tinj injection from another process). */
     if(!getenv("OURUI_NOGRAB")){ if(ioctl(ifd,EVIOCGRAB,1)!=0) perror("EVIOCGRAB"); }
 }
-/* v6.14: TÆND/SLUK-KNAPPEN — k62091-noden, read-only og UDEN EVIOCGRAB (stock griber den heller ikke; app_powerKey_thread
- * 0x140AB4 åbner /dev/input/event1). Valg: OURUI_KBD=<sti> -> ellers den event-node (ikke touch-noden), hvis navn indeholder
- * "k62091" -> ellers den første med EV_KEY og uden EV_ABS -> ellers /dev/input/event1, hvis den kan åbnes. */
+/* v6.14: THE POWER BUTTON — the k62091 node, read-only and WITHOUT EVIOCGRAB (stock does not grab it either; app_powerKey_thread
+ * 0x140AB4 opens /dev/input/event1). Selection: OURUI_KBD=<path> -> else the event node (not the touch node) whose name contains
+ * "k62091" -> else the first one with EV_KEY and without EV_ABS -> else /dev/input/event1, if it can be opened. */
 static int kfd=-1;
 static int kbd_try(const char*path,int need_name,int*fdo,char*name,size_t nn){
     int fd=open(path,O_RDONLY|O_NONBLOCK); if(fd<0) return 0;
@@ -4909,98 +4915,98 @@ static int scaley(int v){ return (int)((long)(v-absy_min)*H/(absy_max-absy_min+1
 /* ====================================================================== */
 /* ================= SIM-HAL (v6.4 · sim/CONTRACT.md) =================== */
 /* ====================================================================== */
-/* Alt herfra til #endif findes KUN i SIM-build'et. Det erstatter enhedens tre fil-noder
- * (fb0, ttyS1, event0) og lægger en test-flade ovenpå — UI-, protokol-, gem- og tegne-koden
- * er den samme som på enheden:
- *   OURUI_SIM_TTY    pty-slave i stedet for /dev/ttyS1            (uart_open: UART_DEV)
- *   OURUI_SIM_FB     fb-buffer -> fil (tmp+rename, <= 10 Hz + ved ændring)
- *   OURUI_SIM_TOUCH  FIFO m. rå 16-byte evdev-records; afvikles efter records'enes tidsstempler
- *   OURUI_SIM_STATE  state-JSONL (én linje pr. renderet frame hvor indholdet er ændret; mindst ~10 Hz)
- *   OURUI_SIM_CTRL   unix-socket m. JSONL-kroge (ping, fb_dump, exit, action, save, page, touch,
+/* Everything from here to #endif exists ONLY in the SIM build. It replaces the device's three file nodes
+ * (fb0, ttyS1, event0) and adds a test surface on top — the UI, protocol, save and drawing code
+ * is the same as on the device:
+ *   OURUI_SIM_TTY    pty slave instead of /dev/ttyS1              (uart_open: UART_DEV)
+ *   OURUI_SIM_FB     fb buffer -> file (tmp+rename, <= 10 Hz + on change)
+ *   OURUI_SIM_TOUCH  FIFO w/ raw 16-byte evdev records; played back according to the records' timestamps
+ *   OURUI_SIM_STATE  state JSONL (one line per rendered frame whose content changed; at least ~10 Hz)
+ *   OURUI_SIM_CTRL   unix socket w/ JSONL hooks (ping, fb_dump, exit, action, save, page, touch,
  *                    boot_flag, runtime_switch, raw_write, config_reload, state_now, layout)
- *   OURUI_SIM_ROOT   sandkasse-rod for /customer /new_customer /proc /tmp (påkrævet)
- * Krogene kalder de SAMME funktioner som et tryk ville (act_request, save_begin, sys_confirm …);
- * de omgår hverken vagter eller frame-politik. Eneste undtagelse er raw_write (stock-emulering),
- * se sim_raw_push(). Intet skrives uden for sandkassen ud over de stier, runneren selv udpeger. */
+ *   OURUI_SIM_ROOT   sandbox root for /customer /new_customer /proc /tmp (required)
+ * The hooks call the SAME functions a tap would (act_request, save_begin, sys_confirm …);
+ * they bypass neither guards nor frame policy. The only exception is raw_write (stock emulation),
+ * see sim_raw_push(). Nothing is written outside the sandbox besides the paths the runner itself designates. */
 static char sim_fb_path[300]="", sim_state_path[300]="", sim_touch_path[300]="", sim_ctrl_path[300]="";
 static FILE*sim_sf=NULL;
 static ms_t sim_t0=0;
 static int sim_tfd_w=-1, sim_lfd=-1, sim_bp_guard=0;
 
-/* runneren læser ikke stderr løbende (pipe): aldrig en strøm af fejl-linjer */
+/* the runner does not read stderr continuously (pipe): never a stream of error lines */
 static void sim_perr(const char*s){ static int n; if(n<3){ n++; perror(s); } }
 static void sim_die(int rc,const char*fmt,...){
     va_list ap; va_start(ap,fmt); fputs("ourui-sim: ",stderr); vfprintf(stderr,fmt,ap); va_end(ap); fputc('\n',stderr); exit(rc);
 }
 
-/* ---- sandkasse ---- */
+/* ---- sandbox ---- */
 static void sim_mkparents(const char*path){
     char b[460]; snprintf(b,sizeof b,"%s",path);
     for(char*q=b+1;*q;q++) if(*q=='/'){ *q=0; mkdir(b,0755); *q='/'; }
 }
-static void sim_put(const char*rel,const char*data,int mode){   /* opretter KUN hvis stien mangler */
+static void sim_put(const char*rel,const char*data,int mode){   /* creates ONLY if the path is missing */
     char p[460]; snprintf(p,sizeof p,"%s%s",sysroot,rel); struct stat st; if(lstat(p,&st)==0) return;
     sim_mkparents(p); int fd=open(p,O_WRONLY|O_CREAT|O_EXCL,mode); if(fd<0) return;
     int n=(int)strlen(data); if(n&&write(fd,data,n)!=n){} close(fd); chmod(p,mode);
 }
-/* Runnerens sandkasse (kontrakt §8) har /customer, /new_customer/ourui/boot og tre /proc-filer.
- * BOOT-UI-vagten og SKIFT NU læser mere end det: /proc/mounts (er slot B mountet?), slot B's
- * demo_v9 (er det ourui?), slot A's demo_v9 (findes der et stock-UI?) og /proc/self/exe. Uden dem
- * ville begge være LÅST. Her suppleres det, der mangler — en slot B-boot, som preview'ets
- * mock_boot_b(). Intet eksisterende overskrives; OURUI_SIM_NOPROVISION=1 springer det over. */
+/* The runner's sandbox (contract §8) has /customer, /new_customer/ourui/boot and three /proc files.
+ * The BOOT UI guard and SWITCH NOW read more than that: /proc/mounts (is slot B mounted?), slot B's
+ * demo_v9 (is it ourui?), slot A's demo_v9 (is there a stock UI?) and /proc/self/exe. Without them
+ * both would be LOCKED. Here whatever is missing is filled in — a slot B boot, like the preview's
+ * mock_boot_b(). Nothing existing is overwritten; OURUI_SIM_NOPROVISION=1 skips it. */
 static void sim_provision(void){
     char mk[200], p[460]; struct stat st;
     sim_put("/proc/mounts","rootfs / rootfs rw 0 0\nmock-a /customer mockfs rw 0 0\nmock-b " SLOT_B_MNT " mockfs rw 0 0\n",0644);
     sim_put("/proc/sys/kernel/random/boot_id","6f757275-6973-4000-8000-73696d626f6f\n",0644);
-    snprintf(mk,sizeof mk,"#!/bin/sh\n# SIM-mock af slot B's demo_v9: %s\nexit 0\n",OURUI_MARK); sim_put(SLOT_B_EXE,mk,0755);
-    sim_put(SLOT_A_EXE,"#!/bin/sh\n# SIM-mock af stock-UI'et (slot A)\nexec sleep 3\n",0755);
+    snprintf(mk,sizeof mk,"#!/bin/sh\n# SIM mock of slot B's demo_v9: %s\nexit 0\n",OURUI_MARK); sim_put(SLOT_B_EXE,mk,0755);
+    sim_put(SLOT_A_EXE,"#!/bin/sh\n# SIM mock of the stock UI (slot A)\nexec sleep 3\n",0755);
     snprintf(p,sizeof p,"%s/proc/self/exe",sysroot);
     if(lstat(p,&st)!=0){ sim_mkparents(p); if(symlink(SLOT_B_EXE,p)!=0){} }
 }
 static void sim_env_path(const char*name,char*dst,size_t n,int required){
     const char*e=getenv(name);
-    if(!e||!*e){ if(required) sim_die(2,"%s mangler (paakraevet i SIM-build, se sim/CONTRACT.md §2)",name); return; }
-    if(strlen(e)>=n) sim_die(2,"%s er for lang (%d tegn, max %d)",name,(int)strlen(e),(int)n-1);
+    if(!e||!*e){ if(required) sim_die(2,"%s missing (required in the SIM build, see sim/CONTRACT.md §2)",name); return; }
+    if(strlen(e)>=n) sim_die(2,"%s is too long (%d chars, max %d)",name,(int)strlen(e),(int)n-1);
     snprintf(dst,n,"%s",e);
 }
 static void sim_env(void){
     const char*e; struct stat st;
     sim_t0=now_ms();
     signal(SIGPIPE,SIG_IGN);
-    if((e=getenv("OURUI_SIM_ROOT"))&&*e){ if(strlen(e)>=sizeof sysroot) sim_die(2,"OURUI_SIM_ROOT er for lang"); snprintf(sysroot,sizeof sysroot,"%s",e); }
-    else if((e=getenv("OURUI_ROOT"))&&strlen(e)>=sizeof sysroot) sim_die(2,"OURUI_ROOT er for lang");
+    if((e=getenv("OURUI_SIM_ROOT"))&&*e){ if(strlen(e)>=sizeof sysroot) sim_die(2,"OURUI_SIM_ROOT is too long"); snprintf(sysroot,sizeof sysroot,"%s",e); }
+    else if((e=getenv("OURUI_ROOT"))&&strlen(e)>=sizeof sysroot) sim_die(2,"OURUI_ROOT is too long");
     size_t L=strlen(sysroot); while(L>1&&sysroot[L-1]=='/') sysroot[--L]=0;
-    if(!sysroot[0]||!strcmp(sysroot,"/")) sim_die(2,"OURUI_SIM_ROOT mangler: SIM-build'et maa aldrig roere vaertens /customer, /new_customer, /proc eller /tmp");
-    if(stat(sysroot,&st)!=0||!S_ISDIR(st.st_mode)) sim_die(2,"sandkasse-roden findes ikke: %s",sysroot);
-    /* stier uden egen env følger roden (på enheden følger sprog-filen IKKE OURUI_ROOT — uændret) */
-    if((e=getenv("OURUI_CONFIG"))){ if(strlen(e)>=sizeof cfg_path) sim_die(2,"OURUI_CONFIG er for lang"); } else snprintf(cfg_path,sizeof cfg_path,"%s/customer/config.json",sysroot);
-    if((e=getenv("OURUI_BAKDIR"))){ if(strlen(e)>=sizeof cfg_bakdir) sim_die(2,"OURUI_BAKDIR er for lang"); } else snprintf(cfg_bakdir,sizeof cfg_bakdir,"%s/new_customer/ourui/cfgbak",sysroot);
-    if((e=getenv("OURUI_LANGFILE"))){ if(strlen(e)>=sizeof lang_path) sim_die(2,"OURUI_LANGFILE er for lang"); } else snprintf(lang_path,sizeof lang_path,"%s/new_customer/ourui/lang",sysroot);
+    if(!sysroot[0]||!strcmp(sysroot,"/")) sim_die(2,"OURUI_SIM_ROOT missing: the SIM build must never touch the host's /customer, /new_customer, /proc or /tmp");
+    if(stat(sysroot,&st)!=0||!S_ISDIR(st.st_mode)) sim_die(2,"sandbox root does not exist: %s",sysroot);
+    /* paths without their own env follow the root (on the device the language file does NOT follow OURUI_ROOT — unchanged) */
+    if((e=getenv("OURUI_CONFIG"))){ if(strlen(e)>=sizeof cfg_path) sim_die(2,"OURUI_CONFIG is too long"); } else snprintf(cfg_path,sizeof cfg_path,"%s/customer/config.json",sysroot);
+    if((e=getenv("OURUI_BAKDIR"))){ if(strlen(e)>=sizeof cfg_bakdir) sim_die(2,"OURUI_BAKDIR is too long"); } else snprintf(cfg_bakdir,sizeof cfg_bakdir,"%s/new_customer/ourui/cfgbak",sysroot);
+    if((e=getenv("OURUI_LANGFILE"))){ if(strlen(e)>=sizeof lang_path) sim_die(2,"OURUI_LANGFILE is too long"); } else snprintf(lang_path,sizeof lang_path,"%s/new_customer/ourui/lang",sysroot);
     sim_env_path("OURUI_SIM_TTY",sim_tty,sizeof sim_tty,1);
     sim_env_path("OURUI_SIM_FB",sim_fb_path,sizeof sim_fb_path-8,1);
     sim_env_path("OURUI_SIM_STATE",sim_state_path,sizeof sim_state_path,1);
     sim_env_path("OURUI_SIM_TOUCH",sim_touch_path,sizeof sim_touch_path,0);
     sim_env_path("OURUI_SIM_CTRL",sim_ctrl_path,sizeof sim_ctrl_path,0);
-    bl_enabled=0;                                          /* backlight-sysfs skrives aldrig i SIM */
+    bl_enabled=0;                                          /* the backlight sysfs is never written in SIM */
     if(getenv("OURUI_SIM_NOBOOTPUSH")) bp_on=0;
-    if(getenv("OURUI_SIM_BOOTPUSH_GUARD")) sim_bp_guard=1;   /* v6.5: enhedens aktivitets-vagt (spring over i stedet for at udskyde) */
-    bp_guard_cfg=sim_bp_guard;                             /* v6.6: en re-push bruger samme vagt-valg som boot-pushen */
-    if((e=getenv("OURUI_SIM_UPTIME_MS"))&&*e){ sim_clk_off=0; sim_clk_off=strtoll(e,NULL,0)-(int64_t)now_ms(); sim_t0=now_ms(); }   /* v6.6: uret starter paa en valgt vaerdi (omloebs-test) */
+    if(getenv("OURUI_SIM_BOOTPUSH_GUARD")) sim_bp_guard=1;   /* v6.5: the device's activity guard (skip instead of defer) */
+    bp_guard_cfg=sim_bp_guard;                             /* v6.6: a re-push uses the same guard choice as the boot push */
+    if((e=getenv("OURUI_SIM_UPTIME_MS"))&&*e){ sim_clk_off=0; sim_clk_off=strtoll(e,NULL,0)-(int64_t)now_ms(); sim_t0=now_ms(); }   /* v6.6: the clock starts at a chosen value (wraparound test) */
     if(!getenv("OURUI_SIM_NOPROVISION")) sim_provision();
-    /* v6.7: wifi-MODELLEN. Standard = sund stak (som runtime-B: stock's wpa_supplicant lever); "cold" = slot B-koldstart
-     * (ingen wlan0, ingen supplicant, ingen IP); "off" = vagten slaaet fra. Loggen ligger i sandkassens /tmp. */
+    /* v6.7: the wifi MODEL. Default = healthy stack (like runtime B: stock's wpa_supplicant is alive); "cold" = slot B cold start
+     * (no wlan0, no supplicant, no IP); "off" = the watchdog disabled. The log lives in the sandbox's /tmp. */
     { e=getenv("OURUI_SIM_NET"); nm_reset(e&&!strcmp(e,"cold")); sim_net_on=!(e&&!strcmp(e,"off")); mkdir(rp("/tmp"),0755); mkdir(rp("/appconfigs"),0755); }
 }
 
-/* ---- touch: FIFO m. rå evdev-records -> tidsstyret kø -> inp_poll() (samme afkodning som enheden) ----
- * Runneren skriver en hel gestus på én gang; varigheden ligger i records'enes tidsstempler
- * (kontrakt §4). Køen afleverer derfor hver record, når dens tidsstempel-afstand til gestussens
- * første record er gået på væggen — så hold-for-start (650 ms) måles som på enheden. */
+/* ---- touch: FIFO w/ raw evdev records -> timed queue -> inp_poll() (same decoding as the device) ----
+ * The runner writes a whole gesture at once; the duration lies in the records' timestamps
+ * (contract §4). The queue therefore delivers each record once its timestamp offset from the gesture's
+ * first record has elapsed on the wall clock — so hold-to-start (650 ms) is measured as on the device. */
 #define SIM_EVQ 4096
 static struct { struct input_event ev; ms_t due; } sim_evq[SIM_EVQ];
 static int sim_evh=0, sim_evn=0;
 static uint8_t sim_tb[16]; static int sim_tbn=0;
-static ms_t sim_ev_bw=0, sim_ev_be=0;                      /* anker: væg-tid / record-tid for gestussens første record */
+static ms_t sim_ev_bw=0, sim_ev_be=0;                      /* anchor: wall time / record time of the gesture's first record */
 static ms_t sim_ev_last(void){ return sim_evn? sim_evq[(sim_evh+sim_evn-1)%SIM_EVQ].due : 0; }
 static void sim_ev_push(uint16_t type,uint16_t code,int32_t value,ms_t due){
     if(sim_evn>=SIM_EVQ) return;
@@ -5014,7 +5020,7 @@ static void sim_touch_read(ms_t now){
             sim_tb[sim_tbn++]=b[i]; if(sim_tbn<16) continue;
             sim_tbn=0; struct input_event ev; memcpy(&ev,sim_tb,16);
             ms_t ems=(ms_t)ev.sec*1000+ev.usec/1000, due=sim_ev_bw+(ems-sim_ev_be);
-            if(sim_evn==0||ems<sim_ev_be||due<now-50||due>now+120000){ sim_ev_bw=now; sim_ev_be=ems; due=now; }   /* ny gestus: nyt anker */
+            if(sim_evn==0||ems<sim_ev_be||due<now-50||due>now+120000){ sim_ev_bw=now; sim_ev_be=ems; due=now; }   /* new gesture: new anchor */
             if(due<sim_ev_last()) due=sim_ev_last();
             sim_ev_push(ev.type,ev.code,ev.value,due);
         }
@@ -5025,24 +5031,24 @@ static int sim_ev_next(struct input_event*ev,ms_t now){
     if(!sim_evn||sim_evq[sim_evh].due>now) return 0;
     *ev=sim_evq[sim_evh].ev; sim_evh=(sim_evh+1)%SIM_EVQ; sim_evn--; return 1;
 }
-/* ctrl "touch": samme record-sekvens som tinj_hold, lagt i samme kø (ned nu, op efter ms) */
+/* ctrl "touch": same record sequence as tinj_hold, put in the same queue (down now, up after ms) */
 static void sim_touch_inject(int x,int y,int ms,ms_t now){
-    int rx=clampi((x*4096+479)/480,0,4095), ry=clampi((y*4096+479)/480,0,4095);   /* oprundet: scalex() giver præcis x tilbage */
+    int rx=clampi((x*4096+479)/480,0,4095), ry=clampi((y*4096+479)/480,0,4095);   /* rounded up: scalex() returns exactly x */
     ms_t due=now>sim_ev_last()?now:sim_ev_last()+1; if(ms<1) ms=1;
     sim_ev_push(EV_ABS,ABS_MT_TRACKING_ID,1,due); sim_ev_push(EV_ABS,ABS_MT_POSITION_X,rx,due); sim_ev_push(EV_ABS,ABS_MT_POSITION_Y,ry,due);
     sim_ev_push(EV_ABS,ABS_X,rx,due); sim_ev_push(EV_ABS,ABS_Y,ry,due); sim_ev_push(EV_KEY,BTN_TOUCH,1,due); sim_ev_push(EV_SYN,SYN_REPORT,0,due);
     sim_ev_push(EV_ABS,ABS_MT_TRACKING_ID,-1,due+ms); sim_ev_push(EV_KEY,BTN_TOUCH,0,due+ms); sim_ev_push(EV_SYN,SYN_REPORT,0,due+ms);
 }
-/* ingen EVIOCGRAB og ingen EVIOCGABS i SIM: rå-området er 0..4095 (skærm = rå*480/4096) */
+/* no EVIOCGRAB and no EVIOCGABS in SIM: the raw range is 0..4095 (screen = raw*480/4096) */
 static void inp_open(void){
     struct stat st;
-    if(!sim_touch_path[0]){ ifd=open("/dev/null",O_RDONLY); return; }      /* ingen FIFO: kun ctrl-"touch" */
+    if(!sim_touch_path[0]){ ifd=open("/dev/null",O_RDONLY); return; }      /* no FIFO: only ctrl "touch" */
     if(stat(sim_touch_path,&st)!=0&&mkfifo(sim_touch_path,0600)!=0) sim_die(4,"mkfifo %s: %s",sim_touch_path,strerror(errno));
     ifd=open(sim_touch_path,O_RDONLY|O_NONBLOCK);
     if(ifd<0) sim_die(4,"open touch %s: %s",sim_touch_path,strerror(errno));
-    sim_tfd_w=open(sim_touch_path,O_WRONLY|O_NONBLOCK);    /* egen skrive-ende: ingen EOF når runneren lukker mellem injektioner */
+    sim_tfd_w=open(sim_touch_path,O_WRONLY|O_NONBLOCK);    /* own write end: no EOF when the runner closes between injections */
 }
-static void dev_release_impl(void){                        /* BOOT.md §9.2 trin 1 i SIM: UART + touch slippes (fb er hukommelse) */
+static void dev_release_impl(void){                        /* BOOT.md §9.2 step 1 in SIM: UART + touch are released (fb is memory) */
     uart_flush();
     if(ufd>=0){ tcdrain(ufd); close(ufd); ufd=-1; }
     if(ifd>=0){ close(ifd); ifd=-1; }
@@ -5053,14 +5059,14 @@ static void dev_reacquire_impl(void){
     RL full; full.n=1; full.r[0]=FULL; pres_prev=full;
 }
 
-/* ---- JSON ud ---- */
+/* ---- JSON out ---- */
 typedef struct { char*p,*e; } JB;
 static void jb(JB*j,const char*fmt,...){
     if(j->p>=j->e) return;
     va_list ap; va_start(ap,fmt); int n=vsnprintf(j->p,(size_t)(j->e-j->p),fmt,ap); va_end(ap);
     if(n>0) j->p+=(n<j->e-j->p)?n:(j->e-j->p);
 }
-/* JSON-streng af en UI-tekst: skrift-skift (LC/UC) fjernes, ikon-koder skrives som \u00XX */
+/* JSON string of a UI text: font switches (LC/UC) are removed, icon codes are written as \u00XX */
 static void jb_s(JB*j,const char*s){
     jb(j,"\"");
     for(;s&&*s;s++){ unsigned char c=(unsigned char)*s;
@@ -5069,11 +5075,11 @@ static void jb_s(JB*j,const char*s){
     jb(j,"\"");
 }
 
-/* ---- tilstand der kun findes til state-JSON'en ---- */
+/* ---- state that exists only for the state JSON ---- */
 static const char*const PH_KEY[NPHASE]={"OFFLINE","SLEEP","ERROR","HEAT","READY","GRIND","PRE","EXT","WATER","STEAM","DONE"};
 static const char*const ACT_KEY[4]={"grind","brew","water","steam"};
-static const char*const STOP_KEY[4]={"grind_stop","brew_stop","water_stop","steam_stop"};   /* v6.13: ctrl-handling + layout-navne */
-/* parity_spec-id -> SET[]-række (sim_e2e.py tjekker tabellen mod parity_spec.json + --dump-table) */
+static const char*const STOP_KEY[4]={"grind_stop","brew_stop","water_stop","steam_stop"};   /* v6.13: ctrl action + layout names */
+/* parity_spec id -> SET[] row (sim_e2e.py checks the table against parity_spec.json + --dump-table) */
 static const struct { const char*id; int idx; } SIM_PARAM[]={
  {"grind_weight",S_GRINDW},{"grind_mode",S_GRINDMODE},{"brew_weight",S_BREWW},{"brew_temp",S_BREWT},
  {"preinfusion_switch",S_PISW},{"preinfusion_time",S_PITIME},{"preinfusion_pressure",S_PIPRESS},{"break_time",S_BREAK},
@@ -5084,18 +5090,18 @@ static const struct { const char*id; int idx; } SIM_PARAM[]={
 #define SIM_NPARAM ((int)(sizeof SIM_PARAM/sizeof SIM_PARAM[0]))
 static int sim_param_idx(const char*id){
     for(int k=0;k<SIM_NPARAM;k++) if(!strcmp(SIM_PARAM[k].id,id)) return SIM_PARAM[k].idx;
-    for(int i=0;i<NSET;i++) if(SET[i].key&&!strcmp(SET[i].key,id)) return i;               /* config-nøglen dur også */
+    for(int i=0;i<NSET;i++) if(SET[i].key&&!strcmp(SET[i].key,id)) return i;               /* the config key works too */
     return -1;
 }
 static const char* sim_param_id(int idx){ for(int k=0;k<SIM_NPARAM;k++) if(SIM_PARAM[k].idx==idx) return SIM_PARAM[k].id; return "?"; }
 
-/* toast: hvilken streng-id blev vist? (TR() returnerer tabellens egen pointer) */
+/* toast: which string id was shown? (TR() returns the table's own pointer) */
 static struct { int id; uint32_t col; } sim_tst={-1,0};
 static void sim_toast(const char*m,uint32_t col){
     sim_tst.id=-1; sim_tst.col=col;
     for(int l=0;l<NLANG&&sim_tst.id<0;l++){ int lg=(ui_lang+l)%NLANG; for(int i=1;i<NSTR;i++) if(STR[lg][i]==m){ sim_tst.id=i; break; } }
 }
-/* seneste GEM (krog eller tryk): pending -> ok/fail; afvist/uændret sættes af krogen */
+/* latest SAVE (hook or tap): pending -> ok/fail; rejected/unchanged is set by the hook */
 enum { SSV_NONE=0, SSV_PENDING, SSV_OK, SSV_FAIL, SSV_REJECTED, SSV_UNCHANGED };
 static const char*const SSV_KEY[]={"none","pending","ok","fail","rejected","unchanged"};
 static struct { int state, idx, val; char param[40]; } ssave;
@@ -5104,11 +5110,11 @@ static void sim_save_track(void){
         ssave.state=SSV_PENDING; ssave.idx=sav.idx; ssave.val=sav.val; snprintf(ssave.param,sizeof ssave.param,"%s",sim_param_id(sav.idx));
     }
     if(ssave.state==SSV_PENDING&&!sav.active){
-        ssave.state=(SET[ssave.idx].val==ssave.val)?SSV_OK:SSV_FAIL;   /* boot-push-gentagelsen efter et GEM ligger fra v6.5 i save_step() (alle build-typer) */
+        ssave.state=(SET[ssave.idx].val==ssave.val)?SSV_OK:SSV_FAIL;   /* since v6.5 the boot-push retry after a SAVE lives in save_step() (all build types) */
     }
 }
 
-/* ---- fb -> fil (tmp + rename: filen er altid én hel frame) ---- */
+/* ---- fb -> file (tmp + rename: the file is always one whole frame) ---- */
 static long sim_fb_dumped=-1; static ms_t sim_fb_last=-100000;
 static int sim_fb_write(const char*path){
     char tmp[460]; snprintf(tmp,sizeof tmp,"%s.tmp",path);
@@ -5120,7 +5126,7 @@ static int sim_fb_write(const char*path){
     return 1;
 }
 
-/* ---- state-JSONL (kontrakt §3 + tillæg, se sim/CONTRACT.md "TILLÆG v6.4") ---- */
+/* ---- state JSONL (contract §3 + addendum, see sim/CONTRACT.md "ADDENDUM v6.4") ---- */
 static long sim_frames=0; static ms_t sim_state_last=-100000; static double sim_ft_sum=0; static float sim_ft_win=0, sim_ft_peak=0;
 static uint32_t sim_sig=0;
 static int sim_bye_on=0; static ms_t sim_bye_until=0;
@@ -5130,40 +5136,40 @@ static const char* sim_page_key(void){
     return page==PG_DIAG?"diag":"settings";
 }
 static const char* sim_bpr(int r){ static const char*const k[]={"none","ok","noack","blocked","nocfg","skipped"}; return k[r]; }
-static void sim_state_emit(ms_t now,int force){   /* force=0: kun hvis linjens indhold er ændret, eller der er gået 90 ms */
+static void sim_state_emit(ms_t now,int force){   /* force=0: only if the line's content changed, or 90 ms have passed */
     if(!sim_sf) return;
     static char buf[12288]; JB j={buf,buf+sizeof buf-4};
     static const char*const VW[]={"splash","main","detail","sys","bye","off"};
     static const char*const TAB[]={"home","brew","steam","system","diag"};
-    static const short SHOWN[]={0,1,2,3,4,6,9,11,14,16,17,19,22,23,24,25,33,34,35,36,37,38,39,40,41,42,44,46,47,48,50,51,52,58,112,113,114};   /* v6.6: + 44, 46 (wand-kontakten) */
+    static const short SHOWN[]={0,1,2,3,4,6,9,11,14,16,17,19,22,23,24,25,33,34,35,36,37,38,39,40,41,42,44,46,47,48,50,51,52,58,112,113,114};   /* v6.6: + 44, 46 (the wand switch) */
     int pr=phase_raw(now); struct stat st; char rn[340], stamp[160]="", a[40], b[40];
     static uint32_t last_h; jb(&j,"\"client\":\"ourui-sim\",\"version\":\"" OURUI_VERSION "\"");
     jb(&j,",\"view\":\"%s\",\"view_raw\":\"%s\",\"page\":\"%s\",\"tab\":\"%s\"",view==V_BYE?"bye":"main",VW[view],sim_page_key(),TAB[page]);
     jb(&j,",\"phase\":\"%s\",\"phase_ui\":\"%s\",\"work_sta\":%u,\"link_up\":%s",PH_KEY[pr],PH_KEY[act.ph],reg[33],link_up(now)?"true":"false");
-    /* v6.6: phase = kontraktens phase_raw() (damp foerst, uaendret); phase_main = HJEM's hoved-aktivitet; steam = damp-vejen */
+    /* v6.6: phase = the contract's phase_raw() (steam first, unchanged); phase_main = HOME's main activity; steam = the steam path */
     { static const char*const SKK[]={"none","unknown","auto","wand"}; int on=link_up(now)&&steam_bits(), pm=phase_main(now);
       jb(&j,",\"phase_main\":\"%s\",\"phases\":[",PH_KEY[pm]);
       if(phase_active(pm)&&pm!=PH_STEAM) jb(&j,"\"%s\"%s",PH_KEY[pm],on?",":""); if(on) jb(&j,"\"STEAM\""); if(!phase_active(pm)) jb(&j,"%s\"%s\"",on?",":"",PH_KEY[pm]);
       jb(&j,"],\"steam\":{\"on\":%s,\"kind\":\"%s\",\"last_kind\":\"%s\",\"concurrent\":%s,\"wand_sw\":%s,\"wand_seen\":%s,\"ord24\":%u,\"target\":%d,\"milk\":%u,\"stop_btn\":%s}",
          on?"true":"false",SKK[stm.kind],SKK[stm.last_kind],(on&&phase_active(pm)&&pm!=PH_STEAM)?"true":"false",wand_sw()?"true":"false",stm.wand?"true":"false",reg[24],steam_target(),reg[48],steam_stop_visible()?"true":"false"); }
-    { int sk[2], sn=link_up(now)?stop_btns(now,sk):0;               /* v6.13: STOP-knapperne (venstre -> højre) + seneste stop-bestilling */
+    { int sk[2], sn=link_up(now)?stop_btns(now,sk):0;               /* v6.13: the STOP buttons (left -> right) + latest stop request */
       jb(&j,",\"stop\":{\"btns\":["); for(int i=0;i<sn;i++) jb(&j,"%s\"%s\"",i?",":"",ACT_KEY[sk[i]]);
       jb(&j,"],\"pending\":"); if(stp.active) jb(&j,"\"%s\"",ACT_KEY[stp.kind]); else jb(&j,"null");
       jb(&j,",\"last\":"); if(stp.n_req) jb(&j,"\"%s\"",ACT_KEY[stp.kind]); else jb(&j,"null");
       jb(&j,",\"req\":%ld,\"ok\":%ld,\"fail\":%ld}",stp.n_req,stp.n_ok,stp.n_fail); }
     jb(&j,",\"regs\":{"); for(unsigned k=0;k<sizeof SHOWN/sizeof SHOWN[0];k++) jb(&j,"%s\"%d\":%u",k?",":"",SHOWN[k],reg[SHOWN[k]]);
     jb(&j,"},\"regs_s\":{\"38\":%d,\"39\":%d}",s16(38),s16(39));
-    /* v6.9 (tillæg): visnings-konditionering + seneste chart-skala (kun visning — regs ovenfor er rå) */
+    /* v6.9 (addendum): display conditioning + latest chart scale (display only — regs above are raw) */
     jb(&j,",\"cond\":{\"raw\":%s,\"a_chart\":%.3f,\"a_hero\":%.3f,\"med\":%d,\"scale\":\"%s\",\"pct\":%d,\"hold\":%d,\"head\":%.2f,\"hero_snaps\":%d,\"wdb\":%.1f,\"gate\":%d}",
        cd.raw?"true":"false",cd.a_chart,cd.a_hero,cd.med,CS_KEY[cd.scale],cd.pct,cd.hold,cd.head,hf.n_snap,(double)CD_WDB,cd.gate);
-    /* v6.9: vægt-kilden (latch) og den viste vægt (0,1 g, signed, konditioneret + dødbånd) — regs/regs_s er rå */
+    /* v6.9: the weight source (latch) and the displayed weight (0.1 g, signed, conditioned + deadband) — regs/regs_s are raw */
     jb(&j,",\"weight\":{\"src\":%d,\"switches\":%d,\"shown\":%d}",wsl.src,wsl.n_sw,w_disp(wsl.src,now));
-    { float pb=p_bar((float)reg[51]);                       /* v6.10: tryk-estimatet (kun visning; regs er rå) — bar = null over P_EST_MAX (puls) */
+    { float pb=p_bar((float)reg[51]);                       /* v6.10: the pressure estimate (display only; regs are raw) — bar = null above P_EST_MAX (pulse) */
       jb(&j,",\"press\":{\"raw\":%u,\"k\":%.6f,\"anchor_bar\":%d,\"p0\":%d,\"max_bar\":%.1f",reg[51],(double)p_k(),p_anchor_bar(),P_ANCHOR_RAW,(double)P_EST_MAX);
       if(pb<0.f) jb(&j,",\"bar\":null,\"pulse\":true}"); else jb(&j,",\"bar\":%.2f,\"pulse\":false}",(double)pb); }
     jb(&j,",\"chart\":{\"mode\":%d,\"active\":%s,\"full\":%d,\"top\":%d,\"raw_max\":%d,\"disp_max\":%d,\"ticks\":%d,\"base_ticks\":%d,\"clipped\":%d,\"n\":%d,\"n_active\":%d}",
        cst.mode,cst.active?"true":"false",cst.full,cst.top,cst.raw_max,cst.disp_max,cst.ticks,cst.bticks,cst.clip,cst.n,cst.na);
-    /* det skærmen viser */
+    /* what the screen shows */
     jb(&j,",\"shown\":{");
     if(view==V_MAIN&&page==PG_HOME){
         jb(&j,"\"chip\":"); jb_s(&j,hm.chip?hm.chip:ph_name(act.ph)); jb(&j,",\"badge\":"); if(hm.badge) jb_s(&j,hm.badge); else jb(&j,"null"); jb(&j,",\"hero\":"); jb_s(&j,hm.hero); jb(&j,",\"unit\":"); jb_s(&j,hm.unit?hm.unit:"");
@@ -5181,15 +5187,15 @@ static void sim_state_emit(ms_t now,int force){   /* force=0: kun hvis linjens i
         jb(&j,"\"title\":"); jb_s(&j,TR(TIER_NAME[tier_of_page(page)])); jb(&j,",\"rows\":%d,\"scroll\":%d",page_rows(page),(int)scroll[page]);
     } else if(view==V_BYE){ jb(&j,"\"sub\":"); jb_s(&j,bye_sub()); }
     jb(&j,"}");
-    /* toast: text = tabellens DANSKE tekst (scenariernes assert-sprog), shown = teksten på skærmen */
+    /* toast: text = the table's DANISH text (the scenarios' assert language), shown = the text on screen */
     if(toast.dur&&now-toast.t0<toast.dur){
         uint32_t c=sim_tst.col; const char*kind=c==C_OK?"ok":(c==C_ERR?"err":(c==C_WARN?"warn":"info"));
         jb(&j,",\"toast\":{\"text\":"); jb_s(&j,sim_tst.id>=0?STR[LANG_DA][sim_tst.id]:toast.msg);
         jb(&j,",\"shown\":"); jb_s(&j,toast.msg); jb(&j,",\"id\":\"%s\",\"kind\":\"%s\"}",sim_tst.id>=0?STR_ID[sim_tst.id]:"",kind);
     } else jb(&j,",\"toast\":null");
-    /* sprog: lang = stock-UI'ets config.language (kontrakt); ui_lang = Meraki+'s eget sprog */
+    /* language: lang = the stock UI's config.language (contract); ui_lang = Meraki+'s own language */
     jb(&j,",\"lang\":%d,\"ui_lang\":\"%s\",\"lang_src\":\"%s\"",sv(S_LANG),LANG_CODE[ui_lang],lang_src==LS_FILE?"file":(lang_src==LS_UNKNOWN?"unknown":(lang_src==LS_SESSION?"session":"default")));
-    /* boot: flaget læses friskt; resten er UI'ets eget billede (bs) — state-eksporten ændrer det ikke */
+    /* boot: the flag is read fresh; the rest is the UI's own view (bs) — the state export does not change it */
     int flag=stat(rp(BOOT_FLAG),&st)==0, nb=(!flag||bs.lock==BL_NOMOUNT)?BN_ORIGINAL:(bs.lock==BL_OK?BN_OURS:BN_SLOTB);
     jb(&j,",\"boot_flag\":%s,\"next_boot\":\"%s\",\"boot_lock\":\"%s\",\"exe_slot\":\"%s\",\"self_exe\":",flag?"true":"false",
        nb==BN_OURS?"ours":(nb==BN_SLOTB?"slot_b":"original"),bs.lock==BL_OK?"ok":(bs.lock==BL_NOMOUNT?"nomount":(bs.lock==BL_NOBIN?"nobin":"vendor")),
@@ -5200,17 +5206,17 @@ static void sim_state_emit(ms_t now,int force){   /* force=0: kun hvis linjens i
     { int fd=open(rn,O_RDONLY), have=fd>=0; if(have){ static char rb[1024]; int n=(int)read(fd,rb,sizeof rb-1); close(fd); if(n<0)n=0; rb[n]=0;
         char*q=strstr(rb,"boot_id="); if(q){ snprintf(stamp,sizeof stamp,"%s",q); stamp[strcspn(stamp,"\r\n")]=0; } }
       jb(&j,",\"restart_needed\":{\"file\":%s,\"pending\":%s,\"stamp\":",have?"true":"false",restart_pending()?"true":"false"); jb_s(&j,stamp); jb(&j,"}"); }
-    /* link + write-kø */
+    /* link + write queue */
     jb(&j,",\"crc_bad\":%u,\"cmd6\":{\"ok\":%ld,\"retx\":%ld,\"fail\":%ld,\"block\":%ld},\"blok\":%ld,\"wq_n\":%d",rx_bad,wq.n_ok,wq.n_retx,wq.n_fail,wq.n_block,wq.n_block,wq.n);
     jb(&j,",\"boot_pushed\":%s,\"boot_push\":{\"enabled\":%s,\"sub1_len30\":\"%s\",\"sub112_len3\":\"%s\",\"runs\":%d}",(bp.state==BP_DONE&&bp.ra!=BPR_NOCFG&&bp.ra!=BPR_SKIP)?"true":"false",bp_on?"true":"false",sim_bpr(bp.ra),sim_bpr(bp.rb),bp.runs);
     jb(&j,",\"rx_resync\":%u",rx_resync);
     jb(&j,",\"repush\":{\"count\":%d,\"ver\":%d,\"defaults\":%d,\"last\":\"%s\",\"armed\":%s,\"ver_reqs\":%u,\"defaults_sig\":%s}",repush_count(),rps.n_ver,rps.n_def,
        rps.last==RPC_VER?"ver":(rps.last==RPC_DEF?"defaults":"none"),rps.armed?"true":"false",ver_n,mcu_defaults_sig()?"true":"false");
     jb(&j,",\"ka_hold\":%s,\"backlight_preview\":%d",sim_ka_hold?"true":"false",sim_bl);
-    { static const char*const PWS[]={"on","turning_off","off","turning_on"};   /* v6.14: tænd/sluk-knappen */
+    { static const char*const PWS[]={"on","turning_off","off","turning_on"};   /* v6.14: the power button */
       jb(&j,",\"power\":{\"state\":\"%s\",\"backlight_off\":%s,\"presses\":%ld,\"short\":%ld,\"offs\":%ld,\"ons\":%ld,\"blocked\":%ld,\"fails\":%ld,\"ack8\":%ld,\"auto_on\":%ld,\"wake_timeouts\":%ld}",
          PWS[pw.state],bl_is_off?"true":"false",pw.n_press,pw.n_short,pw.n_off,pw.n_on,pw.n_blk,pw.n_fail,pw.n_ack8,pw.n_auto,pw.n_wto); }
-    { static const char*const NSK[]={"off","down","starting","connecting","up"}; char ipb[20];   /* v6.7: net-vagten */
+    { static const char*const NSK[]={"off","down","starting","connecting","up"}; char ipb[20];   /* v6.7: the net watchdog */
       jb(&j,",\"net\":{\"enabled\":%s,\"state\":\"%s\",\"iface\":%s,\"ifup\":%s,\"wpa_pid\":%d,\"dhcp_pid\":%d,\"carrier\":%s,\"ip\":\"%s\",\"gw\":%s,\"heals\":%d,\"boots\":%d,\"heal_ms\":%d,\"init_runs\":%d,\"wpa_starts\":%d,\"dhcp_starts\":%d,\"conf_writes\":%d,\"fails\":%d}",
          net.on?"true":"false",NSK[net.on?net.state:NS_OFF],net.p.iface?"true":"false",net.p.ifup?"true":"false",net.p.wpa_pid,net.p.dhcp_pid,net.p.carrier?"true":"false",net_ipstr(net.p.ip,ipb,sizeof ipb),net.p.gw?"true":"false",
          net.n_heal,net.n_boot,(int)net.heal_ms,net.n_init,net.n_wpa,net.n_dhcp,net.n_conf,net.n_fail); }
@@ -5221,29 +5227,29 @@ static void sim_state_emit(ms_t now,int force){   /* force=0: kun hvis linjens i
     if(ssave.state==SSV_NONE) jb(&j,",\"save\":null");
     else jb(&j,",\"save\":{\"state\":\"%s\",\"param\":\"%s\",\"value\":%d}",SSV_KEY[ssave.state],ssave.param,ssave.val);
     if(act.pending==ACT_NONE) jb(&j,",\"activity_pending\":null"); else jb(&j,",\"activity_pending\":\"%s\"",ACT_KEY[act.pending]);
-    /* tællere uden for indholds-sammenligningen: RX-tæller + frame-tid (sidste, max siden forrige linje, snit, max i kørslen; VÆRT) */
+    /* counters outside the content comparison: RX counter + frame time (last, max since previous line, mean, max over the run; HOST) */
     char*tail=j.p; uint32_t h=H0; for(char*q=buf;q<tail;q++){ h^=(unsigned char)*q; h*=16777619u; }
     jb(&j,",\"crc_ok\":%u,\"frame_ms\":%.3f,\"frame_ms_max\":%.3f,\"frame_ms_avg\":%.3f,\"frame_ms_peak\":%.3f,\"frames\":%ld,\"fb_seq\":%ld}",
        rx_ok,ft_last,sim_ft_win>ft_last?sim_ft_win:ft_last,sim_frames?sim_ft_sum/sim_frames:0.0,sim_ft_peak,sim_frames,sim_fb_seq);
-    if(j.p>=j.e){ static int warned; if(!warned){ warned=1; fputs("ourui-sim: state-linje for lang\n",stderr); } return; }
+    if(j.p>=j.e){ static int warned; if(!warned){ warned=1; fputs("ourui-sim: state line too long\n",stderr); } return; }
     if(!force&&h==last_h&&now-sim_state_last<90) return;
     last_h=h; *j.p++='\n'; fprintf(sim_sf,"{\"t_ms\":%lld,",(long long)(now-sim_t0)); fwrite(buf,1,(size_t)(j.p-buf),sim_sf); fflush(sim_sf); sim_state_last=now; sim_ft_win=0;
 }
-/* efter hver renderet frame: frame-statistik, state-linje (hvis indholdet er ændret, ellers ~10 Hz), fb-fil */
+/* after each rendered frame: frame statistics, state line (if the content changed, otherwise ~10 Hz), fb file */
 static void sim_frame(ms_t now){
     sim_frames++; sim_ft_sum+=ft_last; if(ft_last>sim_ft_win) sim_ft_win=ft_last; if(ft_last>sim_ft_peak) sim_ft_peak=ft_last;
     uint32_t g=H0; int ton=toast.dur&&now-toast.t0<toast.dur;
     g=hi(g,view); g=hi(g,page); g=hi(g,sel); g=hi(g,xsel); g=hi(g,phase_raw(now)); g=hi(g,act.ph); g=hi(g,ton?(int)(toast.t0&0x7FFFFFFF):0);
     g=hi(g,ssave.state); g=hi(g,ssave.val); g=hi(g,act.pending); g=hi(g,(int)(wq.n_ok+wq.n_fail*7+wq.n_block*31+wq.n_retx*131));
     g=hi(g,ui_lang); g=hi(g,sv(S_LANG)); g=hi(g,cfg_writes); g=hi(g,bp.state); g=hi(g,stm.kind*4+stm.wand); g=hi(g,repush_count()); g=hi(g,edit_val); g=hi(g,x_edit); g=hi(g,access(rp(BOOT_FLAG),F_OK)==0);
-    int chg=(g!=sim_sig); sim_sig=g; sim_state_emit(now,chg);   /* hver frame hvis noget i linjen er ændret; ellers mindst hver 90 ms */
+    int chg=(g!=sim_sig); sim_sig=g; sim_state_emit(now,chg);   /* every frame if anything in the line changed; otherwise at least every 90 ms */
     if(sim_fb_seq!=sim_fb_dumped&&(chg||now-sim_fb_last>=100)){ if(sim_fb_write(sim_fb_path)){ sim_fb_last=now; sim_fb_dumped=sim_fb_seq; } }
 }
 
-/* ---- JSON ind: ét fladt objekt pr. linje ---- */
-typedef struct { const char*k; int kl; const char*v; int vl; char t; } JKV;   /* t: 's' streng (uden anførselstegn), 'a' array, 'o' objekt, 'n' tal/true/false/null */
+/* ---- JSON in: one flat object per line ---- */
+typedef struct { const char*k; int kl; const char*v; int vl; char t; } JKV;   /* t: 's' string (without quotes), 'a' array, 'o' object, 'n' number/true/false/null */
 static const char* js_ws(const char*s){ while(*s==' '||*s=='\t'||*s=='\r'||*s=='\n') s++; return s; }
-static const char* js_strend(const char*s){ while(*s&&*s!='"'){ if(*s=='\\'&&s[1]) s++; s++; } return s; }   /* s står efter åbnings-tegnet */
+static const char* js_strend(const char*s){ while(*s&&*s!='"'){ if(*s=='\\'&&s[1]) s++; s++; } return s; }   /* s points past the opening quote */
 static int js_parse(const char*s,JKV*kv,int max){
     int n=0; s=js_ws(s); if(*s!='{') return -1; s++;
     for(;;){
@@ -5282,9 +5288,9 @@ static int js_words(const JKV*kv,int n,const char*key,uint16_t*w,int max){
     return c;
 }
 
-/* ---- test-kroge ---- */
+/* ---- test hooks ---- */
 static int sim_def_kind=0, sim_def_a=0, sim_def_b=0; static ms_t sim_def_until=0; static char sim_def_param[40]="";
-/* afslut splash/overgang og luk en åben detalje-/system-visning — som et afsluttet tryk på TILBAGE, uden animation */
+/* end splash/transition and close an open detail/system view — like a completed tap on BACK, without animation */
 static void sim_go_main(void){
     if(sim_bye_on){ sim_bye_on=0; sim_bye_until=0; if(view==V_BYE) view=V_MAIN; }
     if(view==V_DETAIL&&sel>=0){ if(SET[sel].flags&SF_BL) bl_set(SET[sel].val); if(SET[sel].flags&SF_LOCAL) lang_set(SET[sel].val); }
@@ -5292,36 +5298,36 @@ static void sim_go_main(void){
     sel=-1; xsel=-1; x_from_switch=0; tr.type=TR_NONE; static_dirty=1; force_all=1; ui_kick=1;
 }
 static void sim_set_page(int np){ if(page!=np){ page=np; static_dirty=1; if(np==PG_HOME) act.gkind=-1; } }
-/* GEM som via stepper + GEM: åbn rækken, sæt værdien stepperen ville stå på, tryk GEM (save_begin) */
+/* SAVE as via stepper + SAVE: open the row, set the value the stepper would show, tap SAVE (save_begin) */
 static int sim_save_now(int idx,int val,const char*param,ms_t now){
     ssave.idx=idx; ssave.val=val; snprintf(ssave.param,sizeof ssave.param,"%s",param);
-    if(idx<0||(SET[idx].flags&SF_LOCK)){                    /* ingen editor: ukendt/ikke eksponeret, låst eller sensor */
+    if(idx<0||(SET[idx].flags&SF_LOCK)){                    /* no editor: unknown/not exposed, locked or sensor */
         ssave.state=SSV_REJECTED; ssave.idx=0; toast_show(TR(TX_D_LOCKED),C_WARN,now); ui_kick=1; return 0;
     }
     Setting*s=&SET[idx]; int was=s->val;
     sim_go_main(); sim_set_page(PG_T0+s->tier);
     detail_open(idx,now);
-    if(!set_valid(s,val)||(s->step>1&&(val-s->lo)%s->step)){   /* uden for intervallet eller mellem stepperens trin */
+    if(!set_valid(s,val)||(s->step>1&&(val-s->lo)%s->step)){   /* outside the range or between the stepper's steps */
         ssave.state=SSV_REJECTED; toast_show(TR(TX_T_RANGE),C_ERR,now); detail_close(now); return 0;
     }
     edit_val=val; if(s->flags&SF_BL) bl_set(val); if(s->flags&SF_LOCAL) lang_set(val);
     save_begin(now);
     if(sav.active){ ssave.state=SSV_PENDING; return 1; }
-    if(was==val){ ssave.state=SSV_UNCHANGED; return 1; }    /* GEM uden ændring lukker blot editoren */
+    if(was==val){ ssave.state=SSV_UNCHANGED; return 1; }    /* SAVE without a change just closes the editor */
     if(s->flags&SF_LOCAL){ ssave.state=SSV_OK; return 1; }
-    ssave.state=SSV_REJECTED; if(view==V_DETAIL) detail_close(now);   /* en vagt afviste (toast vist): brugeren annullerer */
+    ssave.state=SSV_REJECTED; if(view==V_DETAIL) detail_close(now);   /* a guard rejected it (toast shown): the user cancels */
     return 0;
 }
-/* aktivitet som via knappen (hold-tiden er sprunget over; vagterne er de samme) */
+/* activity as via the button (the hold time is skipped; the guards are the same) */
 static int sim_action_now(int kind,ms_t now){
     sim_go_main(); sim_set_page(PG_HOME);
     act_request(kind,now); return act.pending==kind;
 }
-/* raw_write: emulerer et STOCK-UI-write (kontrakt §5), fx MachSleep ord1=1, som ourui selv aldrig
- * sender. Samme bånd- og trigger-vagt som frame-politikken (ord 26/27/30 og start-ord kan ikke
- * sættes), og alle andre ord skal ligge i deres spec-interval — eneste lempelse er ord1 ∈ {0,1}.
- * ord1=1 sætter samtidig ourui's keep-awake på pause (ellers vækker UI'et controlleren igen inden
- * for 3 s — det er v6-adfærden); et raw_write m. ord1=0 ophæver pausen. */
+/* raw_write: emulates a STOCK UI write (contract §5), e.g. MachSleep word1=1, which ourui itself never
+ * sends. Same band and trigger guard as the frame policy (words 26/27/30 and start words cannot
+ * be set), and all other words must lie within their spec range — the only relaxation is word1 ∈ {0,1}.
+ * word1=1 also pauses ourui's keep-awake (otherwise the UI wakes the controller again within
+ * 3 s — that is the v6 behaviour); a raw_write w/ word1=0 lifts the pause. */
 static int sim_raw_push(int sub,const uint16_t*w,int len){
     if(ro_mode||wq.n>=WQ_MAX||len<1||len>WQ_WMAX||sub<0||sub>255) return 0;
     int end=sub+len;
@@ -5337,7 +5343,7 @@ static int sim_raw_push(int sub,const uint16_t*w,int len){
     if(sub<=1&&end>1) sim_ka_hold=(w[1-sub]==1);
     return 1;
 }
-/* SKIFT NU i dry-run: SIM viser farvel-skærmen i 1 s og vender tilbage (enheden: kun log + toast) */
+/* SWITCH NOW in dry-run: SIM shows the goodbye screen for 1 s and returns (device: only log + toast) */
 static int sim_bye_begin(int mode,ms_t now){
     bye_mode=mode; view=V_BYE; xsel=-1; x_from_switch=0; tr.type=TR_NONE; rip.on=0; toast.dur=0; static_dirty=1; force_all=1;
     sim_bye_on=1; sim_bye_until=now+1000; ui_kick=1; return 1;
@@ -5347,7 +5353,7 @@ static void sim_hooks_step(ms_t now){
         sim_bye_on=0;
         if(view==V_BYE&&run){ view=V_MAIN; static_dirty=1; force_all=1; act.gkind=-1; toast_show(TR(TX_T_DRYRUN),C_WARN,now); ui_kick=1; }
     }
-    if(sim_def_kind){                                       /* udskudt krog: vent (højst 600 ms) til write-køen er tom, som et tryk et øjeblik senere */
+    if(sim_def_kind){                                       /* deferred hook: wait (at most 600 ms) until the write queue is empty, like a tap a moment later */
         int busy=wq_busy()||sav.active;
         if(!busy||now>=sim_def_until){ int k=sim_def_kind; sim_def_kind=0; if(k==1) sim_save_now(sim_def_a,sim_def_b,sim_def_param,now); else sim_action_now(sim_def_a,now); }
     }
@@ -5355,7 +5361,7 @@ static void sim_hooks_step(ms_t now){
 static void sim_dispatch(const char*line,char*out,size_t on,ms_t now){
     JKV kv[24]; int n=js_parse(line,kv,24); char cmd[32]="", name[40]="", path[420]="";
     JB j={out,out+on-48};
-    if(n<0){ jb(&j,"{\"ok\":false,\"error\":\"ugyldig JSON\""); goto done; }
+    if(n<0){ jb(&j,"{\"ok\":false,\"error\":\"invalid JSON\""); goto done; }
     js_str(kv,n,"cmd",cmd,sizeof cmd); js_str(kv,n,"name",name,sizeof name);
     if(!strcmp(cmd,"ping")){ jb(&j,"{\"ok\":true,\"t\":%.3f,\"page\":\"%s\",\"phase\":\"%s\",\"client\":\"ourui-sim\",\"version\":\"" OURUI_VERSION "\"",(now-sim_t0)/1000.0,sim_page_key(),PH_KEY[phase_raw(now)]); }
     else if(!strcmp(cmd,"state_now")){ sim_state_emit(now,1); jb(&j,"{\"ok\":true"); }
@@ -5364,15 +5370,15 @@ static void sim_dispatch(const char*line,char*out,size_t on,ms_t now){
         jb(&j,"{\"ok\":%s,\"bytes\":%d",sim_fb_write(path)?"true":"false",W*H*4);
     }
     else if(!strcmp(cmd,"exit")){ sim_rc=js_int(kv,n,"code",0); run=0; jb(&j,"{\"ok\":true"); }
-    else if(!strcmp(cmd,"key")){   /* v6.14: tænd/sluk-knappen (SIM har ingen k62091-node): {"cmd":"key","value":1|0[,"code":116]} */
+    else if(!strcmp(cmd,"key")){   /* v6.14: the power button (SIM has no k62091 node): {"cmd":"key","value":1|0[,"code":116]} */
         int v=js_int(kv,n,"value",-1), c=js_int(kv,n,"code",116);
-        if(v!=0&&v!=1) jb(&j,"{\"ok\":false,\"error\":\"value skal vaere 0 eller 1\"");
+        if(v!=0&&v!=1) jb(&j,"{\"ok\":false,\"error\":\"value must be 0 or 1\"");
         else { pw_key(c,v,now); jb(&j,"{\"ok\":true,\"power\":\"%s\"",pw.state==PW_ON?"on":(pw.state==PW_OFF?"off":(pw.state==PW_OFFING?"turning_off":"turning_on"))); } }
     else if(!strcmp(cmd,"action")){
         int kind=-1; for(int k=0;k<4;k++) if(!strcmp(name,ACT_KEY[k])) kind=k;
-        int stk=-1; for(int k=0;k<4;k++) if(!strcmp(name,STOP_KEY[k])) stk=k;     /* v6.13: grind_stop / brew_stop / water_stop (+ steam_stop som før) */
+        int stk=-1; for(int k=0;k<4;k++) if(!strcmp(name,STOP_KEY[k])) stk=k;     /* v6.13: grind_stop / brew_stop / water_stop (+ steam_stop as before) */
         if(stk>=0){ int n0=wq.n; stop_request(stk,now); ui_kick=1; jb(&j,"{\"ok\":%s",wq.n>n0?"true":"false"); }
-        else if(kind<0) jb(&j,"{\"ok\":false,\"error\":\"ukendt aktivitet\"");
+        else if(kind<0) jb(&j,"{\"ok\":false,\"error\":\"unknown activity\"");
         else if((wq_busy()||sav.active)&&act.pending==ACT_NONE){ sim_def_kind=2; sim_def_a=kind; sim_def_until=now+600; jb(&j,"{\"ok\":true,\"deferred\":true"); }
         else { int ok=sim_action_now(kind,now); jb(&j,"{\"ok\":%s",ok?"true":"false"); if(!ok&&sim_tst.id>=0) jb(&j,",\"guard\":\"%s\"",STR_ID[sim_tst.id]); }
     }
@@ -5394,29 +5400,29 @@ static void sim_dispatch(const char*line,char*out,size_t on,ms_t now){
         jb(&j,"{\"ok\":%s,\"page\":\"%s\"",ok?"true":"false",sim_page_key());
     }
     else if(!strcmp(cmd,"touch")){ sim_touch_inject(js_int(kv,n,"x",CX),js_int(kv,n,"y",CY),js_int(kv,n,"ms",80),now); jb(&j,"{\"ok\":true"); }
-    else if(!strcmp(cmd,"boot_flag")){                      /* SYSTEM -> BOOT-UI -> vælg -> GEM (sys_confirm -> boot_flag_set m. vagt) */
+    else if(!strcmp(cmd,"boot_flag")){                      /* SYSTEM -> BOOT UI -> choose -> SAVE (sys_confirm -> boot_flag_set w/ guard) */
         int want=js_int(kv,n,"value",0)!=0; struct stat st;
         sim_go_main(); sim_set_page(PG_T2); sys_open(X_BOOTUI,now); x_edit=want; sys_confirm(now);
-        if(view==V_SYS) sys_close(now);                     /* låst / fejl: toast er vist, brugeren trykker TILBAGE */
+        if(view==V_SYS) sys_close(now);                     /* locked / error: toast is shown, the user taps BACK */
         int have=stat(rp(BOOT_FLAG),&st)==0;
         jb(&j,"{\"ok\":%s,\"flag\":%s,\"lock\":%d",have==want?"true":"false",have?"true":"false",bs.lock);
     }
-    else if(!strcmp(cmd,"runtime_switch")){                 /* SYSTEM -> SKIFT TIL ORIGINAL NU -> SKIFT NU (sys_confirm -> do_switch) */
+    else if(!strcmp(cmd,"runtime_switch")){                 /* SYSTEM -> SWITCH TO ORIGINAL NOW -> SWITCH NOW (sys_confirm -> do_switch) */
         sim_go_main(); sim_set_page(PG_T2); sys_open(X_SWITCH,now); sys_confirm(now);
         int went=sim_bye_on||!run;
-        if(view==V_SYS&&xsel==X_SWITCH) sys_close(now);     /* spærret (aktivitet/låst): toast vist, brugeren går tilbage */
+        if(view==V_SYS&&xsel==X_SWITCH) sys_close(now);     /* blocked (activity/locked): toast shown, the user goes back */
         jb(&j,"{\"ok\":%s,\"dry\":%s",went?"true":"false",sw_dry?"true":"false"); if(!went&&sim_tst.id>=0) jb(&j,",\"guard\":\"%s\"",STR_ID[sim_tst.id]);
     }
     else if(!strcmp(cmd,"raw_write")){
         uint16_t w[WQ_WMAX]; int len=js_words(kv,n,"words",w,WQ_WMAX), ok=len>0&&sim_raw_push(js_int(kv,n,"sub",-1),w,len);
         jb(&j,"{\"ok\":%s,\"ka_hold\":%s",ok?"true":"false",sim_ka_hold?"true":"false");
     }
-    else if(!strcmp(cmd,"config_reload")){                  /* som ved opstart: læs sprog-fil + config, og (SIM) boot-push igen */
+    else if(!strcmp(cmd,"config_reload")){                  /* as at startup: read language file + config, and (SIM) boot-push again */
         sim_go_main(); lang_load(); settings_load(); if(bp_on) boot_push_start(sim_bp_guard);
         int oor=0; for(int i=0;i<NSET;i++) oor+=set_oor(&SET[i]);
         jb(&j,"{\"ok\":%s,\"oor\":%d",cfg_ok?"true":"false",oor);
     }
-    else if(!strcmp(cmd,"cond")){                           /* v6.9: visnings-konditionering — alle felter valgfri; uden felter = læs */
+    else if(!strcmp(cmd,"cond")){                           /* v6.9: display conditioning — all fields optional; without fields = read */
         char sc[8]=""; js_str(kv,n,"scale",sc,sizeof sc);
         cd.a_chart=clampf((float)js_num(kv,n,"a_chart",cd.a_chart),0.01f,1); cd.a_hero=clampf((float)js_num(kv,n,"a_hero",cd.a_hero),0.01f,1);
         cd.med=js_int(kv,n,"med",cd.med)>=3?3:1; cd.hold=clampi(js_int(kv,n,"hold",cd.hold),1,50); cd.pct=clampi(js_int(kv,n,"pct",cd.pct),50,100);
@@ -5427,19 +5433,19 @@ static void sim_dispatch(const char*line,char*out,size_t on,ms_t now){
         jb(&j,"{\"ok\":true,\"raw\":%s,\"a_chart\":%.3f,\"a_hero\":%.3f,\"med\":%d,\"scale\":\"%s\",\"hold\":%d,\"pct\":%d,\"head\":%.2f,\"gate\":%d",
            cd.raw?"true":"false",cd.a_chart,cd.a_hero,cd.med,CS_KEY[cd.scale],cd.hold,cd.pct,cd.head,cd.gate);
     }
-    else if(!strcmp(cmd,"net")){                            /* v6.7: wifi-modellen — kill | ip_drop | if_down | cold | ap_down | ap_up | status */
+    else if(!strcmp(cmd,"net")){                            /* v6.7: the wifi model — kill | ip_drop | if_down | cold | ap_down | ap_up | status */
         int ok=1; char ipb[20];
-        if(!strcmp(name,"kill")){ nm.wpa_pid=0; nm.dhcp_pid=0; nm.carrier=0; }                       /* kill wpa_supplicant (+ udhcpc): IP'en og ruten bliver staaende paa wlan0 */
+        if(!strcmp(name,"kill")){ nm.wpa_pid=0; nm.dhcp_pid=0; nm.carrier=0; }                       /* kill wpa_supplicant (+ udhcpc): the IP and the route stay on wlan0 */
         else if(!strcmp(name,"ip_drop")){ nm.ip=0; nm.gw=0; }                                       /* ifconfig wlan0 0.0.0.0 */
-        else if(!strcmp(name,"if_down")){ nm.ifup=0; nm.carrier=0; nm.gw=0; }                       /* ifconfig wlan0 down: IP bliver, ruterne forsvinder */
+        else if(!strcmp(name,"if_down")){ nm.ifup=0; nm.carrier=0; nm.gw=0; }                       /* ifconfig wlan0 down: the IP stays, the routes disappear */
         else if(!strcmp(name,"cold")){ nm.iface=0; nm.ifup=0; nm.wpa_pid=0; nm.dhcp_pid=0; nm.carrier=0; nm.ip=0; nm.gw=0; }
         else if(!strcmp(name,"ap_down")){ nm.ap=0; nm.carrier=0; }
         else if(!strcmp(name,"ap_up")){ nm.ap=1; nm.assoc_at=now+NM_ASSOC_MS; }
         else if(strcmp(name,"status")) ok=0;
-        if(ok&&strcmp(name,"status")) net.t_probe=0;        /* vurdér i næste loop-omgang */
+        if(ok&&strcmp(name,"status")) net.t_probe=0;        /* evaluate in the next loop iteration */
         jb(&j,"{\"ok\":%s,\"state\":%d,\"wpa_pid\":%d,\"ip\":\"%s\",\"heals\":%d",ok?"true":"false",net.state,nm.wpa_pid,net_ipstr(nm.ip,ipb,sizeof ipb),net.n_heal);
     }
-    else if(!strcmp(cmd,"layout")){                         /* tillæg: de RIGTIGE tryk-mål i den aktuelle visning (hit_test's geometri) */
+    else if(!strcmp(cmd,"layout")){                         /* addendum: the REAL tap targets in the current view (hit_test's geometry) */
         jb(&j,"{\"ok\":true,\"page\":\"%s\",\"targets\":[",sim_page_key()); int c=0;
 #define LT_C(nm,x,y,r) jb(&j,"%s{\"name\":\"%s\",\"x\":%d,\"y\":%d,\"r\":%d}",c++?",":"",nm,x,y,r)
 #define LT_R(nm,x,y,w,h) jb(&j,"%s{\"name\":\"%s\",\"x\":%d,\"y\":%d,\"w\":%d,\"h\":%d}",c++?",":"",nm,(x)+(w)/2,(y)+(h)/2,w,h)
@@ -5448,7 +5454,7 @@ static void sim_dispatch(const char*line,char*out,size_t on,ms_t now){
             if(locked) LT_R("back",170,284,140,64);
             else { if(view==V_DETAIL||xsel==X_BOOTUI){ LT_C("minus",84,184,42); LT_C("plus",396,184,42); } LT_R("cancel",100,284,136,64); LT_R("save",244,284,136,64); }
         } else if(view==V_MAIN&&page==PG_HOME){
-            int sk[2], sn=stop_btns(now,sk);                                   /* v6.13: STOP for kværn/bryg/vand + latchet damp */
+            int sk[2], sn=stop_btns(now,sk);                                   /* v6.13: STOP for grind/brew/water + latched steam */
             if(sn){ for(int i=0;i<sn;i++){ Rect r=stop_hit(sn,i); LT_R(STOP_KEY[sk[i]],r.x0,r.y0,r.x1-r.x0,r.y1-r.y0); } }
             else for(int k=0;k<4;k++) LT_C(ACT_KEY[k],ACT_X[k],ACT_Y,30);
             LT_R("edge_left",10,150,60,180); LT_R("edge_right",410,150,60,180);
@@ -5459,21 +5465,21 @@ static void sim_dispatch(const char*line,char*out,size_t on,ms_t now){
         }
 #undef LT_C
 #undef LT_R
-        jb(&j,"],\"swipe\":\"vandret >= 60 px skifter side (home, brew, steam, system, diag)\"");
+        jb(&j,"],\"swipe\":\"horizontal >= 60 px switches page (home, brew, steam, system, diag)\"");
     }
-    else jb(&j,"{\"ok\":false,\"error\":\"ukendt cmd\"");
+    else jb(&j,"{\"ok\":false,\"error\":\"unknown cmd\"");
 done:
     { const JKV*id=n>0?js_get(kv,n,"id"):NULL; if(id&&id->t=='n'&&id->vl<24) jb(&j,",\"id\":%.*s}\n",id->vl,id->v); else jb(&j,",\"id\":null}\n"); }
     j.e=out+on-1; if(j.p>j.e) j.p=j.e; *j.p=0;
 }
-/* ---- ctrl-socket: JSONL, én forespørgsel pr. linje, svar m. samme id ---- */
+/* ---- ctrl socket: JSONL, one request per line, reply w/ the same id ---- */
 #define SIM_NCLI 8
 static struct { int fd, n; char buf[4096]; } sim_cli[SIM_NCLI];
 static void sim_ctrl_open(void){
     struct sockaddr_un a; memset(&a,0,sizeof a); a.sun_family=AF_UNIX;
     for(int i=0;i<SIM_NCLI;i++) sim_cli[i].fd=-1;
     if(!sim_ctrl_path[0]) return;
-    if(strlen(sim_ctrl_path)>=sizeof a.sun_path) sim_die(2,"OURUI_SIM_CTRL er for lang til en unix-socket (%d tegn, max %d)",(int)strlen(sim_ctrl_path),(int)sizeof a.sun_path-1);
+    if(strlen(sim_ctrl_path)>=sizeof a.sun_path) sim_die(2,"OURUI_SIM_CTRL is too long for a unix socket (%d chars, max %d)",(int)strlen(sim_ctrl_path),(int)sizeof a.sun_path-1);
     unlink(sim_ctrl_path); snprintf(a.sun_path,sizeof a.sun_path,"%s",sim_ctrl_path);
     sim_lfd=socket(AF_UNIX,SOCK_STREAM,0);
     if(sim_lfd<0||bind(sim_lfd,(struct sockaddr*)&a,sizeof a)!=0||listen(sim_lfd,8)!=0) sim_die(2,"ctrl-socket %s: %s",sim_ctrl_path,strerror(errno));
@@ -5501,19 +5507,19 @@ static void sim_ctrl_io(ms_t now){
             s=nl+1;
         }
         int rest=(int)(sim_cli[k].buf+sim_cli[k].n-s); memmove(sim_cli[k].buf,s,(size_t)rest); sim_cli[k].n=rest;
-        if(sim_cli[k].n>=(int)sizeof sim_cli[k].buf-1) sim_cli[k].n=0;      /* linje uden ende: smid den væk */
+        if(sim_cli[k].n>=(int)sizeof sim_cli[k].buf-1) sim_cli[k].n=0;      /* line without an end: discard it */
     }
 }
 
-/* ---- livscyklus (kaldt fra main via SIM_*-makroerne) ---- */
+/* ---- lifecycle (called from main via the SIM_* macros) ---- */
 static void sim_start(void){
-    sim_sf=fopen(sim_state_path,"a"); if(!sim_sf) sim_die(2,"kan ikke aabne OURUI_SIM_STATE %s: %s",sim_state_path,strerror(errno));
-    if(!sim_fb_write(sim_fb_path)) sim_die(4,"kan ikke skrive OURUI_SIM_FB %s: %s",sim_fb_path,strerror(errno));
-    sim_ctrl_open();                                       /* lytter FØR første state-linje (runneren pinger, så snart linjen findes) */
+    sim_sf=fopen(sim_state_path,"a"); if(!sim_sf) sim_die(2,"cannot open OURUI_SIM_STATE %s: %s",sim_state_path,strerror(errno));
+    if(!sim_fb_write(sim_fb_path)) sim_die(4,"cannot write OURUI_SIM_FB %s: %s",sim_fb_path,strerror(errno));
+    sim_ctrl_open();                                       /* listens BEFORE the first state line (the runner pings as soon as the line exists) */
     if(bp_on) boot_push_start(sim_bp_guard);
 }
 static void sim_tick(ms_t now){
-    sim_save_track();                                      /* fanger også et GEM startet af et tryk i denne omgang */
+    sim_save_track();                                      /* also catches a SAVE started by a tap in this iteration */
     sim_ctrl_io(now);
     sim_hooks_step(now);
     sim_save_track();
@@ -5549,23 +5555,23 @@ static void inp_poll(ms_t now){
 }
 
 #ifdef DEVICE_RT
-/* BOOT.md §9.2 trin 1: stop egen aktivitet — UART, touch-grab og fb slippes FØR stock-A startes */
+/* BOOT.md §9.2 step 1: stop own activity — UART, touch grab and fb are released BEFORE stock A is started */
 static void dev_release_impl(void){
     uart_flush();
     if(ufd>=0){ tcdrain(ufd); close(ufd); ufd=-1; }
     if(ifd>=0){ ioctl(ifd,EVIOCGRAB,0); close(ifd); ifd=-1; }
     if(kfd>=0){ close(kfd); kfd=-1; }                                       /* v6.14 */
-    if(bl_is_off) bl_power(1);                                              /* v6.14: stock-UI'et må ikke starte i mørke */
+    if(bl_is_off) bl_power(1);                                              /* v6.14: the stock UI must not start in the dark */
     if(fbmem){ munmap(fbmem,fblen); fbmem=NULL; }
     if(ffd>=0){ close(ffd); ffd=-1; }
 }
-static void dev_reacquire_impl(void){      /* stock-UI'et kom ikke op: ourui tager skærmen igen */
+static void dev_reacquire_impl(void){      /* the stock UI did not come up: ourui takes the screen back */
     uart_open(); fb_open(); inp_open(); kbd_open();
     RL full; full.n=1; full.r[0]=FULL; pres_prev=full;
 }
-/* v6.7: net-vagten alene, uden skaerm/UART/touch — til status og til selv-heal-beviset paa enheden:
- *   ourui --net-status            (kun laesning: probe + sammenligning af conf-filen med det, config.json giver)
- *   ourui --net-watch [sekunder]  (samme net_step() som UI'ets main-loop; logger ogsaa til stdout) */
+/* v6.7: the net watchdog alone, without screen/UART/touch — for status and for the self-heal proof on the device:
+ *   ourui --net-status            (read-only: probe + comparison of the conf file with what config.json yields)
+ *   ourui --net-watch [seconds]   (same net_step() as the UI's main loop; also logs to stdout) */
 static int net_cli(int argc,char**argv){
     ms_t now=now_ms(); const char*e;
     if((e=getenv("OURUI_CONFIG"))) snprintf(cfg_path,sizeof cfg_path,"%s",e);
@@ -5575,12 +5581,12 @@ static int net_cli(int argc,char**argv){
         if(net.cfg==NC_OK&&(wn=net_conf_build(want,sizeof want))>0) md5_hex((const uint8_t*)want,(size_t)wn,mw);
         int fd=open(NET_CONF,O_RDONLY); int hn=fd>=0?(int)read(fd,have,sizeof have):-1; if(fd>=0) close(fd);
         if(hn>0) md5_hex((const uint8_t*)have,(size_t)hn,mh);
-        printf("ourui " OURUI_VERSION " net-status (kun laesning)\n");
-        printf("probe : " NET_IF " %s, wpa_supplicant pid %d, udhcpc pid %d, carrier %d, ip %s, default-rute %d\n",p.iface?(p.ifup?"findes (UP)":"findes (NEDE)"):"mangler",p.wpa_pid,p.dhcp_pid,p.carrier,net_ipstr(p.ip,ipb,sizeof ipb),p.gw);
-        printf("config: %s -> %s; ssid-laengde %d, password-laengde %d\n",cfg_path,NC_TXT[net.cfg],net.ssid_n,(int)strlen(net.psk));
-        printf("conf  : " NET_CONF " paa disk %d bytes md5 %s\n",hn,mh);
-        printf("conf  : bygget fra config.json %d bytes md5 %s -> %s\n",wn,mw,(wn>0&&hn==wn&&!memcmp(have,want,(size_t)wn))?"IDENTISK (ville ikke blive skrevet)":"AFVIGER (ville blive skrevet ved bring-up)");
-        printf("dom   : %s\n",(p.wpa_pid>0&&p.ifup&&p.carrier&&p.ip)?"sund stak - intet at goere":(p.wpa_pid>0?"wpa_supplicant lever - den roeres ikke (evt. udhcpc)":"wpa_supplicant koerer ikke - bring-up"));
+        printf("ourui " OURUI_VERSION " net-status (read-only)\n");
+        printf("probe : " NET_IF " %s, wpa_supplicant pid %d, udhcpc pid %d, carrier %d, ip %s, default route %d\n",p.iface?(p.ifup?"present (UP)":"present (DOWN)"):"missing",p.wpa_pid,p.dhcp_pid,p.carrier,net_ipstr(p.ip,ipb,sizeof ipb),p.gw);
+        printf("config: %s -> %s; ssid length %d, password length %d\n",cfg_path,NC_TXT[net.cfg],net.ssid_n,(int)strlen(net.psk));
+        printf("conf  : " NET_CONF " on disk %d bytes md5 %s\n",hn,mh);
+        printf("conf  : built from config.json %d bytes md5 %s -> %s\n",wn,mw,(wn>0&&hn==wn&&!memcmp(have,want,(size_t)wn))?"IDENTICAL (would not be written)":"DIFFERS (would be written on bring-up)");
+        printf("dom   : %s\n",(p.wpa_pid>0&&p.ifup&&p.carrier&&p.ip)?"healthy stack - nothing to do":(p.wpa_pid>0?"wpa_supplicant alive - not touched (udhcpc if needed)":"wpa_supplicant not running - bring-up"));
         return 0;
     }
     if(!strcmp(argv[1],"--net-watch")){
@@ -5588,13 +5594,13 @@ static int net_cli(int argc,char**argv){
         net_start(now,!getenv("OURUI_NONET"));
         ms_t end=secs>0?now+(ms_t)secs*1000:0;
         while(run&&(!end||now_ms()<end)){ net_step(now_ms()); struct timespec sl={0,20*1000*1000}; nanosleep(&sl,NULL); }
-        net_now=now_ms(); net_log("net-vagt (--net-watch) slut: heal %d, wpa-starter %d, udhcpc-starter %d, conf-skrivninger %d, fejl %d",net.n_heal,net.n_wpa,net.n_dhcp,net.n_conf,net.n_fail);
+        net_now=now_ms(); net_log("net watchdog (--net-watch) done: heal %d, wpa starts %d, udhcpc starts %d, conf writes %d, errors %d",net.n_heal,net.n_wpa,net.n_dhcp,net.n_conf,net.n_fail);
         return 0;
     }
-    fprintf(stderr,"brug: ourui [--net-status | --net-watch [sekunder]]\n"); return 2;
+    fprintf(stderr,"usage: ourui [--net-status | --net-watch [seconds]]\n"); return 2;
 }
 #define NET_CLI(argc,argv) if(argc>1) return net_cli(argc,argv);
-#define NET_ENABLED (!getenv("OURUI_NONET")&&!sysroot[0])      /* under en test-rod (OURUI_ROOT) roeres det aegte netvaerk ikke */
+#define NET_ENABLED (!getenv("OURUI_NONET")&&!sysroot[0])      /* under a test root (OURUI_ROOT) the real network is not touched */
 #endif
 #ifdef SIM_RT
 #define NET_CLI(argc,argv) (void)argc; (void)argv;
@@ -5615,43 +5621,43 @@ int main(int argc,char**argv){
     if(getenv("OURUI_NOBOOTPUSH")) bp_on=0;
     SIM_ENV
     bs.self_pid=(int)getpid();
-    lang_load();                           /* v6.3: UI-sprog FØR første frame (splash); mangler/ulæselig/ukendt -> engelsk */
+    lang_load();                           /* v6.3: UI language BEFORE the first frame (splash); missing/unreadable/unknown -> English */
     gfx_init(); settings_load();
-    boot_refresh();                        /* varm op (binær-mærke-scan af slot B) under splash, ikke ved første tryk */
+    boot_refresh();                        /* warm up (binary marker scan of slot B) during splash, not on the first tap */
     uart_open(); fb_open(); inp_open();
 #ifdef DEVICE_RT
-    kbd_open();                            /* v6.14: tænd/sluk-knappen (k62091) */
+    kbd_open();                            /* v6.14: the power button (k62091) */
 #endif
     SIM_START
     ms_t t0=now_ms();
-    net_start(t0,NET_ENABLED);             /* v6.7: wifi ved opstart + selv-heal (første vurdering i første loop-omgang) */
-    proto_keepawake(t0,1);                 /* power=1 + ord1=0 (vågen) */
+    net_start(t0,NET_ENABLED);             /* v6.7: wifi at startup + self-heal (first evaluation in the first loop iteration) */
+    proto_keepawake(t0,1);                 /* power=1 + word1=0 (awake) */
 #ifdef DEVICE_RT
-    if(bp_on&&!ro_mode) boot_push_start(1);   /* v6.5: boot-push som stock (sub1 len30 + sub112 len3) m. aktivitets-vagt */
+    if(bp_on&&!ro_mode) boot_push_start(1);   /* v6.5: boot push like stock (sub1 len30 + sub112 len3) w/ activity guard */
 #endif
     RL full; full.n=1; full.r[0]=FULL; pres_prev=full;
     while(run){
         ms_t now=now_ms();
         uint8_t b[512]; int n;
         while((n=read(ufd,b,sizeof b))>0) rx_feed(b,n,now);
-        rx_feed(b,0,now);                  /* v6.5: resync-watchdog'en skal også løbe, når der intet kommer */
+        rx_feed(b,0,now);                  /* v6.5: the resync watchdog must also run when nothing arrives */
         wq_step(now);
-        loop_poll(now);                    /* v6.6: timerne står i lt (64 bit) — se loop_poll() */
+        loop_poll(now);                    /* v6.6: the timers live in lt (64 bit) — see loop_poll() */
         proto_keepawake(now,0);
         uart_flush();
         loop_graph(now);
         inp_poll(now);
 #ifdef DEVICE_RT
-        kbd_poll(now);                     /* v6.14: tænd/sluk-knappen */
+        kbd_poll(now);                     /* v6.14: the power button */
 #endif
-        pw_step(now);                      /* v6.14: hold -> sluk-frames / SLUKKET / TÆNDER… */
-        net_step(now);                     /* v6.7: ikke-blokerende; gør intet mellem to prober */
+        pw_step(now);                      /* v6.14: hold -> off frames / OFF / TURNING ON… */
+        net_step(now);                     /* v6.7: non-blocking; does nothing between two probes */
 #ifdef DEVICE_RT
         boot_push_step(now);
-        repush_step(now);                  /* v6.6: MCU-genstart (0x89 igen / startværdi-signatur) -> boot-push forfra */
+        repush_step(now);                  /* v6.6: MCU restart (0x89 again / defaults signature) -> boot push from scratch */
 #endif
         SIM_TICK(now)
-        if(!run) break;                    /* REVERT / runtime-skift: efter trin 1 er fb/UART lukket — rør dem ikke mere */
+        if(!run) break;                    /* REVERT / runtime switch: after step 1 fb/UART are closed — do not touch them any more */
         if(loop_render_due(now)){
             struct timespec fa,fb; clock_gettime(CLOCK_MONOTONIC,&fa);
             ui_frame(now);
@@ -5661,11 +5667,11 @@ int main(int argc,char**argv){
         }
         struct timespec sl={0, 2*1000*1000}; nanosleep(&sl,NULL);
     }
-    /* run.sh-tilstand: sidste frame (fb er stadig åben; ved et ægte B->A-skift er den allerede vist og fb lukket) */
+    /* run.sh mode: last frame (fb is still open; on a real B->A switch it has already been shown and fb closed) */
     if(view==V_BYE&&fbmem){ tr.type=TR_NONE; tr_was=0; static_dirty=1; force_all=1; ui_frame(now_ms()); }
     if(sw_child) printf(TR(TX_O_SWITCHED),sw_child);
-    if(sel>=0&&(SET[sel].flags&SF_BL)) bl_set(SET[sel].val);   /* fortryd uafsluttet lysstyrke-preview */
-    /* samme påmindelse som exit-skærmen — og kun når den er sand (et stock-UI m. gammelt RAM-spejl venter) */
+    if(sel>=0&&(SET[sel].flags&SF_BL)) bl_set(SET[sel].val);   /* undo an unfinished brightness preview */
+    /* same reminder as the exit screen — and only when it is true (a stock UI w/ a stale RAM mirror is waiting) */
     boot_refresh();
     if(restart_pending()) fputs(TR(TX_O_RESTART),stdout);
     else if(cfg_writes) printf(TR(TX_O_CFGCHANGED),cfg_writes);
@@ -5677,15 +5683,15 @@ int main(int argc,char**argv){
 #ifdef DEVICE_RT
     if(kfd>=0) close(kfd);
 #endif
-    if(bl_is_off) bl_power(1);             /* v6.14: aldrig efterlade skærmen mørk (run.sh -> stock-UI'et fortsætter) */
+    if(bl_is_off) bl_power(1);             /* v6.14: never leave the screen dark (run.sh -> the stock UI continues) */
     if(fbmem) munmap(fbmem,fblen);
     if(ffd>=0) close(ffd);
     return MAIN_RC;
 }
 #else
-/* ================= PREVIEW: syntetiske scenarier -> rå fb-filer (ingen device) ================= */
+/* ================= PREVIEW: synthetic scenarios -> raw fb files (no device) ================= */
 static ms_t sim_now=200000, sim_t0=0; static int sim_link=1;
-static int pv_lang=LANG_EN;                /* --lang en|da: sproget previews/selftest køres i */
+static int pv_lang=LANG_EN;                /* --lang en|da: the language previews/selftest run in */
 static void (*sim_tick)(ms_t)=NULL;
 static const uint32_t* sim_last=NULL;
 static void sim_base(void){
@@ -5713,14 +5719,14 @@ static void sim_reset(void){
     xsel=-1; x_from_switch=0; x_pending=0; bye_mode=0; run=1; bs.t=-100000; lang_set(pv_lang);
     act.raw=PH_OFFLINE; act.ph=PH_OFFLINE; act.last_ph=PH_READY; act.pending=ACT_NONE; act.gkind=-1; act.t_done=-100000; act.t_col=-100000;
     g_n=0; g_head=0; static_dirty=1; force_all=1; garc.f_d=0; parc.f_d=0;
-    cond_reset(); memset(&hf,0,sizeof hf); cd.raw=0;               /* v6.9: filtrene starter forfra (visnings-tilstanden fra DIAGNOSE nulstilles) */
+    cond_reset(); memset(&hf,0,sizeof hf); cd.raw=0;               /* v6.9: the filters restart (the display state from DIAGNOSE is reset) */
     wsl.src=wsl.cand=39; wsl.n_sw=0; wsl.req=ACT_NONE; wsl.t_req=-100000; g_lsrc=39;
     sim_now+=100000; ui_start=sim_now-20000; ui_last=sim_now; sim_tick=NULL; sim_link=1; sim_t0=sim_now;
     memset(&wq,0,sizeof wq); wq.sim_ack=1; sim_base(); settings_load();
-    memset(&bp,0,sizeof bp); bp.state=BP_DONE; bp.ra=bp.rb=BPR_OK; bp.runs=1; rx_resync=0;   /* v6.5: normal drift — boot-pushen er gennemført */
+    memset(&bp,0,sizeof bp); bp.state=BP_DONE; bp.ra=bp.rb=BPR_OK; bp.runs=1; rx_resync=0;   /* v6.5: normal operation — the boot push has completed */
     memset(&stm,0,sizeof stm); memset(&stp,0,sizeof stp); stp.kind=ACT_NONE; memset(&rps,0,sizeof rps); memset(&lt,0,sizeof lt); ver_n=0; rx_n112=0;      /* v6.6 */
-    memset(&pw,0,sizeof pw); pw.kbd_ok=1; snprintf(pw.node,sizeof pw.node,"%s · %s",INP_KBD,KBD_NAME); bl_is_off=0; ka_next=0;   /* v6.14: knap-noden som paa enheden */
-    nm_reset(0); memset(&net,0,sizeof net); net.on=1; net.cfg_logged=-1; nh_probe(&net.p,sim_now,1); net.state=NS_UP; net.booted=net.was_up=net.gw_seen=1;   /* v6.7: sund stak (DIAGNOSE: 841 / 192.168.1.100 / UP) */
+    memset(&pw,0,sizeof pw); pw.kbd_ok=1; snprintf(pw.node,sizeof pw.node,"%s · %s",INP_KBD,KBD_NAME); bl_is_off=0; ka_next=0;   /* v6.14: the button node as on the device */
+    nm_reset(0); memset(&net,0,sizeof net); net.on=1; net.cfg_logged=-1; nh_probe(&net.p,sim_now,1); net.state=NS_UP; net.booted=net.was_up=net.gw_seen=1;   /* v6.7: healthy stack (DIAGNOSE: 841 / 192.168.1.100 / UP) */
 }
 static void tick_brew(ms_t t){
     if(t<300){ reg[33]=0x0101; reg[51]=2; reg[52]=0; reg[39]=0; }
@@ -5739,28 +5745,28 @@ static void tick_water(ms_t t){
     else if(t<9300){ reg[33]=0x030B; reg[39]=(uint16_t)((t-300)*400/9000); reg[51]=1290+(t/89)%21; reg[52]=520; }
     else { reg[33]=0x0101; reg[39]=404; reg[51]=3; reg[52]=0; }
 }
-/* v6.6: display-damp som i STEAMLIVE §5 — ord 24 = 1 fra start-writen, bits 5+14, wand-kontakten (ord 44 bit0 / ord 46)
- * er IKKE aktiveret; ved målet rydder MCU'en bits'ene og derefter ord 24, og proben stiger ~3,9 °C videre på ~11 s */
+/* v6.6: display steam as in STEAMLIVE §5 — word 24 = 1 from the start write, bits 5+14, the wand switch (word 44 bit0 / word 46)
+ * is NOT activated; at the target the MCU clears the bits and then word 24, and the probe keeps rising ~3.9 °C over ~11 s */
 static void tick_steam(ms_t t){
     reg[44]=0x000C; reg[46]=0;
     if(t<300){ reg[33]=0x0101; reg[24]=0; }
     else { int m=226+(int)((t-300)*14/1000); reg[24]=1; reg[33]=0x4121; reg[48]=(uint16_t)(m>650?650:m); reg[47]=1262-(t/400)%9;
            if(m>=650){ ms_t ts=300+(650-226)*1000/14, d=t-ts; reg[33]=0x0101; reg[24]=0; reg[48]=(uint16_t)(650+(d>=11000?39:(int)(d*39/11000))); } }
 }
-/* momentan wand/flush (STEAMLIVE §6.2): bits 5+14 UDEN ord 24 = 1; ord 44 bit0 + ord 46 følger ca. 0,4 s efter; proben
- * varmes forbi målet (650) til 695, og dampen fortsætter, til wand'en slippes */
+/* momentary wand/flush (STEAMLIVE §6.2): bits 5+14 WITHOUT word 24 = 1; word 44 bit0 + word 46 follow approx. 0.4 s later; the probe
+ * is heated past the target (650) to 695, and the steam continues until the wand is released */
 static void tick_wand(ms_t t){
     reg[24]=0;
     if(t<300){ reg[33]=0x0101; reg[44]=0x000C; reg[46]=0; }
     else { int on=t>=700, m=514+(int)((t-300)*60/1000); reg[33]=0x4121; reg[44]=on?0x000D:0x000C; reg[46]=(uint16_t)on; reg[48]=(uint16_t)(m>695?695:m); reg[47]=(uint16_t)(1295-(t-300)*116/10000); }
 }
-/* flush UNDER ekstraktion (STEAMLIVE §7): 0x1307 | 0x4020 = 0x5327 i 3,1 s; brygget kører uforstyrret videre */
+/* flush DURING extraction (STEAMLIVE §7): 0x1307 | 0x4020 = 0x5327 for 3.1 s; the brew continues undisturbed */
 static void tick_brew_wand(ms_t t){
     tick_brew(t); reg[24]=0; reg[44]=0x000C; reg[46]=0; reg[48]=514;
     if(t>=20600&&t<23700){ int on=t>=21000, m=514+(int)((t-20600)*60/1000); reg[33]=0x5327; reg[44]=on?0x000D:0x000C; reg[46]=(uint16_t)on; reg[48]=(uint16_t)(m>695?695:m); }
     else if(t>=23700){ int m=667-(int)((t-23700)/50); reg[48]=(uint16_t)(m<420?420:m); }
 }
-/* v6.13: bryg (ekstraktion) + LATCHET damp samtidig (ord 24 = 1, bits 5+14 oven i bryg-bits'ene) — to STOP-knapper */
+/* v6.13: brew (extraction) + LATCHED steam concurrently (word 24 = 1, bits 5+14 on top of the brew bits) — two STOP buttons */
 static void tick_brew_latched(ms_t t){
     tick_brew(t); reg[24]=1; reg[44]=0x000C; reg[46]=0; reg[48]=(uint16_t)(300+t/60>640?640:300+t/60); reg[47]=1262;
     if(t>=300&&t<28900) reg[33]|=0x4020;
@@ -5777,7 +5783,7 @@ static int copy_file(const char*src,const char*dst){
 }
 static double msnow(void){ struct timespec ts; clock_gettime(CLOCK_MONOTONIC,&ts); return ts.tv_sec*1e3+ts.tv_nsec/1e6; }
 
-/* ---- v6.2: mock-rod til boot-/skift-logikken (kun preview/selftest; rører aldrig ægte stier) ---- */
+/* ---- v6.2: mock root for the boot/switch logic (preview/selftest only; never touches real paths) ---- */
 enum { MB_NONE=0, MB_OURS, MB_VENDOR, MB_V61, MB_OURS_EDGE, MB_OURS_NOEXEC };
 static void mk_p(const char*root,const char*rel){
     char p[520]; snprintf(p,sizeof p,"%s%s",root,rel);
@@ -5793,7 +5799,7 @@ static int mock_put(const char*root,const char*rel,const char*data,int n,int mod
 static int mock_exists(const char*root,const char*rel){ char p[520]; struct stat st; snprintf(p,sizeof p,"%s%s",root,rel); return lstat(p,&st)==0; }
 static void mock_rm(const char*root,const char*rel){ char p[520]; snprintf(p,sizeof p,"%s%s",root,rel); unlink(p); }
 static void mock_reset(const char*root){
-    if(!strstr(root,"_preview_root")&&!strstr(root,"ourui_v6_selftest")){ fprintf(stderr,"mock-rod: uventet sti %s\n",root); exit(2); }
+    if(!strstr(root,"_preview_root")&&!strstr(root,"ourui_v6_selftest")){ fprintf(stderr,"mock root: unexpected path %s\n",root); exit(2); }
     char c[640]; snprintf(c,sizeof c,"rm -rf '%s'",root); if(system(c)!=0){}
     mk_p(root,"/customer/libs"); mk_p(root,"/new_customer/libs"); mk_p(root,"/proc/self"); mk_p(root,"/proc/sys/kernel/random"); mk_p(root,"/tmp");
     static const char stock[]="\x7f" "ELF mock: vendor stock demo_v9 (slot A)\n";
@@ -5809,10 +5815,10 @@ static void mock_slot_b(const char*root,int mounted,int kind){
     mock_rm(root,SLOT_B_EXE); bs.m_valid=0;
     if(kind==MB_NONE) return;
     static char big[66000]; int bn;
-    if(kind==MB_VENDOR) bn=snprintf(big,sizeof big,"\x7f" "ELF mock: vendor demo_v9 i slot B (OTA) - intet ourui-maerke\n");
+    if(kind==MB_VENDOR) bn=snprintf(big,sizeof big,"\x7f" "ELF mock: vendor demo_v9 in slot B (OTA) - no ourui marker\n");
     else if(kind==MB_V61) bn=snprintf(big,sizeof big,"\x7f" "ELF mock: ourui V6.1 ... %s %%d gang(e) ...\n",OURUI_MARK_V61);
-    else if(kind==MB_OURS_EDGE){ memset(big,'.',sizeof big); bn=65530+snprintf(big+65530,sizeof big-65530,"%s\n",OURUI_MARK); }   /* mærket krydser 64 KiB-læsegrænsen */
-    else bn=snprintf(big,sizeof big,"\x7f" "ELF mock: ourui i slot B ... %s ...\n",OURUI_MARK);
+    else if(kind==MB_OURS_EDGE){ memset(big,'.',sizeof big); bn=65530+snprintf(big+65530,sizeof big-65530,"%s\n",OURUI_MARK); }   /* the marker straddles the 64 KiB read limit */
+    else bn=snprintf(big,sizeof big,"\x7f" "ELF mock: ourui in slot B ... %s ...\n",OURUI_MARK);
     mock_put(root,SLOT_B_EXE,big,bn,kind==MB_OURS_NOEXEC?0644:0755);
 }
 static void mock_flag(const char*root,int on){ if(on) mock_put(root,BOOT_FLAG,"",0,0644); else mock_rm(root,BOOT_FLAG); }
@@ -5822,7 +5828,7 @@ static void mock_proc_rm(const char*root,int pid){
     for(int i=0;i<4;i++){ snprintf(r,sizeof r,"/proc/%d/%s",pid,f[i]); mock_rm(root,r); }
     char p[520]; snprintf(p,sizeof p,"%s/proc/%d",root,pid); rmdir(p);
 }
-/* state: 'T' = stoppet (SIGSTOP), 'S'/'R' = kører, 'Z' = zombie (tom cmdline) */
+/* state: 'T' = stopped (SIGSTOP), 'S'/'R' = running, 'Z' = zombie (empty cmdline) */
 static void mock_proc(const char*root,int pid,const char*exe,const char*comm,char state,int64_t start_s){
     char r[64],b[256],p[520]; mock_proc_rm(root,pid);
     snprintf(r,sizeof r,"/proc/%d",pid); mk_p(root,r);
@@ -5838,16 +5844,16 @@ static void mock_swlog(const char*root,const char*text){ if(text) mock_put(root,
 #define MOCK_STOCK_PID 187
 #define MOCK_SW_PID 301
 static const char MOCK_SWLOG[]=
- "[2026-11-17 12:40:41 UTC] switcher startet (pid 301): gestus = 3\xC3\x97long-press \xE2\x89\xA5" "1500 ms i hj\xC3\xB8rne x<90,y<90 inden for 6 s\n"
- "[2026-11-17 12:40:41 UTC] input: /dev/input/event0 (navn 'TECHWIN_TS', raw x 0..4095 y 0..4095) \xE2\x80\x94 READ-ONLY, ingen grab\n"
- "[2026-11-17 12:41:02 UTC] gestus: gyldig long-press i hj\xC3\xB8rne talt (1/3)\n"
- "[2026-11-17 12:41:04 UTC] gestus: gyldig long-press i hj\xC3\xB8rne talt (2/3)\n"
- "[2026-11-17 12:41:06 UTC] GESTUS UDL\xC3\x98ST + mode A \xE2\x86\x92 runtime-skift til ourui\n"
- "[2026-11-17 12:41:06 UTC] skift A\xE2\x86\x92" "B: SIGSTOP pid 187 (watchdog ser stadig PID)\n"
- "[2026-11-17 12:41:06 UTC] skift A\xE2\x86\x92" "B: launchede B pid 412 (/new_customer/demo_v9)\n"
- "[2026-11-17 12:41:07 UTC] skift A\xE2\x86\x92" "B: B verificeret (exe-link) \xE2\x80\x94 SIGKILL pid 187\n"
- "[2026-11-17 12:41:07 UTC] skift A\xE2\x86\x92" "B F\xC3\x86RDIG: ourui k\xC3\xB8rer, stock-A exit'et, ingen reboot\n";
-/* standard-tilstand for previews: bootet i slot B (flag sat), ourui = /new_customer/demo_v9, switcher kører */
+ "[2026-11-17 12:40:41 UTC] switcher started (pid 301): gesture = 3\xC3\x97long-press \xE2\x89\xA5" "1500 ms in corner x<90,y<90 within 6 s\n"
+ "[2026-11-17 12:40:41 UTC] input: /dev/input/event0 (name 'TECHWIN_TS', raw x 0..4095 y 0..4095) \xE2\x80\x94 READ-ONLY, no grab\n"
+ "[2026-11-17 12:41:02 UTC] gesture: valid corner long-press counted (1/3)\n"
+ "[2026-11-17 12:41:04 UTC] gesture: valid corner long-press counted (2/3)\n"
+ "[2026-11-17 12:41:06 UTC] GESTURE TRIGGERED + mode A \xE2\x86\x92 runtime switch to ourui\n"
+ "[2026-11-17 12:41:06 UTC] switch A\xE2\x86\x92" "B: SIGSTOP pid 187 (watchdog still sees the PID)\n"
+ "[2026-11-17 12:41:06 UTC] switch A\xE2\x86\x92" "B: launched B pid 412 (/new_customer/demo_v9)\n"
+ "[2026-11-17 12:41:07 UTC] switch A\xE2\x86\x92" "B: B verified (exe link) \xE2\x80\x94 SIGKILL pid 187\n"
+ "[2026-11-17 12:41:07 UTC] switch A\xE2\x86\x92" "B DONE: ourui running, stock A exited, no reboot\n";
+/* default state for previews: booted in slot B (flag set), ourui = /new_customer/demo_v9, switcher running */
 static void mock_boot_b(const char*root){
     mock_reset(root); mock_slot_b(root,1,MB_OURS); mock_flag(root,1); mock_self(root,SLOT_B_EXE);
     mock_proc(root,MOCK_SW_PID,"/new_customer/ourui/boot/switcher","switcher",'S',12);
@@ -5855,7 +5861,7 @@ static void mock_boot_b(const char*root){
     mock_swlog(root,MOCK_SWLOG);
     bs.self_pid=MOCK_SELF_PID; bs.t=-100000;
 }
-/* run.sh-tilstand: A-boot (intet flag), ourui kørt fra /new_customer/ourui, stock-UI SIGSTOP'et, ingen switcher */
+/* run.sh mode: A boot (no flag), ourui run from /new_customer/ourui, stock UI SIGSTOPped, no switcher */
 static void mock_runsh(const char*root,int64_t stock_start_s){
     mock_reset(root); mock_slot_b(root,1,MB_OURS); mock_flag(root,0); mock_self(root,"/new_customer/ourui/ourui");
     mock_proc(root,MOCK_STOCK_PID,SLOT_A_EXE,"demo_v9",'T',stock_start_s);
@@ -5875,8 +5881,8 @@ static int copy_big(const char*src,const char*dst,int mode){
     static char buf[65536]; int n,ok=1; while((n=read(a,buf,sizeof buf))>0) if(write(b,buf,n)!=n){ ok=0; break; }
     close(a); close(b); chmod(dst,mode); return ok&&n==0;
 }
-/* mock-"stock" til launch-selftesten: en kopi af denne binær, lagt som <rod>/customer/demo_v9 og startet
- * af switch_launch(). Den kvitterer med hvad en ægte demo_v9 ville arve, og lever lidt videre. */
+/* mock "stock" for the launch selftest: a copy of this binary, placed as <root>/customer/demo_v9 and started
+ * by switch_launch(). It reports what a real demo_v9 would inherit, and stays alive a little longer. */
 static int mock_stock_main(const char*argv0){
     const char*out=getenv("OURUI_MOCK_STOCK"),*rel=getenv("OURUI_MOCK_RELEASED"),*ld=getenv("LD_LIBRARY_PATH");
     char cwd[600]=""; if(!getcwd(cwd,sizeof cwd)) cwd[0]=0;
@@ -5899,7 +5905,7 @@ static int hexeq(const uint8_t*b,int n,const char*hex){
     int i=0; while(*hex){ while(*hex==' ')hex++; if(!*hex) break; unsigned v; if(sscanf(hex,"%2x",&v)!=1) return 0; hex+=2; if(i>=n||b[i]!=v) return 0; i++; }
     return i==n;
 }
-/* uafhængig audit af en køet frame (genbruger IKKE frame_policy): intet trigger-ord != 0 ud over 'allowed' */
+/* independent audit of a queued frame (does NOT reuse frame_policy): no trigger word != 0 beyond 'allowed' */
 static int frame_trig_audit(const WFrame*f,uint32_t allowed){
     for(int k=0;k<f->len;k++){
         int idx=f->sub+k; if(idx>=32||f->w[k]==0) continue;
@@ -5912,32 +5918,32 @@ static int frame_covers(const WFrame*f,int idx){ return idx>=f->sub&&idx<f->sub+
 static int q_hex(int k,const char*hex){ uint8_t b[80]; int n=build_write(b,wq.q[k].sub,wq.q[k].w,wq.q[k].len); return hexeq(b,n,hex); }
 static int rej(uint8_t sub,const uint16_t*w,int len,uint32_t intent,int why){ int n0=wq.n; int r=wq_push_t(sub,w,len,intent); int ok=(r==0&&wq_rej==why&&wq.n==n0); wq.n=n0; return ok; }
 #define W1(v) (uint16_t[1]){(uint16_t)(v)}
-/* som chord_half, men inden for gauge-ringens inderkant (r 204) — til visninger hvor ringen er tegnet */
+/* like chord_half, but inside the gauge ring's inner edge (r 204) — for views where the ring is drawn */
 static float ring_half(int y,int h){ int d0=abs(y-CY), d1=abs(y+h-CY); int d=d0>d1?d0:d1; return d>=204?0:sqrtf((float)(204*204-d*d)); }
 static float chord_half(int y,int h){ int d0=abs(y-CY), d1=abs(y+h-CY); int d=d0>d1?d0:d1; return d>=RSAFE?0:sqrtf((float)(RSAFE*RSAFE-d*d)); }
-static void sim_ready(ms_t now){   /* minimal "KLAR"-tilstand uden simulator */
+static void sim_ready(ms_t now){   /* minimal "READY" state without simulator */
     memset(reg,0,sizeof reg); for(int i=0;i<REGN;i++) reg_seen[i]=1;
     reg[0]=1; reg[33]=0x0101; reg[11]=870; reg[40]=900; reg[23]=360; reg[112]=0x0104; reg[113]=0x0605; reg[114]=70; last_rx_ms=now;
 }
-/* ---- v6.3: i18n-hjælpere ---- */
-#define LAY(w,lim,what,st) do{ if((w)>(lim)){ ok=0; printf("     [%s] %s: '%s' er %.0f px, plads %.0f px\n",LANG_CODE[ui_lang],what,st,(double)(w),(double)(lim)); } }while(0)
+/* ---- v6.3: i18n helpers ---- */
+#define LAY(w,lim,what,st) do{ if((w)>(lim)){ ok=0; printf("     [%s] %s: '%s' is %.0f px, room %.0f px\n",LANG_CODE[ui_lang],what,st,(double)(w),(double)(lim)); } }while(0)
 static const char* stl(const char*name){ static char b[4][420]; static int k; char*o=b[k++&3]; snprintf(o,420,"[%s] %s",LANG_CODE[ui_lang],name); return o; }
-/* pixel-budget pr. streng-klasse (skrift, max bredde) — samme tal som tegne-koden bruger */
+/* pixel budget per string class (font, max width) — same numbers as the drawing code uses */
 static const struct { int font,maxw; const char*what; } KB[NKLASS]={
- [KT]={F_XS,TOAST_TW,"toast"},[KSUB]={F_XS,SUB_W-8,"HJEM-underlinje"},[KLAB]={F_XS,254,"HJEM-label (felt 260)"},[KCHIP]={F_S,150,"fase-chip"},
- [KBTN]={F_XS,104,"knap"},[KBTNS]={F_S,104,"knap"},[KTITLE]={F_M,224,"side-titel"},[KPSUB]={F_XS,298,"side-undertitel"},[KSPL]={F_XS,SPLASH_W-8,"tagline"},
- [KDL]={F_XS,170,"diagnose-label"},[KDV]={F_S,168,"diagnose-vaerdi"},[KDF]={F_XS,DG_FULL_W,"fuldbredde-linje"},[KNOTE]={F_XS,392,"note (felt 400)"},
- [KF1]={F_XS,264,"fodlinje 1 (fri af gauge-enderne)"},[KF2]={F_XS,269,"fodlinje 2"},[KXSUB]={F_XS,300,"raekke-underlinje"},[KST]={F_XS,348,"status (felt 360)"},
+ [KT]={F_XS,TOAST_TW,"toast"},[KSUB]={F_XS,SUB_W-8,"HOME subline"},[KLAB]={F_XS,254,"HOME label (field 260)"},[KCHIP]={F_S,150,"phase chip"},
+ [KBTN]={F_XS,104,"button"},[KBTNS]={F_S,104,"button"},[KTITLE]={F_M,224,"page title"},[KPSUB]={F_XS,298,"page subtitle"},[KSPL]={F_XS,SPLASH_W-8,"tagline"},
+ [KDL]={F_XS,170,"diagnose label"},[KDV]={F_S,168,"diagnose value"},[KDF]={F_XS,DG_FULL_W,"full-width line"},[KNOTE]={F_XS,392,"note (field 400)"},
+ [KF1]={F_XS,264,"footer 1 (clear of the gauge ends)"},[KF2]={F_XS,269,"footer 2"},[KXSUB]={F_XS,300,"row subline"},[KST]={F_XS,348,"status (field 360)"},
 };
 static const char*const KNAME[NKLASS]={"-","toast","home-sub","home-label","phase-chip","button","button","page-title","page-sub","tagline","diag-label","diag-value","full-line","note","foot-1","foot-2","row-sub","status","console"};
-/* printf-konverteringerne i en streng, i rækkefølge ("%s|%.34s|%ld|") */
+/* the printf conversions in a string, in order ("%s|%.34s|%ld|") */
 static void fmt_sig(const char*s,char*o,size_t n){
     size_t k=0; o[0]=0;
     for(;*s;s++){ if(*s!='%') continue; if(s[1]=='%'){ s++; continue; }
         const char*e=s+1; while(*e&&!strchr("sduXxfc",*e)) e++; if(!*e) break;
         for(const char*q=s;q<=e&&k+2<n;q++) o[k++]=*q; if(k+2<n) o[k++]='|'; o[k]=0; s=e; }
 }
-/* værst tænkelige udfyldning: %s -> "888.8", heltal -> "88888", %f -> "88.8" (til bredde-måling) */
+/* worst-case fill: %s -> "888.8", integer -> "88888", %f -> "88.8" (for width measurement) */
 static void fmt_fill(const char*s,char*o,size_t n){
     size_t k=0;
     for(;*s&&k+8<n;s++){
@@ -5946,7 +5952,7 @@ static void fmt_fill(const char*s,char*o,size_t n){
         const char*r=*e=='s'?"888.8":(*e=='f'?"88.8":"88888"); while(*r) o[k++]=*r++; s=e; }
     o[k]=0;
 }
-/* tal-signatur: alle cifre + '.'/',' der står MELLEM to cifre — skal være ens i alle sprog */
+/* number signature: all digits + '.'/',' that sit BETWEEN two digits — must be identical in all languages */
 static void num_sig(const char*s,char*o,size_t n){
     size_t k=0;
     for(const char*p=s;*p&&k+1<n;p++){
@@ -5954,7 +5960,7 @@ static void num_sig(const char*s,char*o,size_t n){
         else if((*p=='.'||*p==',')&&p>s&&isdigit((unsigned char)p[-1])&&isdigit((unsigned char)p[1])) o[k++]=*p; }
     o[k]=0;
 }
-/* synlig tekst (versaliseret, uden kode-spænd og styretegn) — til navne-tjek */
+/* visible text (upper-cased, without code spans and control chars) — for name checks */
 static void vis_text(const char*s,char*o,size_t n,int keep_code){
     size_t k=0; int lc=0;
     for(const unsigned char*p=(const unsigned char*)s;*p&&k+1<n;p++){
@@ -5963,7 +5969,7 @@ static void vis_text(const char*s,char*o,size_t n,int keep_code){
         o[k++]=(char)toupper(*p); }
     o[k]=0;
 }
-/* har stroke-fonten en glyf for hvert tegn? (ukendte tegn tegnes ellers som '?') */
+/* does the stroke font have a glyph for every char? (unknown chars are otherwise drawn as '?') */
 static int glyphs_ok(const char*s,char*bad,size_t bn){
     const unsigned char*p=(const unsigned char*)s; g_lc=0;
     while(*p){ const unsigned char*q=p; int g=glyph_next(&p);
@@ -5973,27 +5979,27 @@ static int glyphs_ok(const char*s,char*bad,size_t bn){
 }
 static int put_bytes(const char*path,const char*d,int n){ int fd=open(path,O_WRONLY|O_CREAT|O_TRUNC,0644); if(fd<0) return 0; int ok=n==0||write(fd,d,n)==n; close(fd); return ok; }
 static int file_is(const char*path,const char*want){ char b[64]; int fd=open(path,O_RDONLY); if(fd<0) return 0; int n=(int)read(fd,b,sizeof b); close(fd); return n==(int)strlen(want)&&!memcmp(b,want,n); }
-static int lang_from(const char*path,const char*d,int n){ put_bytes(path,d,n); ui_lang=LANG_DA; static_dirty=0; return lang_load(); }   /* udgangspunkt DA: en ukendt værdi skal aktivt give EN */
-/* ====================== v6.5: selftest — boot-push paa enheden + RX-resync ====================== */
+static int lang_from(const char*path,const char*d,int n){ put_bytes(path,d,n); ui_lang=LANG_DA; static_dirty=0; return lang_load(); }   /* starting point DA: an unknown value must actively yield EN */
+/* ====================== v6.5: selftest — boot push on the device + RX resync ====================== */
 static int mk_frame(uint8_t*o,uint8_t cmd,uint8_t sub,const uint16_t*w,int len){
     int n=0; o[n++]=0xAA; o[n++]=0x55; o[n++]=cmd; o[n++]=sub; o[n++]=(uint8_t)len;
     for(int k=0;k<len;k++){ o[n++]=w[k]&0xFF; o[n++]=w[k]>>8; }
     uint16_t c=crc16(o,n); o[n++]=c&0xFF; o[n++]=c>>8; return n;
 }
 static void rx_zero(void){ rxlen=0; rx_pend_ms=rx_last_ms=0; rx_ok=rx_bad=rx_resync=0; last_rx_ms=last_bad_ms=-100000; }
-/* én omgang af main(): først det der er ankommet, derefter watchdog-kaldet */
+/* one iteration of main(): first whatever has arrived, then the watchdog call */
 static void rx_tick(const uint8_t*d,int n,ms_t t){ if(n>0) rx_feed(d,n,t); rx_feed(NULL,0,t); }
-/* status-svar som controlleren sender det: 0x83 sub0 len56 (119 bytes); ord 55 = løbenummer k */
+/* status reply as the controller sends it: 0x83 sub0 len56 (119 bytes); word 55 = sequence number k */
 #define RXV_N 119
 static int rx_v(uint8_t*o,int k){ uint16_t w[56]; memset(w,0,sizeof w); w[0]=1; w[33]=0x0101; w[55]=(uint16_t)k; return mk_frame(o,0x83,0,w,56); }
 static void st_status(uint16_t ws,ms_t now){ uint8_t f[32]; uint16_t w[7]={ws,0,0,0,0,0,0}; int n=mk_frame(f,0x83,33,w,7); rx_feed(f,n,now); }
-/* controllerens ACK paa den senest sendte cmd6-frame: 0x86 m. samme sub/len og echo af payload */
-static void st_ack_last(ms_t now){ uint8_t a[80]; int n=last_tx_len; if(n<7) return;   /* v6.13: intet sendt endnu (mutant-proeverne) -> intet ACK */ memcpy(a,last_tx,n); a[2]=0x86; uint16_t c=crc16(a,n-2); a[n-2]=c&0xFF; a[n-1]=c>>8; rx_feed(a,n,now); }
+/* the controller's ACK to the most recently sent cmd6 frame: 0x86 w/ the same sub/len and an echo of the payload */
+static void st_ack_last(ms_t now){ uint8_t a[80]; int n=last_tx_len; if(n<7) return;   /* v6.13: nothing sent yet (the mutant tests) -> no ACK */ memcpy(a,last_tx,n); a[2]=0x86; uint16_t c=crc16(a,n-2); a[n-2]=c&0xFF; a[n-1]=c>>8; rx_feed(a,n,now); }
 static void st_bp_reset(void){
     memset(&wq,0,sizeof wq); memset(&bp,0,sizeof bp); memset(&sav,0,sizeof sav); act.pending=ACT_NONE; txq_len=0; last_tx_len=0;
     memset(reg,0,sizeof reg); memset(reg_seen,0,sizeof reg_seen); rx_zero(); ro_mode=0;
 }
-/* fixture-config i stock-UI'ets cJSON-format; ALLE boot-push-felter afviger fra artifacts/config.json og fra MCU'ens startværdier */
+/* fixture config in the stock UI's cJSON format; ALL boot-push fields differ from artifacts/config.json and from the MCU's power-on defaults */
 static int st_fixture(const char*path,int brew_temp,int with_brew){
     char b[1400]; int n=snprintf(b,sizeof b,"{\n\t\"Temperature\":\t1,\n\t\"timemode\":\t1,\n\t\"Automatically\":\t1,\n\t\"timeZone\":\t48,\n\t\"backlight\":\t9,\n\t\"volume\":\t31,\n"
         "\t\"sleepMode\":\t1,\n\t\"sleepModeSetting\":\t0,\n\t\"clearTip\":\t0,\n\t\"brewMode\":\t0,\n");
@@ -6003,142 +6009,142 @@ static int st_fixture(const char*path,int brew_temp,int with_brew){
         "\t\"AtuoSteamTarge\":\t600,\n\t\"hotWaterShortcut\":\t1,\n\t\"autoHotWaterTarget\":\t1500,\n\t\"presetStore\":\t{\n\t},\n\t\"softversion\":\t\"1.1.1-69\",\n\t\"hotWaterMode\":\t1\n}");
     return put_bytes(path,b,n);
 }
-/* uafhængige vektorer (beregnet uden for programmet, egen CRC): stock's boot-push for fixture-config'en */
+/* independent vectors (computed outside the program, own CRC): stock's boot push for the fixture config */
 #define BPV_A "aa 55 06 01 1e 00 00 02 00 00 00 ac 00 3c 00 00 00 00 00 00 00 00 00 00 00 a2 03 00 00 3c 00 02 00 3c 00 00 00 dc 05 00 00 00 00 00 00 00 00 00 00 a4 01 00 00 58 02 00 00 00 00 00 00 00 00 00 00 88 89"
-#define BPV_B "aa 55 06 70 03 03 00 00 09 3c 00 e8 da"        /* v6.7: ord 113 lo-byte = 0 (stock's optagede boot-push); CRC beregnet uden for programmet */
-/* ... og for artifacts/config.json (870 / 185 / 1 / 3 / 400 / 360 / 650) */
+#define BPV_B "aa 55 06 70 03 03 00 00 09 3c 00 e8 da"        /* v6.7: word 113 lo byte = 0 (stock's captured boot push); CRC computed outside the program */
+/* ... and for artifacts/config.json (870 / 185 / 1 / 3 / 400 / 360 / 650) */
 #define BPV_A_REAL "aa 55 06 01 1e 00 00 01 00 00 00 b9 00 3c 00 00 00 00 00 00 00 00 00 00 00 66 03 00 00 3c 00 03 00 3c 00 00 00 90 01 00 00 00 00 00 00 00 00 00 00 68 01 00 00 8a 02 00 00 00 00 00 00 00 00 00 00 62 3e"
 static void st_bootpush_device(const char*cfgsrc){
-    printf("== selftest: v6.5 boot-push paa enheden (aktivitets-vagt TIL; fixture-config; ACK'er gennem rx_feed) ==\n");
+    printf("== selftest: v6.5 boot push on the device (activity guard ON; fixture config; ACKs through rx_feed) ==\n");
     __typeof__(wq) wq0=wq; uint16_t reg0[REGN]; int seen0[REGN]; memcpy(reg0,reg,sizeof reg); memcpy(seen0,reg_seen,sizeof reg_seen);
     ms_t rxl0=last_rx_ms, ok0=rx_ok, bad0=rx_bad; int tx0=txq_len, ro0=ro_mode, bpon0=bp_on;
     char dir[300], fx[340]; snprintf(dir,sizeof dir,"/tmp/ourui_v6_selftest_%d",(int)getpid()); mkdir(dir,0755); snprintf(fx,sizeof fx,"%s/bootpush_fixture.json",dir);
     ms_t T=30000000L;
-    /* --- den ægte config: blokken er stock's, byte for byte --- */
+    /* --- the real config: the block is stock's, byte for byte --- */
     st_bp_reset(); boot_push_start(1); st_status(0x0101,T); boot_push_step(T); wq_step(T);
-    st_check("artifacts/config.json: sub1 len30 paa linjen = uafhaengig vektor (… 66 03 … b9 00 … 62 3e), 67 bytes",bp.state==BP_A&&hexeq(last_tx,last_tx_len,BPV_A_REAL)&&txq_len==67);
+    st_check("artifacts/config.json: sub1 len30 on the wire = independent vector (… 66 03 … b9 00 … 62 3e), 67 bytes",bp.state==BP_A&&hexeq(last_tx,last_tx_len,BPV_A_REAL)&&txq_len==67);
     /* --- fixture --- */
     int fxok=st_fixture(fx,930,1); snprintf(cfg_path,sizeof cfg_path,"%s",fx); settings_load();
     { uint16_t a[30],p[3]; boot_push_words(a,p);
       static const uint16_t ea[30]={0,2,0,172,60,0,0,0,0,0,930,0,60,2,60,0,1500,0,0,0,0,0,420,0,600,0,0,0,0,0};
-      st_check("fixture-config indlaest; ord 1..30 = 0,2,0,172,60,…,930,0,60,2,60,0,1500,…,420,0,600,0…; ord 112..114 = 0003 0900 60 (v6.7: breakTime-byten er 0 i boot-pushen)",
+      st_check("fixture config loaded; words 1..30 = 0,2,0,172,60,…,930,0,60,2,60,0,1500,…,420,0,600,0…; words 112..114 = 0003 0900 60 (v6.7: the breakTime byte is 0 in the boot push)",
                fxok&&cfg_ok&&boot_push_cfg_ok()&&!memcmp(a,ea,sizeof ea)&&p[0]==0x0003&&p[1]==0x0900&&p[2]==60); }
-    /* --- vagten venter, til work_sta er kendt --- */
+    /* --- the guard waits until work_sta is known --- */
     st_bp_reset(); boot_push_start(1); boot_push_step(T);
-    int w1=bp.state==BP_WAIT_A&&bp.guard&&wq.n==0;                                    /* intet link */
-    { static const uint8_t vr[8]={0xAA,0x55,0x89,0x01,0x00,0x00,0x6F,0x81}; rx_feed(vr,8,T+5); }   /* controllerens versions-forespørgsel: link oppe, work_sta ukendt */
-    boot_push_step(T+6); int w2=link_up(T+6)&&!reg_seen[33]&&bp.state==BP_WAIT_A&&bp.guard&&wq.n==0&&txq_len==15;   /* kun versions-svaret er sendt */
-    st_check("vagt: intet sendes uden link, og heller ikke med link saa laenge work_sta (ord 33) er ukendt",w1&&w2);
-    /* --- ledig maskine: sub1 len30 -> ACK -> sub112 len3 -> ACK --- */
+    int w1=bp.state==BP_WAIT_A&&bp.guard&&wq.n==0;                                    /* no link */
+    { static const uint8_t vr[8]={0xAA,0x55,0x89,0x01,0x00,0x00,0x6F,0x81}; rx_feed(vr,8,T+5); }   /* the controller's version query: link up, work_sta unknown */
+    boot_push_step(T+6); int w2=link_up(T+6)&&!reg_seen[33]&&bp.state==BP_WAIT_A&&bp.guard&&wq.n==0&&txq_len==15;   /* only the version reply has been sent */
+    st_check("guard: nothing is sent without a link, nor with a link as long as work_sta (word 33) is unknown",w1&&w2);
+    /* --- idle machine: sub1 len30 -> ACK -> sub112 len3 -> ACK --- */
     st_status(0x0101,T+10); boot_push_step(T+10);
     int qa=bp.state==BP_A&&!bp.guard&&wq.n==1&&wq.q[0].sub==1&&wq.q[0].len==30; const WFrame fa=wq.q[0];
     wq_step(T+10);
-    st_check("ledig (work_sta 0101): sub1 len30 paa linjen = uafhaengig vektor for fixture'en (67 bytes)",qa&&hexeq(last_tx,last_tx_len,BPV_A)&&txq_len==15+67);
+    st_check("idle (work_sta 0101): sub1 len30 on the wire = independent vector for the fixture (67 bytes)",qa&&hexeq(last_tx,last_tx_len,BPV_A)&&txq_len==15+67);
     { int z=1; static const int zero[]={1,3,6,7,8,9,10,12,16,18,19,20,21,22,24,26,27,28,29,30}; for(unsigned q=0;q<sizeof zero/sizeof zero[0];q++) if(fa.w[zero[q]-1]) z=0;
-      st_check("trigger-ord-politik: ord 26/27/30 = 0, start-ord 3/6/9/16/22/24 = 0, ord 5/13/15 = 60, oevrige ukendte ord = 0 (uafhaengig audit)",
+      st_check("trigger-word policy: words 26/27/30 = 0, start words 3/6/9/16/22/24 = 0, words 5/13/15 = 60, other unknown words = 0 (independent audit)",
                z&&frame_trig_audit(&fa,0)&&fa.w[4]==60&&fa.w[12]==60&&fa.w[14]==60); }
     st_ack_last(T+35); boot_push_step(T+36); int a1=bp.ra==BPR_OK&&bp.state==BP_WAIT_B;
     boot_push_step(T+36); wq_step(T+36); int b1=bp.state==BP_B&&hexeq(last_tx,last_tx_len,BPV_B)&&txq_len==15+67+13;
     st_ack_last(T+60); boot_push_step(T+61);
-    st_check("ACK (0x86 m. echo) -> sub112 len3 = uafhaengig vektor (… 03 00 00 09 3c 00 e8 da) -> ACK -> faerdig: OK / OK, 0 retransmit, 0 fejl, 0 blok",
+    st_check("ACK (0x86 w/ echo) -> sub112 len3 = independent vector (… 03 00 00 09 3c 00 e8 da) -> ACK -> done: OK / OK, 0 retransmits, 0 failures, 0 blocks",
              a1&&b1&&bp.state==BP_DONE&&bp.rb==BPR_OK&&bp.runs==1&&wq.n==0&&wq.n_ok==2&&wq.n_retx==0&&wq.n_fail==0&&wq.n_block==0&&txq_len==15+67+13);
-    st_check("controller-spejlet efter ACK = config: ord 11 = 930, ord 4 = 172, ord 2 = 2, ord 14 = 2, ord 17 = 1500, ord 23 = 420, ord 25 = 600, ord 112..114 = 0003 0900 60",
+    st_check("controller mirror after ACK = config: word 11 = 930, word 4 = 172, word 2 = 2, word 14 = 2, word 17 = 1500, word 23 = 420, word 25 = 600, words 112..114 = 0003 0900 60",
              reg[11]==930&&reg[4]==172&&reg[2]==2&&reg[14]==2&&reg[17]==1500&&reg[23]==420&&reg[25]==600&&reg[112]==0x0003&&reg[113]==0x0900&&reg[114]==60&&reg[5]==60&&reg[30]==0);
     { ms_t t=T+70; for(int k=0;k<5000;k++){ t+=2; rx_feed(NULL,0,t); wq_step(t); boot_push_step(t); }
-      st_check("boot-pushen sendes EN gang: 10 s senere er intet nyt sendt",bp.state==BP_DONE&&bp.runs==1&&txq_len==15+67+13&&wq.n==0); }
+      st_check("the boot push is sent ONCE: 10 s later nothing new has been sent",bp.state==BP_DONE&&bp.runs==1&&txq_len==15+67+13&&wq.n==0); }
     { uint32_t c0,c1; const char*s0=bp_text(0,&c0),*s1=bp_text(1,&c1);
-      st_check("DIAGNOSE: BOOT-PUSH 1-30 = OK (groen), BOOT-PUSH 112-114 = OK (groen)",s0==TR(TX_DV_OK)&&s1==TR(TX_DV_OK)&&c0==C_OK&&c1==C_OK); }
-    /* --- ACK-vent + én retransmit --- */
+      st_check("DIAGNOSE: BOOT-PUSH 1-30 = OK (green), BOOT-PUSH 112-114 = OK (green)",s0==TR(TX_DV_OK)&&s1==TR(TX_DV_OK)&&c0==C_OK&&c1==C_OK); }
+    /* --- ACK wait + one retransmit --- */
     st_bp_reset(); boot_push_start(1); st_status(0x0101,T); boot_push_step(T); wq_step(T);
     wq_step(T+149); int r0=wq.n_retx==0&&txq_len==67; wq_step(T+150); int r1=wq.n_retx==1&&txq_len==2*67&&hexeq(last_tx,last_tx_len,BPV_A);
     wq_step(T+160); int r2=txq_len==2*67; st_ack_last(T+170); boot_push_step(T+171);
-    st_check("sub1 len30 uden ACK: ingen retransmit foer 150 ms, praecis EN (samme bytes) ved 150 ms; ACK paa den -> OK",r0&&r1&&r2&&bp.ra==BPR_OK&&wq.n_fail==0);
+    st_check("sub1 len30 without ACK: no retransmit before 150 ms, exactly ONE (same bytes) at 150 ms; ACK to it -> OK",r0&&r1&&r2&&bp.ra==BPR_OK&&wq.n_fail==0);
     boot_push_step(T+171); wq_step(T+171); wq_step(T+171+150); wq_step(T+171+150+299); int n0=wq.n==1&&wq.n_retx==2; wq_step(T+171+150+300); boot_push_step(T+171+450);
-    st_check("sub112 len3 helt uden ACK: 1 retransmit, opgives efter 150 + 300 ms -> INGEN ACK; pushen er faerdig (ingen flere forsoeg af sig selv)",
+    st_check("sub112 len3 with no ACK at all: 1 retransmit, given up after 150 + 300 ms -> NO ACK; the push is done (no further attempts on its own)",
              n0&&bp.state==BP_DONE&&bp.ra==BPR_OK&&bp.rb==BPR_NOACK&&wq.n==0&&wq.n_fail==1&&txq_len==2*67+2*13);
     st_bp_reset(); boot_push_start(1); st_status(0x0101,T); boot_push_step(T); wq_step(T); wq_step(T+150); wq_step(T+450); boot_push_step(T+450); boot_push_step(T+450); wq_step(T+450);
-    st_check("sub1 len30 helt uden ACK: INGEN ACK, og sub112 len3 sendes alligevel",bp.ra==BPR_NOACK&&bp.state==BP_B&&hexeq(last_tx,last_tx_len,BPV_B)&&wq.n_retx==1&&wq.n_fail==1);
-    /* --- aktivitets-vagten --- */
-    { static const uint16_t act_ws[]={0x0141,0x1107,0x1307,0x030B,0x4121}; int ok=1;   /* kværn, pre-inf., ekstraktion, varmt vand, damp (SESSION.md §6) */
+    st_check("sub1 len30 with no ACK at all: NO ACK, and sub112 len3 is sent anyway",bp.ra==BPR_NOACK&&bp.state==BP_B&&hexeq(last_tx,last_tx_len,BPV_B)&&wq.n_retx==1&&wq.n_fail==1);
+    /* --- the activity guard --- */
+    { static const uint16_t act_ws[]={0x0141,0x1107,0x1307,0x030B,0x4121}; int ok=1;   /* grind, pre-inf., extraction, hot water, steam (SESSION.md §6) */
       for(unsigned q=0;q<sizeof act_ws/sizeof act_ws[0];q++){
           st_bp_reset(); boot_push_start(1); st_status(act_ws[q],T); boot_push_step(T);
           int skip=bp.state==BP_DONE&&bp.ra==BPR_SKIP&&bp.rb==BPR_SKIP&&bp.runs==1&&wq.n==0&&txq_len==0;
-          ms_t t=T; for(int k=0;k<300;k++){ t+=100; st_status(k<50?act_ws[q]:0x0101,t); wq_step(t); boot_push_step(t); }   /* aktiviteten slutter efter 5 s; 25 s ledig */
-          boot_push_resave();                                                                                         /* et senere GEM genoptager den heller ikke */
+          ms_t t=T; for(int k=0;k<300;k++){ t+=100; st_status(k<50?act_ws[q]:0x0101,t); wq_step(t); boot_push_step(t); }   /* the activity ends after 5 s; 25 s idle */
+          boot_push_resave();                                                                                         /* a later SAVE does not resume it either */
           boot_push_step(t+100);
           if(!(skip&&bp.state==BP_DONE&&bp.ra==BPR_SKIP&&wq.n==0&&txq_len==0&&wq.n_block==0)){ ok=0; printf("     work_sta %04X: state=%d ra=%d wq.n=%d tx=%d\n",act_ws[q],bp.state,bp.ra,wq.n,txq_len); } }
-      st_check("AKTIVITETS-VAGT: work_sta 0141/1107/1307/030B/4121 ved opstart -> pushen SPRINGES OVER: 0 bytes sendt — heller ikke efter aktiviteten eller et GEM",ok);
-      uint32_t c0; st_check("DIAGNOSE: BOOT-PUSH = SPRUNGET OVER / SKIPPED (neutral farve)",bp_text(0,&c0)==TR(TX_DV_BP_SKIP)&&c0==C_TXT&&bp_text(1,&c0)==TR(TX_DV_BP_SKIP)); }
-    { static const uint16_t idle_ws[]={0x0101,0x0001,0x0000}; int ok=1;                 /* vågen-ledig, sleep/drain, MCU sleep-task */
+      st_check("ACTIVITY GUARD: work_sta 0141/1107/1307/030B/4121 at startup -> the push is SKIPPED: 0 bytes sent — not after the activity or a SAVE either",ok);
+      uint32_t c0; st_check("DIAGNOSE: BOOT-PUSH = SPRUNGET OVER / SKIPPED (neutral colour)",bp_text(0,&c0)==TR(TX_DV_BP_SKIP)&&c0==C_TXT&&bp_text(1,&c0)==TR(TX_DV_BP_SKIP)); }
+    { static const uint16_t idle_ws[]={0x0101,0x0001,0x0000}; int ok=1;                 /* awake-idle, sleep/drain, MCU sleep task */
       for(unsigned q=0;q<3;q++){ st_bp_reset(); boot_push_start(1); st_status(idle_ws[q],T); boot_push_step(T); if(!(bp.state==BP_A&&wq.n==1&&wq.q[0].sub==1)) ok=0; }
-      st_check("vagten spaerrer IKKE for en ledig maskine: work_sta 0101 (vaagen), 0001 (sleep/drain) og 0000 -> pushen sendes",ok); }
+      st_check("the guard does NOT block an idle machine: work_sta 0101 (awake), 0001 (sleep/drain) and 0000 -> the push is sent",ok); }
     st_bp_reset(); boot_push_start(1); st_status(0x0101,T); boot_push_step(T); wq_step(T); st_ack_last(T+25); boot_push_step(T+26);
     { int d=bp.state==BP_WAIT_B; ms_t t=T+30; for(int k=0;k<300;k++){ t+=100; st_status(0x1307,t); wq_step(t); boot_push_step(t); if(bp.state!=BP_WAIT_B||wq.n) d=0; }
       st_status(0x0101,t+100); boot_push_step(t+100); wq_step(t+100);
-      st_check("aktivitet startet EFTER afgoerelsen (mellem de to blokke): sub112 len3 UDSKYDES 30 s og sendes, naar maskinen er ledig",d&&bp.state==BP_B&&hexeq(last_tx,last_tx_len,BPV_B)); }
-    /* --- config uden for spec / mangler / read-only / slaaet fra --- */
+      st_check("activity started AFTER the decision (between the two blocks): sub112 len3 is DEFERRED 30 s and sent when the machine is idle",d&&bp.state==BP_B&&hexeq(last_tx,last_tx_len,BPV_B)); }
+    /* --- config out of spec / missing / read-only / disabled --- */
     st_fixture(fx,1200,1); settings_load(); st_bp_reset(); boot_push_start(1); st_status(0x0101,T); boot_push_step(T);
     int blk=bp.ra==BPR_BLOCKED&&bp.state==BP_WAIT_B&&wq.n==0&&wq.n_block==1&&wq_rej==WJ_RANGE&&txq_len==0;
     boot_push_step(T); wq_step(T); blk&=hexeq(last_tx,last_tx_len,BPV_B); st_ack_last(T+25); boot_push_step(T+26);
-    st_check("fixture m. brewTemper=1200: sub1 len30 AFVIST af frame-politikken (BLOK +1, 0 bytes), sub112 len3 sendt og ACK'et",blk&&bp.state==BP_DONE&&bp.rb==BPR_OK);
-    { uint32_t c0; st_check("DIAGNOSE: BOOT-PUSH 1-30 = AFVIST / REJECTED (rav)",bp_text(0,&c0)==TR(TX_DV_BP_BLOCKED)&&c0==C_WARN); }
-    SET[S_BREWT].val=930; boot_push_resave();                                             /* brugeren har rettet værdien med et GEM */
+    st_check("fixture w/ brewTemper=1200: sub1 len30 REJECTED by the frame policy (BLOK +1, 0 bytes), sub112 len3 sent and ACKed",blk&&bp.state==BP_DONE&&bp.rb==BPR_OK);
+    { uint32_t c0; st_check("DIAGNOSE: BOOT-PUSH 1-30 = AFVIST / REJECTED (amber)",bp_text(0,&c0)==TR(TX_DV_BP_BLOCKED)&&c0==C_WARN); }
+    SET[S_BREWT].val=930; boot_push_resave();                                             /* the user has corrected the value with a SAVE */
     { int rs=bp.state==BP_WAIT_A&&!bp.guard; boot_push_step(T+100); wq_step(T+100); rs&=hexeq(last_tx,last_tx_len,BPV_A); st_ack_last(T+125); boot_push_step(T+126);
       boot_push_step(T+126); wq_step(T+126); st_ack_last(T+150); boot_push_step(T+151);
-      st_check("efter et GEM, der bringer config i spec: pushen gentages — sub1 len30 (nu = vektoren) + sub112 len3, begge ACK'et",rs&&bp.state==BP_DONE&&bp.ra==BPR_OK&&bp.rb==BPR_OK&&bp.runs==2&&wq.n_block==1);
-      boot_push_resave(); st_check("en gennemfoert push (OK / OK) gentages IKKE af et senere GEM",bp.state==BP_DONE&&bp.runs==2); }
+      st_check("after a SAVE that brings config into spec: the push is repeated — sub1 len30 (now = the vector) + sub112 len3, both ACKed",rs&&bp.state==BP_DONE&&bp.ra==BPR_OK&&bp.rb==BPR_OK&&bp.runs==2&&wq.n_block==1);
+      boot_push_resave(); st_check("a completed push (OK / OK) is NOT repeated by a later SAVE",bp.state==BP_DONE&&bp.runs==2); }
     st_fixture(fx,0,0); settings_load(); st_bp_reset(); boot_push_start(1); st_status(0x0101,T); boot_push_step(T);
-    st_check("fixture uden brewTemper: INGEN CONFIG — intet sendes (ingen gaet vaerdi til controlleren)",bp.state==BP_DONE&&bp.ra==BPR_NOCFG&&bp.rb==BPR_NOCFG&&wq.n==0&&txq_len==0);
+    st_check("fixture without brewTemper: NO CONFIG — nothing is sent (no guessed value to the controller)",bp.state==BP_DONE&&bp.ra==BPR_NOCFG&&bp.rb==BPR_NOCFG&&wq.n==0&&txq_len==0);
     st_fixture(fx,930,1); settings_load(); st_bp_reset(); ro_mode=1; boot_push_start(1); st_status(0x0101,T); boot_push_step(T); int ro=wq.n==0&&txq_len==0&&bp.ra==BPR_NONE; ro_mode=0;
     st_bp_reset(); bp_on=0; boot_push_resave(); st_status(0x0101,T); boot_push_step(T); int off=bp.state==BP_OFF&&wq.n==0&&txq_len==0; uint32_t c0; off&=(bp_text(0,&c0)==TR(TX_DV_BP_OFF));
-    st_check("OURUI_READONLY: intet sendes; OURUI_NOBOOTPUSH (ikke startet): intet sendes, DIAGNOSE viser FRA / OFF",ro&&off);
-    /* --- ryd op: den ægte config tilbage --- */
+    st_check("OURUI_READONLY: nothing is sent; OURUI_NOBOOTPUSH (not started): nothing is sent, DIAGNOSE shows FRA / OFF",ro&&off);
+    /* --- clean up: restore the real config --- */
     bp_on=bpon0; ro_mode=ro0; snprintf(cfg_path,sizeof cfg_path,"%s",cfgsrc); settings_load(); unlink(fx);
     wq=wq0; memset(&bp,0,sizeof bp); memcpy(reg,reg0,sizeof reg); memcpy(reg_seen,seen0,sizeof reg_seen); rx_zero(); last_rx_ms=rxl0; rx_ok=ok0; rx_bad=bad0; txq_len=tx0; last_tx_len=0;
-    st_check("den aegte config er indlaest igen efter fixture-testene (0104 / 0605 / 70)",cfg_ok&&pack112(sv(S_PISW),sv(S_PIPRESS))==0x0104&&pack113(sv(S_PITIME),sv(S_BREAK))==0x0605&&sv(S_HEADT)==70);
+    st_check("the real config is loaded again after the fixture tests (0104 / 0605 / 70)",cfg_ok&&pack112(sv(S_PISW),sv(S_PIPRESS))==0x0104&&pack113(sv(S_PITIME),sv(S_BREAK))==0x0605&&sv(S_HEADT)==70);
 }
 static void st_rx_resync(void){
-    printf("== selftest: v6.5 RX-resync-watchdog (RX_RESYNC_MS = %d; main() kalder parseren hvert 2. ms) ==\n",RX_RESYNC_MS);
+    printf("== selftest: v6.5 RX resync watchdog (RX_RESYNC_MS = %d; main() calls the parser every 2 ms) ==\n",RX_RESYNC_MS);
     __typeof__(wq) wq0=wq; uint16_t reg0[REGN]; int seen0[REGN]; memcpy(reg0,reg,sizeof reg); memcpy(seen0,reg_seen,sizeof reg_seen);
     ms_t rxl0=last_rx_ms, ok0=rx_ok, bad0=rx_bad, lb0=last_bad_ms; int tx0=txq_len;
     static uint8_t V[8][RXV_N], C[RXV_N], blob[8192]; ms_t T=40000000L, t;
     for(int k=0;k<8;k++) rx_v(V[k],k+1);
-    /* --- grundlinje: gyldige frames, uanset hvordan de er delt op --- */
+    /* --- baseline: valid frames, however they are split up --- */
     { int ok=1; static const int chunk[]={1,7,37,119,512};
       for(unsigned q=0;q<5;q++){ rx_zero(); int n=0; for(int k=0;k<5;k++){ memcpy(blob+n,V[k],RXV_N); n+=RXV_N; }
           t=T; for(int o=0;o<n;o+=chunk[q]){ int m=n-o<chunk[q]?n-o:chunk[q]; rx_tick(blob+o,m,t++); }
           if(!(rx_ok==5&&reg[55]==5&&rx_bad==0&&rx_resync==0&&rxlen==0)) ok=0; }
-      st_check("grundlinje: 5 gyldige frames i bidder a 1 / 7 / 37 / 119 / 512 bytes -> 5 modtaget, 0 CRC-fejl, 0 resync, tom buffer",ok); }
-    /* --- korrupt længde-byte: umulig længde (v6.4-fundet) --- */
-    memcpy(C,V[7],RXV_N); C[4]=0xC8;                                                     /* LEN 56 -> 200 ord: findes ikke */
+      st_check("baseline: 5 valid frames in chunks of 1 / 7 / 37 / 119 / 512 bytes -> 5 received, 0 CRC errors, 0 resync, empty buffer",ok); }
+    /* --- corrupt length byte: impossible length (the v6.4 finding) --- */
+    memcpy(C,V[7],RXV_N); C[4]=0xC8;                                                     /* LEN 56 -> 200 words: does not exist */
     rx_zero(); { int n=0; memcpy(blob,C,RXV_N); n=RXV_N; for(int k=0;k<3;k++){ memcpy(blob+n,V[k],RXV_N); n+=RXV_N; } rx_feed(blob,n,T); }
-    st_check("korrupt laengde-byte (LEN = 200 ord): kandidaten forkastes STRAKS — de 3 frames bagved er modtaget i samme kald (0 ms), RESYNC +1",rx_ok==3&&reg[55]==3&&rx_resync==1&&rxlen==0);
+    st_check("corrupt length byte (LEN = 200 words): the candidate is discarded IMMEDIATELY — the 3 frames behind it are received in the same call (0 ms), RESYNC +1",rx_ok==3&&reg[55]==3&&rx_resync==1&&rxlen==0);
     { rx_zero(); rx_tick(C,RXV_N,T); ms_t gap=0,last=T; int k=0; for(t=T+2;t<=T+3000;t+=2){ ms_t o=rx_ok; if((t-T)%50==0){ rx_v(blob,++k); rx_tick(blob,RXV_N,t); } else rx_tick(NULL,0,t); if(rx_ok!=o){ if(t-last>gap) gap=t-last; last=t; } }
-      st_check("v6.4-scenariet: korrupt LEN efterfulgt af 3 s poll-trafik -> alle 60 svar modtaget, stoerste hul 50 ms, link oppe hele vejen (v6.4: ca. 3,5 s uden RX)",rx_ok==60&&reg[55]==60&&gap<=50&&rx_resync==1&&link_up(T+3000)); }
-    /* --- korrupt længde-byte: mulig, men for lang (56 -> 120 ord = 247 bytes) --- */
+      st_check("the v6.4 scenario: corrupt LEN followed by 3 s of poll traffic -> all 60 replies received, largest gap 50 ms, link up the whole way (v6.4: approx. 3.5 s without RX)",rx_ok==60&&reg[55]==60&&gap<=50&&rx_resync==1&&link_up(T+3000)); }
+    /* --- corrupt length byte: possible, but too long (56 -> 120 words = 247 bytes) --- */
     memcpy(C,V[7],RXV_N); C[4]=0x78;
     { rx_zero(); ms_t first=-1,all=-1; for(t=T;t<=T+300;t+=2){ const uint8_t*d=NULL; if(t==T) d=C; else if(t==T+50) d=V[0]; else if(t==T+100) d=V[1]; else if(t==T+150) d=V[2];
           rx_tick(d,d?RXV_N:0,t); if(first<0&&rx_ok>=1) first=t; if(all<0&&rx_ok>=3) all=t; }
-      st_check("korrupt LEN (120 ord = 247 bytes), trafikken fortsaetter: CRC'en faelder kandidaten, saa snart 247 bytes er kommet — frames bagved modtaget ved +100 ms, alle 3 ved +150 ms, 0 tabt",
+      st_check("corrupt LEN (120 words = 247 bytes), traffic continues: the CRC rejects the candidate as soon as 247 bytes have arrived — frames behind it received at +100 ms, all 3 at +150 ms, 0 lost",
                first==T+100&&all==T+150&&reg[55]==3&&rx_bad==1&&rx_resync==0&&rxlen==0); }
     { rx_zero(); ms_t got=-1; for(t=T;t<=T+1000;t+=2){ const uint8_t*d=NULL; if(t==T) d=C; else if(t==T+50) d=V[0]; rx_tick(d,d?RXV_N:0,t); if(got<0&&rx_ok>=1) got=t; }
-      st_check("korrupt LEN (247 bytes), derefter stilhed: WATCHDOG'en forkaster kandidaten efter praecis RX_RESYNC_MS — framen bagved modtages da (+400 ms), RESYNC +1, tom buffer",
+      st_check("corrupt LEN (247 bytes), then silence: the WATCHDOG discards the candidate after exactly RX_RESYNC_MS — the frame behind it is then received (+400 ms), RESYNC +1, empty buffer",
                got==T+RX_RESYNC_MS&&reg[55]==1&&rx_resync==1&&rxlen==0); }
-    /* --- afkortet frame --- */
+    /* --- truncated frame --- */
     { rx_zero(); int held=0,gone=0; for(t=T;t<=T+998;t+=2){ rx_tick(t==T?V[7]:NULL,t==T?60:0,t); if(t==T+RX_RESYNC_MS-2) held=rxlen==60; if(t==T+RX_RESYNC_MS) gone=rxlen==0&&rx_resync==1; }
       rx_tick(V[0],RXV_N,T+1000); int a=rx_ok==1; rx_tick(V[1],RXV_N,T+1050);
-      st_check("afkortet frame (60 af 119 bytes), 1 s stilhed: stumpen holdes i 398 ms, forkastes ved 400 ms; de naeste frames modtages straks, de ankommer",held&&gone&&a&&rx_ok==2&&reg[55]==2&&rx_resync==1&&rx_bad==0); }
+      st_check("truncated frame (60 of 119 bytes), 1 s of silence: the fragment is held for 398 ms, discarded at 400 ms; the next frames are received as soon as they arrive",held&&gone&&a&&rx_ok==2&&reg[55]==2&&rx_resync==1&&rx_bad==0); }
     { rx_zero(); memset(reg,0,sizeof reg); uint8_t sf[32]; uint16_t w7[7]={0x0101,0,0,0,0,0,0}; int sn=mk_frame(sf,0x83,33,w7,7);
-      rx_feed(V[7],60,T); rx_feed(sf,sn,T+1000);                                         /* 60 + 21 bytes: stumpens 119 bytes bliver aldrig fyldt op */
-      st_check("afkortet frame, og parseren kaldes foerst igen, naar et kort svar (21 bytes) kommer 1 s senere: watchdog'en afgoeres VED ANKOMST — svaret modtaget i samme kald (0 ms), RESYNC +1",
+      rx_feed(V[7],60,T); rx_feed(sf,sn,T+1000);                                         /* 60 + 21 bytes: the fragment's 119 bytes are never filled up */
+      st_check("truncated frame, and the parser is not called again until a short reply (21 bytes) arrives 1 s later: the watchdog is decided ON ARRIVAL — reply received in the same call (0 ms), RESYNC +1",
                rx_ok==1&&reg[33]==0x0101&&rx_resync==1&&rx_bad==0&&rxlen==0);
-      rx_zero(); rx_feed(V[7],60,T); rx_feed(V[0],RXV_N,T+1000);                           /* 60 + 119 bytes: stumpen fyldes op, og CRC'en fælder den */
-      st_check("afkortet frame fulgt af et langt svar 1 s senere: CRC'en faelder stumpen — svaret modtaget i samme kald (0 ms), 1 CRC-fejl",rx_ok==1&&reg[55]==1&&rx_bad==1&&rxlen==0); }
+      rx_zero(); rx_feed(V[7],60,T); rx_feed(V[0],RXV_N,T+1000);                           /* 60 + 119 bytes: the fragment is filled up, and the CRC rejects it */
+      st_check("truncated frame followed by a long reply 1 s later: the CRC rejects the fragment — reply received in the same call (0 ms), 1 CRC error",rx_ok==1&&reg[55]==1&&rx_bad==1&&rxlen==0); }
     rx_zero(); rx_tick(V[7],60,T); rx_tick(V[0],RXV_N,T+10); rx_tick(V[1],RXV_N,T+60);
-    st_check("afkortet frame fulgt af gyldige frames 10 ms efter: CRC'en faelder stumpen — begge frames modtaget straks, 1 CRC-fejl, 0 resync",rx_ok==2&&reg[55]==2&&rx_bad==1&&rx_resync==0&&rxlen==0);
+    st_check("truncated frame followed by valid frames 10 ms later: the CRC rejects the fragment — both frames received immediately, 1 CRC error, 0 resync",rx_ok==2&&reg[55]==2&&rx_bad==1&&rx_resync==0&&rxlen==0);
     { rx_zero(); static const uint8_t st4[4]={0xAA,0x55,0x83,0x00}; int gone=0; for(t=T;t<=T+600;t+=2){ rx_tick(t==T?st4:NULL,t==T?4:0,t); if(t==T+RX_RESYNC_MS) gone=rxlen==0; } rx_tick(V[0],RXV_N,T+602);
-      st_check("stump under 7 bytes (AA 55 83 00): forkastes ved 400 ms; naeste frame modtaget",gone&&rx_ok==1&&rx_resync==1); }
-    /* --- støj-byge: tilfældige bytes + de værste præfikser, i bidder a 1..24 bytes pr. 10 ms (som sim'ens garbage) --- */
+      st_check("fragment under 7 bytes (AA 55 83 00): discarded at 400 ms; next frame received",gone&&rx_ok==1&&rx_resync==1); }
+    /* --- noise burst: random bytes + the worst prefixes, in chunks of 1..24 bytes per 10 ms (like the sim's garbage) --- */
     { static const uint8_t nasty[9][5]={{0xAA},{0xAA,0x55},{0xAA,0x55,0x03},{0xAA,0x55,0x08},{0xAA,0x55,0x88,0x12,0x34},{0xAA,0x55,0x83,0x00,0x38},{0xAA,0x55,0x09,0xFF},{0xAA,0x55,0x86,0x0B,0x81},{0xAA,0x55,0x83,0x00,0xC8}};
       static const int nlen[9]={1,2,3,4,5,5,4,5,5};
       rx_zero(); uint32_t x=0x6502u; int maxbuf=0, sent=0, nn=0; t=T;
@@ -6147,224 +6153,224 @@ static void st_rx_resync(void){
           for(int q=0;q<5;q++){ rx_tick(q==0?blob:NULL,q==0?m:0,t); t+=2; } sent+=m; if(rxlen>maxbuf) maxbuf=rxlen; }
       int quiet=rx_ok==0; ms_t tv=t, first=-1;
       for(int k=0;k<5;k++){ for(int q=0;q<25;q++){ rx_tick(q==0?V[k]:NULL,q==0?RXV_N:0,t); if(first<0&&rx_ok>=1) first=t; t+=2; } }
-      char nm[260]; snprintf(nm,sizeof nm,"stoej-byge: %d tilfaeldige bytes m. %d indlagte vaerste-praefikser (AA 55 03 / 08 / 88 / lang LEN …): 0 falske frames, buffer hoejst %d bytes; de 5 frames lige efter er ALLE modtaget, den foerste %ld ms efter ankomst",sent,nn,maxbuf,(long)(first-tv));
+      char nm[260]; snprintf(nm,sizeof nm,"noise burst: %d random bytes with %d inserted worst-case prefixes (AA 55 03 / 08 / 88 / long LEN …): 0 false frames, buffer at most %d bytes; the 5 frames right after are ALL received, the first %ld ms after arrival",sent,nn,maxbuf,(long)(first-tv));
       st_check(nm,quiet&&rx_ok==5&&reg[55]==5&&first>=0&&first-tv<=RX_RESYNC_MS&&maxbuf<=265+29+RXV_N);
-      /* hvert præfiks for sig, lige foran gyldige frames: (a) trafikken fortsætter, (b) én frame og så stilhed */
+      /* each prefix on its own, right before valid frames: (a) traffic continues, (b) one frame and then silence */
       int ok=1; ms_t worst=0;
       for(int q=0;q<9;q++) for(int mode=0;mode<2;mode++){
           rx_zero(); ms_t got=-1;
           for(t=T;t<=T+700;t+=2){ const uint8_t*d=NULL; int m=0;
               if(t==T){ d=nasty[q]; m=nlen[q]; } else if(t==T+10){ d=V[0]; m=RXV_N; } else if(!mode&&t==T+60){ d=V[1]; m=RXV_N; } else if(!mode&&t==T+110){ d=V[2]; m=RXV_N; }
               rx_tick(d,m,t); if(got<0&&rx_ok>=1) got=t; }
-          int want=mode?1:3; if(got<0||got-T>RX_RESYNC_MS||rx_ok!=want||reg[55]!=want||rxlen!=0){ ok=0; printf("     praefiks %d mode %d: rx_ok=%u got=%ld rxlen=%d\n",q,mode,rx_ok,(long)(got-T),rxlen); }
+          int want=mode?1:3; if(got<0||got-T>RX_RESYNC_MS||rx_ok!=want||reg[55]!=want||rxlen!=0){ ok=0; printf("     prefix %d mode %d: rx_ok=%u got=%ld rxlen=%d\n",q,mode,rx_ok,(long)(got-T),rxlen); }
           if(got-T>worst) worst=got-T; }
-      snprintf(nm,sizeof nm,"hvert af de 9 vaerste praefikser lige foran gyldige frames (trafik fortsaetter / EN frame og saa stilhed): ingen frame tabt, foerste frame modtaget senest %ld ms efter stoejen (graense %d)",(long)worst,RX_RESYNC_MS);
+      snprintf(nm,sizeof nm,"each of the 9 worst prefixes right before valid frames (traffic continues / ONE frame and then silence): no frame lost, first frame received at most %ld ms after the noise (limit %d)",(long)worst,RX_RESYNC_MS);
       st_check(nm,ok&&worst<=RX_RESYNC_MS); }
-    /* --- gyldige frames flettet med fejl: hver gyldig frame præcis én gang, i rækkefølge --- */
+    /* --- valid frames interleaved with errors: each valid frame exactly once, in order --- */
     { rx_zero(); memset(&wq,0,sizeof wq); txq_len=0; int ok=1, nbad=0, prev=0; uint32_t x=77u; t=T; ms_t tack=-1;
       for(int k=1;k<=40;k++){ int n=0; uint8_t f[RXV_N]; rx_v(f,k);
           if(k%3==0){ for(int j=0;j<9;j++) blob[n++]=(uint8_t)((x=x*1103515245u+12345u)>>16); }
-          if(k%5==0){ memcpy(blob+n,f,RXV_N); blob[n+40]^=0x10; n+=RXV_N; nbad++; }               /* bit-fejl i payload -> CRC-fejl */
-          if(k%7==0){ memcpy(blob+n,f,RXV_N); blob[n+4]=0xC8; n+=RXV_N; }                         /* umulig længde */
-          if(k%11==0){ memcpy(blob+n,f,RXV_N); blob[n+4]=0x78; n+=RXV_N; nbad++; }                /* for lang længde -> CRC-fejl, når 247 bytes er kommet */
-          if(k%13==0){ memcpy(blob+n,f,45); n+=45; nbad++; }                                      /* afkortet -> CRC-fejl, når næste frame fylder den op */
-          if(k%17==0){ blob[n++]=0xAA; blob[n++]=0x55; blob[n++]=0x03; nbad++; }                  /* cmd 3-hoved + 4 bytes af næste frame -> CRC-fejl (v6.4 slugte dem uden CRC) */
+          if(k%5==0){ memcpy(blob+n,f,RXV_N); blob[n+40]^=0x10; n+=RXV_N; nbad++; }               /* bit error in payload -> CRC error */
+          if(k%7==0){ memcpy(blob+n,f,RXV_N); blob[n+4]=0xC8; n+=RXV_N; }                         /* impossible length */
+          if(k%11==0){ memcpy(blob+n,f,RXV_N); blob[n+4]=0x78; n+=RXV_N; nbad++; }                /* too long a length -> CRC error once 247 bytes have arrived */
+          if(k%13==0){ memcpy(blob+n,f,45); n+=45; nbad++; }                                      /* truncated -> CRC error when the next frame fills it up */
+          if(k%17==0){ blob[n++]=0xAA; blob[n++]=0x55; blob[n++]=0x03; nbad++; }                  /* cmd 3 header + 4 bytes of the next frame -> CRC error (v6.4 swallowed them without CRC) */
           memcpy(blob+n,f,RXV_N); n+=RXV_N;
-          if(k==20){ wq_push(11,(uint16_t[1]){880},1); wq_step(t); }                              /* GEM-write sendes … */
-          if(k==21){ uint8_t a[16]; uint16_t w=880; int an=mk_frame(a,0x86,11,&w,1); memcpy(blob+n,a,an); n+=an; }   /* … og ACK'en kommer midt i strømmen */
+          if(k==20){ wq_push(11,(uint16_t[1]){880},1); wq_step(t); }                              /* SAVE write is sent … */
+          if(k==21){ uint8_t a[16]; uint16_t w=880; int an=mk_frame(a,0x86,11,&w,1); memcpy(blob+n,a,an); n+=an; }   /* … and the ACK arrives mid-stream */
           for(int o=0,q=0;q<25;q++){ int m=n-o<37?n-o:37; rx_tick(m>0?blob+o:NULL,m>0?m:0,t); o+=m>0?m:0; wq_step(t); if(tack<0&&wq.result==WR_OK) tack=t;
               if(reg[55]<prev||reg[55]>k) ok=0; prev=reg[55]; t+=2; } }
       for(int q=0;q<300;q++){ rx_tick(NULL,0,t); t+=2; }
-      char nm[260]; snprintf(nm,sizeof nm,"flettet: 40 gyldige svar + 1 ACK blandet m. stoej, CRC-fejl, umulig/for lang LEN, afkortede frames og AA 55 03: alle 41 modtaget EN gang i raekkefoelge, %d CRC-fejl talt, ACK'en frigav write-koeen",nbad);
-      if(!(ok&&rx_ok==41&&rx_bad==nbad)) printf("     ok=%d rx_ok=%u reg55=%u rx_bad=%u (ventet %d) resync=%u rxlen=%d tack=%ld\n",ok,rx_ok,reg[55],rx_bad,nbad,rx_resync,rxlen,(long)(tack-T));
+      char nm[260]; snprintf(nm,sizeof nm,"interleaved: 40 valid replies + 1 ACK mixed with noise, CRC errors, impossible/too long LEN, truncated frames and AA 55 03: all 41 received ONCE in order, %d CRC errors counted, the ACK released the write queue",nbad);
+      if(!(ok&&rx_ok==41&&rx_bad==nbad)) printf("     ok=%d rx_ok=%u reg55=%u rx_bad=%u (expected %d) resync=%u rxlen=%d tack=%ld\n",ok,rx_ok,reg[55],rx_bad,nbad,rx_resync,rxlen,(long)(tack-T));
       st_check(nm,ok&&rx_ok==41&&reg[55]==40&&rx_bad==nbad&&rxlen==0&&tack>=0&&wq.result==WR_OK&&wq.n_fail==0&&wq.n_retx==0); memset(&wq,0,sizeof wq); txq_len=0; }
-    /* --- langsom, men gyldig trafik må ikke forkastes --- */
+    /* --- slow but valid traffic must not be discarded --- */
     { rx_zero(); static const int gaps[]={100,300,456,1000,1400}; t=T; int k=0; rx_tick(V[k++],RXV_N,t);
       for(unsigned q=0;q<5;q++){ ms_t e=t+gaps[q]; for(t+=2;t<e;t+=2) rx_tick(NULL,0,t); rx_tick(V[k++],RXV_N,t); }
-      st_check("ophold MELLEM frames paa 100 / 300 / 456 / 1000 / 1400 ms (poll-kadence og laengste maalte poll-hul): alle 6 modtaget, 0 resync",rx_ok==6&&reg[55]==6&&rx_resync==0&&rx_bad==0); }
+      st_check("pauses BETWEEN frames of 100 / 300 / 456 / 1000 / 1400 ms (poll cadence and longest measured poll gap): all 6 received, 0 resync",rx_ok==6&&reg[55]==6&&rx_resync==0&&rx_bad==0); }
     { int ok=1; static const int pause[]={20,300,398}; for(unsigned q=0;q<3;q++){ rx_zero(); for(t=T;t<=T+pause[q];t+=2){ const uint8_t*d=NULL; int m=0; if(t==T){ d=V[0]; m=60; } else if(t==T+pause[q]){ d=V[0]+60; m=RXV_N-60; } rx_tick(d,m,t); }
           if(!(rx_ok==1&&rx_resync==0&&rx_bad==0&&rxlen==0)) ok=0; }
-      st_check("ophold MIDT i en frame paa 20 / 300 / 398 ms (laengste maalte MCU-tavshed: 279 ms): framen modtages, 0 resync",ok); }
+      st_check("pauses IN THE MIDDLE of a frame of 20 / 300 / 398 ms (longest measured MCU silence: 279 ms): the frame is received, 0 resync",ok); }
     { rx_zero(); for(t=T;t<=T+450;t+=2){ const uint8_t*d=NULL; int m=0; if(t==T){ d=V[0]; m=60; } else if(t==T+450){ d=V[0]+60; m=RXV_N-60; } rx_tick(d,m,t); }
       int lost=rx_ok==0&&rx_resync==1; rx_tick(V[1],RXV_N,T+500);
-      st_check("ophold midt i en frame paa 450 ms (over vinduet): DEN frame opgives (RESYNC +1) — den naeste modtages",lost&&rx_ok==1&&reg[55]==2&&rxlen==0); }
+      st_check("pause in the middle of a frame of 450 ms (beyond the window): THAT frame is dropped (RESYNC +1) — the next one is received",lost&&rx_ok==1&&reg[55]==2&&rxlen==0); }
     { rx_zero(); txq_len=0; static const uint8_t vr[8]={0xAA,0x55,0x89,0x01,0x00,0x00,0x6F,0x81}; rx_tick(vr,3,T); rx_tick(vr+3,5,T+20); int one=txq_len==15&&rx_ok==1; rx_tick(vr,8,T+40);
       static const uint8_t q3[7]={0xAA,0x55,0x03,0x00,0x38,0xDC,0x06}; rx_tick(q3,7,T+60);
-      st_check("versions-forespoergsel 0x89 (delt i to) besvares EN gang pr. forespoergsel; en gyldig cmd 3-frame (AA 55 03 00 38 DC 06) springes over uden fejl",one&&txq_len==30&&rx_ok==2&&rx_bad==0&&rx_resync==0&&rxlen==0); txq_len=0; }
-    /* --- en fastlåst kandidat foran en ACK må ikke koste et GEM (vinduet < ACK-budgettet 450 ms) --- */
+      st_check("version request 0x89 (split in two) is answered ONCE per request; a valid cmd 3 frame (AA 55 03 00 38 DC 06) is skipped without error",one&&txq_len==30&&rx_ok==2&&rx_bad==0&&rx_resync==0&&rxlen==0); txq_len=0; }
+    /* --- a stuck candidate in front of an ACK must not cost a SAVE (window < ACK budget 450 ms) --- */
     { rx_zero(); memset(&wq,0,sizeof wq); txq_len=0; wq_push(11,(uint16_t[1]){890},1); ms_t tok=-1; uint8_t a[16]; uint16_t w=890; int an=mk_frame(a,0x86,11,&w,1);
-      static uint8_t stuck[25]={0xAA,0x55,0x83,0x00,0x81};                                 /* lover 265 bytes, leverer 25 */
+      static uint8_t stuck[25]={0xAA,0x55,0x83,0x00,0x81};                                 /* promises 265 bytes, delivers 25 */
       for(t=T;t<=T+460;t+=2){ const uint8_t*d=NULL; int m=0; if(t==T+4){ d=stuck; m=25; } else if(t==T+24){ d=a; m=an; } rx_tick(d,m,t); wq_step(t); if(tok<0&&wq.result==WR_OK) tok=t; }
-      st_check("ACK fanget bag en fastlaast kandidat, ingen anden trafik: frigives af watchdog'en 400 ms efter kandidaten (+404 ms) — foer write-koeen opgiver ved 450 ms; GEM lykkes",
+      st_check("ACK caught behind a stuck candidate, no other traffic: released by the watchdog 400 ms after the candidate (+404 ms) — before the write queue gives up at 450 ms; SAVE succeeds",
                tok==T+4+RX_RESYNC_MS&&wq.n_fail==0&&wq.n_retx==1&&reg[11]==890&&rx_resync==1); memset(&wq,0,sizeof wq); txq_len=0; }
-    st_check("vinduet ligger mellem laengste maalte MCU-tavshed (279 ms) og write-koeens ACK-budget (150 + 300 ms), og under OFFLINE-graensen (1500 ms)",RX_RESYNC_MS>279&&RX_RESYNC_MS<WQ_ACK1_MS+WQ_ACK2_MS&&RX_RESYNC_MS<1500);
+    st_check("the window lies between the longest measured MCU silence (279 ms) and the write queue's ACK budget (150 + 300 ms), and below the OFFLINE limit (1500 ms)",RX_RESYNC_MS>279&&RX_RESYNC_MS<WQ_ACK1_MS+WQ_ACK2_MS&&RX_RESYNC_MS<1500);
     wq=wq0; memcpy(reg,reg0,sizeof reg); memcpy(reg_seen,seen0,sizeof reg_seen); rx_zero(); last_rx_ms=rxl0; rx_ok=ok0; rx_bad=bad0; last_bad_ms=lb0; txq_len=tx0; last_tx_len=0;
 }
 /* ====================================================================== */
-/* ================= v6.6: fase-semantik · 64-bit-ur · re-push ========== */
+/* ============= v6.6: phase semantics · 64-bit clock · re-push ========= */
 /* ====================================================================== */
-/* controllerens svar som de kommer på linjen: 0x83 sub0 len56 (ord 0..55) hhv. 0x83 sub33 len7 (ord 33..39) */
+/* the controller's replies as they arrive on the line: 0x83 sub0 len56 (words 0..55) and 0x83 sub33 len7 (words 33..39) respectively */
 static void st_s0(uint16_t ws,uint16_t w24,uint16_t w44,uint16_t w46,uint16_t w48,ms_t t){
     uint8_t f[128]; uint16_t w[56]; memcpy(w,reg,sizeof w); w[33]=ws; w[24]=w24; w[44]=w44; w[46]=w46; w[48]=w48; rx_feed(f,mk_frame(f,0x83,0,w,56),t);
 }
 static void st_s33(uint16_t ws,ms_t t){ uint8_t f[32]; uint16_t w[7]; memcpy(w,reg+33,sizeof w); w[0]=ws; rx_feed(f,mk_frame(f,0x83,33,w,7),t); }
 static int st_has(const char*hay,const char*needle){ return strstr(hay,needle)!=NULL; }
-/* ledig maskine m. frisk link på tidspunkt t (HJEM, ingen toast, tom write-kø) */
+/* idle machine with a fresh link at time t (HOME, no toast, empty write queue) */
 static ms_t st_home(void){
     sim_reset(); sim_run(400); memset(&wq,0,sizeof wq); txq_len=0; toast.dur=0;
     return sim_now;
 }
 static void st_phases(void){
-    printf("== selftest: v6.6 fase-semantik efter STEAMLIVE.md (to damp-veje via ord 24 + work_sta + ord 44/46; samtidige faser) ==\n");
+    printf("== selftest: v6.6 phase semantics per STEAMLIVE.md (two steam paths via word 24 + work_sta + words 44/46; concurrent phases) ==\n");
     char a[32],b[96]; ms_t t;
-    /* ---- (1) LATCHET auto-damp: STEAMLIVE §4.1 + §5.1, række for række ---- */
-    t=st_home(); reg[25]=600;                                   /* MCU'ens mål (ord 25) = 60,0° — bevidst forskelligt fra config (65,0°) */
-    st_s0(0x0101,1,0x000C,0,123,t+=100); ui_frame(t);            /* start-writen er ACK'et: ord 24 = 1, bits 5+14 endnu ikke sat */
+    /* ---- (1) LATCHED auto steam: STEAMLIVE §4.1 + §5.1, row by row ---- */
+    t=st_home(); reg[25]=600;                                   /* the MCU's target (word 25) = 60.0° — deliberately different from config (65.0°) */
+    st_s0(0x0101,1,0x000C,0,123,t+=100); ui_frame(t);            /* the start write is ACKed: word 24 = 1, bits 5+14 not yet set */
     int pre=stm.kind==SK_NONE&&act.ph!=PH_STEAM;
     st_s33(0x4121,t+=220); ui_frame(t);
     fmt_t10(a,sizeof a,600,1); snprintf(b,sizeof b,TR(TX_H_AUTOSTOP_T),a);
-    st_check("LATCHET (ord 24 = 1, work_sta 4121, wand-kontakten 0): chip = STEAM·AUTO / DAMP·AUTO, fase STEAM",
+    st_check("LATCHED (word 24 = 1, work_sta 4121, wand switch 0): chip = STEAM·AUTO / DAMP·AUTO, phase STEAM",
              pre&&stm.kind==SK_AUTO&&!stm.wand&&act.ph==PH_STEAM&&phase_raw(t)==PH_STEAM&&hm.chip==TR(TX_PH_STEAM_AUTO)&&!hm.conc&&!hm.badge);
-    st_check("LATCHET: maalet er ORD 25 (60.0°, ikke config'ens 65.0°) — label, auto-stop-forventning og gauge-maerke",
+    st_check("LATCHED: the target is WORD 25 (60.0°, not the config's 65.0°) — label, auto-stop expectation and gauge marker",
              st_has(hm.label,a)&&!strcmp(hm.sub,b)&&fabsf(hm.gmark-(600-200)/600.f)<1e-4f&&steam_target()==600&&sv(S_STEAMT)==650);
-    st_check("LATCHET: STOP-knappen vises og rammes (150,344,180x56); ingen start-knapper",steam_stop_visible()&&hit_test(240,372,t)==T_STOP&&hit_test(150,372,t)==T_STOP&&hit_test(330,372,t)==T_NONE);
-    { int ok=1; static const uint16_t pulse[]={0x6121,0x4521,0x4121,0x6121};      /* bit 10/13-pulser oven i damp (STEAMLIVE §3) */
+    st_check("LATCHED: the STOP button is shown and hittable (150,344,180x56); no start buttons",steam_stop_visible()&&hit_test(240,372,t)==T_STOP&&hit_test(150,372,t)==T_STOP&&hit_test(330,372,t)==T_NONE);
+    { int ok=1; static const uint16_t pulse[]={0x6121,0x4521,0x4121,0x6121};      /* bit 10/13 pulses on top of steam (STEAMLIVE §3) */
       for(unsigned q=0;q<4;q++){ st_s0(pulse[q],1,0x000C,0,(uint16_t)(288+q*40),t+=100); ui_frame(t); if(stm.kind!=SK_AUTO||hm.chip!=TR(TX_PH_STEAM_AUTO)) ok=0; }
-      st_check("LATCHET: vedligehold-pulser (6121 / 4521) aendrer intet — stadig STEAM·AUTO",ok); }
-    /* manuel STOP: ACK-echoet saetter ord 24 = 0, FOER MCU'en rydder bits 5+14 */
+      st_check("LATCHED: maintenance pulses (6121 / 4521) change nothing — still STEAM·AUTO",ok); }
+    /* manual STOP: the ACK echo sets word 24 = 0 BEFORE the MCU clears bits 5+14 */
     { __typeof__(stm) k=stm; uint16_t r24=reg[24]; int ok=1;
       for(int q=0;q<3;q++){ st_s0(0x4121,0,0x000C,0,430,t+=50); ui_frame(t); if(stm.kind!=SK_AUTO||hm.chip!=TR(TX_PH_STEAM_AUTO)||!steam_stop_visible()) ok=0; }
-      st_check("LATCHET er klaebende: ord 24 = 0 (ACK paa en STOP-write), mens bits 5+14 endnu staar -> stadig STEAM·AUTO, aldrig et WAND-blink",ok);
+      st_check("LATCHED is sticky: word 24 = 0 (ACK of a STOP write) while bits 5+14 are still set -> still STEAM·AUTO, never a WAND flash",ok);
       stm=k; reg[24]=r24; }
-    /* auto-stop, præcis som i loggen: 96.363 / 96.437 / 96.676 / 96.838 */
+    /* auto-stop, exactly as in the log: 96.363 / 96.437 / 96.676 / 96.838 */
     st_s0(0x6121,1,0x000C,0,646,t+=100); ui_frame(t); st_s33(0x6121,t+=74); ui_frame(t);
     int on=stm.kind==SK_AUTO&&act.ph==PH_STEAM;
-    st_s33(0x2101,t+=239); ui_frame(t);                                            /* bits 5+14 ryddet, ord 24 stadig 1 */
+    st_s33(0x2101,t+=239); ui_frame(t);                                            /* bits 5+14 cleared, word 24 still 1 */
     int stop1=stm.kind==SK_NONE&&stm.last_kind==SK_AUTO&&act.ph==PH_DONE&&act.last_ph==PH_STEAM&&!steam_stop_visible()&&hit_test(240,372,t)!=T_STOP;
-    st_s0(0x0501,0,0x000C,0,652,t+=162); ui_frame(t);                              /* MCU'en nulstiller selv ord 24; mælk 65,2° */
-    st_check("AUTO-STOP (STEAMLIVE §5.1: 6121 -> 2101 m. ord 24 = 1 -> 0501 m. ord 24 = 0): FAERDIG, STOP-knappen vaek, og ourui har INTET sendt (ingen stop-write)",
+    st_s0(0x0501,0,0x000C,0,652,t+=162); ui_frame(t);                              /* the MCU resets word 24 itself; milk 65.2° */
+    st_check("AUTO-STOP (STEAMLIVE §5.1: 6121 -> 2101 with word 24 = 1 -> 0501 with word 24 = 0): DONE, STOP button gone, and ourui has sent NOTHING (no stop write)",
              on&&stop1&&act.ph==PH_DONE&&wq.n==0&&txq_len==0&&wq.n_ok==0);
     { char d[8]; fmt_fix(d,sizeof d,use_c()?MILK_RISE10:MILK_RISE10*9/5,-1); char need[16]; snprintf(need,sizeof need,"\xE2\x89\x88%s\xC2\xB0",d);
       int note=st_has(hm.sub,need)&&st_has(hm.label,a);
-      for(int q=0;q<12;q++){ st_s0(0x0101,0,0x000C,0,652,t+=100); ui_frame(t); }  /* v6.9: hero er konditioneret (median-3 + EMA) — lad den lande */
+      for(int q=0;q<12;q++){ st_s0(0x0101,0,0x000C,0,652,t+=100); ui_frame(t); }  /* v6.9: the hero is conditioned (median-3 + EMA) — let it settle */
       fmt_t10(a,sizeof a,652,1); int h1=!strcmp(hm.hero,a);
       st_s0(0x0101,0,0x000C,0,689,t+=4000); ui_frame(t); fmt_t10(a,sizeof a,689,1);
-      st_check("efter auto-stop: under-linjen oplyser efterstigningen (ca. +4 °C), og hero foelger proben videre (65.2 -> 68.9) — kun oplysning",note&&h1&&!strcmp(hm.hero,a)&&act.ph==PH_DONE&&!strcmp(d,"4"));
+      st_check("after auto-stop: the subline states the post-stop rise (approx. +4 °C), and the hero keeps following the probe (65.2 -> 68.9) — information only",note&&h1&&!strcmp(hm.hero,a)&&act.ph==PH_DONE&&!strcmp(d,"4"));
       for(int q=0;q<50;q++){ st_s33(0x0101,t+=100); ui_frame(t); }
-      st_check("8 s efter stop: tilbage til KLAR; damp-sporet er nulstillet",act.ph==PH_READY&&stm.kind==SK_NONE); }
-    /* ---- (2) MOMENTAN wand/flush alene ---- */
+      st_check("8 s after stop: back to READY; the steam tracking is reset",act.ph==PH_READY&&stm.kind==SK_NONE); }
+    /* ---- (2) MOMENTARY wand/flush alone ---- */
     t=st_home();
     st_s0(0x0101,0,0x000C,0,514,t+=100); ui_frame(t);
-    st_s33(0x4121,t+=76); ui_frame(t);                                             /* bits sat; ord 44/46 foelger foerst ~0,4 s senere */
+    st_s33(0x4121,t+=76); ui_frame(t);                                             /* bits set; words 44/46 only follow ~0.4 s later */
     int w0=stm.kind==SK_WAND&&!stm.wand&&hm.chip==TR(TX_PH_STEAM_WAND);
     st_s0(0x4121,0,0x000D,1,523,t+=391); ui_frame(t);
-    st_check("WAND (work_sta 4121 UDEN ord 24 = 1): chip = STEAM·WAND / DAMP·WAND straks; ord 44 bit0 + ord 46 = 1 bekraefter 0,4 s senere",
+    st_check("WAND (work_sta 4121 WITHOUT word 24 = 1): chip = STEAM·WAND / DAMP·WAND immediately; word 44 bit0 + word 46 = 1 confirm 0.4 s later",
              w0&&stm.kind==SK_WAND&&stm.wand&&wand_sw()&&act.ph==PH_STEAM&&phase_raw(t)==PH_STEAM&&hm.chip==TR(TX_PH_STEAM_WAND));
-    st_check("WAND: ingen auto-stop-forventning — label 'MILK PROBE · NO TARGET', under-linje 'NO AUTO-STOP · RELEASE WAND', intet maal-maerke paa gaugen",
+    st_check("WAND: no auto-stop expectation — label 'MILK PROBE · NO TARGET', subline 'NO AUTO-STOP · RELEASE WAND', no target marker on the gauge",
              !strcmp(hm.label,TR(TX_H_MILK_PROBE))&&!strcmp(hm.sub,TR(TX_H_WAND_NOSTOP))&&hm.gmark<0&&!st_has(hm.sub,"AUTO-STOP A")&&!st_has(hm.sub,"AUTO-STOP V"));
-    st_check("WAND: INGEN STOP-knap (en STOP-write ville intet goere) og ingen start-knapper; start er spaerret (AKTIVITET I GANG)",
+    st_check("WAND: NO STOP button (a STOP write would do nothing) and no start buttons; start is blocked (ACTIVITY IN PROGRESS)",
              !steam_stop_visible()&&hit_test(240,372,t)==T_NONE&&hit_test(210,372,t)==T_NONE&&act_guard(ACT_BREW,t)==TR(TX_G_BUSY)&&act_guard(ACT_STEAM,t)==TR(TX_G_BUSY));
-    { char v[DG_N][28]; uint32_t col[DG_N]; diag_top_text(v,col,t); st_check("DIAGNOSE: FASE-cellen viser damp-vejen (STEAM·WAND)",!strcmp(v[1],TR(TX_PH_STEAM_WAND))); }
-    /* ---- (3) wand over maalet: ingen auto-stop ---- */
-    { int ok=1, never_done=1, sent=0; static const uint16_t milk[]={560,610,650,669,683,695,695,695,691,688};   /* forbi 650 og videre, som i STEAMLIVE §6.2 */
+    { char v[DG_N][28]; uint32_t col[DG_N]; diag_top_text(v,col,t); st_check("DIAGNOSE: the PHASE cell shows the steam path (STEAM·WAND)",!strcmp(v[1],TR(TX_PH_STEAM_WAND))); }
+    /* ---- (3) wand over the target: no auto-stop ---- */
+    { int ok=1, never_done=1, sent=0; static const uint16_t milk[]={560,610,650,669,683,695,695,695,691,688};   /* past 650 and beyond, as in STEAMLIVE §6.2 */
       for(unsigned q=0;q<10;q++){ for(int k=0;k<3;k++){ st_s0(0x4121,0,0x000D,1,milk[q],t+=100); ui_touch(TE_DOWN,240,372,t); ui_frame(t); ui_touch(TE_UP,240,372,t); ui_frame(t+=33); wq_step(t);
               if(stm.kind!=SK_WAND||hm.chip!=TR(TX_PH_STEAM_WAND)||strcmp(hm.sub,TR(TX_H_WAND_NOSTOP))||hm.gmark>=0||steam_stop_visible()) ok=0;
               if(act.ph!=PH_STEAM) never_done=0; if(wq.n||txq_len||toast.dur) sent=1; } }
-      st_check("WAND OVER MAALET: proben 56.0 -> 69.5° (maal 65.0°) i 4 s — hele vejen STEAM·WAND, aldrig FAERDIG, aldrig en auto-stop-tekst eller et maal",ok&&never_done&&reg[48]>steam_target());
-      st_check("WAND OVER MAALET: tryk dér, hvor STOP-knappen ville vaere, goer intet — ourui sender ingen frame (ingen stop-write, ingen toast)",!sent&&wq.n_ok==0&&wq.n_block==0);
+      st_check("WAND OVER TARGET: probe 56.0 -> 69.5° (target 65.0°) in 4 s — STEAM·WAND the whole way, never DONE, never an auto-stop text or a target",ok&&never_done&&reg[48]>steam_target());
+      st_check("WAND OVER TARGET: a tap where the STOP button would be does nothing — ourui sends no frame (no stop write, no toast)",!sent&&wq.n_ok==0&&wq.n_block==0);
       st_s33(0x0101,t+=100); ui_frame(t);
-      st_check("wand'en slippes (bits 5+14 ryddet): FAERDIG med ren 'DONE IN …' — ingen efterstignings-note (den hoerer til auto-stop)",
+      st_check("wand released (bits 5+14 cleared): DONE with a plain 'DONE IN …' — no post-stop rise note (that belongs to auto-stop)",
                act.ph==PH_DONE&&stm.kind==SK_NONE&&stm.last_kind==SK_WAND&&!st_has(hm.sub,"\xE2\x89\x88")&&!strcmp(hm.label,TR(TX_H_MILK_PROBE))); }
-    /* ---- (4) SAMTIDIGE faser: flush under bryg, STEAMLIVE §6.2 række for række ---- */
+    /* ---- (4) CONCURRENT phases: flush during brew, STEAMLIVE §6.2 row by row ---- */
     t=st_home(); reg[39]=0; reg[51]=360; reg[52]=360;
-    st_s0(0x1107,0,0x000C,0,514,t+=100); ui_frame(t);                              /* bryg: pre-infusion */
+    st_s0(0x1107,0,0x000C,0,514,t+=100); ui_frame(t);                              /* brew: pre-infusion */
     ms_t tb0=act.t_act0; int pre_ok=act.ph==PH_PRE&&tb0==t;
     reg[39]=216; reg[51]=1301; reg[52]=191;
-    st_s0(0x1307,0,0x000C,0,514,t+=20500); ui_frame(t);                            /* 239.726: ekstraktion, wand FRA */
+    st_s0(0x1307,0,0x000C,0,514,t+=20500); ui_frame(t);                            /* 239.726: extraction, wand OFF */
     int e0=act.ph==PH_EXT&&!hm.conc&&!hm.badge&&hm.sl[2]==TR(TX_ST_FLOW)&&hm.chip==ph_name(PH_EXT);
-    st_s33(0x5327,t+=76); ui_frame(t);                                             /* 239.802: damp-bits lagt oven i brygget */
-    st_check("SAMTIDIG (work_sta 5327 = bryg 1+2+9+12 + damp 5+14, ord 24 = 0): kontraktens phase_raw() er STEAM (uaendret); HJEM's hoved-fase er EKSTRAKTION",
+    st_s33(0x5327,t+=76); ui_frame(t);                                             /* 239.802: steam bits added on top of the brew */
+    st_check("CONCURRENT (work_sta 5327 = brew 1+2+9+12 + steam 5+14, word 24 = 0): the contract's phase_raw() is STEAM (unchanged); HOME's main phase is EXTRACTION",
              pre_ok&&e0&&phase_raw(t)==PH_STEAM&&phase_main(t)==PH_EXT&&act.ph==PH_EXT&&act.raw==PH_EXT);
-    st_check("SAMTIDIG: BEGGE navngivet — chip = EXTRACTION, damp-maerke = STEAM·WAND (ord 44/46 endnu 0: wand-vejen foelger af ord 24 = 0)",
+    st_check("CONCURRENT: BOTH named — chip = EXTRACTION, steam badge = STEAM·WAND (words 44/46 still 0: the wand path follows from word 24 = 0)",
              hm.conc&&hm.chip==ph_name(PH_EXT)&&hm.badge==TR(TX_PH_STEAM_WAND)&&stm.kind==SK_WAND&&!stm.wand);
-    reg[39]=223; st_s0(0x5327,0,0x000D,1,523,t+=391); ui_frame(t);                 /* 240.193: wand TIL */
-    for(int q=0;q<14;q++){ st_s0(0x5327,0,0x000D,1,523,t+=100); ui_frame(t); }     /* v6.9: hero er konditioneret — lad den lande paa 22.3 (1,4 s tages af det naeste hul) */
+    reg[39]=223; st_s0(0x5327,0,0x000D,1,523,t+=391); ui_frame(t);                 /* 240.193: wand ON */
+    for(int q=0;q<14;q++){ st_s0(0x5327,0,0x000D,1,523,t+=100); ui_frame(t); }     /* v6.9: the hero is conditioned — let it settle at 22.3 (1.4 s is taken from the next gap) */
     { char h[16],m1[16]; fmt_fix(h,sizeof h,223,1); fmt_t10(a,sizeof a,523,1); snprintf(m1,sizeof m1,"%s\xC2\xB0",a); fmt_fix(a,sizeof a,sv(S_BREWW),1); snprintf(b,sizeof b,TR(TX_H_AUTOSTOP_G),a);
-      st_check("SAMTIDIG: bryggets gauge/vaegt bliver staaende (hero 22.3 G, fremskridts-ring, AUTO-STOP VED 36.0 G), og maelke-temperaturen staar i stat-raekken (TID · ≈BAR* · MAELK 52.3°)",
+      st_check("CONCURRENT: the brew's gauge/weight stays (hero 22.3 G, progress ring, AUTO-STOP AT 36.0 G), and the milk temperature is in the stat row (TIME · ≈BAR* · MILK 52.3°)",
                stm.wand&&!strcmp(hm.hero,h)&&hm.unit==TR(TX_U_G)&&hm.pvis&&!strcmp(hm.sub,b)&&hm.sl[0]==TR(TX_ST_TIME)&&hm.sl[1]==TR(TX_ST_BAR)&&hm.sl[2]==TR(TX_ST_MILK)&&!strcmp(hm.svv[2],m1)); }
-    reg[39]=262; st_s0(0x5327,0,0x000D,1,669,t+=1473-1400); ui_frame(t); reg[39]=272; st_s0(0x5327,0,0x000D,1,695,t+=480); ui_frame(t);   /* 241.666 / 242.146: proben over 650 */
+    reg[39]=262; st_s0(0x5327,0,0x000D,1,669,t+=1473-1400); ui_frame(t); reg[39]=272; st_s0(0x5327,0,0x000D,1,695,t+=480); ui_frame(t);   /* 241.666 / 242.146: probe above 650 */
     { fmt_t10(a,sizeof a,695,1); char m1[16]; snprintf(m1,sizeof m1,"%s\xC2\xB0",a);
-      int sk[2], sn=stop_btns(t,sk);   /* v6.13: brygget har sin egen STOP-knap — wand'en har stadig ingen */
-      st_check("SAMTIDIG + wand over maalet (69.5° > 65.0°): stadig EXTRACTION + STEAM·WAND; ingen DAMP-STOP (kun v6.13's STOP BRYG), ingen frame sendt; bryg-uret er ikke nulstillet",
+      int sk[2], sn=stop_btns(t,sk);   /* v6.13: the brew has its own STOP button — the wand still has none */
+      st_check("CONCURRENT + wand over the target (69.5° > 65.0°): still EXTRACTION + STEAM·WAND; no STEAM STOP (only v6.13's STOP BREW), no frame sent; the brew timer is not reset",
                hm.conc&&hm.badge==TR(TX_PH_STEAM_WAND)&&!strcmp(hm.svv[2],m1)&&act.ph==PH_EXT&&!steam_stop_visible()&&sn==1&&sk[0]==ACT_BREW&&hit_test(240,372,t)==T_STOP&&wq.n==0&&txq_len==0&&act.t_act0==tb0); }
-    st_s33(0x1307,t+=768); ui_frame(t);                                            /* 242.914: wand sluppet, brygget fortsaetter */
-    st_check("wand'en slippes under brygget: maerket vaek, EKSTRAKTION fortsaetter uden FAERDIG-visning; 3. stat-felt er FLOW igen; samme bryg-ur",
+    st_s33(0x1307,t+=768); ui_frame(t);                                            /* 242.914: wand released, the brew continues */
+    st_check("wand released during the brew: badge gone, EXTRACTION continues without a DONE view; 3rd stat field is FLOW again; same brew timer",
              !hm.conc&&!hm.badge&&act.ph==PH_EXT&&stm.kind==SK_NONE&&hm.sl[2]==TR(TX_ST_FLOW)&&act.t_act0==tb0);
     reg[39]=352; st_s33(0x2101,t+=2936); ui_frame(t); st_s0(0x0101,0,0x000C,0,600,t+=180); ui_frame(t);
     { char tbx[24]; snprintf(tbx,sizeof tbx,"%ld.%ld",(long)(act.done_ms/1000),(long)((act.done_ms%1000)/100));
-      st_check("brygget stopper: FAERDIG for BRYGGET (vaegt i hero, 'DONE IN' = hele bryg-tiden fra pre-infusion — ikke damp-tiden)",
+      st_check("the brew stops: DONE for the BREW (weight in hero, 'DONE IN' = the whole brew time from pre-infusion — not the steam time)",
                act.ph==PH_DONE&&act.last_ph==PH_EXT&&hm.unit==TR(TX_U_G)&&st_has(hm.sub,tbx)&&act.done_ms>26000&&act.done_ms<27500); }
-    /* ---- (5) varianter ---- */
+    /* ---- (5) variants ---- */
     t=st_home(); reg[39]=120;
     st_s0(0x1307,0,0x000C,0,300,t+=100); ui_frame(t); st_s0(0x5327,1,0x000C,0,310,t+=100); ui_frame(t);
-    { int sk[2], sn=stop_btns(t,sk);   /* v6.13: to knapper — venstre STOP BRYG, hoejre STOP DAMP */
-      st_check("samtidig bryg + LATCHET damp (ord 24 = 1): maerket er STEAM·AUTO, og STOP-knappen vises (latchet damp kan altid stoppes) — v6.13: ved siden af STOP BRYG",
+    { int sk[2], sn=stop_btns(t,sk);   /* v6.13: two buttons — left STOP BREW, right STOP STEAM */
+      st_check("concurrent brew + LATCHED steam (word 24 = 1): the badge is STEAM·AUTO, and the STOP button is shown (latched steam can always be stopped) — v6.13: next to STOP BREW",
              hm.conc&&hm.badge==TR(TX_PH_STEAM_AUTO)&&act.ph==PH_EXT&&steam_stop_visible()&&sn==2&&sk[0]==ACT_BREW&&sk[1]==ACT_STEAM&&hit_test(160,372,t)==T_STOP&&hit_test(320,372,t)==T_STOPS); }
     t=st_home(); reg_seen[24]=0;
     st_s33(0x4121,t+=100); ui_frame(t);
-    st_check("ord 24 endnu ikke laest (kun sub33-svar): neutral chip STEAM / DAMP, intet loefte om auto-stop — og STOP-knappen vises (altid sikker)",
+    st_check("word 24 not read yet (sub33 replies only): neutral chip STEAM / DAMP, no auto-stop promise — and the STOP button is shown (always safe)",
              stm.kind==SK_UNKNOWN&&hm.chip==TR(TX_PH_STEAM)&&hm.sub[0]==0&&steam_stop_visible()&&hit_test(240,372,t)==T_STOP);
     st_s0(0x4121,0,0x000D,1,400,t+=50); ui_frame(t);
-    st_check("… saa snart ord 24 = 0 er laest: STEAM·WAND",stm.kind==SK_WAND&&hm.chip==TR(TX_PH_STEAM_WAND)&&!steam_stop_visible());
+    st_check("… as soon as word 24 = 0 is read: STEAM·WAND",stm.kind==SK_WAND&&hm.chip==TR(TX_PH_STEAM_WAND)&&!steam_stop_visible());
     t=st_home(); reg[38]=123; reg[39]=7; reg[58]=640; reg_seen[51]=1; memset(&lt,0,sizeof lt); g_n=0; g_head=0;
     st_s0(0x0141,0,0x000C,0,300,t+=100); ui_frame(t); loop_graph(t);
-    for(int q=0;q<4;q++){ st_s0(0x4161,0,0x000D,1,340,t+=100); ui_frame(t); loop_graph(t); }   /* v6.9: kilde-skift kræver 300 ms (ingen UI-start her) */
-    st_check("kvaern + wand (0141 | 4020): hoved-fasen er KVAERNER m. damp-maerke, 3. stat-felt = MAELK, og grafen tager fortsat KVAERN-vaegten (ord 38; v6.9: efter 300 ms debounce)",
+    for(int q=0;q<4;q++){ st_s0(0x4161,0,0x000D,1,340,t+=100); ui_frame(t); loop_graph(t); }   /* v6.9: a source switch takes 300 ms (no UI start here) */
+    st_check("grind + wand (0141 | 4020): the main phase is GRINDING with a steam badge, 3rd stat field = MILK, and the graph still takes the GRIND weight (word 38; v6.9: after 300 ms debounce)",
              act.ph==PH_GRIND&&hm.conc&&hm.badge==TR(TX_PH_STEAM_WAND)&&hm.sl[2]==TR(TX_ST_MILK)&&hm.sl[1]==TR(TX_ST_CURRENT)&&g_n==5&&g_w[(g_head+GN-1)%GN]==123&&wsl.src==38&&wsl.n_sw==1);
     t=st_home(); reg[39]=200;
     st_s0(0x5327,0,0x000D,1,560,t+=100); ui_frame(t); ms_t t_st=stm.t0;
-    st_s0(0x4121,0,0x000D,1,640,t+=9000); ui_frame(t);                             /* brygget slut, wand stadig aaben */
+    st_s0(0x4121,0,0x000D,1,640,t+=9000); ui_frame(t);                             /* brew finished, wand still open */
     { char tbx[24]; ms_t el=t-t_st; snprintf(tbx,sizeof tbx,"%ld.%ld",(long)(el/1000),(long)((el%1000)/100));
-      st_check("brygget slutter, mens wand'en stadig er aaben: hoved-fasen bliver STEAM·WAND uden FAERDIG imellem; TID-feltet er DAMPENS tid",
+      st_check("the brew ends while the wand is still open: the main phase becomes STEAM·WAND with no DONE in between; the TIME field is the STEAM's time",
                act.ph==PH_STEAM&&!hm.conc&&hm.chip==TR(TX_PH_STEAM_WAND)&&st_has(hm.svv[0],tbx)&&t_st==stm.t0); }
     last_rx_ms=t-2000; ui_frame(t+=10);
-    st_check("linket falder ud under damp: OFFLINE, og damp-sporet nulstilles (ingen haengende STOP-knap)",act.ph==PH_OFFLINE&&stm.kind==SK_NONE&&!steam_stop_visible());
+    st_check("the link drops during steam: OFFLINE, and the steam tracking is reset (no lingering STOP button)",act.ph==PH_OFFLINE&&stm.kind==SK_NONE&&!steam_stop_visible());
     t=st_home(); act.pending=ACT_STEAM; act.t_req=t; ui_frame(t+=33);
     snprintf(b,sizeof b,TR(TX_H_STARTING),TR(ACT_NAME[ACT_STEAM]));
-    st_check("damp bestilt fra UI'et, bits endnu ikke sat: 'STARTING STEAM…' (display-damp starter selv ~0,2 s efter writen; wand'en skal ikke aabnes)",!strcmp(hm.sub,b));
+    st_check("steam requested from the UI, bits not yet set: 'STARTING STEAM…' (display steam starts by itself ~0.2 s after the write; the wand does not need to be opened)",!strcmp(hm.sub,b));
     act.pending=ACT_NONE;
     { int ok=1; for(int lg=0;lg<NLANG;lg++){ int kl=ui_lang; lang_set(lg);
-          for(int k=SK_UNKNOWN;k<=SK_WAND;k++){ float w=text_wf(steam_label(k),F_XS)+30; LAY(w,254,"damp-maerke (label-feltet 260)",steam_label(k)); }
+          for(int k=SK_UNKNOWN;k<=SK_WAND;k++){ float w=text_wf(steam_label(k),F_XS)+30; LAY(w,254,"steam badge (label field 260)",steam_label(k)); }
           lang_set(kl); }
-      st_check("damp-maerket passer i label-feltet paa begge sprog (alle tre tekster)",ok); }
+      st_check("the steam badge fits in the label field in both languages (all three texts)",ok); }
     sim_reset();
 }
 
-/* ---- 64-bit-ur: omløbs-test. B31 = 2^31 ms (her løb v6.5's 32-bit 'long' rundt: 24,86 døgn), B32 = 2^32 ms (49,7 døgn) ---- */
+/* ---- 64-bit clock: wraparound test. B31 = 2^31 ms (where v6.5's 32-bit 'long' wrapped: 24.86 days), B32 = 2^32 ms (49.7 days) ---- */
 #define B31 ((ms_t)2147483648LL)
 #define B32 ((ms_t)4294967296LL)
 typedef struct { int n_fast,n_slow,n_ext,frames; ms_t gap_max,last_fast; } WrapStat;
-/* én omgang af main(): poll-timere + (hvis forfalden) en frame — med de SAMME funktioner som main() bruger */
+/* one iteration of main(): poll timers + (if due) a frame — with the SAME functions main() uses */
 static void wrap_iter(ms_t t,WrapStat*s){
     int l0=txq_len; loop_poll(t);
     for(int i=l0;i+7<=txq_len;i+=7){ uint8_t sub=txq[i+3];
         if(sub==0||sub==33){ s->n_fast++; if(s->last_fast&&t-s->last_fast>s->gap_max) s->gap_max=t-s->last_fast; s->last_fast=t; }
         else if(sub==56) s->n_slow++; else if(sub==112) s->n_ext++; }
     txq_len=0;
-    last_rx_ms=t;                                               /* linket svarer */
+    last_rx_ms=t;                                               /* the link answers */
     if(loop_render_due(t)){ ui_frame(t); loop_rendered(t,1.0f); s->frames++; }
 }
-/* kør main-loopet fra B-3000 til B+5000: 2 ms-skridt, og ÉT langt skridt (en langsom frame) fra B-12 til B+28, hen over
- * poll-, slow- og ext-fristerne, som alle står til B-10 */
+/* run the main loop from B-3000 to B+5000: 2 ms steps, and ONE long step (a slow frame) from B-12 to B+28, across
+ * the poll, slow and ext deadlines, which are all due at B-10 */
 static WrapStat wrap_loop(ms_t B){
-    WrapStat s; memset(&s,0,sizeof s); st_home(); memset(&lt,0,sizeof lt); txq_len=0; ui_last=B-3010-33;   /* samme UI-tilstand i hver kørsel: kun uret er forskelligt */
-    ms_t t=B-3010;                                             /* første omgang: alle timere affyres; ext står derefter til B-2010, B-1010, B-10 */
+    WrapStat s; memset(&s,0,sizeof s); st_home(); memset(&lt,0,sizeof lt); txq_len=0; ui_last=B-3010-33;   /* same UI state in every run: only the clock differs */
+    ms_t t=B-3010;                                             /* first iteration: all timers fire; ext is then due at B-2010, B-1010, B-10 */
     for(;t<B-12;t+=2) wrap_iter(t,&s);
     wrap_iter(B-12,&s);
     for(t=B+28;t<=B+5000;t+=2) wrap_iter(t,&s);
     return s;
 }
-static int wrap_hold(ms_t t0){          /* hold-for-start hen over t0+650: 1 = startede praecis ved 650 ms */
+static int wrap_hold(ms_t t0){          /* hold-to-start across t0+650: 1 = started exactly at 650 ms */
     st_home(); ms_t t=t0; last_rx_ms=t; ui_frame(t);
     ui_touch(TE_DOWN,210,372,t); int early=0;
     for(;t<t0+649;t+=7){ last_rx_ms=t; ui_frame(t); if(tch.fired) early=1; }
@@ -6372,89 +6378,89 @@ static int wrap_hold(ms_t t0){          /* hold-for-start hen over t0+650: 1 = s
     last_rx_ms=t0+650; ui_frame(t0+650); int at=tch.fired&&act.pending==ACT_BREW&&wq.n>=1&&wq.q[wq.n-1].sub==5&&wq.q[wq.n-1].len==18;
     ui_touch(TE_UP,210,372,t0+660); return !early&&before&&at;
 }
-static int wrap_stepper(ms_t t0){       /* hold + i 2,6 s paa BRYG-VAEGT: returnerer editor-vaerdien (gentagelse m. acceleration) */
+static int wrap_stepper(ms_t t0){       /* hold + for 2.6 s on BREW WEIGHT: returns the editor value (repeat with acceleration) */
     st_home(); page=PG_T0; ms_t t=t0; last_rx_ms=t; ui_frame(t); detail_open(S_HOTW,t); tr.type=0; edit_val=SET[S_HOTW].lo;
     ui_touch(TE_DOWN,396,184,t);
     for(;t<=t0+2600;t+=33){ last_rx_ms=t; ui_frame(t); }
     int v=edit_val; ui_touch(TE_UP,396,184,t); detail_close(t); tr.type=0; return v;
 }
 static void st_wrap(void){
-    printf("== selftest: v6.6 64-bit-ur — omloeb ved 2^31 ms (24,86 doegn: her loeb v6.5's 32-bit 'long' rundt) og 2^32 ms (49,7 doegn) ==\n");
+    printf("== selftest: v6.6 64-bit clock — wraparound at 2^31 ms (24.86 days: where v6.5's 32-bit 'long' wrapped) and 2^32 ms (49.7 days) ==\n");
     char nm[420];
-    { struct timespec a={2592000,999000000}, b={4294967,296000000}, c={3155760000LL,0};      /* 30 døgn · 2^32 ms · 100 år */
-      st_check("tidsbasen er 64 bit, og sekund->ms dannes i 64 bit: 30 doegn = 2 592 000 999 ms, 4 294 967,296 s = 2^32 ms, 100 aar = 3 155 760 000 000 ms",
+    { struct timespec a={2592000,999000000}, b={4294967,296000000}, c={3155760000LL,0};      /* 30 days · 2^32 ms · 100 years */
+      st_check("the time base is 64 bit, and second->ms is computed in 64 bit: 30 days = 2 592 000 999 ms, 4 294 967.296 s = 2^32 ms, 100 years = 3 155 760 000 000 ms",
                sizeof(ms_t)==8&&sizeof now_ms()==8&&ts_ms(&a)==(ms_t)2592000999LL&&ts_ms(&b)==B32&&ts_ms(&c)==(ms_t)3155760000000LL); }
-    { ms_t a=now_ms(), b=now_ms(); st_check("now_ms() er monotont (CLOCK_MONOTONIC) og ikke-negativt",b>=a&&a>=0); }
+    { ms_t a=now_ms(), b=now_ms(); st_check("now_ms() is monotonic (CLOCK_MONOTONIC) and non-negative",b>=a&&a>=0); }
     st_home();
-    /* ---- main-loopets timere ---- */
+    /* ---- the main loop's timers ---- */
     WrapStat ref=wrap_loop((ms_t)50000000), w31=wrap_loop(B31), w32=wrap_loop(B32), wfar=wrap_loop((ms_t)1<<45);
-    snprintf(nm,sizeof nm,"main-loopets poll hen over 2^31 ms (et 40 ms-skridt springer B-10, hvor poll-, slow- og ext-fristen staar): %d + %d + %d queries paa 8 s, stoerste hul %ld ms — som langt fra graensen (%d + %d + %d, %ld ms)",
+    snprintf(nm,sizeof nm,"the main loop's poll across 2^31 ms (a 40 ms step skips B-10, where the poll, slow and ext deadlines are): %d + %d + %d queries in 8 s, largest gap %ld ms — same as far from the boundary (%d + %d + %d, %ld ms)",
              w31.n_fast,w31.n_slow,w31.n_ext,(long)w31.gap_max,ref.n_fast,ref.n_slow,ref.n_ext,(long)ref.gap_max);
-    st_check(nm,w31.n_fast==ref.n_fast&&w31.n_slow==ref.n_slow&&w31.n_ext==ref.n_ext&&w31.gap_max==ref.gap_max&&ref.n_fast>=155&&ref.n_slow>=38&&ref.n_ext>=8&&ref.gap_max<=50+40);   /* hullet = 50 ms + det lange skridt */
-    snprintf(nm,sizeof nm,"render-timeren hen over 2^31 ms: %d frames paa 8 s (langt fra graensen: %d) — ingen frossen skaerm",w31.frames,ref.frames);
+    st_check(nm,w31.n_fast==ref.n_fast&&w31.n_slow==ref.n_slow&&w31.n_ext==ref.n_ext&&w31.gap_max==ref.gap_max&&ref.n_fast>=155&&ref.n_slow>=38&&ref.n_ext>=8&&ref.gap_max<=50+40);   /* the gap = 50 ms + the long step */
+    snprintf(nm,sizeof nm,"the render timer across 2^31 ms: %d frames in 8 s (far from the boundary: %d) — no frozen screen",w31.frames,ref.frames);
     st_check(nm,w31.frames==ref.frames&&ref.frames>=75);
-    st_check("samme hen over 2^32 ms og ved 2^45 ms (1115 aar): poll- og frame-tal er identiske med referencen",
+    st_check("same across 2^32 ms and at 2^45 ms (1115 years): poll and frame counts are identical to the reference",
              w32.n_fast==ref.n_fast&&w32.n_slow==ref.n_slow&&w32.n_ext==ref.n_ext&&w32.frames==ref.frames&&w32.gap_max==ref.gap_max&&wfar.n_fast==ref.n_fast&&wfar.frames==ref.frames);
     /* ---- keep-awake ---- */
     { int ok=1; static const ms_t Bs[2]={B31,B32}; ms_t at[2][4]; int n[2];
       for(int q=0;q<2;q++){ ms_t B=Bs[q], t=B-20000; st_home(); memset(&wq,0,sizeof wq); txq_len=0; act.pending=ACT_NONE; n[q]=0;
-          last_rx_ms=t; proto_keepawake(t,1); wq_step(t); st_ack_last(t+10); wq_step(t+12); st_ack_last(t+20); wq_step(t+22);      /* opstart: PowerOn + vågen; næste frist B+10000 */
+          last_rx_ms=t; proto_keepawake(t,1); wq_step(t); st_ack_last(t+10); wq_step(t+12); st_ack_last(t+20); wq_step(t+22);      /* startup: PowerOn + awake; next deadline B+10000 */
           int k0=(int)wq.n_ok;
           for(t+=24;t<=B+45000;t+=2){ last_rx_ms=t; proto_keepawake(t,0); wq_step(t);
               if(wq.n&&wq.state==WQ_WAIT&&wq.sent_ms==t&&wq.tries==1){ if(wq.q[0].sub!=1||wq.q[0].len!=1||wq.q[0].w[0]!=0) ok=0; if(n[q]<4) at[q][n[q]]=t-B; n[q]++; }
               if(wq.n&&wq.state==WQ_WAIT&&t-wq.sent_ms>=20) st_ack_last(t); }
           if(wq.n_ok-k0!=n[q]||wq.n_fail||wq.n_retx) ok=0; }
-      snprintf(nm,sizeof nm,"keep-awake (ord 1 = 0 hvert 30. s) hen over 2^31 og 2^32 ms: praecis 2 writes paa 65 s, ved B+%ld og B+%ld ms (2^32: B+%ld / B+%ld) — ingen pause, ingen stroem af writes",
+      snprintf(nm,sizeof nm,"keep-awake (word 1 = 0 every 30 s) across 2^31 and 2^32 ms: exactly 2 writes in 65 s, at B+%ld and B+%ld ms (2^32: B+%ld / B+%ld) — no pause, no stream of writes",
                (long)at[0][0],(long)at[0][1],(long)at[1][0],(long)at[1][1]);
       st_check(nm,ok&&n[0]==2&&n[1]==2&&at[0][0]>=10000&&at[0][0]<=10004&&at[0][1]-at[0][0]>=30000&&at[0][1]-at[0][0]<=30004&&at[1][0]==at[0][0]&&at[1][1]==at[0][1]); }
-    /* ---- ACK-budget og RX-resync-vindue ---- */
+    /* ---- ACK budget and RX resync window ---- */
     { st_home(); memset(&wq,0,sizeof wq); txq_len=0; ms_t t=B31-100; wq_push(11,(uint16_t[1]){880},1); wq_step(t);
       wq_step(B31+49); int r0=wq.n_retx==0; wq_step(B31+50); int r1=wq.n_retx==1&&wq.tries==2; wq_step(B31+349); int f0=wq.n_fail==0&&wq.n==1; wq_step(B31+350);
-      st_check("write-koeens ACK-budget hen over 2^31 ms: sendt B-100, retransmit praecis ved +150 ms (B+50), opgivet praecis 300 ms senere (B+350)",r0&&r1&&f0&&wq.n_fail==1&&wq.n==0&&wq.result==WR_FAIL);
-      rx_zero(); static const uint8_t cand[9]={0xAA,0x55,0x83,0x00,0x38,1,0,2,0};                 /* kandidat, der lover 119 bytes */
+      st_check("the write queue's ACK budget across 2^31 ms: sent B-100, retransmit exactly at +150 ms (B+50), given up exactly 300 ms later (B+350)",r0&&r1&&f0&&wq.n_fail==1&&wq.n==0&&wq.result==WR_FAIL);
+      rx_zero(); static const uint8_t cand[9]={0xAA,0x55,0x83,0x00,0x38,1,0,2,0};                 /* candidate promising 119 bytes */
       rx_feed(cand,9,B32-200); rx_tick(NULL,0,B32+199); int w0=rx_resync==0&&rxlen==9; rx_tick(NULL,0,B32+200);
-      st_check("RX-resync-vinduet (400 ms) hen over 2^32 ms: ufuldstaendig kandidat fra B-200 staar ved B+199 og forkastes praecis ved B+200",w0&&rx_resync==1&&rxlen==0);
+      st_check("the RX resync window (400 ms) across 2^32 ms: incomplete candidate from B-200 is still there at B+199 and is discarded exactly at B+200",w0&&rx_resync==1&&rxlen==0);
       rx_zero(); }
-    /* ---- hold-for-start + stepper-gentagelse ---- */
-    st_check("hold-for-start (650 ms) hen over 2^31 og 2^32 ms: intet ved 649 ms, bryg-blokken (sub5 len18) koeet praecis ved 650 ms",wrap_hold(B31-300)&&wrap_hold(B32-300)&&wrap_hold((ms_t)70000000));
+    /* ---- hold-to-start + stepper repeat ---- */
+    st_check("hold-to-start (650 ms) across 2^31 and 2^32 ms: nothing at 649 ms, the brew block (sub5 len18) queued exactly at 650 ms",wrap_hold(B31-300)&&wrap_hold(B32-300)&&wrap_hold((ms_t)70000000));
     { int vr=wrap_stepper((ms_t)80000000), v1=wrap_stepper(B31-1000), v2=wrap_stepper(B32-1000);
-      snprintf(nm,sizeof nm,"hold paa + i 2,6 s (gentagelse m. acceleration) hen over 2^31 og 2^32 ms: samme vaerdi som langt fra graensen (%d = %d = %d)",v1,v2,vr);
+      snprintf(nm,sizeof nm,"hold on + for 2.6 s (repeat with acceleration) across 2^31 and 2^32 ms: same value as far from the boundary (%d = %d = %d)",v1,v2,vr);
       st_check(nm,v1==vr&&v2==vr&&vr>SET[S_HOTW].lo+10*SET[S_HOTW].step); }
-    /* ---- toast, side-overgang, frame-tid ---- */
+    /* ---- toast, page transition, frame time ---- */
     { st_home(); ms_t t=B31-1000; last_rx_ms=t; toast_show("WRAP",C_OK,t); int on0=!r_empty(toast_rect(t+1))&&!r_empty(toast_rect(B31+1399)), off=r_empty(toast_rect(B31+1400));
-      st_check("toast (2400 ms) hen over 2^31 ms: synlig fra B-1000 til B+1399, vaek ved B+1400",on0&&off);
+      st_check("toast (2400 ms) across 2^31 ms: visible from B-1000 to B+1399, gone at B+1400",on0&&off);
       st_home(); t=B32-100; last_rx_ms=t; ui_frame(t); go_page(PG_T0,1,t); int in0=tr.type==TR_SLIDE; last_rx_ms=B32+100; ui_frame(B32+100); int mid=tr.type==TR_SLIDE; last_rx_ms=B32+161; ui_frame(B32+161);
-      st_check("side-overgang (260 ms) hen over 2^32 ms: i gang ved B+100, afsluttet ved B+161 — siden er skiftet",in0&&mid&&tr.type==TR_NONE&&page==PG_T0);
+      st_check("page transition (260 ms) across 2^32 ms: in progress at B+100, finished at B+161 — the page has changed",in0&&mid&&tr.type==TR_NONE&&page==PG_T0);
       memset(&lt,0,sizeof lt); ft_max=0; loop_rendered(B31-1000,42.0f); loop_rendered(B31+3999,1.0f); int keep=ft_max==42.0f; loop_rendered(B31+4002,1.0f);
-      st_check("frame-tids-statistikken (MAX nulstilles hvert 5. s) hen over 2^31 ms: max holdes til B+3999 og nulstilles efter 5 s",keep&&ft_max==1.0f&&ft_last==1.0f); }
-    /* ---- forskelle over 2^31 ms: v6.5's 32-bit-forskelle blev negative efter 24,86 døgn ---- */
-    { const ms_t D=B31+60000;                                   /* 24,86 døgn + 1 min. senere */
+      st_check("the frame time statistics (MAX reset every 5 s) across 2^31 ms: max is held until B+3999 and reset after 5 s",keep&&ft_max==1.0f&&ft_last==1.0f); }
+    /* ---- differences over 2^31 ms: v6.5's 32-bit differences went negative after 24.86 days ---- */
+    { const ms_t D=B31+60000;                                   /* 24.86 days + 1 min. later */
       ms_t t0=st_home(); last_rx_ms=t0; int up0=link_up(t0+10), dead=!link_up(t0+D);
-      st_check("et link, der har vaeret tavst i 24,86 doegn, er stadig NEDE (32-bit: forskellen blev negativ, og linket saa 'oppe' ud)",up0&&dead);
-      t0=st_home(); toast_show("GAMMEL",C_OK,t0); last_rx_ms=t0+D; int gone=r_empty(toast_rect(t0+D));
+      st_check("a link that has been silent for 24.86 days is still DOWN (32-bit: the difference went negative and the link looked 'up')",up0&&dead);
+      t0=st_home(); toast_show("OLD",C_OK,t0); last_rx_ms=t0+D; int gone=r_empty(toast_rect(t0+D));
       act.t_done=t0; act.raw=PH_READY; act.ph=PH_READY; ui_frame(t0+D);
-      st_check("24,86 doegn efter seneste aktivitet og seneste toast: ingen FAERDIG-chip og ingen toast, der kommer igen",gone&&act.ph==PH_READY&&!(toast.dur&&(t0+D)-toast.t0<toast.dur+50));
+      st_check("24.86 days after the last activity and the last toast: no DONE chip and no toast coming back",gone&&act.ph==PH_READY&&!(toast.dur&&(t0+D)-toast.t0<toast.dur+50));
       rx_bad=3; last_bad_ms=t0; int crc=(t0+D)-last_bad_ms<10000&&rx_bad>0; rx_bad=0; last_bad_ms=-100000;
-      st_check("24,86 doegn efter seneste CRC-fejl: CRC-advarslen paa HJEM vender ikke tilbage",!crc); }
-    /* ---- sekunder siden boot + /proc-starttid ---- */
+      st_check("24.86 days after the last CRC error: the CRC warning on HOME does not come back",!crc); }
+    /* ---- seconds since boot + /proc start time ---- */
     { char root[300], p[400]; snprintf(root,sizeof root,"/tmp/ourui_v6_selftest_%d/wrap",(int)getpid()); snprintf(p,sizeof p,"%s/proc/4711",root); mk_p(root,"/proc/4711");
       char ksr[sizeof sysroot]; strcpy(ksr,sysroot); snprintf(sysroot,sizeof sysroot,"%s",root);
       mock_put(root,"/proc/4711/stat","4711 (demo_v9) T 1 4711 4711 0 -1 4194560 0 0 0 0 0 0 0 0 20 0 1 0 300000000000 1404928 91 4294967295\n",120,0644);
       char stt='?'; int64_t s=proc_stat(4711,&stt); strcpy(sysroot,ksr);
       int64_t kf=mono_fake; mono_fake=(int64_t)5000000000LL; int64_t m=mono_s(); mono_fake=kf;
-      st_check("/proc-starttid og sekunder siden boot er 64 bit: 300 000 000 000 ticks = 3 000 000 000 s (32-bit atol: maettet ved 2^31 efter 248 doegn); mono_s 5 000 000 000",
+      st_check("/proc start time and seconds since boot are 64 bit: 300 000 000 000 ticks = 3 000 000 000 s (32-bit atol: saturated at 2^31 after 248 days); mono_s 5 000 000 000",
                s==(int64_t)3000000000LL&&stt=='T'&&m==(int64_t)5000000000LL); }
     { uint32_t k=rx_ok; rx_ok=0xFFFFFFFFu; rx_zero(); rx_ok=0xFFFFFFFFu; uint8_t f[128]; rx_feed(f,rx_v(f,1),(ms_t)1000); int z=rx_ok==0; rx_zero(); rx_ok=k;
-      st_check("RX-taellerne er uint32 og loeber veldefineret rundt (4 294 967 295 + 1 = 0) — ingen signed overflow efter aar i drift",z); }
+      st_check("the RX counters are uint32 and wrap in a well-defined way (4 294 967 295 + 1 = 0) — no signed overflow after years in service",z); }
     sim_reset();
 }
 
-/* ---- MCU-genstart -> re-push ---- */
-#define BPV_B_REAL "aa 55 06 70 03 04 01 00 06 46 00 c7 ce"   /* v6.7: = stock's optagede frame (boot/ondevice/GROUND-TRUTH.md) */
+/* ---- MCU restart -> re-push ---- */
+#define BPV_B_REAL "aa 55 06 70 03 04 01 00 06 46 00 c7 ce"   /* v6.7: = stock's captured frame (boot/ondevice/GROUND-TRUTH.md) */
 typedef struct { ms_t t; uint16_t ws, p[3]; int have_p, ack, deaf; int n_a, n_b, n_other, n_verq, n_vera; ms_t t_a[12]; } RpSim;
 static const uint8_t ST_VREQ[8]={0xAA,0x55,0x89,0x01,0x00,0x00,0x6F,0x81};
-/* én omgang af main() i main()'s rækkefølge: RX, write-kø, boot-push, re-push. Den "simulerede MCU": status (ord 33) hvert
- * 50. ms, ord 112..114 hvert 1. s, ACK 20 ms efter en write (ack=1) — og den beholder det, der skrives til ord 112..114 */
+/* one iteration of main() in main()'s order: RX, write queue, boot push, re-push. The "simulated MCU": status (word 33) every
+ * 50 ms, words 112..114 every 1 s, ACK 20 ms after a write (ack=1) — and it keeps what is written to words 112..114 */
 static void rp_tick(RpSim*r){
     r->t+=2;
     if(r->t%50==0) st_status(r->ws,r->t);
@@ -6467,133 +6473,133 @@ static void rp_tick(RpSim*r){
     txq_len=0;
 }
 static void rp_run(RpSim*r,ms_t ms){ ms_t e=r->t+ms; while(r->t<e) rp_tick(r); }
-/* MCU-genstart: registerfilen paa startvaerdierne, og n versions-forespoergsler m. 20 ms mellemrum */
+/* MCU restart: the register file at its start values, and n version requests 20 ms apart */
 static void rp_reboot(RpSim*r,int n){
     r->p[0]=0; r->p[1]=0; r->p[2]=50; uint8_t f[16]; rx_feed(f,mk_frame(f,0x83,112,r->p,3),r->t);
     for(int k=0;k<n;k++){ rx_feed(ST_VREQ,8,r->t); r->n_verq++; rp_run(r,20); }
 }
 static void rp_init(RpSim*r,ms_t T,int guard){
     st_bp_reset(); memset(&rps,0,sizeof rps); ver_n=0; ver_ms=0; rx_n112=0; bp_guard_cfg=guard; bp_on=1;
-    memset(r,0,sizeof *r); r->t=T; r->ws=0x0101; r->ack=1; r->have_p=1; r->p[2]=50;            /* MCU'en staar paa sine startvaerdier (slot B-boot) */
+    memset(r,0,sizeof *r); r->t=T; r->ws=0x0101; r->ack=1; r->have_p=1; r->p[2]=50;            /* the MCU is at its start values (slot B boot) */
     boot_push_start(guard);
 }
 static void st_repush(const char*cfgsrc){
-    printf("== selftest: v6.6 MCU-genstart -> re-push (0x89 igen / startvaerdi-signatur; samme blokke, samme frame-politik, samme aktivitets-vagt) ==\n");
+    printf("== selftest: v6.6 MCU restart -> re-push (0x89 again / start-value signature; same blocks, same frame policy, same activity guard) ==\n");
     int bpon0=bp_on, g0=bp_guard_cfg, ro0=ro_mode; RpSim r; char nm[420]; const ms_t T=60000000;
     char dir[300], fx[340]; snprintf(dir,sizeof dir,"/tmp/ourui_v6_selftest_%d",(int)getpid()); mkdir(dir,0755); snprintf(fx,sizeof fx,"%s/repush_fixture.json",dir);
     snprintf(cfg_path,sizeof cfg_path,"%s",cfgsrc); settings_load();
-    /* ---- (1) det foerste haandtryk er IKKE en genstart ---- */
+    /* ---- (1) the first handshake is NOT a restart ---- */
     rp_init(&r,T,1);
     for(int k=0;k<3;k++){ rx_feed(ST_VREQ,8,r.t); r.n_verq++; rx_feed(NULL,0,r.t); boot_push_step(r.t); repush_step(r.t); for(int i=0;i+2<txq_len;i++) if(txq[i]==0xAA&&txq[i+2]==0x09) r.n_vera++; txq_len=0; r.t+=20; }
     int quiet=wq.n==0&&bp.state==BP_WAIT_A&&!bp.t0_set;
-    rp_run(&r,60);                                             /* status -> vagten afgoeres -> sub1 len30 koeet */
+    rp_run(&r,60);                                             /* status -> the guard is decided -> sub1 len30 queued */
     int started=bp.t0_set&&r.n_a==1;
-    rx_feed(ST_VREQ,8,r.t); r.n_verq++;                        /* efternoeler fra det foerste haandtryk, < 200 ms efter at pushen gik ud */
+    rx_feed(ST_VREQ,8,r.t); r.n_verq++;                        /* straggler from the first handshake, < 200 ms after the push went out */
     rp_run(&r,12000);
-    st_check("opstart: 3 versions-forespoergsler FOER boot-pushen + en efternoeler lige efter den = det foerste haandtryk — besvaret (4 x cmd 9), ingen re-push",
+    st_check("startup: 3 version requests BEFORE the boot push + a straggler right after it = the first handshake — answered (4 x cmd 9), no re-push",
              quiet&&started&&r.n_vera==4&&r.n_a==1&&r.n_b==1&&bp.state==BP_DONE&&bp.ra==BPR_OK&&bp.rb==BPR_OK&&bp.runs==1&&repush_count()==0&&!rps.armed);
-    st_check("controlleren stod paa sine startvaerdier (ord 112..114 = 0 / 0 / 50) og har nu config'ens (0104 / 0600 / 70 — ord 113 lo = 0 som stock); 12 s senere er intet nyt sendt",
+    st_check("the controller was at its start values (words 112..114 = 0 / 0 / 50) and now has the config's (0104 / 0600 / 70 — word 113 lo = 0 like stock); 12 s later nothing new has been sent",
              r.p[0]==0x0104&&r.p[1]==0x0600&&r.p[2]==70&&reg[112]==0x0104&&r.n_other==0&&wq.n_ok==2);
-    /* ---- (2) MCU-genstart midt i sessionen: 0x89 kommer igen ---- */
+    /* ---- (2) MCU restart mid-session: 0x89 comes again ---- */
     int a0=r.n_a, b0=r.n_b; ms_t t_rb=r.t;
-    rp_reboot(&r,5);                                           /* 5 forespoergsler paa 100 ms; den sidste ved t_rb+80 */
+    rp_reboot(&r,5);                                           /* 5 requests in 100 ms; the last at t_rb+80 */
     int during=r.n_a==a0&&rps.armed&&repush_count()==0;
     while(r.t<t_rb+80+RP_SETTLE_MS-2) rp_tick(&r);
-    int settle=r.n_a==a0&&repush_count()==0;                   /* 298 ms efter den sidste 0x89: endnu intet */
+    int settle=r.n_a==a0&&repush_count()==0;                   /* 298 ms after the last 0x89: nothing yet */
     rp_run(&r,4); int begun=repush_count()==1&&rps.n_ver==1&&rps.last==RPC_VER&&bp.state!=BP_DONE;
     rp_run(&r,60);
     int a_sent=r.n_a==a0+1&&hexeq(last_tx,last_tx_len,BPV_A_REAL);
     rp_run(&r,40); int b_sent=r.n_b==b0+1&&hexeq(last_tx,last_tx_len,BPV_B_REAL);
     rp_run(&r,3000);
-    st_check("MCU-GENSTART (0x89 igen, 5 stk.): alle besvaret; intet sendes, foer runden har vaeret stille i 300 ms og en FRISK work_sta er laest",
+    st_check("MCU RESTART (0x89 again, 5 of them): all answered; nothing is sent until the round has been quiet for 300 ms and a FRESH work_sta has been read",
              during&&settle&&begun&&r.n_vera==4+5);
-    st_check("RE-PUSH = boot-pushen: sub1 len30 (uafhaengig vektor, 67 bytes) -> ACK -> sub112 len3 (… 04 01 00 06 46 00 c7 ce) -> ACK; OK / OK, 0 retransmit, 0 blok",
+    st_check("RE-PUSH = the boot push: sub1 len30 (independent vector, 67 bytes) -> ACK -> sub112 len3 (… 04 01 00 06 46 00 c7 ce) -> ACK; OK / OK, 0 retransmit, 0 block",
              a_sent&&b_sent&&bp.state==BP_DONE&&bp.ra==BPR_OK&&bp.rb==BPR_OK&&bp.runs==2&&wq.n_ok==4&&wq.n_retx==0&&wq.n_fail==0&&wq.n_block==0&&r.n_other==0);
-    st_check("efter re-pushen staar controlleren igen paa config (ord 112..114 = 0104 / 0600 / 70, ord 11 = 870); taeller: 1 (aarsag 0x89); 3 s senere intet nyt",
+    st_check("after the re-push the controller is back on config (words 112..114 = 0104 / 0600 / 70, word 11 = 870); counter: 1 (cause 0x89); 3 s later nothing new",
              r.p[0]==0x0104&&r.p[1]==0x0600&&r.p[2]==70&&reg[11]==870&&reg[25]==650&&repush_count()==1&&rps.n_def==0&&r.n_a==a0+1);
     { char v[DG_N][28],lb[48],lb2[48],want[48]; uint32_t col[DG_N]; last_rx_ms=r.t; diag_top_text(v,col,r.t); uint32_t lc=diag_label(14,lb,sizeof lb), lc2=diag_label(15,lb2,sizeof lb2); snprintf(want,sizeof want,TR(TX_DL_BP_A_RE),1);
-      st_check("DIAGNOSE: boot-push-raekken hedder nu 'RE-PUSH 1 · 1-30' (accent-farve) | '112-114'; cellerne viser udfaldet af den seneste push: OK / OK (groen)",
+      st_check("DIAGNOSE: the boot push row is now called 'RE-PUSH 1 · 1-30' (accent colour) | '112-114'; the cells show the outcome of the latest push: OK / OK (green)",
                !strcmp(lb,want)&&st_has(lb,"RE-PUSH 1 ")&&lc==C_ACC&&!strcmp(lb2,TR(TX_DL_BP_B_RE))&&lc2==C_TXT3&&!strcmp(v[14],TR(TX_DV_OK))&&!strcmp(v[15],TR(TX_DV_OK))&&col[14]==C_OK&&col[15]==C_OK); }
-    /* ---- (3) to genstarter taet paa hinanden: mindst RP_MIN_MS mellem to re-push ---- */
-    { ms_t ta=r.t_a[r.n_a-1]; a0=r.n_a; rp_reboot(&r,3); rp_run(&r,1000); int held=r.n_a==a0&&rps.armed;   /* 4,2 s efter forrige: runden er faldet til ro, men afstanden mangler */
+    /* ---- (3) two restarts close together: at least RP_MIN_MS between two re-pushes ---- */
+    { ms_t ta=r.t_a[r.n_a-1]; a0=r.n_a; rp_reboot(&r,3); rp_run(&r,1000); int held=r.n_a==a0&&rps.armed;   /* 4.2 s after the previous one: the round has settled, but the spacing is not reached */
       rp_run(&r,6000);
-      snprintf(nm,sizeof nm,"ny genstart 3,2 s efter den forrige re-push: holdes tilbage til der er gaaet %d ms (her %ld ms mellem de to sub1 len30), og sendes saa — taeller 2",RP_MIN_MS,(long)(r.t_a[r.n_a-1]-ta));
+      snprintf(nm,sizeof nm,"new restart 3.2 s after the previous re-push: held back until %d ms have passed (here %ld ms between the two sub1 len30), then sent — counter 2",RP_MIN_MS,(long)(r.t_a[r.n_a-1]-ta));
       st_check(nm,held&&r.n_a==a0+1&&repush_count()==2&&r.t_a[r.n_a-1]-ta>=RP_MIN_MS&&r.t_a[r.n_a-1]-ta<RP_MIN_MS+200&&bp.ra==BPR_OK&&bp.rb==BPR_OK); }
-    /* ---- (4) aktivitets-vagten gaelder ogsaa re-pushen ---- */
+    /* ---- (4) the activity guard also applies to the re-push ---- */
     rp_run(&r,6000); a0=r.n_a; b0=r.n_b;
-    r.ws=0x4121; rp_reboot(&r,4); rp_run(&r,2000);              /* genstart, og brugeren har wand'en aaben (damp-bits sat) */
+    r.ws=0x4121; rp_reboot(&r,4); rp_run(&r,2000);              /* restart, and the user has the wand open (steam bits set) */
     { uint32_t c0; int skip=bp.state==BP_DONE&&bp.ra==BPR_SKIP&&bp.rb==BPR_SKIP&&r.n_a==a0&&r.n_b==b0&&rps.n_ver==3&&bp_text(0,&c0)==TR(TX_DV_BP_SKIP);
-      rp_run(&r,6000); int still=r.n_a==a0&&rps.n_def==0;       /* signaturen staar (0 / 0), men maskinen er ikke ledig */
-      st_check("VAGTEN: genstart, mens en aktivitet koerer (work_sta 4121) -> re-pushen SPRINGES OVER, 0 bytes sendt; signaturen udloeser heller intet, saa laenge aktiviteten koerer",skip&&still);
-      r.ws=0x0101; rp_run(&r,1900); int notyet=r.n_a==a0;       /* ledig: 2 laesninger er ikke nok */
+      rp_run(&r,6000); int still=r.n_a==a0&&rps.n_def==0;       /* the signature is present (0 / 0), but the machine is not idle */
+      st_check("THE GUARD: restart while an activity is running (work_sta 4121) -> the re-push is SKIPPED, 0 bytes sent; the signature triggers nothing either while the activity runs",skip&&still);
+      r.ws=0x0101; rp_run(&r,1900); int notyet=r.n_a==a0;       /* idle: 2 reads are not enough */
       rp_run(&r,2400);
-      st_check("… og naar maskinen er ledig, finder STARTVAERDI-SIGNATUREN (ord 112 = 0, ord 113 = 0 i 3 laesninger) den: pushen sendes — aarsag 'startvaerdier', OK / OK",
+      st_check("… and when the machine is idle, the START-VALUE SIGNATURE (word 112 = 0, word 113 = 0 in 3 reads) catches it: the push is sent — cause 'start values', OK / OK",
                notyet&&r.n_a==a0+1&&r.n_b==b0+1&&rps.n_def==1&&rps.last==RPC_DEF&&bp.ra==BPR_OK&&bp.rb==BPR_OK&&r.p[0]==0x0104); }
-    /* ---- (5) signaturen alene (0x89-runden tabt) ---- */
+    /* ---- (5) the signature alone (0x89 round lost) ---- */
     rp_run(&r,6000); a0=r.n_a; int d0=rps.n_def;
-    r.p[0]=0; r.p[1]=0; r.p[2]=50;                               /* genstart uden at ourui ser en 0x89 */
+    r.p[0]=0; r.p[1]=0; r.p[2]=50;                               /* restart without ourui seeing a 0x89 */
     { ms_t ts=r.t; while(r.n_a==a0&&r.t<ts+10000) rp_tick(&r); ms_t took=r.t-ts; rp_run(&r,3000);
-      snprintf(nm,sizeof nm,"genstart UDEN 0x89 (runden tabt): signaturen udloeser re-pushen efter 3 friske laesninger (%ld ms) — controlleren tilbage paa config, taeller +1",(long)took);
+      snprintf(nm,sizeof nm,"restart WITHOUT 0x89 (round lost): the signature triggers the re-push after 3 fresh reads (%ld ms) — controller back on config, counter +1",(long)took);
       st_check(nm,r.n_a==a0+1&&rps.n_def==d0+1&&took>=3000&&took<=4100&&r.p[0]==0x0104&&r.p[1]==0x0600&&bp.ra==BPR_OK); }
     { a0=r.n_a; d0=rps.n_def; rp_run(&r,6000); uint16_t keep[3]; memcpy(keep,r.p,sizeof keep);
       r.p[0]=0; r.p[1]=0; rp_run(&r,2100); r.p[0]=keep[0]; r.p[1]=keep[1]; rp_run(&r,1000); r.p[0]=0; r.p[1]=0; rp_run(&r,2000); int no=r.n_a==a0;
       memcpy(r.p,keep,sizeof keep); rp_run(&r,3000);
-      st_check("signaturen skal staa i 3 laesninger I TRAEK: 2 x (0 / 0), 1 x config, 2 x (0 / 0) udloeser intet",no&&r.n_a==a0&&rps.n_def==d0); }
-    /* ---- (6) budget: en controller, der ikke tager imod ---- */
+      st_check("the signature must hold for 3 reads IN A ROW: 2 x (0 / 0), 1 x config, 2 x (0 / 0) triggers nothing",no&&r.n_a==a0&&rps.n_def==d0); }
+    /* ---- (6) budget: a controller that does not accept ---- */
     { rp_init(&r,T+10000000,1); rp_run(&r,3000); int base=r.n_a==1&&bp.ra==BPR_OK;
-      r.deaf=1; r.p[0]=0; r.p[1]=0; r.p[2]=50;                   /* ACK'er, men vaerdierne bliver ikke staaende */
+      r.deaf=1; r.p[0]=0; r.p[1]=0; r.p[2]=50;                   /* ACKs, but the values do not stick */
       ms_t ts=r.t; rp_run(&r,RP_WINDOW_MS-30000); int n1=rps.n_def, a1=r.n_a;
       ms_t gap=r.t_a[2]-r.t_a[1];
-      rp_run(&r,30000+gap-1000); int n2=rps.n_def;               /* 10 min. efter den FOERSTE er dens plads fri igen (den naeste foerst 'gap' senere) */
-      snprintf(nm,sizeof nm,"BUDGET: signaturen bliver staaende (controlleren tager ikke imod): %d re-push paa de foerste %d,5 min. (%ld ms imellem), derefter stille; %d min. efter den foerste gives der EN ny — ingen uendelig stroem af writes",
+      rp_run(&r,30000+gap-1000); int n2=rps.n_def;               /* 10 min. after the FIRST one its slot is free again (the next one only 'gap' later) */
+      snprintf(nm,sizeof nm,"BUDGET: the signature persists (the controller does not accept): %d re-pushes in the first %d.5 min. (%ld ms apart), then quiet; %d min. after the first, ONE new one is allowed — no endless stream of writes",
                n1,(int)((RP_WINDOW_MS-30000)/60000),(long)gap,(int)(RP_WINDOW_MS/60000));
       if(!(base&&n1==RP_BUDGET&&a1==1+RP_BUDGET&&n2==RP_BUDGET+1)) printf("     base=%d n1=%d a1=%d n2=%d gap=%ld\n",base,n1,a1,n2,(long)gap);
       st_check(nm,base&&n1==RP_BUDGET&&a1==1+RP_BUDGET&&gap>=RP_MIN_MS&&n2==RP_BUDGET+1&&r.t-ts>RP_WINDOW_MS); }
-    /* ---- (7) genstart MIDT i en push ---- */
+    /* ---- (7) restart IN THE MIDDLE of a push ---- */
     { rp_init(&r,T+20000000,1); rp_run(&r,60); int a_out=r.n_a==1&&bp.state==BP_A;
-      rp_run(&r,24); int a_ok=bp.ra==BPR_OK;                     /* blok A ACK'et */
-      r.ack=0; rp_run(&r,230);                                   /* MCU'en genstarter: blok B faar ingen ACK … */
-      rx_feed(ST_VREQ,8,r.t); r.n_verq++; rp_run(&r,20); rx_feed(ST_VREQ,8,r.t); r.n_verq++;   /* … og den spoerger om versionen igen (> 200 ms efter pushens start) */
+      rp_run(&r,24); int a_ok=bp.ra==BPR_OK;                     /* block A ACKed */
+      r.ack=0; rp_run(&r,230);                                   /* the MCU restarts: block B gets no ACK … */
+      rx_feed(ST_VREQ,8,r.t); r.n_verq++; rp_run(&r,20); rx_feed(ST_VREQ,8,r.t); r.n_verq++;   /* … and it asks for the version again (> 200 ms after the push started) */
       int armed=rps.armed&&bp.state!=BP_DONE;
       rp_run(&r,400); int nb=bp.rb==BPR_NOACK||bp.state!=BP_DONE;
       r.ack=1; rp_run(&r,6000);
-      st_check("genstart MIDT i boot-pushen (blok A ACK'et, blok B uden ACK, 0x89 igen): pushen goeres faerdig (INGEN ACK), og derefter sendes BEGGE blokke forfra — OK / OK",
+      st_check("restart IN THE MIDDLE of the boot push (block A ACKed, block B without ACK, 0x89 again): the push is completed (NO ACK), and then BOTH blocks are sent again from the start — OK / OK",
                a_out&&a_ok&&armed&&nb&&r.n_a==2&&r.n_b==2&&rps.n_ver==1&&bp.state==BP_DONE&&bp.ra==BPR_OK&&bp.rb==BPR_OK&&r.p[0]==0x0104); }
-    /* ---- (8) SIM-kontrakten (ingen vagt): udskyd i stedet for at springe over ---- */
+    /* ---- (8) the SIM contract (no guard): postpone instead of skipping ---- */
     { rp_init(&r,T+30000000,0); rp_run(&r,3000); a0=r.n_a;
       r.ws=0x1307; rp_reboot(&r,3); rp_run(&r,8000); int wait=r.n_a==a0&&bp.state==BP_WAIT_A&&rps.n_ver==1;
       r.ws=0x0101; rp_run(&r,500);
-      st_check("uden vagten (SIM-kontrakten): en re-push under en aktivitet UDSKYDES og sendes, naar maskinen er ledig",wait&&r.n_a==a0+1&&bp.ra==BPR_OK&&bp.rb==BPR_OK); }
-    /* ---- (9) hvor der IKKE re-pushes ---- */
+      st_check("without the guard (the SIM contract): a re-push during an activity is POSTPONED and sent when the machine is idle",wait&&r.n_a==a0+1&&bp.ra==BPR_OK&&bp.rb==BPR_OK); }
+    /* ---- (9) where there is NO re-push ---- */
     { int ok=1;
-      st_fixture(fx,1200,1); snprintf(cfg_path,sizeof cfg_path,"%s",fx); settings_load();           /* config uden for spec */
+      st_fixture(fx,1200,1); snprintf(cfg_path,sizeof cfg_path,"%s",fx); settings_load();           /* config out of spec */
       rp_init(&r,T+40000000,1); rp_run(&r,3000); int blk=bp.ra==BPR_BLOCKED; long nb0=wq.n_block; a0=r.n_a;
       r.p[0]=0; r.p[1]=0; rp_run(&r,20000); if(!(blk&&r.n_a==a0&&rps.n_def==0&&wq.n_block==nb0&&!repush_cfg_sane())) ok=0;
       snprintf(cfg_path,sizeof cfg_path,"%s",cfgsrc); settings_load(); unlink(fx);
       rp_init(&r,T+50000000,1); ro_mode=1; rp_run(&r,3000); rp_reboot(&r,3); rp_run(&r,20000); if(r.n_a||r.n_b||repush_count()||r.n_vera!=3) ok=0; ro_mode=0;
       rp_init(&r,T+60000000,1); memset(&bp,0,sizeof bp); bp_on=0; rp_run(&r,3000); rp_reboot(&r,3); rp_run(&r,20000); if(r.n_a||r.n_b||repush_count()||r.n_vera!=3) ok=0; bp_on=1;
-      st_check("ingen re-push: config uden for spec (blokken ville blive afvist igen — ingen stroem af BLOK-taellinger), OURUI_READONLY, OURUI_NOBOOTPUSH; 0x89 besvares stadig",ok); }
+      st_check("no re-push: config out of spec (the block would be rejected again — no stream of BLOCK counts), OURUI_READONLY, OURUI_NOBOOTPUSH; 0x89 is still answered",ok); }
     { char la[48],lb[48]; int ok=1;
       for(int lg=0;lg<NLANG;lg++){ int kl=ui_lang; lang_set(lg); rps.n_ver=600; rps.n_def=600; diag_label(14,la,sizeof la); diag_label(15,lb,sizeof lb);
-          float a=text_wf(la,F_XS), b2=text_wf(lb,F_XS); LAY(a/2+b2/2+8,DG_COL_R-DG_COL_L,"diagnose label-par m. re-push-taeller",la); LAY(a,2*(DG_COL_L-40),"diagnose-label v.",la);
+          float a=text_wf(la,F_XS), b2=text_wf(lb,F_XS); LAY(a/2+b2/2+8,DG_COL_R-DG_COL_L,"diagnose label pair with re-push counter",la); LAY(a,2*(DG_COL_L-40),"diagnose label L",la);
           if(!st_has(la,"RE-PUSH 999 ")) ok=0; rps.n_ver=rps.n_def=0; diag_label(14,la,sizeof la); diag_label(15,lb,sizeof lb); if(strcmp(la,TR(TX_DL_BP_A))||strcmp(lb,TR(TX_DL_BP_B))) ok=0;
           lang_set(kl); }
-      st_check("DIAGNOSE: label-parret m. re-push-taeller (loft 999) roerer ikke hinanden paa noget sprog; uden re-push er raekken uaendret 'BOOT PUSH 1-30' | 'BOOT PUSH 112-114'",ok); }
-    /* ---- ryd op ---- */
+      st_check("DIAGNOSE: the label pair with the re-push counter (cap 999) does not touch in any language; without a re-push the row is unchanged 'BOOT PUSH 1-30' | 'BOOT PUSH 112-114'",ok); }
+    /* ---- clean up ---- */
     bp_on=bpon0; bp_guard_cfg=g0; ro_mode=ro0; snprintf(cfg_path,sizeof cfg_path,"%s",cfgsrc); settings_load();
     st_bp_reset(); memset(&rps,0,sizeof rps); ver_n=0; rx_n112=0; sim_reset();
 }
 
-/* ============================ v6.7: net-vagten (wifi ved opstart + selv-heal) ============================ */
-/* Modellen (nm_*) står i stedet for wlan0/wpa_supplicant/udhcpc; tilstandsmaskinen er den samme kode som paa enheden.
- * conf-vektorerne er beregnet uden for programmet (python hashlib) — samme skabelon som enhedens .conf_bak (61 bytes). */
+/* ============================ v6.7: the net guard (wifi at startup + self-heal) ============================ */
+/* The model (nm_*) stands in for wlan0/wpa_supplicant/udhcpc; the state machine is the same code as on the device.
+ * The conf vectors are computed outside the program (python hashlib) — same template as the device's .conf_bak (61 bytes). */
 #define NETV_HDR  "ctrl_interface=/tmp/wifi/run/wpa_supplicant\nupdate_config=1\n"
 #define NETV_PSK  NETV_HDR "\nnetwork={\n\tssid=\"TestNet\"\n\tpsk=\"abcdefgh12\"\n\tkey_mgmt=WPA-PSK\n}\n"
 #define NETV_PSK_MD5 "5a970359d863288e79358cae148dc9a9"
 #define NETV_OPEN_MD5 "c1a621ab7f10b7829bb2b6865d9284b0"
 static void st_net_run(ms_t*t,int ms){ for(int k=0;k<ms;k+=20){ *t+=20; net_step(*t); } }
 static int st_net_cfg(const char*path,int on,const char*ssid_json,const char*pw_json){
-    char b[600]; int n=snprintf(b,sizeof b,"{\n\t\"Temperature\":\t1,\n\t\"wifionoff\":\t%d,\n\t\"ssid\":\t\"%s\",\n\t\"password\":\t\"%s\",\n\t\"presetStore\":\t{\n\t\t\"ssid\":\t\"IKKE-DENNE\"\n\t},\n\t\"init\":\t1\n}",on,ssid_json,pw_json);
+    char b[600]; int n=snprintf(b,sizeof b,"{\n\t\"Temperature\":\t1,\n\t\"wifionoff\":\t%d,\n\t\"ssid\":\t\"%s\",\n\t\"password\":\t\"%s\",\n\t\"presetStore\":\t{\n\t\t\"ssid\":\t\"NOT-THIS-ONE\"\n\t},\n\t\"init\":\t1\n}",on,ssid_json,pw_json);
     return put_bytes(path,b,n);
 }
 static int st_file_md5(const char*path,char out[33]){
@@ -6601,7 +6607,7 @@ static int st_file_md5(const char*path,char out[33]){
     md5_hex((const uint8_t*)b,(size_t)n,out); return n;
 }
 static void st_net(const char*dir){
-    printf("== selftest: v6.7 net-vagten (wifi ved opstart + selv-heal; model af wlan0/wpa_supplicant/udhcpc) ==\n");
+    printf("== selftest: v6.7 the net guard (wifi at startup + self-heal; model of wlan0/wpa_supplicant/udhcpc) ==\n");
     char ksr[sizeof sysroot],kcfg[sizeof cfg_path],root[360],p[460],cf[460],conf[460],lg[460],m[33]; char t1[64]; uint32_t col;
     strcpy(ksr,sysroot); strcpy(kcfg,cfg_path);
     snprintf(root,sizeof root,"%s/netroot",dir); mkdir(root,0755);
@@ -6611,268 +6617,268 @@ static void st_net(const char*dir){
     snprintf(conf,sizeof conf,"%s" NET_CONF,root); snprintf(lg,sizeof lg,"%s" NET_LOG,root);
     snprintf(p,sizeof p,"%s" NET_CONF_BAK,root); put_bytes(p,NETV_HDR "\n",61);
     ms_t T=50000000L, t;
-    /* --- conf-formatet --- */
+    /* --- the conf format --- */
     st_net_cfg(cf,1,"TestNet","abcdefgh12"); net_cfg_load();
     { char b[4096]; int n=net_conf_build(b,sizeof b); md5_hex((const uint8_t*)b,(size_t)n,m);
-      st_check("conf = save_config-formatet: skabelonens globale linjer + tom linje + network={ ssid=\"…\" psk=\"…\" key_mgmt=WPA-PSK } (125 bytes, uafhaengig md5 5a970359…)",
+      st_check("conf = the save_config format: the template's global lines + empty line + network={ ssid=\"…\" psk=\"…\" key_mgmt=WPA-PSK } (125 bytes, independent md5 5a970359…)",
                net.cfg==NC_OK&&n==125&&!memcmp(b,NETV_PSK,125)&&!strcmp(m,NETV_PSK_MD5)); }
     st_net_cfg(cf,1,"Caf\\u00e9",""); net_cfg_load();
     { char b[4096]; int n=net_conf_build(b,sizeof b); md5_hex((const uint8_t*)b,(size_t)n,m);
-      st_check("ssid m. JSON-escape (\\u00e9 -> UTF-8) skrives som hex uden anfoerselstegn, aabent net -> key_mgmt=NONE (105 bytes, md5 c1a621ab…)",net.cfg==NC_OK&&n==105&&!strcmp(m,NETV_OPEN_MD5)); }
+      st_check("ssid with JSON escape (\\u00e9 -> UTF-8) is written as hex without quotes, open network -> key_mgmt=NONE (105 bytes, md5 c1a621ab…)",net.cfg==NC_OK&&n==105&&!strcmp(m,NETV_OPEN_MD5)); }
     { int ok=1;
       st_net_cfg(cf,0,"TestNet","abcdefgh12"); net_cfg_load(); ok&=net.cfg==NC_WIFIOFF;
       st_net_cfg(cf,1,"","abcdefgh12"); net_cfg_load(); ok&=net.cfg==NC_NOSSID;
       st_net_cfg(cf,1,"TestNet","kort"); net_cfg_load(); ok&=net.cfg==NC_BADPSK;
       st_net_cfg(cf,1,"TestNet","abc\\u0001defghij"); net_cfg_load(); ok&=net.cfg==NC_BADPSK;
       unlink(cf); net_cfg_load(); ok&=net.cfg==NC_NOCFG;
-      st_net_cfg(cf,1,"TestNet","abcdefgh12"); net_cfg_load(); ok&=net.cfg==NC_OK&&!strcmp(net.ssid,"TestNet");   /* presetStore's "ssid" (dybde 2) ignoreres */
-      st_check("config-vagt: wifionoff 0 / tomt ssid / password < 8 eller m. styretegn / ingen config -> vagten er FRA; kun top-niveau-noeglerne laeses",ok); }
-    /* --- 1. sund stak ved start (runtime-B): roeres ikke --- */
+      st_net_cfg(cf,1,"TestNet","abcdefgh12"); net_cfg_load(); ok&=net.cfg==NC_OK&&!strcmp(net.ssid,"TestNet");   /* presetStore's "ssid" (depth 2) is ignored */
+      st_check("config guard: wifionoff 0 / empty ssid / password < 8 or with control characters / no config -> the guard is OFF; only the top-level keys are read",ok); }
+    /* --- 1. healthy stack at start (runtime B): left alone --- */
     unlink(conf); unlink(lg); nm_reset(0); t=T; net_start(t,1); st_net_run(&t,60000);
     diag_net_text(t1,sizeof t1,&col);
-    st_check("SUND STAK ved start (stock's wpa_supplicant 841 + ip): OPPE paa foerste probe, og i 60 s: 0 init, 0 wpa-starter, 0 udhcpc, conf-filen ikke engang skrevet",
-             net.state==NS_UP&&nm.n_init==0&&nm.n_wpa==0&&nm.n_dhcp==0&&nm.n_prep==0&&nm.n_ifup==0&&access(conf,F_OK)!=0&&file_has(lg,"OPPE ved start: wpa_supplicant pid 841"));
-    st_check("DIAGNOSE NET-raekken: '841 / 192.168.1.100 / OPPE|UP' (groen)",st_has(t1,"841 / 192.168.1.100 / ")&&st_has(t1,TR(TX_NS_UP))&&col==C_OK);
-    /* --- 2. slot B-koldstart: ingen wlan0, ingen supplicant, ingen IP --- */
+    st_check("HEALTHY STACK at start (stock's wpa_supplicant 841 + ip): UP on the first probe, and for 60 s: 0 init, 0 wpa starts, 0 udhcpc, the conf file not even written",
+             net.state==NS_UP&&nm.n_init==0&&nm.n_wpa==0&&nm.n_dhcp==0&&nm.n_prep==0&&nm.n_ifup==0&&access(conf,F_OK)!=0&&file_has(lg,"UP at start: wpa_supplicant pid 841"));
+    st_check("DIAGNOSE NET row: '841 / 192.168.1.100 / UP' (green)",st_has(t1,"841 / 192.168.1.100 / ")&&st_has(t1,TR(TX_NS_UP))&&col==C_OK);
+    /* --- 2. slot B cold start: no wlan0, no supplicant, no IP --- */
     nm_reset(1); t=T; net_start(t,1); net_step(t);
     int init1=nm.n_init==1&&net.step==NB_INIT&&net.state==NS_STARTING;
     diag_net_text(t1,sizeof t1,&col); int dstart=st_has(t1,"- / - / ")&&st_has(t1,TR(TX_NS_STARTING))&&col==C_WARN;
     ms_t up_at=0; for(int k=0;k<1500&&!up_at;k++){ t+=20; net_step(t); if(net.state==NS_UP) up_at=t; }
     st_file_md5(conf,m);
-    st_check("KOLDSTART (slot B): init-scriptet koeres EN gang (som MI_WLAN_Init), conf skrives fra config.json (= vektoren), wpa_supplicant + udhcpc startes EN gang hver",
+    st_check("COLD START (slot B): the init script runs ONCE (like MI_WLAN_Init), conf is written from config.json (= the vector), wpa_supplicant + udhcpc are started ONCE each",
              init1&&nm.n_init==1&&nm.n_wpa==1&&nm.n_dhcp==1&&net.n_conf==1&&!strcmp(m,NETV_PSK_MD5));
-    snprintf(t1,sizeof t1,"OPPE %d ms efter opstart",(int)(up_at-T));
-    st_check("KOLDSTART: OPPE (ip 192.168.1.100) under 10 s i modellen; DIAGNOSE viste STARTER|STARTING undervejs; loggen har hvert trin",
-             up_at&&up_at-T<10000&&dstart&&net.n_boot==1&&net.p.ip==nm.lease&&file_has(lg,"findes ikke: koerer \"source /config/wifi/ssw01bInit.sh dummy1 dummy2\"")&&file_has(lg,"skrevet fra config.json")&&file_has(lg,"startet: wpa_supplicant -i wlan0 -Dnl80211 -c /appconfigs/wpa_supplicant.conf")&&file_has(lg,"startet udhcpc -i wlan0 -s /etc/init.d/udhcpc.script -a -q -b -t 20 -T 1")&&file_has(lg,t1));
-    st_check("passwordet staar aldrig i loggen",!file_has(lg,"abcdefgh12"));
-    /* --- 3. wpa_supplicant draebt (IP + rute bliver paa wlan0) -> selv-heal, samme IP, ingen udhcpc --- */
+    snprintf(t1,sizeof t1,"UP %d ms after startup",(int)(up_at-T));
+    st_check("COLD START: UP (ip 192.168.1.100) within 10 s in the model; DIAGNOSE showed STARTING along the way; the log has every step",
+             up_at&&up_at-T<10000&&dstart&&net.n_boot==1&&net.p.ip==nm.lease&&file_has(lg,"missing: running \"source /config/wifi/ssw01bInit.sh dummy1 dummy2\"")&&file_has(lg,"written from config.json")&&file_has(lg,"started: wpa_supplicant -i wlan0 -Dnl80211 -c /appconfigs/wpa_supplicant.conf")&&file_has(lg,"started udhcpc -i wlan0 -s /etc/init.d/udhcpc.script -a -q -b -t 20 -T 1")&&file_has(lg,t1));
+    st_check("the password never appears in the log",!file_has(lg,"abcdefgh12"));
+    /* --- 3. wpa_supplicant killed (IP + route stay on wlan0) -> self-heal, same IP, no udhcpc --- */
     { int w0=nm.n_wpa,d0=nm.n_dhcp,c0=net.n_conf; uint32_t ip0=net.p.ip; st_net_run(&t,10000); ms_t tk=t;
       nm.wpa_pid=0; nm.dhcp_pid=0; nm.carrier=0;
       ms_t det=0,back=0; int pid0=0; for(int k=0;k<1500&&!back;k++){ t+=20; net_step(t); if(!det&&net.dead) det=t; if(det&&net.state==NS_UP){ back=t; pid0=net.p.wpa_pid; } }
-      snprintf(t1,sizeof t1,"SELV-HEAL faerdig paa");
-      st_check("KILL wpa_supplicant: opdaget inden for 2 s, bring-up efter 3 s; NY supplicant, SAMME IP, ingen udhcpc (ip + rute beholdes), conf ikke skrevet igen",
-               det&&det-tk<=2100&&back&&nm.n_wpa==w0+1&&nm.n_dhcp==d0&&net.n_conf==c0&&net.p.ip==ip0&&pid0!=841&&pid0>0&&net.n_heal==1&&file_has(lg,"beholdes (ingen udhcpc)")&&file_has(lg,t1));
-      snprintf(t1,sizeof t1,"heal paa %d ms (graense 10 s i modellen)",(int)(back-tk));
+      snprintf(t1,sizeof t1,"SELF-HEAL done in");
+      st_check("KILL wpa_supplicant: detected within 2 s, bring-up after 3 s; NEW supplicant, SAME IP, no udhcpc (ip + route kept), conf not rewritten",
+               det&&det-tk<=2100&&back&&nm.n_wpa==w0+1&&nm.n_dhcp==d0&&net.n_conf==c0&&net.p.ip==ip0&&pid0!=841&&pid0>0&&net.n_heal==1&&file_has(lg,"kept (no udhcpc)")&&file_has(lg,t1));
+      snprintf(t1,sizeof t1,"heal in %d ms (limit 10 s in the model)",(int)(back-tk));
       st_check(t1,back-tk<10000&&net.heal_ms>0); }
-    /* --- 4. wpa draebt OG IP vaek -> wpa + udhcpc (som stock) --- */
+    /* --- 4. wpa killed AND IP gone -> wpa + udhcpc (like stock) --- */
     { int w0=nm.n_wpa,d0=nm.n_dhcp; nm.wpa_pid=0; nm.carrier=0; nm.ip=0; nm.gw=0;
       for(int k=0;k<1500&&!(net.state==NS_UP&&nm.n_wpa>w0);k++){ t+=20; net_step(t); }
-      st_check("KILL wpa_supplicant + IP vaek: wpa_supplicant og derefter udhcpc (stock's raekkefoelge) -> OPPE, heal nr. 2",net.state==NS_UP&&nm.n_wpa==w0+1&&nm.n_dhcp==d0+1&&net.n_heal==2); }
-    /* --- 5. supplicanten lever, IP'en forsvinder -> udhcpc efter 8 s; supplicanten roeres ikke --- */
+      st_check("KILL wpa_supplicant + IP gone: wpa_supplicant and then udhcpc (stock's order) -> UP, heal no. 2",net.state==NS_UP&&nm.n_wpa==w0+1&&nm.n_dhcp==d0+1&&net.n_heal==2); }
+    /* --- 5. the supplicant is alive, the IP disappears -> udhcpc after 8 s; the supplicant is left alone --- */
     { int w0=nm.n_wpa,d0=nm.n_dhcp; ms_t tk=t; nm.ip=0; nm.gw=0; ms_t dh=0;
       for(int k=0;k<1500&&!(dh&&net.state==NS_UP);k++){ t+=20; net_step(t); if(!dh&&nm.n_dhcp>d0) dh=t; }
-      st_check("INGEN IP (supplicanten lever): udhcpc startes efter ca. 8 s (ikke foer), INGEN ny wpa_supplicant -> OPPE",dh&&dh-tk>=8000&&dh-tk<=10500&&nm.n_wpa==w0&&nm.n_dhcp==d0+1&&net.state==NS_UP); }
-    /* --- 6. ifconfig wlan0 down (supplicanten lever, ruterne vaek) -> ifconfig up -> udhcpc for ruten --- */
+      st_check("NO IP (the supplicant is alive): udhcpc is started after approx. 8 s (not before), NO new wpa_supplicant -> UP",dh&&dh-tk>=8000&&dh-tk<=10500&&nm.n_wpa==w0&&nm.n_dhcp==d0+1&&net.state==NS_UP); }
+    /* --- 6. ifconfig wlan0 down (the supplicant is alive, the routes gone) -> ifconfig up -> udhcpc for the route --- */
     { int w0=nm.n_wpa,d0=nm.n_dhcp,u0=nm.n_ifup; ms_t tk=t; nm.ifup=0; nm.carrier=0; nm.gw=0; ms_t upa=0;
       for(int k=0;k<2000&&!(upa&&net.state==NS_UP);k++){ t+=20; net_step(t); if(!upa&&nm.n_ifup>u0) upa=t; }
-      st_check("WLAN0 NEDE (supplicanten lever): 'ifconfig wlan0 up' efter ca. 3 s, derefter udhcpc for den tabte default-rute -> OPPE; INGEN ny wpa_supplicant",
-               upa&&upa-tk>=3000&&upa-tk<=5200&&nm.n_ifup==u0+1&&nm.n_dhcp==d0+1&&nm.n_wpa==w0&&net.state==NS_UP&&net.p.gw&&file_has(lg,"ifconfig wlan0 up (som MI_WLAN_Open)")); }
-    /* --- 7. AP vaek i 2 min: supplicanten genforbinder selv -> ingen indgreb --- */
+      st_check("WLAN0 DOWN (the supplicant is alive): 'ifconfig wlan0 up' after approx. 3 s, then udhcpc for the lost default route -> UP; NO new wpa_supplicant",
+               upa&&upa-tk>=3000&&upa-tk<=5200&&nm.n_ifup==u0+1&&nm.n_dhcp==d0+1&&nm.n_wpa==w0&&net.state==NS_UP&&net.p.gw&&file_has(lg,"ifconfig wlan0 up (like MI_WLAN_Open)")); }
+    /* --- 7. AP gone for 2 min: the supplicant reconnects by itself -> no intervention --- */
     { int w0=nm.n_wpa,d0=nm.n_dhcp,u0=nm.n_ifup,i0=nm.n_init; nm.ap=0; nm.carrier=0; st_net_run(&t,120000);
       int quiet=nm.n_wpa==w0&&nm.n_dhcp==d0&&nm.n_ifup==u0&&nm.n_init==i0&&net.state==NS_CONNECTING;
       nm.ap=1; nm.assoc_at=t+NM_ASSOC_MS; st_net_run(&t,4000);
-      st_check("AP VAEK i 2 min (ingen carrier, IP staar): ingen indgreb overhovedet — supplicanten genforbinder selv; derefter OPPE 'uden indgreb'",quiet&&net.state==NS_UP&&file_has(lg,"uden indgreb")); }
-    /* --- 8. et net uden gateway er ogsaa sundt (ingen udhcpc-stroem) --- */
+      st_check("AP GONE for 2 min (no carrier, IP stays): no intervention at all — the supplicant reconnects by itself; then 'UP again … without intervention'",quiet&&net.state==NS_UP&&file_has(lg,"without intervention")); }
+    /* --- 8. a network without a gateway is healthy too (no udhcpc stream) --- */
     { nm_reset(1); nm.gw_offer=0; t=T; net_start(t,1); st_net_run(&t,90000);
-      st_check("net UDEN default-rute (DHCP giver ingen router): OPPE efter koldstart, og i 90 s kun den ene udhcpc (ingen stroem af genstarter)",net.state==NS_UP&&nm.n_dhcp==1&&!net.gw_seen); }
-    /* --- 9. init-scriptet haenger: ingen kill, ingen anden insmod --- */
+      st_check("network WITHOUT a default route (DHCP gives no router): UP after cold start, and for 90 s only the one udhcpc (no stream of restarts)",net.state==NS_UP&&nm.n_dhcp==1&&!net.gw_seen); }
+    /* --- 9. the init script hangs: no kill, no second insmod --- */
     { nm_reset(1); nm.init_hang=1; t=T; net_start(t,1); st_net_run(&t,60000);
-      int hung=nm.n_init==1&&net.step==NB_INIT&&net.init_hung&&file_has(lg,"det draebes ikke");
+      int hung=nm.n_init==1&&net.step==NB_INIT&&net.init_hung&&file_has(lg,"it is not killed");
       nm.iface=1; st_net_run(&t,8000);
-      st_check("INIT-SCRIPTET HAENGER: efter 25 s logges det (intet kill-kald, ingen ny insmod); da wlan0 dukker op, fortsaettes til wpa_supplicant -> OPPE",hung&&nm.n_init==1&&nm.n_wpa==1&&net.state==NS_UP&&net.orphan); }
-    /* --- 10. wpa_supplicant vil ikke starte: backoff 5, 10, 20, 40, 60 s --- */
+      st_check("THE INIT SCRIPT HANGS: after 25 s it is logged (no kill call, no new insmod); when wlan0 appears, it continues to wpa_supplicant -> UP",hung&&nm.n_init==1&&nm.n_wpa==1&&net.state==NS_UP&&net.orphan); }
+    /* --- 10. wpa_supplicant will not start: backoff 5, 10, 20, 40, 60 s --- */
     { nm_reset(0); nm.wpa_pid=0; nm.carrier=0; nm.wpa_fail=1; t=T; net_start(t,1); st_net_run(&t,300000);
-      st_check("wpa_supplicant starter ikke: backoff 5 -> 10 -> 20 -> 40 -> 60 s (loft) — 8 forsoeg paa 5 min, ikke hundreder",nm.n_wpa>=6&&nm.n_wpa<=9&&net.backoff==NET_BACKOFF_MAX_MS&&net.state==NS_DOWN); }
-    /* --- 11. wifi slaaet fra i config: vagten roerer intet, heller ikke en kold stak --- */
+      st_check("wpa_supplicant does not start: backoff 5 -> 10 -> 20 -> 40 -> 60 s (cap) — 8 attempts in 5 min, not hundreds",nm.n_wpa>=6&&nm.n_wpa<=9&&net.backoff==NET_BACKOFF_MAX_MS&&net.state==NS_DOWN); }
+    /* --- 11. wifi turned off in config: the guard touches nothing, not even a cold stack --- */
     { st_net_cfg(cf,0,"TestNet","abcdefgh12"); unlink(conf); nm_reset(1); t=T; net_start(t,1); st_net_run(&t,120000);
       diag_net_text(t1,sizeof t1,&col);
-      st_check("wifionoff = 0: FRA — 0 init, 0 wpa, 0 udhcpc, conf ikke skrevet; DIAGNOSE 'FRA|OFF' (neutral)",net.state==NS_OFF&&nm.n_init==0&&nm.n_wpa==0&&nm.n_dhcp==0&&access(conf,F_OK)!=0&&st_has(t1,TR(TX_NS_OFF))&&col==C_TXT2);
+      st_check("wifionoff = 0: OFF — 0 init, 0 wpa, 0 udhcpc, conf not written; DIAGNOSE 'OFF' (neutral)",net.state==NS_OFF&&nm.n_init==0&&nm.n_wpa==0&&nm.n_dhcp==0&&access(conf,F_OK)!=0&&st_has(t1,TR(TX_NS_OFF))&&col==C_TXT2);
       net_start(t,0); nm_reset(1); st_net_run(&t,30000);
-      st_check("OURUI_NONET / test-rod: vagten er slaaet helt fra (ingen probe, intet startet)",!net.on&&nm.n_init==0&&nm.n_wpa==0); }
-    /* --- NET-raekken passer paa begge sprog, ogsaa i vaerste fald (5-cifret pid, laengste IP, laengste tilstand) --- */
+      st_check("OURUI_NONET / test root: the guard is fully disabled (no probe, nothing started)",!net.on&&nm.n_init==0&&nm.n_wpa==0); }
+    /* --- the NET row fits in both languages, also in the worst case (5-digit pid, longest IP, longest state) --- */
     { int ok=1, kl=ui_lang;
-      for(int lgx=0;lgx<NLANG;lgx++){ lang_set(lgx); for(int st=NS_OFF;st<=NS_UP;st++){ char w[96]; snprintf(w,sizeof w,"32767 / 255.255.255.255 / %s",TR(TX_NS_OFF+st)); LAY(text_wf(w,diag_net_font(w)),DG_FULL_W,"NET-raekken",w); }
+      for(int lgx=0;lgx<NLANG;lgx++){ lang_set(lgx); for(int st=NS_OFF;st<=NS_UP;st++){ char w[96]; snprintf(w,sizeof w,"32767 / 255.255.255.255 / %s",TR(TX_NS_OFF+st)); LAY(text_wf(w,diag_net_font(w)),DG_FULL_W,"NET row",w); }
         LAY(text_wf(TR(TX_DG_L_NET),F_XS),DG_FULL_W,"NET-label",TR(TX_DG_L_NET)); }
       lang_set(kl);
-      { char w[64]; snprintf(w,sizeof w,"841 / 192.168.1.100 / %s",TR(TX_NS_UP)); ok&=diag_net_font(w)==F_S; }   /* den sunde linje er i F_S */
-      st_check("DIAGNOSE NET-raekken passer paa EN og DA: den sunde linje i F_S; i vaerste fald ('32767 / 255.255.255.255 / FORBINDER') skiftes til F_XS og holdes inden for fuldbredde-feltet",ok); }
-    /* oprydning: tilbage til preview-standarden (sund stak) */
+      { char w[64]; snprintf(w,sizeof w,"841 / 192.168.1.100 / %s",TR(TX_NS_UP)); ok&=diag_net_font(w)==F_S; }   /* the healthy line is in F_S */
+      st_check("DIAGNOSE NET row fits in EN and DA: the healthy line in F_S; in the worst case ('32767 / 255.255.255.255 / CONNECTING') it switches to F_XS and stays within the full-width field",ok); }
+    /* cleanup: back to the preview default (healthy stack) */
     strcpy(sysroot,ksr); strcpy(cfg_path,kcfg);
     nm_reset(0); memset(&net,0,sizeof net); net.on=1; net.cfg_logged=-1; nh_probe(&net.p,sim_now,1); net.state=NS_UP; net.booted=net.was_up=net.gw_seen=1;
 }
 /* ====================================================================== */
-/* ======= v6.9: visnings-konditionering + stabil vægt-kilde + dødbånd ==== */
+/* ===== v6.9: display conditioning + stable weight source + deadband ===== */
 /* ====================================================================== */
-/* syntetiske forløb (som sim/mcu_sim.py + BREW.md/STEAMLIVE.md): bryg-plateau m. ADC-støj og deadhead-pulser, trin, ro m.
- * vedligehold-pulser. Testerne læser ringbufferen (rå g_* og viste g_*d), hero/stat-modellen og chart-skalaen (cst). */
+/* synthetic sequences (like sim/mcu_sim.py + BREW.md/STEAMLIVE.md): brew plateau with ADC noise and deadhead pulses, steps, idle with
+ * maintenance pulses. The tests read the ring buffer (raw g_* and displayed g_*d), the hero/stat model and the chart scale (cst). */
 static int cs_ws=0x1307, cs_p=1320, cs_w39=0, cs_w38=0, cs_pulse=1, cs_glitch=0;
 static void tick_cs(ms_t t){
     reg[33]=(uint16_t)cs_ws; reg[39]=(uint16_t)cs_w39; reg[38]=(uint16_t)cs_w38;
-    int p=cs_p+((t/97)%41)-20;                                         /* ADC-støj ±20 */
-    if(cs_pulse&&t>=500&&(t%4000)<100) p=16000;                                /* deadhead-puls, 1 sample hvert 4. s */
-    if(cs_pulse&&(t%6000)>=2500&&(t%6000)<2700) p=15500;               /* deadhead-puls, 2 samples hvert 6. s (tilsammen < 10 % af samples) */
+    int p=cs_p+((t/97)%41)-20;                                         /* ADC noise ±20 */
+    if(cs_pulse&&t>=500&&(t%4000)<100) p=16000;                                /* deadhead pulse, 1 sample every 4 s */
+    if(cs_pulse&&(t%6000)>=2500&&(t%6000)<2700) p=15500;               /* deadhead pulse, 2 samples every 6 s (together < 10 % of samples) */
     reg[51]=(uint16_t)(p<0?0:p); reg[52]=cs_ws==0x0101?0:360;
 }
-/* ro + vedligehold-pulser (work_sta 0x0101 | 0x0400/0x0800/0x2000/0x0C00/0x2800 — BREW.md §5, mcu_sim.py) og evt. ét
- * enkelt work_sta-sample m. bit 6 (glitch) — vægt-ordene står stille: 38 = sidste kværning, 39 = sidste kop */
+/* idle + maintenance pulses (work_sta 0x0101 | 0x0400/0x0800/0x2000/0x0C00/0x2800 — BREW.md §5, mcu_sim.py) and optionally one
+ * single work_sta sample with bit 6 (glitch) — the weight words stay put: 38 = last grind, 39 = last cup */
 static void tick_idle_maint(ms_t t){
     static const uint16_t PB[5]={0x0400,0x0800,0x2000,0x0C00,0x2800};
     int k=(int)((t/1700)%5), on=(t%1700)<250;
     reg[33]=(uint16_t)(0x0101|(on?PB[k]:0)); reg[51]=on?(uint16_t)(3000+k*2700):(uint16_t)(t%2); reg[52]=0;
-    if(cs_glitch&&t>=cs_glitch&&t<cs_glitch+100) reg[33]=0x0141;         /* ÉT sample m. bit 6 */
+    if(cs_glitch&&t>=cs_glitch&&t<cs_glitch+100) reg[33]=0x0141;         /* ONE sample with bit 6 */
     reg[38]=(uint16_t)cs_w38; reg[39]=(uint16_t)cs_w39;
 }
 static int g_last(const int*a){ return a[(g_head+GN-1)%GN]; }
 static float g_lastf(const float*a){ return a[(g_head+GN-1)%GN]; }
 static void st_chart_now(void){ home_model(sim_now); static_dirty=1; force_all=1; ui_frame(sim_now+1); }
 static void st_cond(void){
-    printf("== selftest: v6.9 visnings-konditionering (median-3 + EMA) + robust chart-skala + stabil vaegt-kilde + vaegt-doedbaand ==\n");
+    printf("== selftest: v6.9 display conditioning (median-3 + EMA) + robust chart scale + stable weight source + weight deadband ==\n");
     char a[32],b[64];
-    /* ---- (1) spike-tog: bryg-plateau 1320 ± 20 m. deadhead-pulser 16000 (1 sample / 4 s) og 15500 (2 samples / 6 s) ----
-     *      (preview-harnessens sample-takt er 132 ms; pulserne er tilsammen ca. 8 % af de aktive samples — p90 taaler < 10 %) */
+    /* ---- (1) spike train: brew plateau 1320 ± 20 with deadhead pulses 16000 (1 sample / 4 s) and 15500 (2 samples / 6 s) ----
+     *      (the preview harness's sample rate is 132 ms; the pulses are together approx. 8 % of the active samples — p90 tolerates < 10 %) */
     sim_reset(); cs_ws=0x1307; cs_p=1320; cs_w39=200; cs_pulse=1; sim_tick=tick_cs; sim_run(20000); st_chart_now();
     { float dmax=0; int rmax=0; for(int i=0;i<110;i++){ int k=(g_head+GN-1-i)%GN; if(g_pd[k]>dmax) dmax=g_pd[k]; if(g_p[k]>rmax) rmax=g_p[k]; }
       snprintf(b,sizeof b,"%.0f",(double)dmax);
-      st_check("SPIKE-TOG: rå top >= 15500, VIST top <= plateau + 5 % (median-3 fjerner 1-sample-pulsen, puls-gaten 2-sample-pulsen)",rmax>=15500&&dmax<=1340*1.05f);
-      printf("       rå max %d · vist max %s (sidste 110 samples = 14,5 s)\n",rmax,b);
-      st_check("SPIKE-TOG: chart-toppen = p90 af aktive samples x 1,15 (1340..1800) — kurven fladtrykkes ikke; pulserne vises som streger i overkanten",
+      st_check("SPIKE TRAIN: raw peak >= 15500, DISPLAYED peak <= plateau + 5 % (median-3 removes the 1-sample pulse, the pulse gate the 2-sample pulse)",rmax>=15500&&dmax<=1340*1.05f);
+      printf("       raw max %d · displayed max %s (last 110 samples = 14.5 s)\n",rmax,b);
+      st_check("SPIKE TRAIN: chart top = p90 of active samples x 1.15 (1340..1800) — the curve is not flattened; the pulses are shown as ticks at the top edge",
                cst.active&&cst.mode==0&&cst.top>=1340&&cst.top<=1800&&cst.ticks>0&&cst.disp_max<=1400&&cst.na>140);
       { int keep=cd.gate; cd.gate=0; sim_reset(); cs_ws=0x1307; cs_p=1320; cs_w39=200; cs_pulse=1; sim_tick=tick_cs; sim_run(20000); float g0=0; for(int i=0;i<110;i++){ int k=(g_head+GN-1-i)%GN; if(g_pd[k]>g0) g0=g_pd[k]; }
         cd.gate=keep; sim_reset(); cs_ws=0x1307; cs_p=1320; cs_w39=200; cs_pulse=1; sim_tick=tick_cs; sim_run(20000); st_chart_now();
-        st_check("… kontrol: uden puls-gaten (cd.gate=0) slipper 2-sample-pulsen igennem median-3 (vist > 3000) — gaten er det, der holder den nede",g0>3000);
-        printf("       uden gate: vist max %.0f\n",(double)g0); }
+        st_check("… control: without the pulse gate (cd.gate=0) the 2-sample pulse gets through median-3 (displayed > 3000) — the gate is what keeps it down",g0>3000);
+        printf("       without gate: displayed max %.0f\n",(double)g0); }
       int top_pct=cst.top; cd.raw=1; st_chart_now(); int rawtop=cst.top, rawd=cst.disp_max; cd.raw=0; st_chart_now();
-      printf("       chart-top: glat (p90) %d · RAA = v6.8 (rå serie + max-skala) %d\n",top_pct,rawtop);
-      st_check("… mod v6.8 = DIAGNOSE → GRAF = RAA (ukonditioneret serie, max-skala): toppen >= 16000 x 1,08, saa plateauet fyldte under 1/10 af hoejden; tilbage til GLAT bagefter",
+      printf("       chart top: smooth (p90) %d · RAW = v6.8 (raw series + max scale) %d\n",top_pct,rawtop);
+      st_check("… vs v6.8 = DIAGNOSE → GRAPH = RAW (unconditioned series, max scale): top >= 16000 x 1.08, so the plateau filled less than 1/10 of the height; back to SMOOTH afterwards",
                rawd>=15500&&rawtop>=16000*1.08f-1&&1340*10<rawtop&&!cd.raw&&cst.top==top_pct); }
-    /* ---- (1b) de foerste sekunder af en ekstraktion: vinduet er mest tomgang ---- */
+    /* ---- (1b) the first seconds of an extraction: the window is mostly idle ---- */
     sim_reset(); cs_ws=0x0101; cs_p=0; cs_w39=0; cs_pulse=0; sim_tick=tick_cs; sim_run(36000); cs_ws=0x1307; cs_p=1320; sim_run(3000); st_chart_now();
     { int all[GN],n=0; ms_t t0=sim_now-40000; for(int i=0;i<g_n;i++){ int k=(g_head+GN-g_n+i)%GN; if(g_t[k]>=t0) all[n++]=g_p[k]; } qsort(all,(size_t)n,sizeof all[0],cmp_int);
       int p90all=all[(n-1)*90/100];
-      st_check("3 s inde i en ekstraktion: p90 af AKTIVE samples holder plateauet i skala (top >= 1320), hvor p90 af HELE vinduet ville vaere ~0 og klemme kurven op i loftet",
-               cst.top>=1320&&cst.top<=1800&&p90all<40&&cst.clip==0); printf("       p90 hele vinduet %d · top %d\n",p90all,cst.top); }
-    /* ---- (2) trin i samme fase: 360 -> 1320 (ingen fase-skift = ingen snap) ---- */
+      st_check("3 s into an extraction: p90 of ACTIVE samples keeps the plateau in scale (top >= 1320), where p90 of the WHOLE window would be ~0 and squash the curve against the ceiling",
+               cst.top>=1320&&cst.top<=1800&&p90all<40&&cst.clip==0); printf("       p90 whole window %d · top %d\n",p90all,cst.top); }
+    /* ---- (2) step within the same phase: 360 -> 1320 (no phase change = no snap) ---- */
     sim_reset(); cs_ws=0x1307; cs_p=360; cs_w39=100; cs_pulse=0; sim_tick=tick_cs; sim_run(5000);
     { int i0=g_n; cs_p=1320; sim_run(4000); int n=g_n-i0, settle=-1, over=0; float first=g_pd[(g_head+GN-n)%GN];
       for(int i=0;i<n;i++){ int k=(g_head+GN-n+i)%GN; if(settle<0&&fabsf(g_pd[k]-(float)g_p[k])<=0.02f*1320) settle=i; if(g_pd[k]>1340+0.5f) over=1; }
-      st_check("TRIN 360 -> 1320 i samme fase: foerste viste sample er stadig ved 360 (median-3), ingen oversving, inden for 2 % paa <= 2,5 s (25 samples)",first<400&&!over&&settle>=0&&settle<=25);
-      printf("       landet efter %d samples (%.1f s)\n",settle,settle/10.0); }
-    /* ---- (3) snap ved fase-skift og set-punkt-skift ---- */
+      st_check("STEP 360 -> 1320 within the same phase: first displayed sample is still at 360 (median-3), no overshoot, within 2 % in <= 2.5 s (25 samples)",first<400&&!over&&settle>=0&&settle<=25);
+      printf("       settled after %d samples (%.1f s)\n",settle,settle/10.0); }
+    /* ---- (3) snap on phase change and set-point change ---- */
     sim_reset(); cs_ws=0x1107; cs_p=358; cs_w39=0xFFFD; cs_pulse=0; sim_tick=tick_cs; sim_run(3000);
     { cs_ws=0x1307; cs_p=1320; int i0=g_n; sim_run(400); int n=g_n-i0; float v[4]; int r[4]; for(int i=0;i<n&&i<4;i++){ int k=(g_head+GN-n+i)%GN; v[i]=g_pd[k]; r[i]=g_p[k]; }
       int ok=n>=3&&v[0]<400&&fabsf(v[1]-(float)med3(358,r[0],r[1]))<0.01f&&v[2]>1290;
-      st_check("FASE-SKIFT (PRAE-INF. 1107 -> EKSTRAKTION 1307): de 2 foerste samples foelger median-3 direkte (ingen EMA) — trinnet staar fuldt paa 2. sample, intet smøres ud",ok);
-      printf("       vist %.0f / %.0f / %.0f  (rå %d / %d / %d)\n",(double)v[0],(double)v[1],(double)v[2],r[0],r[1],r[2]); }
+      st_check("PHASE CHANGE (PRE-INF. 1107 -> EXTRACTION 1307): the first 2 samples follow median-3 directly (no EMA) — the step is complete on the 2nd sample, nothing is smeared out",ok);
+      printf("       displayed %.0f / %.0f / %.0f  (raw %d / %d / %d)\n",(double)v[0],(double)v[1],(double)v[2],r[0],r[1],r[2]); }
     sim_reset(); cs_ws=0x1307; cs_p=1320; cs_w39=300; cs_pulse=0; sim_tick=tick_cs; sim_run(4000);
     { reg_seen[51]=1; cs_ws=0x0101; cs_p=0; sim_tick=NULL; reg[33]=0x0101; reg[51]=16000; reg[52]=0; int i0=g_n; sim_run(132); reg[51]=12; sim_run(1500);
       float mx=0; for(int i=g_n-i0-1;i>=0;i--){ int k=(g_head+GN-1-i)%GN; if(g_pd[k]>mx) mx=g_pd[k]; }
-      st_check("FASE-SKIFT lige i en deadhead-puls (bryg stopper, foerste ro-sample = 16000): pulsen slipper ikke igennem (median-3 ved skiftet) — vist max <= plateauet",mx<=1345); }
+      st_check("PHASE CHANGE right in a deadhead pulse (brew stops, first idle sample = 16000): the pulse does not get through (median-3 at the change) — displayed max <= the plateau",mx<=1345); }
     sim_reset(); sim_tick=NULL; reg[40]=870; reg[11]=870; sim_run(3000); home_model(sim_now);
     { reg[40]=905; sim_run(100); home_model(sim_now); fmt_t10(a,sizeof a,905,1); int lag=strcmp(hm.hero,a)!=0;
       reg[11]=900; home_model(sim_now); int snap=!strcmp(hm.hero,a);
-      st_check("SET-PUNKT-SKIFT (kedel 87,0 -> 90,0): hero springer til rå-værdien (90.5) i samme frame; uden skift glider den (median-3 + EMA)",lag&&snap); }
+      st_check("SET-POINT CHANGE (boiler 87.0 -> 90.0): the hero jumps to the raw value (90.5) in the same frame; without a change it glides (median-3 + EMA)",lag&&snap); }
     sim_reset(); cs_ws=0x0101; cs_w38=0; cs_w39=367; sim_tick=tick_idle_maint; sim_run(3000);
     { cs_w38=12; tick_idle_maint(0); reg[33]=0x0141; sim_run(100); home_model(sim_now); }
-    /* ---- (3b) ro efter et bryg m. vedligehold-pulser: tryk-kurven er flad, pulserne er streger på grundlinjen ---- */
+    /* ---- (3b) idle after a brew with maintenance pulses: the pressure curve is flat, the pulses are ticks on the baseline ---- */
     sim_reset(); cs_ws=0x1307; cs_p=1320; cs_w39=300; cs_pulse=0; sim_tick=tick_cs; sim_run(10000);
     { cs_w38=0; cs_w39=367; sim_tick=tick_idle_maint; sim_run(20000); st_chart_now(); int ok=act.ph==PH_READY&&cst.active&&cst.mode==0;
       float mx=0; int rmx=0; for(int i=0;i<140;i++){ int k=(g_head+GN-1-i)%GN; float v=g_a[k]?g_pd[k]:0; if(v>mx) mx=v; if(g_p[k]>rmx) rmx=g_p[k]; }
-      st_check("RO EFTER BRYG m. vedligehold-pulser (0,25 s, op til 13800): chartet viser stadig brygget; de 20 s ro tegnes fladt (0), pulserne som streger paa grundlinjen; skala = bryg-plateauet",
+      st_check("IDLE AFTER BREW with maintenance pulses (0.25 s, up to 13800): the chart still shows the brew; the 20 s of idle are drawn flat (0), the pulses as ticks on the baseline; scale = the brew plateau",
                ok&&rmx>=8000&&mx==0&&cst.bticks>0&&cst.top>=1320&&cst.top<=1800);
       sim_run(31000); st_chart_now();
-      st_check("… naar brygget er ude af 40-s-vinduet: 'INGEN AKTIVITET' (v6.8: hver vedligehold-puls taendte et spike-chart)",!cst.active&&cst.bticks>0); }
-    /* ---- (4) vægt-kilden: vedligehold-pulser + ét bit-6-glitch i ro — ingen flimmer ---- */
+      st_check("… when the brew is out of the 40 s window: 'NO ACTIVITY' (v6.8: every maintenance pulse lit up a spike chart)",!cst.active&&cst.bticks>0); }
+    /* ---- (4) the weight source: maintenance pulses + one bit-6 glitch while idle — no flicker ---- */
     sim_reset(); cs_w38=186; cs_w39=367; cs_glitch=7300; sim_tick=tick_idle_maint;
     { int nphg=0,n0=g_n,bad=0,pulses=0; for(int q=0;q<200;q++){ sim_run(100); if(phase_main(sim_now)==PH_GRIND) nphg++; if((reg[33]&0x2C00)) pulses++; if(g_last(g_w)!=367) bad++; }
       cs_glitch=0;
-      st_check("RO + vedligehold-pulser (0x0400/0x0800/0x2000/0x0C00/0x2800) + ÉT bit-6-sample: vægt-kilden bliver ord 39 (0 skift), alle 200 samples = 36,7 g — ingen 18,6-g-spike",
+      st_check("IDLE + maintenance pulses (0x0400/0x0800/0x2000/0x0C00/0x2800) + ONE bit-6 sample: the weight source stays word 39 (0 switches), all 200 samples = 36.7 g — no 18.6 g spike",
                g_n-n0>=195&&nphg>=1&&pulses>=20&&bad==0&&wsl.src==39&&wsl.n_sw==0);
-      printf("       %d samples m. fase KVAERN (glitch) · %d m. vedligehold-bits · %d samples fra forkert ord\n",nphg,pulses,bad);
+      printf("       %d samples with phase GRIND (glitch) · %d with maintenance bits · %d samples from the wrong word\n",nphg,pulses,bad);
       st_chart_now(); snprintf(b,sizeof b,"36.7 %s",TR(TX_U_G));
-      st_check("… og stat-feltet VAEGT i ro viser 36.7 g (konditioneret)",!strcmp(hm.svv[2],b)); }
-    /* ægte kværning (fysisk start, ingen UI-anmodning): skift efter 300 ms, FÆRDIG beholder ord 38, tilbage til 39 efter */
+      st_check("… and the WEIGHT stat field while idle shows 36.7 g (conditioned)",!strcmp(hm.svv[2],b)); }
+    /* real grind (physical start, no UI request): switch after 300 ms, DONE keeps word 38, back to 39 afterwards */
     { cs_w38=0; int bad=0,n_early=0; ms_t t0=sim_now;
       for(int q=0;q<50;q++){ cs_w38=q*4; tick_idle_maint(0); sim_tick=NULL; reg[33]=0x0141; reg[38]=(uint16_t)cs_w38; reg[39]=367; sim_run(100);
           if(sim_now-t0<=300&&g_last(g_w)==367) n_early++; if(sim_now-t0>=500&&g_last(g_w)!=(int)(int16_t)reg[38]) bad++; }
       int sw1=wsl.n_sw==1&&wsl.src==38;
-      st_check("ÆGTE KVAERNING uden UI-start (bit 6 i 6,6 s): kilden skifter EN gang til ord 38 efter 300 ms debounce; derefter er hvert sample kvaern-vaegten",sw1&&bad==0&&n_early>=2);
-      reg[33]=0x0101; int dbad=0; for(int q=0;q<50;q++){ sim_run(100); if(g_last(g_w)!=196) dbad++; }   /* sim_run(100) = 4 x 33 ms: 50 x 132 ms = 6,6 s */
-      st_check("… FAERDIG-skaermen (8 s; maalt de foerste 6,6 s) beholder ord 38 (kvaern-resultatet 19,6 g) — intet skift",act.ph==PH_DONE&&wsl.src==38&&wsl.n_sw==1&&dbad==0);
+      st_check("REAL GRIND without UI start (bit 6 for 6.6 s): the source switches ONCE to word 38 after 300 ms debounce; after that every sample is the grind weight",sw1&&bad==0&&n_early>=2);
+      reg[33]=0x0101; int dbad=0; for(int q=0;q<50;q++){ sim_run(100); if(g_last(g_w)!=196) dbad++; }   /* sim_run(100) = 4 x 33 ms: 50 x 132 ms = 6.6 s */
+      st_check("… the DONE screen (8 s; measured over the first 6.6 s) keeps word 38 (the grind result 19.6 g) — no switch",act.ph==PH_DONE&&wsl.src==38&&wsl.n_sw==1&&dbad==0);
       sim_run(2000);
-      st_check("… FAERDIG -> KLAR: tilbage til ord 39 (EET skift); i alt 2 skift for hele kvaerningen",act.ph==PH_READY&&wsl.src==39&&wsl.n_sw==2&&g_last(g_w)==367);
-      { int ok=1; tick_idle_maint(0); reg[38]=196; reg[39]=367; sim_tick=NULL; sim_reset(); reg[38]=196; reg[39]=367; reg[33]=0x0141; sim_run(1000);   /* kværn -> 38 latchet */
+      st_check("… DONE -> READY: back to word 39 (ONE switch); 2 switches in total for the whole grind",act.ph==PH_READY&&wsl.src==39&&wsl.n_sw==2&&g_last(g_w)==367);
+      { int ok=1; tick_idle_maint(0); reg[38]=196; reg[39]=367; sim_tick=NULL; sim_reset(); reg[38]=196; reg[39]=367; reg[33]=0x0141; sim_run(1000);   /* grind -> 38 latched */
         reg[33]=0x0101; for(int q=0;q<75;q++){ sim_run(100); home_model(sim_now); if(act.ph==PH_READY&&g_lsrc==39&&fabsf(g_lastf(g_wd)-367.f)>0.5f) ok=0;
             if(act.ph==PH_READY&&strstr(hm.svv[2],"19.6")) ok=0; }
-        st_check("… kilde-skiftet 38 -> 39 bærer ingen historik over: det foerste sample fra ord 39 vises som 36.7 (ingen 19,6-g-blink i stat-feltet)",ok&&wsl.src==39); } }
-    /* UI-startet kværning: straks ved første sample m. bit 6; derefter bryg (UI-startet) straks tilbage til 39 */
+        st_check("… the source switch 38 -> 39 carries no history over: the first sample from word 39 is shown as 36.7 (no 19.6 g flash in the stat field)",ok&&wsl.src==39); } }
+    /* UI-started grind: immediately on the first sample with bit 6; then a brew (UI-started) immediately back to 39 */
     sim_reset(); sim_tick=NULL; reg[38]=0xFFFF; reg[39]=367; sim_run(1000);
     { act_request(ACT_GRIND,sim_now); int req=act.pending==ACT_GRIND; sim_run(150); reg[33]=0x0141; reg[38]=0; sim_run(100);
-      st_check("UI-startet KVAERNING (act_request): kilden skifter STRAKS ved foerste sample m. bit 6 — hero viser 0.0 g (tara), ikke koppens 36,7 g",req&&wsl.src==38&&wsl.n_sw==1&&g_last(g_w)==0);
+      st_check("UI-started GRIND (act_request): the source switches IMMEDIATELY on the first sample with bit 6 — the hero shows 0.0 g (tare), not the cup's 36.7 g",req&&wsl.src==38&&wsl.n_sw==1&&g_last(g_w)==0);
       for(int q=0;q<20;q++){ reg[38]=(uint16_t)(q*9); sim_run(100); } reg[33]=0x0101; sim_run(1500);
       memset(&wq,0,sizeof wq); act.pending=ACT_NONE; reg[39]=0xFFFD; act_request(ACT_BREW,sim_now); sim_run(150); reg[33]=0x1107; sim_run(100);
-      st_check("… og et UI-startet BRYG lige efter (kvaern-FAERDIG stod stadig): straks tilbage til ord 39 — bryg-heroen viser aldrig kvaern-vaegten",wsl.src==39&&wsl.n_sw==2&&g_last(g_w)==-3); }
-    /* kop af / på i ro: stat-feltet springer (uden en hale paa 2 s) */
+      st_check("… and a UI-started BREW right after (grind DONE still showing): immediately back to word 39 — the brew hero never shows the grind weight",wsl.src==39&&wsl.n_sw==2&&g_last(g_w)==-3); }
+    /* cup off / on while idle: the stat field jumps (without a 2 s tail) */
     sim_reset(); sim_tick=NULL; reg[39]=364; sim_run(3000);
     { reg[39]=0xFFFE; sim_run(300); home_model(sim_now); snprintf(b,sizeof b,"0.0 %s",TR(TX_U_G)); int off=!strcmp(hm.svv[2],b);
       reg[39]=91; sim_run(300); home_model(sim_now); snprintf(a,sizeof a,"9.1 %s",TR(TX_U_G));
-      st_check("KOP AF / PAA i ro (36,4 g -> -0,2 g -> 9,1 g): stat-feltet viser det nye niveau efter 2 samples (median-3 + trin-snap > 2 g) — uden en hale paa 2 s",off&&!strcmp(hm.svv[2],a)); }
-    /* ---- (5) dødbånd: |vægt| < 0,25 g vises som 0 (hero, chart, stat-felt); rå bevares ---- */
+      st_check("CUP OFF / ON while idle (36.4 g -> -0.2 g -> 9.1 g): the stat field shows the new level after 2 samples (median-3 + step snap > 2 g) — without a 2 s tail",off&&!strcmp(hm.svv[2],a)); }
+    /* ---- (5) deadband: |weight| < 0.25 g is shown as 0 (hero, chart, stat field); raw is kept ---- */
     sim_reset(); sim_tick=NULL;
     { static const int V[]={-2,-1,0,1,2,3,-3,25}; static const char*const S[]={"0.0","0.0","0.0","0.0","0.0","0.3","-0.3","2.5"}; int ok=1;
       for(int q=0;q<8;q++){ reg[33]=0x0101; reg[39]=(uint16_t)V[q]; sim_run(4000); home_model(sim_now); snprintf(b,sizeof b,"%s %s",S[q],TR(TX_U_G));
-          if(strcmp(hm.svv[2],b)){ ok=0; printf("       ro, ord39=%d: stat '%s', forventet '%s'\n",V[q],hm.svv[2],b); } }
-      st_check("DOEDBAAND (ro, stat-feltet): -0,2 / -0,1 / 0 / 0,1 / 0,2 g -> 0.0 g; 0,3 g og -0,3 g vises; 2,5 g vises",ok); }
+          if(strcmp(hm.svv[2],b)){ ok=0; printf("       idle, word39=%d: stat '%s', expected '%s'\n",V[q],hm.svv[2],b); } }
+      st_check("DEADBAND (idle, stat field): -0.2 / -0.1 / 0 / 0.1 / 0.2 g -> 0.0 g; 0.3 g and -0.3 g are shown; 2.5 g is shown",ok); }
     { int ok=1; static const int V[]={2,-2,1,3,24}; static const char*const S[]={"0.0","0.0","0.0","0.3","2.4"};
       for(int q=0;q<5;q++){ reg[33]=0x1307; reg[51]=1300; reg[39]=(uint16_t)V[q]; sim_run(2500); st_chart_now();
           float cw=wdb(g_lastf(g_wd));
-          if(strcmp(hm.hero,S[q])||(abs(V[q])<3&&cw!=0.f)){ ok=0; printf("       bryg, ord39=%d: hero '%s' (forventet '%s'), chart-vaegt %.2f\n",V[q],hm.hero,S[q],(double)cw); } }
-      st_check("DOEDBAAND (bryg: hero + chart-vaegt): 0,2 / -0,2 / 0,1 g -> 0.0 og chart-linjen paa 0; 0,3 g og 2,4 g vises",ok); }
+          if(strcmp(hm.hero,S[q])||(abs(V[q])<3&&cw!=0.f)){ ok=0; printf("       brew, word39=%d: hero '%s' (expected '%s'), chart weight %.2f\n",V[q],hm.hero,S[q],(double)cw); } }
+      st_check("DEADBAND (brew: hero + chart weight): 0.2 / -0.2 / 0.1 g -> 0.0 and the chart line at 0; 0.3 g and 2.4 g are shown",ok); }
     { reg[39]=2; sim_run(1000); int raw=g_last(g_w)==2&&s16(39)==2&&reg[39]==2;
       cd.raw=1; st_chart_now(); int rv=!strcmp(hm.hero,"0.2"); cd.raw=0; st_chart_now();
-      st_check("… kun visning: ringbufferen, reg[] og state-JSON's regs er rå (0,2 g); DIAGNOSE → GRAF = RAA viser 0.2",raw&&rv&&!strcmp(hm.hero,"0.0")); }
-    /* ---- (6) signed tara: 0xFFFD (-0,3 g) blandet m. 0 / 2 / 0xFFFF — ingen udsmøring mod 6553,3 g ---- */
+      st_check("… display only: the ring buffer, reg[] and the state JSON's regs are raw (0.2 g); DIAGNOSE → GRAPH = RAW shows 0.2",raw&&rv&&!strcmp(hm.hero,"0.0")); }
+    /* ---- (6) signed tare: 0xFFFD (-0.3 g) mixed with 0 / 2 / 0xFFFF — no smearing towards 6553.3 g ---- */
     sim_reset(); sim_tick=NULL; reg[33]=0x1107; reg[51]=358;
     { static const uint16_t T[]={0xFFFD,0x0000,0xFFFD,0x0002,0xFFFF,0xFFFD,0xFFFD,0x0000}; float lo=1e9f,hi=-1e9f; int ok=1;
       for(int q=0;q<80;q++){ reg[39]=T[q%8]; sim_run(100); float v=g_lastf(g_wd); if(v<lo) lo=v; if(v>hi) hi=v; if(g_last(g_w)<-3||g_last(g_w)>2) ok=0; }
       st_chart_now(); int cw=(int)lroundf(wdb(g_lastf(g_wd)));
-      Cond u; cond_snap(&u,0); float um=0; for(int q=0;q<80;q++){ float v=cond_step(&u,(int)T[q%8],cd.a_chart); if(v>um) um=v; }   /* samme filter paa UNSIGNED ord: sådan så sim-fejlen ud */
-      st_check("SIGNED TARA: ord 39 = 0xFFFD/0/2/0xFFFF filtreres som -3..2 (vist -0,3..0,2 g) — aldrig mod 65533; hero 0.0, chart-vaegt 0",ok&&lo>=-3.01f&&hi<=2.01f&&!strcmp(hm.hero,"0.0")&&cw==0);
-      printf("       signed: vist %.2f..%.2f · samme filter paa unsigned ord: op til %.0f (= %.1f g)\n",(double)lo,(double)hi,(double)um,(double)um/10);
-      st_check("… kontrol: det samme filter paa UNSIGNED ord smører tara'en ud til > 1000 g — testen har tænder",um>10000); }
+      Cond u; cond_snap(&u,0); float um=0; for(int q=0;q<80;q++){ float v=cond_step(&u,(int)T[q%8],cd.a_chart); if(v>um) um=v; }   /* same filter on UNSIGNED words: that is what the sim bug looked like */
+      st_check("SIGNED TARE: word 39 = 0xFFFD/0/2/0xFFFF is filtered as -3..2 (shown -0.3..0.2 g) — never towards 65533; hero 0.0, chart weight 0",ok&&lo>=-3.01f&&hi<=2.01f&&!strcmp(hm.hero,"0.0")&&cw==0);
+      printf("       signed: displayed %.2f..%.2f · same filter on unsigned words: up to %.0f (= %.1f g)\n",(double)lo,(double)hi,(double)um,(double)um/10);
+      st_check("… control: the same filter on UNSIGNED words smears the tare out to > 1000 g — the test has teeth",um>10000); }
     sim_reset(); sim_tick=NULL;
 }
-/* ============================ v6.10: tryk-estimat ============================ */
+/* ============================ v6.10: pressure estimate ============================ */
 static int str_any(const char*needle){ for(int lg=0;lg<NLANG;lg++) for(int i=0;i<NSTR;i++) if(STR[lg][i]&&strstr(STR[lg][i],needle)) return 1; return 0; }
 static void st_press(const char*cfgsrc,const char*dir){
-    printf("== selftest: v6.10 tryk-estimat (anker: pre-infusion %d rå i optagelsen = config preInfusionPressure; k = anker / P0; > %.0f bar = puls) ==\n",P_ANCHOR_RAW,(double)P_EST_MAX);
+    printf("== selftest: v6.10 pressure estimate (anchor: pre-infusion %d raw in the capture = config preInfusionPressure; k = anchor / P0; > %.0f bar = pulse) ==\n",P_ANCHOR_RAW,(double)P_EST_MAX);
     char b[96],e[96];
-    /* ---- (1) skala-matematikken ---- */
+    /* ---- (1) the scale math ---- */
     sim_reset();
     { float k=p_k(); int ok=P_ANCHOR_RAW==358&&SET[S_PIPRESS].loaded&&sv(S_PIPRESS)==4&&p_anchor_bar()==4&&fabsf(k-4.f/358.f)<1e-7f;
       ok&=fabsf(p_bar(358)-4.f)<0.001f&&fabsf(p_bar(1346)-15.039f)<0.01f&&fabsf(p_bar(1379)-15.408f)<0.01f&&p_bar(0)==0.f;
       snprintf(b,sizeof b,"%.1f / %.1f / %.1f",(double)p_bar(358),(double)p_bar(1346),(double)p_bar(1379));
-      st_check("SKALA: P0 = 358 raa, anker = config preInfusionPressure 4 -> k = 4/358 = 0,011173 bar/raa; 358 -> 4.0, 1346 -> 15.0, 1379 -> 15.4, 0 -> 0",ok&&!strcmp(b,"4.0 / 15.0 / 15.4"));
-      printf("       k = %.6f bar/raa · pre 358 -> %.2f · ext 1346 -> %.2f · ext-top 1379 -> %.2f\n",(double)k,(double)p_bar(358),(double)p_bar(1346),(double)p_bar(1379)); }
-    /* ---- (2) HJEM: BAR-feltet under præ-infusion og ekstraktion ---- */
+      st_check("SCALE: P0 = 358 raw, anchor = config preInfusionPressure 4 -> k = 4/358 = 0.011173 bar/raw; 358 -> 4.0, 1346 -> 15.0, 1379 -> 15.4, 0 -> 0",ok&&!strcmp(b,"4.0 / 15.0 / 15.4"));
+      printf("       k = %.6f bar/raw · pre 358 -> %.2f · ext 1346 -> %.2f · ext-top 1379 -> %.2f\n",(double)k,(double)p_bar(358),(double)p_bar(1346),(double)p_bar(1379)); }
+    /* ---- (2) HOME: the BAR field during pre-infusion and extraction ---- */
     sim_reset(); cs_ws=0x1107; cs_p=358; cs_w39=0xFFFD; cs_w38=0; cs_pulse=0; cs_glitch=0; sim_tick=tick_cs; sim_run(4000); st_chart_now();
     { float v=(float)atof(hm.svv[1]);
-      st_check("HJEM, PRAE-INF. (plateau 358 +- 20 stoej): BAR-feltet viser 4.0 (+- 0,1) under labelen '≈BAR · EST.'",act.ph==PH_PRE&&hm.sl[1]==TR(TX_ST_BAR)&&fabsf(v-4.f)<=0.1f&&strstr(TR(TX_ST_BAR),"EST."));
+      st_check("HOME, PRE-INF. (plateau 358 +- 20 noise): the BAR field shows 4.0 (+- 0.1) under the label '≈BAR · EST.'",act.ph==PH_PRE&&hm.sl[1]==TR(TX_ST_BAR)&&fabsf(v-4.f)<=0.1f&&strstr(TR(TX_ST_BAR),"EST."));
       printf("       pre: '%s' = '%s'\n",hm.sl[1],hm.svv[1]); }
     cs_ws=0x1307; cs_p=1346; sim_run(6000); st_chart_now();
     { float v=(float)atof(hm.svv[1]);
-      st_check("HJEM, EKSTRAKTION (plateau 1346): BAR-feltet viser 15.0 (+- 0,2) — linear anker, pumpe-side (UI_v6.md §16)",act.ph==PH_EXT&&hm.sl[1]==TR(TX_ST_BAR)&&fabsf(v-15.f)<=0.2f);
+      st_check("HOME, EXTRACTION (plateau 1346): the BAR field shows 15.0 (+- 0.2) — linear anchor, pump side (UI_v6.md §16)",act.ph==PH_EXT&&hm.sl[1]==TR(TX_ST_BAR)&&fabsf(v-15.f)<=0.2f);
       printf("       ext: '%s' = '%s'\n",hm.sl[1],hm.svv[1]); }
-    st_check("v6.11: BAR-feltets label er '≈BAR EST.' (EN + DA), chart-billedteksten er kort ('PRESSURE' / 'TRYK' — estimatet staar i feltet lige under); 'UKALIBRERET' / 'UNCAL' findes ikke laengere i nogen streng",
+    st_check("v6.11: the BAR field's label is '≈BAR EST.' (EN + DA), the chart caption is short ('PRESSURE' / 'TRYK' — the estimate is in the field right below); 'UKALIBRERET' / 'UNCAL' no longer appear in any string",
              !strcmp(STR[LANG_EN][TX_ST_BAR],"≈BAR EST.")&&!strcmp(STR[LANG_DA][TX_ST_BAR],"≈BAR EST.")&&!strcmp(STR[LANG_EN][TX_C_PRESS],"PRESSURE")&&!strcmp(STR[LANG_DA][TX_C_PRESS],"TRYK")&&!str_any("UKALIB")&&!str_any("UNCAL"));
-    /* ---- (3) grundlaget: toast ved tryk paa chartet / BAR-feltet (ingen frames, ingen faseskift) ---- */
+    /* ---- (3) the basis: toast on tapping the chart / the BAR field (no frames, no phase change) ---- */
     { snprintf(e,sizeof e,TR(TX_T_PINFO),4,358); int n0=wq.n; long ok0=wq.n_ok;
       toast.dur=0; tap(240,268); int t1=toast.dur>0&&!strcmp(toast.msg,e); sim_run(3000);
       toast.dur=0; tap(CX,318); int t2=toast.dur>0&&!strcmp(toast.msg,e);
-      st_check("GRUNDLAG: tryk paa chartet og paa BAR-feltet under bryg -> toast 'PRAE-INF. 4 BAR = RAA 358 · LINEAER' (ingen frames sendt, bryg uaendret)",t1&&t2&&wq.n==n0&&wq.n_ok==ok0&&act.ph==PH_EXT);
+      st_check("BASIS: tapping the chart and the BAR field during a brew -> toast 'PRE-INF. 4 BAR = RAW 358 · LINEAR' (no frames sent, brew unchanged)",t1&&t2&&wq.n==n0&&wq.n_ok==ok0&&act.ph==PH_EXT);
       printf("       toast: '%s'\n",toast.msg);
       sim_reset(); sim_run(1500); toast.dur=0; tap(240,268); int t3=toast.dur==0;
-      st_check("… i ro uden bryg i vinduet ('INGEN AKTIVITET') giver chartet ingen toast",t3&&!cst.active); }
-    /* ---- (4) config-ankeret: preInfusionPressure 3 i en config-kopi ændrer skalaen ---- */
+      st_check("… while idle with no brew in the window ('NO ACTIVITY') the chart gives no toast",t3&&!cst.active); }
+    /* ---- (4) the config anchor: preInfusionPressure 3 in a config copy changes the scale ---- */
     { char op[400],kb[400]; snprintf(op,sizeof op,"%s/press_anchor.json",dir); snprintf(kb,sizeof kb,"%s",cfg_bakdir);
       int ok=copy_file(cfgsrc,op); snprintf(cfg_path,sizeof cfg_path,"%s",op); snprintf(cfg_bakdir,sizeof cfg_bakdir,"%s/pressbak",dir);
       ok&=cfg_set_int("preInfusionPressure",3);
@@ -6880,136 +6886,136 @@ static void st_press(const char*cfgsrc,const char*dir){
       char anc[64],nw[64],n2[64]; uint32_t c; diag_press_text(anc,sizeof anc,nw,sizeof nw,&c,n2,sizeof n2);
       snprintf(b,sizeof b,TR(TX_DV_PANCH),3,358,(double)(3.f/358.f)); snprintf(e,sizeof e,TR(TX_T_PINFO),3,358); toast.dur=0; tap(240,268);
       float v=(float)atof(hm.svv[1]);
-      st_check("CONFIG-ANKER: preInfusionPressure = 3 (config-kopi, settings_load) -> k = 3/358; ext 1346 -> 11.3; DIAGNOSE-ankeret og toasten siger 3 BAR",
+      st_check("CONFIG ANCHOR: preInfusionPressure = 3 (config copy, settings_load) -> k = 3/358; ext 1346 -> 11.3; the DIAGNOSE anchor and the toast say 3 BAR",
                ok&&p_anchor_bar()==3&&fabsf(p_k()-3.f/358.f)<1e-7f&&fabsf(v-11.3f)<=0.2f&&!strcmp(anc,b)&&!strcmp(toast.msg,e));
-      printf("       anker 3: BAR '%s' · '%s'\n",hm.svv[1],anc);
+      printf("       anchor 3: BAR '%s' · '%s'\n",hm.svv[1],anc);
       snprintf(cfg_path,sizeof cfg_path,"%s",cfgsrc); snprintf(cfg_bakdir,sizeof cfg_bakdir,"%s",kb);
       sim_reset(); cs_ws=0x1307; cs_p=1346; sim_tick=tick_cs; sim_run(6000); st_chart_now(); v=(float)atof(hm.svv[1]);
       int kv=SET[S_PIPRESS].val; SET[S_PIPRESS].val=0; int d0=p_anchor_bar(); SET[S_PIPRESS].val=99; int d99=p_anchor_bar(); SET[S_PIPRESS].val=kv;
-      st_check("… tilbage paa den aegte config (4) -> 15.0; en anker-vaerdi uden for 1..15 (0 / 99) giver default 4 bar",p_anchor_bar()==4&&fabsf(v-15.f)<=0.2f&&d0==4&&d99==4); }
-    /* ---- (5) deadhead / vedligehold: aldrig et falsk bar-tal ---- */
+      st_check("… back on the real config (4) -> 15.0; an anchor value outside 1..15 (0 / 99) gives the default 4 bar",p_anchor_bar()==4&&fabsf(v-15.f)<=0.2f&&d0==4&&d99==4); }
+    /* ---- (5) deadhead / maintenance: never a false bar figure ---- */
     { float lim=P_EST_MAX/p_k(); int ok=p_bar(16670)<0.f&&p_bar(15716)<0.f&&p_bar(floorf(lim))>=0.f&&p_bar(ceilf(lim)+1)<0.f;
-      st_check("GRAENSE: lineaert > 20 bar (raa > 1790) er en puls -> intet tal; 16670 (186 bar lineaert) og 15716 (176) er pulser; 1790 = 20.0 vises",ok); }
+      st_check("LIMIT: linear > 20 bar (raw > 1790) is a pulse -> no figure; 16670 (186 bar linear) and 15716 (176) are pulses; 1790 = 20.0 is shown",ok); }
     sim_reset(); cs_ws=0x1307; cs_p=1346; cs_pulse=0; sim_tick=tick_cs; sim_run(5000); cs_p=16670; sim_run(1500); st_chart_now();
     { int no186=1; for(int i=0;i<3;i++) if(strstr(hm.svv[i],"186")||strstr(hm.svv[i],"17")==hm.svv[i]) no186=0;
-      st_check("HJEM, vedvarende deadhead (16670 i 1,5 s under EKSTRAKTION): BAR-feltet viser 'PULS' — ikke '186.2'",act.ph==PH_EXT&&!strcmp(hm.svv[1],TR(TX_ST_PULSE))&&no186);
-      printf("       deadhead: '%s' = '%s' (raa %u)\n",hm.sl[1],hm.svv[1],reg[51]);
+      st_check("HOME, sustained deadhead (16670 for 1.5 s during EXTRACTION): the BAR field shows 'PULSE' — not '186.2'",act.ph==PH_EXT&&!strcmp(hm.svv[1],TR(TX_ST_PULSE))&&no186);
+      printf("       deadhead: '%s' = '%s' (raw %u)\n",hm.sl[1],hm.svv[1],reg[51]);
       char anc[64],nw[64],n2[64]; uint32_t c; diag_press_text(anc,sizeof anc,nw,sizeof nw,&c,n2,sizeof n2); snprintf(e,sizeof e,TR(TX_DV_PPULSE),(int)reg[51]);
-      st_check("… DIAGNOSE-nu-linjen under bryg: 'RAA 16670 · PULS, IKKE TRYK' (rav), intet bar-tal",!strcmp(nw,e)&&c==C_WARN&&!strstr(nw,"BAR")); }
+      st_check("… the DIAGNOSE now line during a brew: 'RAW 16670 · PULSE, NO PRESSURE' (amber), no bar figure",!strcmp(nw,e)&&c==C_WARN&&!strstr(nw,"BAR")); }
     sim_reset(); cs_w38=0; cs_w39=367; cs_glitch=0; sim_tick=tick_idle_maint; sim_run(3000); sim_tick=NULL; reg[33]=0x0101; reg[51]=16670; sim_run(100); st_chart_now();
     { char anc[64],nw[64],n2[64]; uint32_t c; diag_press_text(anc,sizeof anc,nw,sizeof nw,&c,n2,sizeof n2); snprintf(e,sizeof e,TR(TX_DV_PMAINT),16670);
       char n2e[64]; snprintf(n2e,sizeof n2e,TR(TX_DG_PNOTE2),20);
-      st_check("RO + vedligehold-puls 16670: DIAGNOSE viser 'RAA 16670 · VEDLIGEHOLD-PULS' (rav) — ikke 186 bar; HJEM viser ingen BAR (chartet: streger paa grundlinjen)",
+      st_check("IDLE + maintenance pulse 16670: DIAGNOSE shows 'RAW 16670 · MAINTENANCE PULSE' (amber) — not 186 bar; HOME shows no BAR (the chart: ticks on the baseline)",
                act.ph==PH_READY&&!strcmp(nw,e)&&c==C_WARN&&!strstr(nw,"186")&&hm.sl[1]!=TR(TX_ST_BAR)&&!strcmp(n2,n2e));
-      printf("       ro: '%s' · note '%s'\n",nw,n2);
+      printf("       idle: '%s' · note '%s'\n",nw,n2);
       reg[51]=12; diag_press_text(anc,sizeof anc,nw,sizeof nw,&c,n2,sizeof n2); snprintf(e,sizeof e,TR(TX_DV_PNOW),12,(double)(12*4.f/358.f));
-      st_check("… og i ro uden puls (raa 12): 'RAA 12 = ≈0.1 BAR'",!strcmp(nw,e)&&c==C_TXT); }
-    /* ---- (6) RÅ-visningen (DIAGNOSE → GRAF) er uberørt: rå tal, rå ringbuffer ---- */
+      st_check("… and idle without a pulse (raw 12): 'RAW 12 = ≈0.1 BAR'",!strcmp(nw,e)&&c==C_TXT); }
+    /* ---- (6) the RAW view (DIAGNOSE → GRAPH) is untouched: raw figures, raw ring buffer ---- */
     sim_reset(); cs_ws=0x1307; cs_p=1346; cs_pulse=0; sim_tick=tick_cs; sim_run(6000); st_chart_now();
     { char glat[16]; snprintf(glat,sizeof glat,"%s",hm.svv[1]); int rb=g_last(g_p)==(int)reg[51];
       cd.raw=1; hf.ok=0; st_chart_now(); snprintf(b,sizeof b,"%d",(int)reg[51]); int r1=!strcmp(hm.svv[1],b)&&hm.sl[1]==TR(TX_ST_PRAW)&&cst.mode==0&&cst.raw_max>=1326;
-      printf("       GLAT '%s' · RAA '%s' = '%s'\n",glat,hm.sl[1],hm.svv[1]);
+      printf("       SMOOTH '%s' · RAW '%s' = '%s'\n",glat,hm.sl[1],hm.svv[1]);
       cs_p=16670; sim_run(400); st_chart_now(); snprintf(b,sizeof b,"%d",(int)reg[51]); int r2=!strcmp(hm.svv[1],b);
       cd.raw=0; hf.ok=0; cs_p=1346; sim_run(6000); st_chart_now();
-      printf("       raa-puls '%s' · tilbage i GLAT '%s' = '%s' (rb %d r1 %d r2 %d)\n",b,hm.sl[1],hm.svv[1],rb,r1,r2);
-      st_check("RAA-VISNING: BAR-feltet viser ord 51 som raa tal (label 'TRYK RAA'), ogsaa en puls (16670 — ingen klemning i raa); ringbufferen er raa; tilbage til GLAT -> ≈bar igen",
+      printf("       raw pulse '%s' · back in SMOOTH '%s' = '%s' (rb %d r1 %d r2 %d)\n",b,hm.sl[1],hm.svv[1],rb,r1,r2);
+      st_check("RAW VIEW: the BAR field shows word 51 as a raw figure (label 'PRESSURE RAW'), also a pulse (16670 — no clamping in raw); the ring buffer is raw; back to SMOOTH -> ≈bar again",
                rb&&r1&&r2&&g_last(g_p)==(int)reg[51]&&hm.sl[1]==TR(TX_ST_BAR)&&fabsf((float)atof(hm.svv[1])-15.f)<=0.2f); }
     sim_reset(); sim_tick=NULL;
 }
-/* ============================ v6.11: UX-review (touch-mål, kontrast, swipe-vagt, luk-chevron, tandhjul, hints, klart sprog, DIAGNOSE-grupper) ============================ */
+/* ============================ v6.11: UX review (touch targets, contrast, swipe guard, close chevron, gear, hints, plain language, DIAGNOSE groups) ============================ */
 static float st_lum(uint32_t c){ float v[3]={(float)((c>>16)&255),(float)((c>>8)&255),(float)(c&255)}; for(int i=0;i<3;i++){ v[i]/=255.f; v[i]=v[i]<=0.03928f?v[i]/12.92f:powf((v[i]+0.055f)/1.055f,2.4f); } return 0.2126f*v[0]+0.7152f*v[1]+0.0722f*v[2]; }
 static float st_cr(uint32_t a,uint32_t b){ float x=st_lum(a),y=st_lum(b); if(x<y){ float t=x; x=y; y=t; } return (x+0.05f)/(y+0.05f); }
-/* tryk-feltet for mål t, MÅLT gennem hit_test() (ikke tegne-konstanterne): omsluttende kasse og antal px */
+/* the touch area for target t, MEASURED through hit_test() (not the drawing constants): bounding box and pixel count */
 static int st_hitbox(int t,int*w,int*h){ int x0=W,y0=H,x1=-1,y1=-1,n=0;
     for(int y=0;y<H;y++) for(int x=0;x<W;x++) if(hit_test(x,y,sim_now)==t){ n++; if(x<x0)x0=x; if(x>x1)x1=x; if(y<y0)y0=y; if(y>y1)y1=y; }
     *w=n?x1-x0+1:0; *h=n?y1-y0+1:0; return n; }
 static void st_gest(const int*p,int np){ ui_touch(TE_DOWN,p[0],p[1],sim_now); for(int i=1;i<np;i++){ sim_now+=16; ui_touch(TE_MOVE,p[2*i],p[2*i+1],sim_now); } ui_touch(TE_UP,p[2*np-2],p[2*np-1],sim_now); }
 static void st_settle(void){ sim_run(400); }
 static void st_v611(void){
-    printf("== selftest: v6.11 UX-review (touch-mål >= 44/48 px målt via hit_test, kontrast, swipe-vagt, luk-chevron, tandhjul, tom-tilstands-hint, klart sprog, DIAGNOSE-grupper) ==\n");
+    printf("== selftest: v6.11 UX review (touch targets >= 44/48 px measured via hit_test, contrast, swipe guard, close chevron, gear, empty-state hint, plain language, DIAGNOSE groups) ==\n");
     char b[160]; int w,h,ok;
-    /* ---- (1) touch-mål: målt tryk-felt (bredde x højde) ---- */
+    /* ---- (1) touch targets: measured touch area (width x height) ---- */
     sim_reset(); sim_run(400);
-    ok=1; for(int i=0;i<4;i++){ st_hitbox(T_ACT0+i,&w,&h); printf("       HJEM ikon %d: %d x %d px\n",i,w,h); ok&=w>=48&&h>=48; }
-    st_check("touch: de fire aktivitets-ikoner har hver et tryk-felt >= 48 x 48 px (cirkel r 30 = 61 px; det tegnede ikon er 50 px)",ok);
-    st_hitbox(T_GEAR,&w,&h); printf("       HJEM tandhjul: %d x %d px\n",w,h);
-    st_check("touch: tandhjulet (indstillinger) har et tryk-felt >= 44 x 44 px, uden overlap med ikonerne",w>=44&&h>=44&&hit_test(ACT_X[1],ACT_Y+28,sim_now)==T_ACT1&&hit_test(CX,GEAR_Y,sim_now)==T_GEAR);
+    ok=1; for(int i=0;i<4;i++){ st_hitbox(T_ACT0+i,&w,&h); printf("       HOME icon %d: %d x %d px\n",i,w,h); ok&=w>=48&&h>=48; }
+    st_check("touch: the four activity icons each have a touch area >= 48 x 48 px (circle r 30 = 61 px; the drawn icon is 50 px)",ok);
+    st_hitbox(T_GEAR,&w,&h); printf("       HOME gear: %d x %d px\n",w,h);
+    st_check("touch: the gear (settings) has a touch area >= 44 x 44 px, without overlapping the icons",w>=44&&h>=44&&hit_test(ACT_X[1],ACT_Y+28,sim_now)==T_ACT1&&hit_test(CX,GEAR_Y,sim_now)==T_GEAR);
     page=PG_T0; static_dirty=1; sim_run(300);
-    ok=1; for(int k=0;k<3;k++){ st_hitbox(T_ROW0+k,&w,&h); printf("       BRYG raekke %d: %d x %d px\n",k,w,h); ok&=w>=300&&h>=48; }
-    st_check("touch: listeraekker har et tryk-felt >= 48 px hoejt (50 px raekke + 4 px over/under) og >= 300 px bredt",ok);
+    ok=1; for(int k=0;k<3;k++){ st_hitbox(T_ROW0+k,&w,&h); printf("       BREW row %d: %d x %d px\n",k,w,h); ok&=w>=300&&h>=48; }
+    st_check("touch: list rows have a touch area >= 48 px high (50 px row + 4 px above/below) and >= 300 px wide",ok);
     activate(T_ROW0+3,sim_now); sim_run(400);
-    { int r[6]={T_MINUS,T_PLUS,T_CANCEL,T_SAVE,T_BACK,0}; const char*nm[5]={"-","+","ANNULLER","GEM","luk-chevron"}; ok=1;
-      for(int i=0;i<5;i++){ st_hitbox(r[i],&w,&h); printf("       detalje %s: %d x %d px\n",nm[i],w,h); ok&=w>=(i==4?44:48)&&h>=(i==4?44:48); }
-      st_check("touch: detalje −/+ (cirkel r 42), ANNULLER/GEM (136 x 64) >= 48 px; luk-chevronen >= 44 px",ok); }
+    { int r[6]={T_MINUS,T_PLUS,T_CANCEL,T_SAVE,T_BACK,0}; const char*nm[5]={"-","+","CANCEL","SAVE","close chevron"}; ok=1;
+      for(int i=0;i<5;i++){ st_hitbox(r[i],&w,&h); printf("       detail %s: %d x %d px\n",nm[i],w,h); ok&=w>=(i==4?44:48)&&h>=(i==4?44:48); }
+      st_check("touch: detail −/+ (circle r 42), CANCEL/SAVE (136 x 64) >= 48 px; the close chevron >= 44 px",ok); }
     detail_close(sim_now); sim_run(400);
-    page=PG_DIAG; scroll[PG_DIAG]=DG_GRAPH-LIST_VY0-60; static_dirty=1; sim_run(300); st_hitbox(T_GRAPH,&w,&h); printf("       DIAGNOSE GRAF-pille: %d x %d px\n",w,h);
-    st_check("touch: DIAGNOSE GRAF-pillen har et tryk-felt >= 44 px hoejt (v6.10: 40)",w>=280&&h>=44);
-    /* ---- (2) kontrast (WCAG 2.x) ---- */
+    page=PG_DIAG; scroll[PG_DIAG]=DG_GRAPH-LIST_VY0-60; static_dirty=1; sim_run(300); st_hitbox(T_GRAPH,&w,&h); printf("       DIAGNOSE GRAPH pill: %d x %d px\n",w,h);
+    st_check("touch: the DIAGNOSE GRAPH pill has a touch area >= 44 px high (v6.10: 40)",w>=280&&h>=44);
+    /* ---- (2) contrast (WCAG 2.x) ---- */
     { uint32_t bg=bgpure[CY*W+CX], bge=bgpure[(CY+150)*W+CX]; float c3[3]={st_cr(C_TXT3,bg),st_cr(C_TXT3,C_SURF),st_cr(C_TXT3,C_SURF2)}, c2[3]={st_cr(C_TXT2,bg),st_cr(C_TXT2,C_SURF),st_cr(C_TXT2,C_SURF2)};
       float d=st_cr(C_DIS,bg), o3=st_cr(0x00686F7Eu,bg);
-      printf("       C_TXT3: %.2f / %.2f / %.2f (bund / SURF / SURF2; v6.10's 104,111,126: %.2f paa bund) · C_TXT2: %.2f / %.2f / %.2f · C_DIS (deaktiveret): %.2f · bund-kant %.2f\n",c3[0],c3[1],c3[2],o3,c2[0],c2[1],c2[2],d,st_cr(C_TXT3,bge));
-      st_check("kontrast: smaa billedtekster (C_TXT3) >= 4,5:1 paa bund, SURF og SURF2 (listeraekker); C_TXT2 >= 7:1 paa bund og SURF, >= 6:1 paa SURF2",c3[0]>=4.5f&&c3[1]>=4.5f&&c3[2]>=4.5f&&st_cr(C_TXT3,bge)>=4.5f&&c2[0]>=7.f&&c2[1]>=7.f&&c2[2]>=6.f);
-      st_check("kontrast: deaktiveret (C_DIS) er synligt svagere end C_TXT3, men >= 3:1 (store glyffer: ikon, stepper-tegn, offline-hero)",d>=3.f&&d<c3[0]-1.f&&o3<4.5f); }
-    /* ---- (3) swipe-vagt ---- */
+      printf("       C_TXT3: %.2f / %.2f / %.2f (background / SURF / SURF2; v6.10's 104,111,126: %.2f on background) · C_TXT2: %.2f / %.2f / %.2f · C_DIS (disabled): %.2f · background edge %.2f\n",c3[0],c3[1],c3[2],o3,c2[0],c2[1],c2[2],d,st_cr(C_TXT3,bge));
+      st_check("contrast: small captions (C_TXT3) >= 4.5:1 on background, SURF and SURF2 (list rows); C_TXT2 >= 7:1 on background and SURF, >= 6:1 on SURF2",c3[0]>=4.5f&&c3[1]>=4.5f&&c3[2]>=4.5f&&st_cr(C_TXT3,bge)>=4.5f&&c2[0]>=7.f&&c2[1]>=7.f&&c2[2]>=6.f);
+      st_check("contrast: disabled (C_DIS) is visibly weaker than C_TXT3, but >= 3:1 (large glyphs: icon, stepper sign, offline hero)",d>=3.f&&d<c3[0]-1.f&&o3<4.5f); }
+    /* ---- (3) swipe guard ---- */
     sim_reset(); page=PG_T0; static_dirty=1; sim_run(300);
-    { int g[]={240,200, 262,205, 310,245}; st_gest(g,3); st_settle(); int a=page==PG_T0;                      /* skråt: dx 70, dy 45 (~33°) */
-      int g2[]={240,200, 222,203, 140,210}; st_gest(g2,3); st_settle(); int b2=page==PG_T1;                   /* vandret: dx -100, dy 10 -> næste side */
+    { int g[]={240,200, 262,205, 310,245}; st_gest(g,3); st_settle(); int a=page==PG_T0;                      /* diagonal: dx 70, dy 45 (~33°) */
+      int g2[]={240,200, 222,203, 140,210}; st_gest(g2,3); st_settle(); int b2=page==PG_T1;                   /* horizontal: dx -100, dy 10 -> next page */
       page=PG_T0; static_dirty=1; sim_run(300); float s0=scroll[PG_T0];
-      int g3[]={240,200, 243,220, 140,250}; st_gest(g3,3); st_settle(); int c=page==PG_T0;                    /* starter lodret (rul), slutter vandret */
-      printf("       skraat 70/45: side %s · vandret -100/10: naeste side %s · lodret start + vandret slut: ingen side %s (rul %.0f -> %.0f)\n",a?"uaendret":"SKIFTET",b2?"ja":"NEJ",c?"uaendret":"SKIFTET",(double)s0,(double)scroll[PG_T0]);
-      st_check("swipe-vagt: et skraat traek (dx 70, dy 45) paa en liste skifter IKKE side (v6.10 gjorde); et vandret (dx -100, dy 10) gør",a&&b2);
-      st_check("swipe-vagt: en gestus, der starter lodret (rul), skifter aldrig side, selv om den ender vandret",c);
+      int g3[]={240,200, 243,220, 140,250}; st_gest(g3,3); st_settle(); int c=page==PG_T0;                    /* starts vertical (scroll), ends horizontal */
+      printf("       diagonal 70/45: page %s · horizontal -100/10: next page %s · vertical start + horizontal end: no page %s (scroll %.0f -> %.0f)\n",a?"unchanged":"CHANGED",b2?"yes":"NO",c?"unchanged":"CHANGED",(double)s0,(double)scroll[PG_T0]);
+      st_check("swipe guard: a diagonal drag (dx 70, dy 45) on a list does NOT change page (v6.10 did); a horizontal one (dx -100, dy 10) does",a&&b2);
+      st_check("swipe guard: a gesture that starts vertical (scroll) never changes page, even if it ends horizontal",c);
       sim_reset(); sim_run(300); int g4[]={240,200, 242,222, 120,236}; st_gest(g4,3); st_settle();
-      st_check("swipe-vagt: ogsaa paa HJEM (ingen rul): lodret start + vandret slut skifter ikke side",page==PG_HOME&&!tr.type); }
-    /* ---- (4) luk-chevron + stryg ned ---- */
+      st_check("swipe guard: also on HOME (no scrolling): vertical start + horizontal end does not change page",page==PG_HOME&&!tr.type); }
+    /* ---- (4) close chevron + swipe down ---- */
     sim_reset(); page=PG_T0; static_dirty=1; sim_run(300); activate(T_ROW0+3,sim_now); sim_run(400);
     { int i=sel, v0=SET[i].val; tap(396,184); sim_run(10); int chg=edit_val!=v0, ht=hit_test(CX,57,sim_now);
       tap(CX,57); sim_run(400); int a=view==V_MAIN&&SET[i].val==v0&&!sav.active;
       printf("       chevron: sel %d v0 %d edit %d chg %d hit %d view %d val %d\n",i,v0,edit_val,chg,ht,view,SET[i].val);
       activate(T_ROW0+3,sim_now); sim_run(400); int g[]={240,250, 242,268, 246,340}; st_gest(g,3); sim_run(400); int c=view==V_MAIN;
       activate(T_ROW0+3,sim_now); sim_run(400); int e0=edit_val; int g2[]={84,184, 86,204, 90,280}; st_gest(g2,3); sim_run(400); int d=view==V_DETAIL&&edit_val==e0-SET[i].step;
-      int g3[]={240,250, 262,262, 330,300}; st_gest(g3,3); sim_run(400); int e=view==V_DETAIL;                      /* skråt -> ikke luk */
+      int g3[]={240,250, 262,262, 330,300}; st_gest(g3,3); sim_run(400); int e=view==V_DETAIL;                      /* diagonal -> do not close */
       detail_close(sim_now); sim_run(400);
-      st_check("luk-chevron: tryk oeverst (240,57) lukker detaljen som ANNULLER — en aendret vaerdi gemmes IKKE",chg&&a);
-      st_check("stryg ned (>= 70 px, lodret) lukker detaljen; startet paa − lukker den ikke (tryk-ned har allerede talt et trin); skraat lukker ikke",c&&d&&e); }
+      st_check("close chevron: a tap at the top (240,57) closes the detail like CANCEL — a changed value is NOT saved",chg&&a);
+      st_check("swipe down (>= 70 px, vertical) closes the detail; started on − it does not close (the press has already counted a step); diagonal does not close",c&&d&&e); }
     sim_reset(); sys_open(X_BOOTUI,sim_now); sim_run(400); tap(CX,57); sim_run(400);
-    st_check("luk-chevron virker ogsaa i system-visningen (BOOT-UI): tilbage til listen, flaget uroert",view==V_MAIN&&xsel==-1);
-    /* ---- (5) tandhjul + kant-tryk paa listerne ---- */
+    st_check("the close chevron also works in the system view (BOOT UI): back to the list, the flag untouched",view==V_MAIN&&xsel==-1);
+    /* ---- (5) gear + edge taps on the lists ---- */
     sim_reset(); sim_run(400); { int n0=wq.n; int q0=txq_len; tap(CX,GEAR_Y); st_settle(); int a=page==PG_T0&&wq.n==n0&&txq_len==q0;
       tap(20,240); st_settle(); int c=page==PG_HOME; page=PG_T1; static_dirty=1; sim_run(300); tap(460,240); st_settle(); int d=page==PG_T2;
-      st_check("tandhjulet paa HJEM aabner BRYG-listen (ingen frame); kant-tryk virker nu ogsaa paa listerne (venstre -> forrige, hoejre -> naeste)",a&&c&&d); }
-    /* ---- (6) tom-tilstands-hint + underlinje ---- */
+      st_check("the gear on HOME opens the BREW list (no frame); edge taps now also work on the lists (left -> previous, right -> next)",a&&c&&d); }
+    /* ---- (6) empty-state hint + subline ---- */
     sim_reset(); sim_run(1500); home_model(sim_now);
     { int a=!strcmp(hm.hint1,TR(TX_C_HINT))&&hm.hint2==TR(TX_C_HINT2)&&!cst.active; char t[40]; fmt_t10(t,sizeof t,870,1); snprintf(b,sizeof b,TR(TX_H_SET_TO),t);
       int s1=!strcmp(hm.sub,b)&&sub_font(&hm)==F_S;
       reg[35]=1; sim_run(400); home_model(sim_now); int e=act.ph==PH_ERROR&&strstr(hm.hint1,"E2")&&!strstr(hm.sub,"E2")&&!strcmp(hm.sub,TR(TX_ER_E2_BREW)); reg[35]=0;
       sim_link=0; sim_run(3000); home_model(sim_now); int o=act.ph==PH_OFFLINE&&!strcmp(hm.hint1,TR(TX_C_DIAGREF))&&!strcmp(hm.sub,TR(TX_H_NORESP)); sim_link=1; sim_run(400);
       reg[1]=1; sim_run(400); home_model(sim_now); int z=act.ph==PH_SLEEP&&!hm.hint1[0]&&!strcmp(hm.sub,TR(TX_H_WAKING)); reg[1]=0; sim_run(400);
-      printf("       klar: '%s' / '%s' · underlinje '%s' (F_S %d) · fejl '%s' / '%s' · offline '%s' / '%s'\n",hm.hint1,hm.hint2,b,s1,TR(TX_ER_E2_BREW),TR(TX_C_ERRCODE),TR(TX_H_NORESP),TR(TX_C_DIAGREF));
-      st_check("HJEM i ro: chart-feltet siger hvad man kan GØRE ('HOLD ET IKON …' + 'STRYG FOR INDSTILLINGER') i stedet for 'INGEN AKTIVITET'; underlinjen er 'MAAL 87.0°' i F_S",a&&s1);
-      st_check("fejl: underlinjen er klart sprog (ingen E-kode); koden staar nedtonet i chart-feltet m. henvisning til DIAGNOSE · offline: 'INGEN FORBINDELSE TIL MASKINEN' + DIAGNOSE-henvisning · sover: 'VAAGNER…'",e&&o&&z); }
+      printf("       ready: '%s' / '%s' · subline '%s' (F_S %d) · error '%s' / '%s' · offline '%s' / '%s'\n",hm.hint1,hm.hint2,b,s1,TR(TX_ER_E2_BREW),TR(TX_C_ERRCODE),TR(TX_H_NORESP),TR(TX_C_DIAGREF));
+      st_check("HOME idle: the chart field says what you can DO ('HOLD AN ICON …' + 'SWIPE FOR SETTINGS') instead of 'NO ACTIVITY'; the subline is 'TARGET 87.0°' in F_S",a&&s1);
+      st_check("error: the subline is plain language (no E code); the code is shown dimmed in the chart field with a reference to DIAGNOSE · offline: 'NO CONNECTION TO THE MACHINE' + DIAGNOSE reference · asleep: 'WAKING UP…'",e&&o&&z); }
     { sim_reset(); reg[33]=0x1307; sim_run(1500); home_model(sim_now); int a=cst.active;
-      st_check("hintet vises kun i det tomme chart (under bryg tegnes kurven som foer)",a&&act.ph==PH_EXT); }
-    /* ---- (7) klart sprog: ingen ord-numre / rå koder i brugerrettede strenge (kun DIAGNOSE og console) ---- */
+      st_check("the hint is shown only in the empty chart (during a brew the curve is drawn as before)",a&&act.ph==PH_EXT); }
+    /* ---- (7) plain language: no word numbers / raw codes in user-facing strings (only DIAGNOSE and console) ---- */
     ok=1; for(int i=0;i<NSTR;i++){ int k=STR_K[i]; if(k==KDL||k==KDV||k==KDF||k==KCON||!strncmp(STR_ID[i],"TX_DL_",6)||!strncmp(STR_ID[i],"TX_DV_",6)||!strncmp(STR_ID[i],"TX_DG_",6)) continue;
         for(int lg=0;lg<NLANG;lg++){ const char*s=STR[lg][i]; if(!s) continue;
             for(const char*p=s;(p=strstr(p,lg==LANG_DA?"ORD ":"WORD "));p++){ const char*q=p+(lg==LANG_DA?4:5); if(isdigit((unsigned char)*q)&&(p==s||!isalpha((unsigned char)p[-1]))){ ok=0; printf("     [%s] %s: '%s'\n",LANG_CODE[lg],STR_ID[i],s); break; } }
             if(strstr(s," ACK")||strstr(s,"FRAME-POLI")||strstr(s,"FRAME POLI")||strstr(s,"WRITE-K")||strstr(s,"WRITE QUEUE")){ ok=0; printf("     [%s] %s: '%s'\n",LANG_CODE[lg],STR_ID[i],s); } } }
-    st_check("klart sprog: ingen brugerrettet streng (HJEM, toasts, noter, fodlinjer) naevner ord-numre, ACK, frame-politik eller write-koe — de staar kun paa DIAGNOSE",ok);
-    /* ---- (8) DIAGNOSE-grupper ---- */
+    st_check("plain language: no user-facing string (HOME, toasts, notes, footers) mentions word numbers, ACK, frame policy or write queue — they appear only on DIAGNOSE",ok);
+    /* ---- (8) DIAGNOSE groups ---- */
     { int perm[DG_N]={0}, okp=1; for(int i=0;i<DG_N;i++){ if(DG_SLOT[i]<0||DG_SLOT[i]>=DG_N||perm[DG_SLOT[i]]++) okp=0; }
       static const int st[]={0,1,5,7,8,13,14,15}; int s8=1; for(int i=0;i<8;i++) s8&=DG_SLOT[st[i]]<8;
       int order=DG_Y0+3*DG_P+30<DG_BOOT-28&&DG_GRAPH<DG_PRESS&&DG_PRESS+28+2*DG_P+16+11<DG_RAW&&DG_RAW+28+3*DG_P+30<DG_ABOUT&&dg_cell_y(2)>DG_RAW&&dg_cell_y(12)>DG_RAW;
-      printf("       STATUS y %d..%d · BOOT %d · GRAF %d · TRYK %d · RAA TAELLERE %d · OM %d · bund %d\n",DG_Y0,DG_Y0+3*DG_P,DG_BOOT,DG_GRAPH,DG_PRESS,DG_RAW,DG_ABOUT,DG_BOTTOM);
-      st_check("DIAGNOSE: STATUS oeverst (link, fase, E1/E2/E3, vaagen, net, version, boot-push), saa boot/net/graf/tryk, RAA TAELLERE (rx, crc, work_sta, cmd6, stroem, frame, spejl, md5) i egen sektion, OM nederst; hver celle har én plads",okp&&s8&&order); }
+      printf("       STATUS y %d..%d · BOOT %d · GRAPH %d · PRESSURE %d · RAW COUNTERS %d · ABOUT %d · bottom %d\n",DG_Y0,DG_Y0+3*DG_P,DG_BOOT,DG_GRAPH,DG_PRESS,DG_RAW,DG_ABOUT,DG_BOTTOM);
+      st_check("DIAGNOSE: STATUS at the top (link, phase, E1/E2/E3, awake, net, version, boot push), then boot/net/graph/pressure, RAW COUNTERS (rx, crc, work_sta, cmd6, current, frame, mirror, md5) in their own section, ABOUT at the bottom; every cell has exactly one slot",okp&&s8&&order); }
     sim_reset(); sim_tick=NULL;
 }
-/* ============================ v6.14: tænd/sluk-knappen ============================ */
-#define PW_V_CMD8 "aa 55 08 ea 07 0b 12 10 23 1c 00 00 00 cc df"   /* 2026-11-18 16:35:28, alarm 0/0/0 (uafhaengigt beregnet CRC) */
-#define PW_V_OFF  "aa 55 06 00 02 00 00 00 00 56 94"               /* stock powerOff: usart_send(6,0,2), ord 0 = 0, ord 1 = 0 */
-#define PW_V_ON   "aa 55 06 00 01 01 00 c5 5f"                     /* PowerOn 0x146EF8: usart_send(6,0,1), ord 0 = 1 */
-#define PW_V_KA   "aa 55 06 01 01 00 00 c5 33"                     /* vaagen: ord 1 = 0 */
-/* txq -> liste af frames (hex), i den raekkefoelge de gik ud */
+/* ============================ v6.14: the power button ============================ */
+#define PW_V_CMD8 "aa 55 08 ea 07 0b 12 10 23 1c 00 00 00 cc df"   /* 2026-11-18 16:35:28, alarm 0/0/0 (independently computed CRC) */
+#define PW_V_OFF  "aa 55 06 00 02 00 00 00 00 56 94"               /* stock powerOff: usart_send(6,0,2), word 0 = 0, word 1 = 0 */
+#define PW_V_ON   "aa 55 06 00 01 01 00 c5 5f"                     /* PowerOn 0x146EF8: usart_send(6,0,1), word 0 = 1 */
+#define PW_V_KA   "aa 55 06 01 01 00 00 c5 33"                     /* awake: word 1 = 0 */
+/* txq -> list of frames (hex), in the order they went out */
 static int st_txq_frames(char out[][96],int max){
     int n=0, i=0;
     while(i+5<=txq_len&&n<max){
@@ -7021,7 +7027,7 @@ static int st_txq_frames(char out[][96],int max){
     }
     return n;
 }
-/* hovedloekke i 10 ms-skridt: link (som controllerens svar), write-koe, auto-ACK af hver cmd6, knap-tilstand, keep-awake */
+/* main loop in 10 ms steps: link (as the controller's replies), write queue, auto-ACK of every cmd6, button state, keep-awake */
 static ms_t st_pw_loop(ms_t t,ms_t dur,int link,int ack){
     ms_t end=t+dur;
     for(;t<end;t+=10){
@@ -7032,162 +7038,162 @@ static ms_t st_pw_loop(ms_t t,ms_t dur,int link,int ack){
     }
     ui_frame(t); return t;
 }
-static ms_t st_pw_home(void){ ms_t t=st_home(); ka_next=t+30000; return t; }   /* keep-awake: naeste frist om 30 s (som efter opstart) */
+static ms_t st_pw_home(void){ ms_t t=st_home(); ka_next=t+30000; return t; }   /* keep-awake: next deadline in 30 s (as after startup) */
 static void st_power(void){
-    printf("== selftest: v6.14 taend/sluk-knappen (k62091 / event1; stock app_powerKey_thread 0x140AB4 + dealPowerState 0x14911C + powerOff 0x149074; MCU sleep-task 0x2F52) ==\n");
+    printf("== selftest: v6.14 the power button (k62091 / event1; stock app_powerKey_thread 0x140AB4 + dealPowerState 0x14911C + powerOff 0x149074; MCU sleep-task 0x2F52) ==\n");
     char fr[16][96]; int nf; ms_t t, t0; uint8_t b[16];
-    /* ---- (1) frames byte-for-byte ---- */
+    /* ---- (1) frames byte for byte ---- */
     { struct tm tm; pw_now_tm(&tm); pw_cmd8(b,&tm,0,0,0);
-      st_check("cmd8 tid/alarm-frame = stock powerOffSend(0,0,0): " PW_V_CMD8 " (aar u16 LE, maaned 1-12, dag, time, minut, sekund, alarm 0/0/0 = ingen; CRC-16/MODBUS over 13 bytes)",hexeq(b,15,PW_V_CMD8)); }
-    { uint16_t w[2]={0,0}; int n=build_write(b,0,w,2); st_check("PowerOff = cmd6 sub0 len2 [ord 0 = 0, ord 1 = 0]: " PW_V_OFF " (stock powerOff: spejl-ord 0 = 0, usart_send(6,0,2); ord 1 = vaagen)",hexeq(b,n,PW_V_OFF)); }
-    { uint16_t w=1; int n=build_write(b,0,&w,1); st_check("PowerOn = cmd6 sub0 len1 [ord 0 = 1]: " PW_V_ON " (stock PowerOn 0x146EF8; samme frame som ourui's opstart)",hexeq(b,n,PW_V_ON)); }
-    /* ---- (2) frame-politik: ord 0 = 0 kun med sluk-intent ---- */
+      st_check("cmd8 time/alarm frame = stock powerOffSend(0,0,0): " PW_V_CMD8 " (year u16 LE, month 1-12, day, hour, minute, second, alarm 0/0/0 = none; CRC-16/MODBUS over 13 bytes)",hexeq(b,15,PW_V_CMD8)); }
+    { uint16_t w[2]={0,0}; int n=build_write(b,0,w,2); st_check("PowerOff = cmd6 sub0 len2 [word 0 = 0, word 1 = 0]: " PW_V_OFF " (stock powerOff: mirror word 0 = 0, usart_send(6,0,2); word 1 = awake)",hexeq(b,n,PW_V_OFF)); }
+    { uint16_t w=1; int n=build_write(b,0,&w,1); st_check("PowerOn = cmd6 sub0 len1 [word 0 = 1]: " PW_V_ON " (stock PowerOn 0x146EF8; same frame as ourui's startup)",hexeq(b,n,PW_V_ON)); }
+    /* ---- (2) frame policy: word 0 = 0 only with power-off intent ---- */
     { uint16_t z2[2]={0,0}; wq.n=0; int a=wq_push_t(0,z2,2,I_POWEROFF)==1&&wq.n==1; wq.n=0;
-      st_check("politik: sub0 len2 [0,0] MED I_POWEROFF koees; UDEN intent afvises den (WJ_TRIG) — ogsaa som sub0 len1 [0]",a&&rej(0,z2,2,0,WJ_TRIG)&&rej(0,W1(0),1,0,WJ_TRIG));
-      st_check("politik: I_POWEROFF tillader intet andet — start-ord (ord 9 = 1), reboot (ord 30 = 1) og ord 1 = 1 (sleep/drain) afvises stadig; PowerOn (ord 0 = 1) uden intent er uaendret OK",
+      st_check("policy: sub0 len2 [0,0] WITH I_POWEROFF is queued; WITHOUT intent it is rejected (WJ_TRIG) — also as sub0 len1 [0]",a&&rej(0,z2,2,0,WJ_TRIG)&&rej(0,W1(0),1,0,WJ_TRIG));
+      st_check("policy: I_POWEROFF allows nothing else — start word (word 9 = 1), reboot (word 30 = 1) and word 1 = 1 (sleep/drain) are still rejected; PowerOn (word 0 = 1) without intent is unchanged OK",
                rej(9,W1(1),1,I_POWEROFF,WJ_TRIG)&&rej(30,W1(1),1,I_POWEROFF,WJ_TRIG)&&rej(1,W1(1),1,I_POWEROFF,WJ_RANGE)&&rej(0,W1(2),1,I_POWEROFF,WJ_RANGE)&&wq_push(0,W1(1),1)&&(wq.n=0,1)); }
-    /* ---- (3) kort tryk: intet ---- */
+    /* ---- (3) short press: nothing ---- */
     t=st_pw_home(); pw_key(116,1,t); t=st_pw_loop(t,1400,1,1); pw_key(116,0,t); t=st_pw_loop(t,3000,1,1);
-    st_check("kort tryk (1,4 s < 1,5 s): ingen frames, TAENDT, talt som kort tryk (stock: vaekker kun sin pauseskaerm)",txq_len==0&&pw.state==PW_ON&&pw.n_short==1&&pw.n_off==0&&view==V_MAIN);
-    /* ---- (4) HOLD: cmd8 -> 80 ms -> cmd6 sub0 len2 -> ACK -> SLUKKET ---- */
+    st_check("short press (1.4 s < 1.5 s): no frames, ON, counted as a short press (stock: only wakes its screensaver)",txq_len==0&&pw.state==PW_ON&&pw.n_short==1&&pw.n_off==0&&view==V_MAIN);
+    /* ---- (4) HOLD: cmd8 -> 80 ms -> cmd6 sub0 len2 -> ACK -> OFF ---- */
     t0=t=st_pw_home(); page=PG_T1; static_dirty=1; pw_key(116,1,t); t=st_pw_loop(t,1490,1,0);
     int before=txq_len==0&&pw.state==PW_ON;
     t=st_pw_loop(t,20,1,0); nf=st_txq_frames(fr,16);
     int at=nf==1&&!strcmp(fr[0],PW_V_CMD8)&&pw.state==PW_OFFING&&view==V_OFF&&pw.t_req-t0>=PW_HOLD_MS&&pw.t_req-t0<PW_HOLD_MS+20;
     ms_t treq=pw.t_req; t=st_pw_loop(t,60,1,0); int gap1=st_txq_frames(fr,16)==1;
     t=st_pw_loop(t,30,1,0); nf=st_txq_frames(fr,16); int gap2=nf==2&&!strcmp(fr[1],PW_V_OFF)&&wq.sent_ms-treq>=PW_GAP_MS&&pw.state==PW_OFFING;
-    st_check("HOLD: intet foer 1,5 s; ved 1,5 s gaar cmd8 (" PW_V_CMD8 ") ud, og SLUKKER… vises (sluk-visningen, ikke indstillings-siden)",before&&at);
-    st_check("HOLD: cmd6 sub0 len2 = " PW_V_OFF " gaar ud >= 80 ms efter cmd8 (stock: usleep(80000) mellem de to); SLUKKER… indtil ACK",gap1&&gap2);
+    st_check("HOLD: nothing before 1.5 s; at 1.5 s cmd8 (" PW_V_CMD8 ") goes out, and TURNING OFF… is shown (the power-off view, not the settings page)",before&&at);
+    st_check("HOLD: cmd6 sub0 len2 = " PW_V_OFF " goes out >= 80 ms after cmd8 (stock: usleep(80000) between the two); TURNING OFF… until ACK",gap1&&gap2);
     st_ack_last(t+5); t=st_pw_loop(t,40,1,0);
-    st_check("ACK (0x86 m. echo) -> SLUKKET; HJEM ved naeste taend",pw.state==PW_OFF&&pw.n_off==1&&wq.n==0&&view==V_OFF);
+    st_check("ACK (0x86 with echo) -> OFF; HOME on the next power-on",pw.state==PW_OFF&&pw.n_off==1&&wq.n==0&&view==V_OFF);
     { uint8_t a[15]; memcpy(a,pw.f8,15); a[2]=0x88; uint16_t c=crc16(a,13); a[13]=c&0xFF; a[14]=c>>8; rx_feed(a,15,t); }
-    st_check("controllerens 0x88-kvittering for cmd8 (echo) taelles til DIAGNOSE (stock venter ikke paa den — det goer ourui heller ikke)",pw.n_ack8==1);
+    st_check("the controller's 0x88 receipt for cmd8 (echo) is counted for DIAGNOSE (stock does not wait for it — neither does ourui)",pw.n_ack8==1);
     int blon=!bl_is_off; t=st_pw_loop(t,treq+PW_BL_MS-t+10,0,0);
-    st_check("baggrundslyset slukkes 1,5 s efter sluk-trykket (stock: lv_tick_elaps > 0x5DC) — ikke foer",blon&&bl_is_off);
+    st_check("the backlight is turned off 1.5 s after the power-off press (stock: lv_tick_elaps > 0x5DC) — not before",blon&&bl_is_off);
     nf=st_txq_frames(fr,16);
-    st_check("PRAECIS to frames i sluk-sekvensen: cmd8 + cmd6 sub0 len2 — ingen stop-frames, ingen keep-awake, intet andet",nf==2&&!strcmp(fr[0],PW_V_CMD8)&&!strcmp(fr[1],PW_V_OFF));
-    /* ---- (5) keep-awake staar stille, mens der er slukket ---- */
+    st_check("EXACTLY two frames in the power-off sequence: cmd8 + cmd6 sub0 len2 — no stop frames, no keep-awake, nothing else",nf==2&&!strcmp(fr[0],PW_V_CMD8)&&!strcmp(fr[1],PW_V_OFF));
+    /* ---- (5) keep-awake stays idle while powered off ---- */
     txq_len=0; t=st_pw_loop(t,65000,0,1); int quiet0=txq_len==0;
     reg[0]=0; t=st_pw_loop(t,65000,1,1); int quiet1=txq_len==0&&pw.state==PW_OFF;
-    st_check("keep-awake paa pause i SLUKKET: 2 x 65 s (controlleren tavs / svarer med ord 0 = 0) -> 0 frames (ingen ord 1 = 0, som ville kaempe imod)",quiet0&&quiet1);
+    st_check("keep-awake paused while OFF: 2 x 65 s (controller silent / answering with word 0 = 0) -> 0 frames (no word 1 = 0, which would fight it)",quiet0&&quiet1);
     { ms_t u=st_pw_home(); u=st_pw_loop(u,65000,1,1); nf=st_txq_frames(fr,16); int nka=0; for(int k=0;k<nf;k++) nka+=!strcmp(fr[k],PW_V_KA);
-      st_check("kontrol: TAENDT i 65 s -> keep-awake koerer som foer (2 x ord 1 = 0)",nka==2&&nf==2); }
-    /* ---- (6) tryk paa den slukkede skaerm ---- */
+      st_check("control: ON for 65 s -> keep-awake runs as before (2 x word 1 = 0)",nka==2&&nf==2); }
+    /* ---- (6) tap on the powered-off screen ---- */
     t=st_pw_home(); pw_key(116,1,t); t=st_pw_loop(t,1600,1,1); pw_key(116,0,t); t=st_pw_loop(t,2000,0,1); txq_len=0;
     int off=pw.state==PW_OFF&&bl_is_off;
     ui_touch(TE_DOWN,240,240,t); int peek=!bl_is_off; ui_touch(TE_UP,240,240,t+60); t=st_pw_loop(t,200,0,1);
     int sw=view==V_OFF&&page==PG_HOME&&hit_test(240,372,t)==T_NONE&&hit_test(CX,GEAR_Y,t)==T_NONE&&txq_len==0;
     ui_touch(TE_DOWN,100,240,t); ui_touch(TE_MOVE,300,240,t+30); ui_touch(TE_UP,300,240,t+60); int noswipe=view==V_OFF&&page==PG_HOME&&tr.type==0;
     t=st_pw_loop(t,PW_PEEK_MS+100,0,1);
-    st_check("tryk paa den slukkede skaerm: lyset taendes (SLUKKET-siden i 8 s), trykket/stryget sluges (ingen side, ingen frames), lyset slukker igen",off&&peek&&sw&&noswipe&&bl_is_off&&txq_len==0);
-    /* ---- (7) TAEND: knappen -> TAENDER… -> controlleren svarer m. ord 0 = 1 -> PowerOn + vaagen -> HJEM ---- */
+    st_check("tap on the powered-off screen: the light turns on (the OFF page for 8 s), the tap/swipe is swallowed (no page, no frames), the light turns off again",off&&peek&&sw&&noswipe&&bl_is_off&&txq_len==0);
+    /* ---- (7) POWER ON: the button -> TURNING ON… -> the controller answers with word 0 = 1 -> PowerOn + awake -> HOME ---- */
     reg[0]=0; pw_key(116,1,t); int wk=pw.state==PW_WAKING&&!bl_is_off; t=st_pw_loop(t,800,1,1);
-    int still=pw.state==PW_WAKING&&txq_len==0;                                     /* ord 0 = 0 (gammelt svar): ikke vaagen */
+    int still=pw.state==PW_WAKING&&txq_len==0;                                     /* word 0 = 0 (old reply): not awake */
     reg[0]=1; t=st_pw_loop(t,PW_SEEN_MS-100,1,0); int wait=pw.state==PW_WAKING;
     t=st_pw_loop(t,200,1,1); t=st_pw_loop(t,200,1,1); pw_key(116,0,t); nf=st_txq_frames(fr,16);
-    st_check("TAEND: knappen i SLUKKET -> lyset paa + TAENDER… (ingen frames: controlleren sover og kan ikke modtage)",wk&&still);
-    st_check("TAEND: foerst naar controlleren har svaret med ord 0 = 1 i 0,6 s -> PowerOn " PW_V_ON " + vaagen " PW_V_KA " (som ved opstart) -> TAENDT, HJEM, groen toast",
+    st_check("POWER ON: the button while OFF -> light on + TURNING ON… (no frames: the controller is asleep and cannot receive)",wk&&still);
+    st_check("POWER ON: only once the controller has answered with word 0 = 1 for 0.6 s -> PowerOn " PW_V_ON " + awake " PW_V_KA " (as at startup) -> ON, HOME, green toast",
              wait&&nf==2&&!strcmp(fr[0],PW_V_ON)&&!strcmp(fr[1],PW_V_KA)&&pw.state==PW_ON&&view==V_MAIN&&page==PG_HOME&&!strcmp(toast.msg,TR(TX_T_PW_ON))&&pw.n_on==1&&!bl_is_off);
     txq_len=0; t=st_pw_loop(t,31000,1,1); nf=st_txq_frames(fr,16);
-    st_check("efter TAEND koerer keep-awake igen (ord 1 = 0 efter 30 s)",nf==1&&!strcmp(fr[0],PW_V_KA));
-    /* ---- (8) TAEND uden svar: efter 10 s tilbage til SLUKKET ---- */
+    st_check("after POWER ON keep-awake runs again (word 1 = 0 after 30 s)",nf==1&&!strcmp(fr[0],PW_V_KA));
+    /* ---- (8) POWER ON without a reply: back to OFF after 10 s ---- */
     t=st_pw_home(); pw_key(116,1,t); t=st_pw_loop(t,1600,1,1); pw_key(116,0,t); t=st_pw_loop(t,2000,0,1); txq_len=0;
     pw_key(116,1,t); t=st_pw_loop(t,300,0,1); pw_key(116,0,t); t=st_pw_loop(t,PW_WAKE_MS,0,1);
-    st_check("TAEND, men controlleren svarer ikke (knappen sluppet for tidligt): efter 10 s tilbage til SLUKKET, lyset slukket, 0 frames",pw.state==PW_OFF&&pw.n_wto==1&&bl_is_off&&txq_len==0);
-    /* ---- (9) controlleren vaagner af sig selv (alarm / knap, ourui ikke saa) ---- */
+    st_check("POWER ON, but the controller does not answer (button released too early): after 10 s back to OFF, light off, 0 frames",pw.state==PW_OFF&&pw.n_wto==1&&bl_is_off&&txq_len==0);
+    /* ---- (9) the controller wakes up by itself (alarm / button ourui did not see) ---- */
     reg[0]=1; t=st_pw_loop(t,PW_SEEN_MS+100,1,1); nf=st_txq_frames(fr,16);
-    st_check("SLUKKET, og controlleren svarer af sig selv med ord 0 = 1 -> TAENDT + PowerOn/vaagen (ingen evig SLUKKET-skaerm)",pw.state==PW_ON&&pw.n_auto==1&&nf>=1&&!strcmp(fr[0],PW_V_ON)&&view==V_MAIN);
-    /* ---- (10) spaerret som hos stock: bryg / damp / kvaern; varmt vand spaerrer IKKE og stoppes ikke ---- */
-    { static const struct { int w; uint16_t v, ws; const char*nm; } B[]={{22,1,0x1307,"bryg (ord 22, work_sta 1307)"},{24,1,0x4121,"damp (ord 24, work_sta 4121)"},{6,1,0x0141,"kvaern (ord 6)"},{0,0,0x1307,"bit 12 alene (fysisk bryg-kontakt)"}};
+    st_check("OFF, and the controller answers by itself with word 0 = 1 -> ON + PowerOn/awake (no eternal OFF screen)",pw.state==PW_ON&&pw.n_auto==1&&nf>=1&&!strcmp(fr[0],PW_V_ON)&&view==V_MAIN);
+    /* ---- (10) blocked as in stock: brew / steam / grind; hot water does NOT block and is not stopped ---- */
+    { static const struct { int w; uint16_t v, ws; const char*nm; } B[]={{22,1,0x1307,"brew (word 22, work_sta 1307)"},{24,1,0x4121,"steam (word 24, work_sta 4121)"},{6,1,0x0141,"grind (word 6)"},{0,0,0x1307,"bit 12 alone (physical brew switch)"}};
       int ok=1;
       for(unsigned q=0;q<sizeof B/sizeof B[0];q++){
           t=st_pw_home(); if(B[q].w) reg[B[q].w]=B[q].v; reg[33]=B[q].ws; pw_key(116,1,t); t=st_pw_loop(t,4000,1,1);
           int blk=txq_len==0&&pw.state==PW_ON&&pw.n_blk==1&&!strcmp(toast.msg,TR(TX_T_PW_BUSY))&&toast.col==C_WARN;
           if(B[q].w) reg[B[q].w]=0; reg[33]=0x0101; t=st_pw_loop(t,1400,1,1); int notyet=txq_len==0;
           t=st_pw_loop(t,300,1,1); nf=st_txq_frames(fr,16); pw_key(116,0,t);
-          printf("       %-36s spaerret %s · efter aktiviteten + fuldt hold: %s\n",B[q].nm,blk?"ja":"NEJ",nf>=1&&!strcmp(fr[0],PW_V_CMD8)?"sluk":"-");
+          printf("       %-36s blocked %s · after the activity + full hold: %s\n",B[q].nm,blk?"yes":"NO",nf>=1&&!strcmp(fr[0],PW_V_CMD8)?"off":"-");
           if(!(blk&&notyet&&nf>=1&&!strcmp(fr[0],PW_V_CMD8))) ok=0; }
-      st_check("SPAERRET under bryg / damp / kvaern (stock isExtractionOrSteamSwitchOn 0x1481E0: work_sta bit 12/14, ord 22/24/6): intet sendes, toast 'STOP AKTIVITETEN FOERST'; naar den er slut, slukker et NYT fuldt hold",ok); }
+      st_check("BLOCKED during brew / steam / grind (stock isExtractionOrSteamSwitchOn 0x1481E0: work_sta bit 12/14, words 22/24/6): nothing is sent, toast 'STOP THE ACTIVITY FIRST'; once it has ended, a NEW full hold powers off",ok); }
     t=st_pw_home(); reg[16]=1; reg[33]=0x030B; pw_key(116,1,t); t=st_pw_loop(t,1600,1,1); pw_key(116,0,t); t=st_pw_loop(t,300,1,1); nf=st_txq_frames(fr,16);
     { int stop=0; for(int k=0;k<nf;k++) if(strstr(fr[k],"aa 55 06 10")||strstr(fr[k],"aa 55 06 16")||strstr(fr[k],"aa 55 06 06")) stop=1;
-      st_check("varmt vand spaerrer IKKE (heller ikke hos stock) og stoppes ikke af ourui: kun cmd8 + sub0 len2 — MCU'ens sleep-task nulstiller work_sta + udgange (0x2F52/0x2F0C)",
+      st_check("hot water does NOT block (not in stock either) and is not stopped by ourui: only cmd8 + sub0 len2 — the MCU's sleep task resets work_sta + outputs (0x2F52/0x2F0C)",
                nf==2&&!strcmp(fr[0],PW_V_CMD8)&&!strcmp(fr[1],PW_V_OFF)&&!stop&&pw.state==PW_OFF); }
-    /* ---- (11) ingen forbindelse / ord 0 = 0 / read-only: intet sendes ---- */
+    /* ---- (11) no connection / word 0 = 0 / read-only: nothing is sent ---- */
     t=st_pw_home(); pw_key(116,1,t); t=st_pw_loop(t,1600,0,1); pw_key(116,0,t); int nl=txq_len==0&&pw.state==PW_ON&&!strcmp(toast.msg,TR(TX_T_PW_NOLINK));
     t=st_pw_home(); reg[0]=0; pw_key(116,1,t); t=st_pw_loop(t,1600,1,1); pw_key(116,0,t); int z0=txq_len==0&&pw.state==PW_ON;
     t=st_pw_home(); ro_mode=1; pw_key(116,1,t); t=st_pw_loop(t,1600,1,1); pw_key(116,0,t); int ro=txq_len==0&&pw.state==PW_ON&&!strcmp(toast.msg,TR(TX_G_RO)); ro_mode=0;
-    st_check("ingen forbindelse -> toast, intet sendes (knappen vaekker maaske netop en sovende controller); ord 0 = 0 -> intet (som stock); READ-ONLY -> intet",nl&&z0&&ro);
-    /* ---- (12) intet ACK -> tilbage til TAENDT m. fejl-toast ---- */
+    st_check("no connection -> toast, nothing is sent (the button may just be waking a sleeping controller); word 0 = 0 -> nothing (like stock); READ-ONLY -> nothing",nl&&z0&&ro);
+    /* ---- (12) no ACK -> back to ON with an error toast ---- */
     t=st_pw_home(); pw_key(116,1,t); t=st_pw_loop(t,1600,1,0); pw_key(116,0,t); t=st_pw_loop(t,600,1,0); nf=st_txq_frames(fr,16);
-    st_check("intet ACK (heller ikke paa retransmit): tilbage til TAENDT/HJEM, lyset aldrig slukket, toast 'SLUK: INTET SVAR'",
+    st_check("no ACK (not on the retransmit either): back to ON/HOME, light never turned off, toast 'POWER OFF: NO REPLY'",
              pw.state==PW_ON&&pw.n_fail==1&&!bl_is_off&&view==V_MAIN&&!strcmp(toast.msg,TR(TX_T_PW_NOACK))&&toast.col==C_ERR&&nf==3&&!strcmp(fr[1],PW_V_OFF)&&!strcmp(fr[2],PW_V_OFF));
-    /* ---- (13) aaben detalje m. lysstyrke-preview: fortrydes, foer der slukkes ---- */
+    /* ---- (13) open detail with brightness preview: reverted before powering off ---- */
     t=st_pw_home(); page=PG_T2; static_dirty=1; view=V_DETAIL; sel=S_BL; edit_val=SET[S_BL].val+1; pw_key(116,1,t); t=st_pw_loop(t,1600,1,1); pw_key(116,0,t); t=st_pw_loop(t,300,1,1);
-    st_check("sluk midt i en aaben detalje: detaljen lukkes uden GEM (sel -1), SLUKKER…/SLUKKET vises",view==V_OFF&&sel<0&&pw.state==PW_OFF&&cfg_writes>=0);
-    /* ---- (14) tekster og layout ---- */
+    st_check("power off in the middle of an open detail: the detail is closed without SAVE (sel -1), TURNING OFF…/OFF is shown",view==V_OFF&&sel<0&&pw.state==PW_OFF&&cfg_writes>=0);
+    /* ---- (14) texts and layout ---- */
     { int ok=1; static const short T[]={TX_PW_OFFING,TX_PW_OFF,TX_PW_WAKING,TX_PW_SUB_OFFING,TX_PW_SUB_OFF,TX_PW_SUB_WAKING,TX_PW_NOTE_OFF};
       for(int lg=0;lg<NLANG;lg++) for(unsigned k=0;k<sizeof T/sizeof T[0];k++){ float w=text_wf(STR[lg][T[k]],k<3?F_M:F_XS); if(w>340){ ok=0; printf("     [%s] %s: %.0f px\n",LANG_CODE[lg],STR_ID[T[k]],w); } }
-      st_check("SLUKKER / SLUKKET / TAENDER + underlinjer passer i feltet (<= 340 px) paa EN og DA",ok); }
+      st_check("TURNING OFF / OFF / TURNING ON + sublines fit in the field (<= 340 px) in EN and DA",ok); }
     { int ok=DG_RAW+28+4*DG_P<=DG_PWR&&DG_PWR+28+3*DG_P<=DG_ABOUT&&DG_ABOUT+76+24<DG_BOTTOM;
       char a[28],c[28],d[28],e[40],f[80]; uint32_t col; diag_pw_text(a,&col,c,d,e,f,sizeof f,t);
-      printf("       DIAGNOSE TAEND/SLUK: y %d (RAA TAELLERE %d, OM %d) · '%s' · ord 0 '%s' · '%s' · '%s' · '%s'\n",DG_PWR,DG_RAW,DG_ABOUT,a,c,d,e,f);
-      st_check("DIAGNOSE: TAEND/SLUK-KNAP-blok mellem RAA TAELLERE og OM (tilstand, ord 0, tryk · sluk · taend, seneste knap, node)",ok&&!strcmp(a,TR(TX_DV_PW_OFF))&&strstr(f,KBD_NAME)!=NULL); }
+      printf("       DIAGNOSE POWER: y %d (RAW COUNTERS %d, ABOUT %d) · '%s' · word 0 '%s' · '%s' · '%s' · '%s'\n",DG_PWR,DG_RAW,DG_ABOUT,a,c,d,e,f);
+      st_check("DIAGNOSE: POWER BUTTON block between RAW COUNTERS and ABOUT (state, word 0, presses · off · on, latest key, node)",ok&&!strcmp(a,TR(TX_DV_PW_OFF))&&strstr(f,KBD_NAME)!=NULL); }
     t=st_pw_home(); pw_key(116,1,t); t=st_pw_loop(t,1600,1,1); pw_key(116,0,t); t=st_pw_loop(t,3000,0,1); static_dirty=1; force_all=1; ui_frame(t);
     { int black=1; static const int P[][2]={{240,40},{240,440},{40,240},{440,240},{240,370}}; for(unsigned k=0;k<5;k++) if((canvas[P[k][1]*W+P[k][0]]&0xFFFFFF)!=0) black=0;
-      st_check("SLUKKET-siden er sort uden for symbol og tekst (ingen buer, ingen HJEM-rester)",black&&!garc.vis&&!parc.vis); }
+      st_check("the OFF page is black outside the symbol and text (no arcs, no HOME leftovers)",black&&!garc.vis&&!parc.vis); }
     sim_reset(); sim_tick=NULL;
 }
-/* ============================ v6.13: manuel STOP for kvaern / bryg / vand ============================ */
+/* ============================ v6.13: manual STOP for grind / brew / water ============================ */
 #define ST_V_GRIND "aa 55 06 06 01 00 00 c4 47"
 #define ST_V_BREW  "aa 55 06 16 01 00 00 c0 87"
 #define ST_V_WATER "aa 55 06 10 01 00 00 c0 0f"
 #define ST_V_WMAN  "aa 55 06 13 01 00 00 c0 4b"
 #define ST_V_STEAM "aa 55 06 18 08 00 00 8a 02 00 00 00 00 00 00 00 00 00 00 00 00 0c f7"
 static int st_tx_is(const char*hex){ return hexeq(last_tx,last_tx_len,hex); }
-/* tryk (ned + op) paa (x,y) som en finger: aktiveringen sker ved slip, som paa skaermen */
+/* tap (down + up) at (x,y) like a finger: activation happens on release, as on the screen */
 static ms_t st_tap(int x,int y,ms_t t){ ui_touch(TE_DOWN,x,y,t); ui_frame(t+=33); ui_touch(TE_UP,x,y,t+=40); ui_frame(t+=33); return t; }
-/* tryk-feltets bredde langs y og hoejde langs x for et bestemt mål (målt via hit_test, som v6.11's UX-tjek) */
+/* the touch area's width along y and height along x for a given target (measured via hit_test, like v6.11's UX check) */
 static void st_hit_size(int tgt,int x,int y,ms_t t,int*w,int*h){ *w=*h=0; for(int i=0;i<W;i++) if(hit_test(i,y,t)==tgt) (*w)++; for(int i=0;i<H;i++) if(hit_test(x,i,t)==tgt) (*h)++; }
 static void st_stop(void){
-    printf("== selftest: v6.13 manuel STOP for kvaern / bryg / vand (stop-ord reverset fra MCU-firmwaren + stock-UI'ets egne stop-kald) ==\n");
+    printf("== selftest: v6.13 manual STOP for grind / brew / water (stop words reversed from the MCU firmware + the stock UI's own stop calls) ==\n");
     ms_t t; int sk[2], sn;
     const char*orstop=STR[ui_lang][TX_H_AUTOSTOP_G]; orstop=strstr(orstop,"%s G")?strstr(orstop,"%s G")+4:orstop;   /* " · OR STOP" / " · ELLER STOP" */
-    /* ---- (1) frames byte-for-byte ---- */
+    /* ---- (1) frames byte for byte ---- */
     t=st_home();
-    act_push_stop(ACT_GRIND); st_check("KVAERN-stop = cmd6 sub6 len1, ord 6 = 0: " ST_V_GRIND " (MCU grind-ctl 0x19C6 koerer mens ord 6 != 0; stock onClick 0x10928C usart_send(6,6,1))",wq.n==1&&q_hex(0,ST_V_GRIND)); wq.n=0;
-    act_push_stop(ACT_BREW);  st_check("BRYG-stop  = cmd6 sub22 len1, ord 22 = 0: " ST_V_BREW " (MCU brew-ctl 0x1E9C: running = ord 22 != 0 ved aendring; auto-stop 0x1F92 skriver det samme)",wq.n==1&&q_hex(0,ST_V_BREW)); wq.n=0;
+    act_push_stop(ACT_GRIND); st_check("GRIND stop = cmd6 sub6 len1, word 6 = 0: " ST_V_GRIND " (MCU grind-ctl 0x19C6 runs while word 6 != 0; stock onClick 0x10928C usart_send(6,6,1))",wq.n==1&&q_hex(0,ST_V_GRIND)); wq.n=0;
+    act_push_stop(ACT_BREW);  st_check("BREW stop  = cmd6 sub22 len1, word 22 = 0: " ST_V_BREW " (MCU brew-ctl 0x1E9C: running = word 22 != 0 on change; auto-stop 0x1F92 writes the same)",wq.n==1&&q_hex(0,ST_V_BREW)); wq.n=0;
     reg_seen[19]=1; reg[19]=0;
-    act_push_stop(ACT_WATER); st_check("VAND-stop  = cmd6 sub16 len1, ord 16 = 0: " ST_V_WATER " (MCU hotwater-ctl 0x1B8C: aktiv = ord 19 | ord 16; stock hotWaterStartStop 0x11468C usart_send(6,16,1))",wq.n==1&&q_hex(0,ST_V_WATER)); wq.n=0;
+    act_push_stop(ACT_WATER); st_check("WATER stop = cmd6 sub16 len1, word 16 = 0: " ST_V_WATER " (MCU hotwater-ctl 0x1B8C: active = word 19 | word 16; stock hotWaterStartStop 0x11468C usart_send(6,16,1))",wq.n==1&&q_hex(0,ST_V_WATER)); wq.n=0;
     reg[19]=1; act_push_stop(ACT_WATER);
-    st_check("VAND-stop m. ord 19 != 0 (manuel tilstand, stock): + sub19 len1 ord 19 = 0: " ST_V_WMAN " (stock 0x114720 usart_send(6,19,1)) — begge i samme koe-omgang",wq.n==2&&q_hex(0,ST_V_WATER)&&q_hex(1,ST_V_WMAN)); wq.n=0; reg[19]=0;
-    act_push_stop(ACT_STEAM); st_check("DAMP-stop  = uaendret (sub24 len8, ord 24 = 0)",wq.n==1&&q_hex(0,ST_V_STEAM)); wq.n=0;
-    /* ---- (2) politik: en stop-frame kan aldrig starte noget og aldrig afvises ---- */
+    st_check("WATER stop with word 19 != 0 (manual mode, stock): + sub19 len1 word 19 = 0: " ST_V_WMAN " (stock 0x114720 usart_send(6,19,1)) — both in the same queue round",wq.n==2&&q_hex(0,ST_V_WATER)&&q_hex(1,ST_V_WMAN)); wq.n=0; reg[19]=0;
+    act_push_stop(ACT_STEAM); st_check("STEAM stop = unchanged (sub24 len8, word 24 = 0)",wq.n==1&&q_hex(0,ST_V_STEAM)); wq.n=0;
+    /* ---- (2) policy: a stop frame can never start anything and is never rejected ---- */
     { int ok=1; for(int k=ACT_GRIND;k<=ACT_STEAM;k++){ wq.n=0; reg_seen[19]=1; reg[19]=1; if(!act_push_stop(k)){ ok=0; continue; }
           for(int q=0;q<wq.n;q++){ const WFrame*f=&wq.q[q]; if(!frame_trig_audit(f,0)||frame_policy(f->sub,f->w,f->len,I_NONE)) ok=0;
-              for(int i=0;i<f->len;i++) if(f->w[i]!=0&&!(f->sub==24&&i==1)) ok=0;                       /* kun nuller (damp: maal-ordet) */
-              if(f->sub!=24&&(frame_covers(f,26)||frame_covers(f,27)||frame_covers(f,30))) ok=0; } }   /* damp-blokken daekker 24..31 — dér er de nuller (tjekket ovenfor) */
+              for(int i=0;i<f->len;i++) if(f->w[i]!=0&&!(f->sub==24&&i==1)) ok=0;                       /* zeros only (steam: the target word) */
+              if(f->sub!=24&&(frame_covers(f,26)||frame_covers(f,27)||frame_covers(f,30))) ok=0; } }   /* the steam block covers 24..31 — there they are zeros (checked above) */
       wq.n=0; reg[19]=0;
-      st_check("politik: alle stop-frames er nuller (damp: + maal-ordet), passerer frame_policy UDEN intent og daekker kun ord 26/27/30 i damp-blokken (som nuller)",ok); }
-    st_check("politik: de samme ord med vaerdien 1 UDEN intent afvises stadig (sub6=1, sub22=1, sub16=1: WJ_TRIG; sub19=1: WJ_RANGE) — STOP-vejen kan ikke starte noget",
+      st_check("policy: all stop frames are zeros (steam: + the target word), pass frame_policy WITHOUT intent and cover words 26/27/30 only in the steam block (as zeros)",ok); }
+    st_check("policy: the same words with value 1 WITHOUT intent are still rejected (sub6=1, sub22=1, sub16=1: WJ_TRIG; sub19=1: WJ_RANGE) — the STOP path cannot start anything",
              rej(6,W1(1),1,0,WJ_TRIG)&&rej(22,W1(1),1,0,WJ_TRIG)&&rej(16,W1(1),1,0,WJ_TRIG)&&rej(19,W1(1),1,0,WJ_RANGE));
-    /* ---- (3) synlig pr. fase + tryk-felt >= 48 px + underlinje "· OR STOP" ---- */
-    { static const struct { uint16_t ws; int kind; const char*nm; } P[]={{0x0141,ACT_GRIND,"kvaern 0141"},{0x1107,ACT_BREW,"pre-inf. 1107"},{0x1307,ACT_BREW,"ekstraktion 1307"},{0x030B,ACT_WATER,"vand 030B"}};
+    /* ---- (3) visible per phase + touch area >= 48 px + subline "· OR STOP" ---- */
+    { static const struct { uint16_t ws; int kind; const char*nm; } P[]={{0x0141,ACT_GRIND,"grind 0141"},{0x1107,ACT_BREW,"pre-inf. 1107"},{0x1307,ACT_BREW,"extraction 1307"},{0x030B,ACT_WATER,"water 030B"}};
       int ok=1, okw=1, oks=1;
       for(unsigned q=0;q<sizeof P/sizeof P[0];q++){
           t=st_home(); st_s0(P[q].ws,0,0x000C,0,300,t+=100); ui_frame(t); sn=stop_btns(t,sk);
           int w,h; st_hit_size(T_STOP,240,372,t,&w,&h);
-          printf("       %-17s STOP-knap: %s · tryk-felt %d x %d px\n",P[q].nm,sn?TR(STOP_BTN[sk[0]]):"(ingen)",w,h);
+          printf("       %-17s STOP button: %s · touch area %d x %d px\n",P[q].nm,sn?TR(STOP_BTN[sk[0]]):"(none)",w,h);
           if(!(sn==1&&sk[0]==P[q].kind&&hit_test(240,372,t)==T_STOP&&hit_test(ACT_X[0],ACT_Y,t)!=T_ACT0&&hit_test(ACT_X[2],ACT_Y,t)!=T_ACT2)) ok=0;
           if(w<48||h<48) okw=0;
           if(!st_has(hm.sub,orstop)) oks=0; }
-      st_check("STOP vises under KVAERN, PRE-INF., EKSTRAKTION og VAND (én knap, samme plads som STOP DAMP; ingen start-ikoner)",ok);
-      st_check("touch: STOP-knappens tryk-felt er >= 48 x 48 px (180 x 56)",okw);
-      st_check("underlinjen beholder auto-stop-forventningen og naevner STOP ('AUTO-STOP AT 36.0 G · OR STOP' / '… · ELLER STOP')",oks); }
+      st_check("STOP is shown during GRIND, PRE-INF., EXTRACTION and WATER (one button, same place as STOP STEAM; no start icons)",ok);
+      st_check("touch: the STOP button's touch area is >= 48 x 48 px (180 x 56)",okw);
+      st_check("the subline keeps the auto-stop expectation and mentions STOP ('AUTO-STOP AT 36.0 G · OR STOP' / '… · ELLER STOP')",oks); }
     t=st_home(); st_s0(0x0101,0,0x000C,0,300,t+=100); ui_frame(t); sn=stop_btns(t,sk);
-    st_check("i ro (0101): ingen STOP-knap — start-ikonerne er der",sn==0&&hit_test(ACT_X[0],ACT_Y,t)==T_ACT0&&hit_test(240,372,t)!=T_STOP);
+    st_check("idle (0101): no STOP button — the start icons are there",sn==0&&hit_test(ACT_X[0],ACT_Y,t)==T_ACT0&&hit_test(240,372,t)!=T_STOP);
     st_s0(0x4121,1,0x000C,0,300,t+=100); ui_frame(t); sn=stop_btns(t,sk);
-    st_check("latchet damp alene: én knap = STOP DAMP (uaendret adfaerd, samme tryk-felt)",sn==1&&sk[0]==ACT_STEAM&&hit_test(240,372,t)==T_STOP&&hit_test(150,372,t)==T_STOP&&hit_test(330,372,t)==T_NONE);
-    /* ---- (4) VAND hele vejen: tryk -> STOPPER VAND… -> frame -> retransmit -> ACK -> bits ryddes -> VAND STOPPET ---- */
+    st_check("latched steam alone: one button = STOP STEAM (unchanged behaviour, same touch area)",sn==1&&sk[0]==ACT_STEAM&&hit_test(240,372,t)==T_STOP&&hit_test(150,372,t)==T_STOP&&hit_test(330,372,t)==T_NONE);
+    /* ---- (4) WATER all the way: tap -> STOPPING WATER… -> frame -> retransmit -> ACK -> bits cleared -> WATER STOPPED ---- */
     t=st_home(); reg[16]=1; reg[17]=400; reg_seen[19]=1; reg[19]=0;
     st_s0(0x030B,0,0x000C,0,300,t+=100); ui_frame(t);
     t=st_tap(240,372,t);
@@ -7195,13 +7201,13 @@ static void st_stop(void){
     wq_step(t); int tx1=st_tx_is(ST_V_WATER); int l0=txq_len;
     wq_step(t+100); int noretx=txq_len==l0; wq_step(t+160); int retx=txq_len==l0+9&&wq.n_retx==1&&st_tx_is(ST_V_WATER);
     st_ack_last(t+190); ui_frame(t+=200);
-    int acked=wq.n==0&&wq.result==WR_OK&&reg[16]==0&&stp.active&&!strcmp(toast.msg,TR(TX_T_STOP_WATER));   /* ACK alene er ikke en bekraeftelse: bits'ene staar endnu */
-    st_check("VAND: tryk STOP -> toast 'STOPPING WATER…' / 'STOPPER VAND…' straks, og stop-framen koees",q1);
-    st_check("VAND: framen sendes byte-for-byte; intet ACK i 150 ms -> praecis én retransmit (samme bytes); ACK m. echo -> koeen fri",tx1&&noretx&&retx&&acked);
+    int acked=wq.n==0&&wq.result==WR_OK&&reg[16]==0&&stp.active&&!strcmp(toast.msg,TR(TX_T_STOP_WATER));   /* an ACK alone is not a confirmation: the bits are still set */
+    st_check("WATER: tap STOP -> toast 'STOPPING WATER…' / 'STOPPER VAND…' immediately, and the stop frame is queued",q1);
+    st_check("WATER: the frame is sent byte for byte; no ACK within 150 ms -> exactly one retransmit (same bytes); ACK with echo -> queue free",tx1&&noretx&&retx&&acked);
     st_s0(0x0101,0,0x000C,0,300,t+=150); ui_frame(t); sn=stop_btns(t,sk);
-    st_check("VAND: MCU'en rydder bits 1+3 (030B -> 0101) -> toast 'WATER STOPPED' / 'VAND STOPPET' (groen), FAERDIG-visning, STOP-knappen vaek",
+    st_check("WATER: the MCU clears bits 1+3 (030B -> 0101) -> toast 'WATER STOPPED' / 'VAND STOPPET' (green), DONE view, STOP button gone",
              !strcmp(toast.msg,TR(TX_T_STOPPED_WATER))&&toast.col==C_OK&&!stp.active&&stp.n_ok==1&&stp.n_fail==0&&act.ph==PH_DONE&&act.last_ph==PH_WATER&&sn==0);
-    /* ---- (5) BRYG og KVAERN samme vej ---- */
+    /* ---- (5) BREW and GRIND the same way ---- */
     { static const struct { uint16_t ws; int kind; const char*v; short tx_s, tx_d; } P[]={{0x1307,ACT_BREW,ST_V_BREW,TX_T_STOP_BREW,TX_T_STOPPED_BREW},{0x0141,ACT_GRIND,ST_V_GRIND,TX_T_STOP_GRIND,TX_T_STOPPED_GRIND}};
       for(unsigned q=0;q<2;q++){
           t=st_home(); if(P[q].kind==ACT_BREW) reg[22]=1; else reg[6]=1;
@@ -7209,93 +7215,93 @@ static void st_stop(void){
           int a=wq.n==1&&q_hex(0,P[q].v)&&!strcmp(toast.msg,TR(P[q].tx_s)); wq_step(t); int b=st_tx_is(P[q].v); st_ack_last(t+25); ui_frame(t+=40);
           int c=wq.n==0&&wq.result==WR_OK&&(P[q].kind==ACT_BREW?reg[22]==0:reg[6]==0)&&stp.active;
           st_s0(0x0101,0,0x000C,0,300,t+=150); ui_frame(t);
-          char nm[200]; snprintf(nm,sizeof nm,"%s: tryk STOP -> '%s' -> %s sendt + ACK -> bits ryddet -> '%s'",P[q].kind==ACT_BREW?"BRYG (1307)":"KVAERN (0141)",TR(P[q].tx_s),P[q].kind==ACT_BREW?"sub22":"sub6",TR(P[q].tx_d));
+          char nm[200]; snprintf(nm,sizeof nm,"%s: tap STOP -> '%s' -> %s sent + ACK -> bits cleared -> '%s'",P[q].kind==ACT_BREW?"BREW (1307)":"GRIND (0141)",TR(P[q].tx_s),P[q].kind==ACT_BREW?"sub22":"sub6",TR(P[q].tx_d));
           st_check(nm,a&&b&&c&&!strcmp(toast.msg,TR(P[q].tx_d))&&toast.col==C_OK&&!stp.active&&act.ph==PH_DONE); } }
-    /* bryg: MCU'ens ventil-puls efter stop (BREW.md §4: 0105 i 0,21 s) er ikke et bryg — ingen STOP-knap, ingen ny fase */
+    /* brew: the MCU's valve pulse after stop (BREW.md §4: 0105 for 0.21 s) is not a brew — no STOP button, no new phase */
     t=st_home(); reg[22]=1; st_s0(0x1307,0,0x000C,0,300,t+=100); ui_frame(t); t=st_tap(240,372,t); wq_step(t); st_ack_last(t+25);
     st_s0(0x0101,0,0x000C,0,300,t+=150); ui_frame(t); st_s33(0x0105,t+=100); ui_frame(t); sn=stop_btns(t,sk);
-    st_check("BRYG: ventil-pulsen efter stop (work_sta 0105, kun bit 2) giver ingen STOP-knap og ingen ny fase",sn==0&&act.ph==PH_DONE&&stp.n_ok==1);
-    /* ---- (6) fejl: intet ACK -> fejl-toast, STOP-knappen bliver staaende (bits'ene staar) ---- */
+    st_check("BREW: the valve pulse after stop (work_sta 0105, only bit 2) gives no STOP button and no new phase",sn==0&&act.ph==PH_DONE&&stp.n_ok==1);
+    /* ---- (6) failure: no ACK -> error toast, the STOP button stays (the bits are still set) ---- */
     t=st_home(); st_s0(0x030B,0,0x000C,0,300,t+=100); ui_frame(t); t=st_tap(240,372,t);
     wq_step(t); wq_step(t+160); wq_step(t+470); st_s33(0x030B,t+=480); ui_frame(t); sn=stop_btns(t,sk);
-    st_check("intet ACK (heller ikke paa retransmit): toast 'STOP: NO REPLY · TRY AGAIN' (roed); STOP-knappen staar, saa man kan proeve igen",
+    st_check("no ACK (not on the retransmit either): toast 'STOP: NO REPLY · TRY AGAIN' (red); the STOP button stays, so you can try again",
              wq.result==WR_FAIL&&!strcmp(toast.msg,TR(TX_T_STOP_NOACK))&&toast.col==C_ERR&&!stp.active&&stp.n_fail==1&&sn==1&&sk[0]==ACT_WATER);
     t=st_tap(240,372,t); wq_step(t); st_ack_last(t+20); st_s0(0x0101,0,0x000C,0,300,t+=150); ui_frame(t);
-    st_check("… andet tryk virker: ny frame, ACK, bits ryddet -> 'WATER STOPPED'",!strcmp(toast.msg,TR(TX_T_STOPPED_WATER))&&stp.n_ok==1&&stp.n_req==2);
-    /* ---- (7) ACK, men bits'ene ryddes ikke (fx bryg fra en fysisk kontakt: ord 22 var 0) -> efter 5 s 'STOP NOT CONFIRMED' ---- */
+    st_check("… a second tap works: new frame, ACK, bits cleared -> 'WATER STOPPED'",!strcmp(toast.msg,TR(TX_T_STOPPED_WATER))&&stp.n_ok==1&&stp.n_req==2);
+    /* ---- (7) ACK, but the bits are not cleared (e.g. a brew from a physical switch: word 22 was 0) -> after 5 s 'STOP NOT CONFIRMED' ---- */
     t=st_home(); st_s0(0x1307,0,0x000C,0,300,t+=100); ui_frame(t); t=st_tap(240,372,t); wq_step(t); st_ack_last(t+20);
-    { int mid=1; for(int q=0;q<40&&t-stp.t_req<STOP_CONFIRM_MS-250;q++){   /* hoejst 40 omgange (10 s), ogsaa hvis STOP aldrig blev bestilt */ st_s33(0x1307,t+=250); ui_frame(t); if(!stp.active) mid=0; }
+    { int mid=1; for(int q=0;q<40&&t-stp.t_req<STOP_CONFIRM_MS-250;q++){   /* at most 40 rounds (10 s), even if STOP was never requested */ st_s33(0x1307,t+=250); ui_frame(t); if(!stp.active) mid=0; }
       for(int q=0;q<3;q++){ st_s33(0x1307,t+=250); ui_frame(t); }
-      st_check("ACK men bits'ene ryddes ikke inden 5 s: toast 'STOP NOT CONFIRMED · TRY AGAIN' (gul) — ingen falsk 'STOPPED'",
+      st_check("ACK but the bits are not cleared within 5 s: toast 'STOP NOT CONFIRMED · TRY AGAIN' (yellow) — no false 'STOPPED'",
                mid&&!stp.active&&!strcmp(toast.msg,TR(TX_T_STOP_UNCONF))&&toast.col==C_WARN&&stp.n_ok==0&&stp.n_fail==1); }
-    /* ---- (8) dobbelt-tryk mens framen er i koeen: ingen ekstra frame ---- */
+    /* ---- (8) double tap while the frame is in the queue: no extra frame ---- */
     t=st_home(); st_s0(0x030B,0,0x000C,0,300,t+=100); ui_frame(t); t=st_tap(240,372,t); wq_step(t); t=st_tap(240,372,t+30);
-    st_check("dobbelt-tryk: andet tryk mens stop-framen venter paa ACK koeer ikke en frame mere (kun toasten gentages)",wq.n==1&&stp.n_req==1&&!strcmp(toast.msg,TR(TX_T_STOP_WATER)));
-    /* ---- (9) to knapper: bryg + latchet damp ---- */
+    st_check("double tap: a second tap while the stop frame waits for its ACK does not queue another frame (only the toast is repeated)",wq.n==1&&stp.n_req==1&&!strcmp(toast.msg,TR(TX_T_STOP_WATER)));
+    /* ---- (9) two buttons: brew + latched steam ---- */
     t=st_home(); reg[22]=1; st_s0(0x1307,0,0x000C,0,300,t+=100); ui_frame(t); st_s0(0x5327,1,0x000C,0,310,t+=100); ui_frame(t); sn=stop_btns(t,sk);
     { int wl,hl,wr,hr; st_hit_size(T_STOP,160,372,t,&wl,&hl); st_hit_size(T_STOPS,320,372,t,&wr,&hr);
-      printf("       to knapper: %s %d x %d px · %s %d x %d px\n",sn>0?TR(STOP_BTN[sk[0]]):"-",wl,hl,sn>1?TR(STOP_BTN[sk[1]]):"-",wr,hr);
-      st_check("bryg + latchet damp (5327, ord 24 = 1): TO knapper — venstre STOP BRYG, hoejre STOP DAMP — hver >= 48 x 48 px",sn==2&&sk[0]==ACT_BREW&&sk[1]==ACT_STEAM&&wl>=48&&hl>=48&&wr>=48&&hr>=48); }
+      printf("       two buttons: %s %d x %d px · %s %d x %d px\n",sn>0?TR(STOP_BTN[sk[0]]):"-",wl,hl,sn>1?TR(STOP_BTN[sk[1]]):"-",wr,hr);
+      st_check("brew + latched steam (5327, word 24 = 1): TWO buttons — left STOP BREW, right STOP STEAM — each >= 48 x 48 px",sn==2&&sk[0]==ACT_BREW&&sk[1]==ACT_STEAM&&wl>=48&&hl>=48&&wr>=48&&hr>=48); }
     t=st_tap(160,372,t); int lft=wq.n==1&&q_hex(0,ST_V_BREW)&&!strcmp(toast.msg,TR(TX_T_STOP_BREW)); wq_step(t); st_ack_last(t+20); ui_frame(t+=30);
     t=st_tap(320,372,t); int rgt=wq.n==1&&q_hex(0,ST_V_STEAM)&&!strcmp(toast.msg,TR(TX_T_STOP_SENT));
-    st_check("venstre knap sender bryg-stop (sub22), hoejre damp-stop (sub24) — hver sin frame",lft&&rgt);
-    /* ---- (10) AUTO-STOP er uaendret: MCU'en stopper selv -> ourui sender intet og viser ingen stop-toast ---- */
+    st_check("the left button sends the brew stop (sub22), the right the steam stop (sub24) — a frame each",lft&&rgt);
+    /* ---- (10) AUTO-STOP is unchanged: the MCU stops by itself -> ourui sends nothing and shows no stop toast ---- */
     { int ok=1; static const uint16_t ws[]={0x030B,0x1307,0x0141};
       for(int q=0;q<3;q++){ t=st_home(); st_s0(ws[q],0,0x000C,0,300,t+=100); ui_frame(t); for(int k=0;k<5;k++){ st_s33(ws[q],t+=200); ui_frame(t); wq_step(t); }
           st_s0(0x0101,0,0x000C,0,300,t+=200); ui_frame(t); wq_step(t); if(!(act.ph==PH_DONE&&wq.n==0&&txq_len==0&&wq.n_ok==0&&stp.n_req==0&&toast.dur==0)) ok=0; }
-      st_check("AUTO-STOP uaendret (vand / bryg / kvaern): MCU'en rydder selv bits'ene -> FAERDIG; ourui har ikke sendt en eneste frame og viser ingen stop-toast",ok); }
-    /* ---- (11) skrivebeskyttet tilstand ---- */
+      st_check("AUTO-STOP unchanged (water / brew / grind): the MCU clears the bits itself -> DONE; ourui has not sent a single frame and shows no stop toast",ok); }
+    /* ---- (11) read-only mode ---- */
     t=st_home(); st_s0(0x030B,0,0x000C,0,300,t+=100); ui_frame(t); ro_mode=1; t=st_tap(240,372,t); ro_mode=0;
-    st_check("OURUI_READONLY=1: STOP sender intet, toasten siger hvorfor (skrivebeskyttet)",wq.n==0&&stp.n_req==0&&!strcmp(toast.msg,TR(TX_G_RO)));
+    st_check("OURUI_READONLY=1: STOP sends nothing, the toast says why (read-only)",wq.n==0&&stp.n_req==0&&!strcmp(toast.msg,TR(TX_G_RO)));
     sim_reset();
 }
 static int selftest(const char*cfgsrc){
     int base_lang=ui_lang;
-    printf("== selftest (UI-sprog under testen: %s) ==\n",LANG_CODE[ui_lang]);
-    printf("== selftest: frame-vektorer (observerede bytes) ==\n");
+    printf("== selftest (UI language during the test: %s) ==\n",LANG_CODE[ui_lang]);
+    printf("== selftest: frame vectors (observed bytes) ==\n");
     snprintf(cfg_path,sizeof cfg_path,"%s",cfgsrc); settings_load();
-    st_check("config indlaest",cfg_ok);
+    st_check("config loaded",cfg_ok);
     memset(reg_seen,0,sizeof reg_seen); memset(&wq,0,sizeof wq);
     uint8_t b[80]; int n;
     uint16_t aw=0; n=build_write(b,1,&aw,1);
-    st_check("keep-awake ord1=0  = AA 55 06 01 01 00 00 C5 33 (SESSION §10.1)",hexeq(b,n,"aa 55 06 01 01 00 00 c5 33"));
+    st_check("keep-awake word1=0 = AA 55 06 01 01 00 00 C5 33 (SESSION §10.1)",hexeq(b,n,"aa 55 06 01 01 00 00 c5 33"));
     act_push(ACT_GRIND);
     st_check("GRIND sub3 len4    = BREW.md W1",wq.n==1&&q_hex(0,"aa 55 06 03 04 01 00 b9 00 3c 00 01 00 5d 6e")); wq.n=0;
     act_push(ACT_BREW);
     st_check("BREW sub5 len18    = BREW.md W3",wq.n==1&&q_hex(0,"aa 55 06 05 12 3c 00 00 00 00 00 00 00 01 00 00 00 66 03 00 00 3c 00 03 00 3c 00 00 00 90 01 00 00 00 00 00 00 00 00 01 00 21 df")); wq.n=0;
     act_push(ACT_WATER);
-    st_check("VAND sub9 len11    = HOTWATER.md W1",wq.n==1&&q_hex(0,"aa 55 06 09 0b 01 00 00 00 66 03 00 00 3c 00 03 00 3c 00 01 00 90 01 00 00 00 00 08 3e")); wq.n=0;
+    st_check("WATER sub9 len11   = HOTWATER.md W1",wq.n==1&&q_hex(0,"aa 55 06 09 0b 01 00 00 00 66 03 00 00 3c 00 03 00 3c 00 01 00 90 01 00 00 00 00 08 3e")); wq.n=0;
     act_push(ACT_STEAM);
-    st_check("DAMP start sub24   = SESSION §10.2",wq.n==1&&q_hex(0,"aa 55 06 18 08 01 00 8a 02 00 00 00 00 00 00 00 00 00 00 00 00 cd 67")); wq.n=0;
+    st_check("STEAM start sub24  = SESSION §10.2",wq.n==1&&q_hex(0,"aa 55 06 18 08 01 00 8a 02 00 00 00 00 00 00 00 00 00 00 00 00 cd 67")); wq.n=0;
     act_push_steam_stop();
-    st_check("DAMP stop sub24    = SESSION §10.3",wq.n==1&&q_hex(0,"aa 55 06 18 08 00 00 8a 02 00 00 00 00 00 00 00 00 00 00 00 00 0c f7")); wq.n=0;
-    uint16_t bad=1; st_check("skrive-baand: ord 33 afvises",rej(33,&bad,1,0,WJ_BAND)); st_check("skrive-baand: ord 32 afvises",rej(32,&bad,1,0,WJ_BAND));
-    st_check("skrive-baand: sub30 len4 afvises",rej(30,(uint16_t[4]){0,0,0,0},4,0,WJ_BAND)); st_check("skrive-baand: sub115 afvises",rej(115,&bad,1,0,WJ_BAND));
-    st_check("skrive-baand: sub112 len3 ok",wq_push(112,(uint16_t[3]){0x104,0x605,70},3)); wq.n=0;
-    /* ACK + én retransmit + fejl */
+    st_check("STEAM stop sub24   = SESSION §10.3",wq.n==1&&q_hex(0,"aa 55 06 18 08 00 00 8a 02 00 00 00 00 00 00 00 00 00 00 00 00 0c f7")); wq.n=0;
+    uint16_t bad=1; st_check("write band: word 33 rejected",rej(33,&bad,1,0,WJ_BAND)); st_check("write band: word 32 rejected",rej(32,&bad,1,0,WJ_BAND));
+    st_check("write band: sub30 len4 rejected",rej(30,(uint16_t[4]){0,0,0,0},4,0,WJ_BAND)); st_check("write band: sub115 rejected",rej(115,&bad,1,0,WJ_BAND));
+    st_check("write band: sub112 len3 ok",wq_push(112,(uint16_t[3]){0x104,0x605,70},3)); wq.n=0;
+    /* ACK + one retransmit + failure */
     ms_t t=1000; wq_push(11,(uint16_t[1]){880},1); wq_step(t); int l0=txq_len; wq_step(t+100); int l1=txq_len; wq_step(t+160); int l2=txq_len;
-    st_check("retransmit: ingen foer 150 ms, praecis en efter",l1==l0&&l2==l0+9);
-    wq_step(t+300); wq_step(t+470); st_check("fejl efter 2. timeout (koe toemt, result=FAIL)",wq.n==0&&wq.result==WR_FAIL&&txq_len==l2);
+    st_check("retransmit: none before 150 ms, exactly one after",l1==l0&&l2==l0+9);
+    wq_step(t+300); wq_step(t+470); st_check("failure after the 2nd timeout (queue emptied, result=FAIL)",wq.n==0&&wq.result==WR_FAIL&&txq_len==l2);
     wq_push(11,(uint16_t[1]){880},1); wq_step(t+500);
     uint8_t ack[9]={0xAA,0x55,0x86,11,1,0x70,0x03,0,0}; uint16_t c=crc16(ack,7); ack[7]=c&0xFF; ack[8]=c>>8; rx_feed(ack,9,t+520);
-    st_check("ACK 0x86 m. echo frigiver koeen (result=OK)",wq.n==0&&wq.result==WR_OK&&reg[11]==880);
+    st_check("ACK 0x86 with echo releases the queue (result=OK)",wq.n==0&&wq.result==WR_OK&&reg[11]==880);
     memset(reg_seen,0,sizeof reg_seen); memset(reg,0,sizeof reg); memset(&wq,0,sizeof wq); txq_len=0;
 
-    printf("== selftest: pakning ord 112/113/114 (PARITY §3.7) ==\n");
-    st_check("ord112 = (switch<<8)|tryk: (1,4)=0104 (0,4)=0004 (1,3)=0103 (0,3)=0003",pack112(1,4)==0x0104&&pack112(0,4)==0x0004&&pack112(1,3)==0x0103&&pack112(0,3)==0x0003);
-    st_check("ord113 = (tid<<8)|pause:   (6,5)=0605 (15,0)=0F00 (5,255)=05FF",pack113(6,5)==0x0605&&pack113(15,0)==0x0F00&&pack113(5,255)==0x05FF);
+    printf("== selftest: packing of words 112/113/114 (PARITY §3.7) ==\n");
+    st_check("word112 = (switch<<8)|pressure: (1,4)=0104 (0,4)=0004 (1,3)=0103 (0,3)=0003",pack112(1,4)==0x0104&&pack112(0,4)==0x0004&&pack112(1,3)==0x0103&&pack112(0,3)==0x0003);
+    st_check("word113 = (time<<8)|pause:   (6,5)=0605 (15,0)=0F00 (5,255)=05FF",pack113(6,5)==0x0605&&pack113(15,0)==0x0F00&&pack113(5,255)==0x05FF);
     { int ok=1; for(int sw=0;sw<=1;sw++) for(int pr=3;pr<=4;pr++) for(int tt=5;tt<=60;tt++) for(int br=0;br<=255;br++){
           uint16_t a=pack112(sw,pr), d=pack113(tt,br); if((a>>8)!=sw||(a&0xFF)!=pr||(d>>8)!=tt||(d&0xFF)!=br) ok=0; }
-      st_check("rundtur pak/udpak for alle (switch, tryk 3-4, tid 5-60, pause 0-255)",ok); }
-    st_check("nuvaerende config pakker til 0104 / 0605 / 70",pack112(sv(S_PISW),sv(S_PIPRESS))==0x0104&&pack113(sv(S_PITIME),sv(S_BREAK))==0x0605&&sv(S_HEADT)==70);
-    setting_mcu_push(S_PISW,0);    st_check("GEM pre-infusion FRA   = sub112 len2: aa 55 06 70 02 04 00 05 06 df c6",wq.n==1&&q_hex(0,"aa 55 06 70 02 04 00 05 06 df c6")); wq.n=0;
-    setting_mcu_push(S_PIPRESS,3); st_check("GEM pre-inf. tryk 3    = sub112 len2: aa 55 06 70 02 03 01 05 06 8f 72",wq.n==1&&q_hex(0,"aa 55 06 70 02 03 01 05 06 8f 72")); wq.n=0;
-    setting_mcu_push(S_PITIME,7);  st_check("GEM pre-inf. tid 7     = sub113 len1: aa 55 06 71 01 05 07 9d 61",wq.n==1&&q_hex(0,"aa 55 06 71 01 05 07 9d 61")); wq.n=0;
-    setting_mcu_push(S_HEADT,80);  st_check("GEM gruppe-temp 80     = sub114 len1: aa 55 06 72 01 50 00 e3 b7",wq.n==1&&q_hex(0,"aa 55 06 72 01 50 00 e3 b7")); wq.n=0;
-    setting_mcu_push(S_GRINDMODE,1); st_check("GEM kvaern-tilstand   = sub2 len1 (IKKE stock's len2 m. start-ord 3)",wq.n==1&&wq.q[0].sub==2&&wq.q[0].len==1&&q_hex(0,"aa 55 06 02 01 01 00 c4 e7")); wq.n=0;
-    st_check("pre-inf. tryk: kun 3 og 4 kan vaelges (MCU 0x1E10)",SET[S_PIPRESS].lo==3&&SET[S_PIPRESS].hi==4&&setting_mcu_push(S_PIPRESS,5)==-1&&wq_rej==WJ_RANGE&&setting_mcu_push(S_PIPRESS,2)==-1); wq.n=0;
+      st_check("pack/unpack round trip for all (switch, pressure 3-4, time 5-60, pause 0-255)",ok); }
+    st_check("the current config packs to 0104 / 0605 / 70",pack112(sv(S_PISW),sv(S_PIPRESS))==0x0104&&pack113(sv(S_PITIME),sv(S_BREAK))==0x0605&&sv(S_HEADT)==70);
+    setting_mcu_push(S_PISW,0);    st_check("SAVE pre-infusion OFF = sub112 len2: aa 55 06 70 02 04 00 05 06 df c6",wq.n==1&&q_hex(0,"aa 55 06 70 02 04 00 05 06 df c6")); wq.n=0;
+    setting_mcu_push(S_PIPRESS,3); st_check("SAVE pre-inf. pressure 3 = sub112 len2: aa 55 06 70 02 03 01 05 06 8f 72",wq.n==1&&q_hex(0,"aa 55 06 70 02 03 01 05 06 8f 72")); wq.n=0;
+    setting_mcu_push(S_PITIME,7);  st_check("SAVE pre-inf. time 7  = sub113 len1: aa 55 06 71 01 05 07 9d 61",wq.n==1&&q_hex(0,"aa 55 06 71 01 05 07 9d 61")); wq.n=0;
+    setting_mcu_push(S_HEADT,80);  st_check("SAVE group temp 80    = sub114 len1: aa 55 06 72 01 50 00 e3 b7",wq.n==1&&q_hex(0,"aa 55 06 72 01 50 00 e3 b7")); wq.n=0;
+    setting_mcu_push(S_GRINDMODE,1); st_check("SAVE grind mode       = sub2 len1 (NOT stock's len2 with start word 3)",wq.n==1&&wq.q[0].sub==2&&wq.q[0].len==1&&q_hex(0,"aa 55 06 02 01 01 00 c4 e7")); wq.n=0;
+    st_check("pre-inf. pressure: only 3 and 4 can be selected (MCU 0x1E10)",SET[S_PIPRESS].lo==3&&SET[S_PIPRESS].hi==4&&setting_mcu_push(S_PIPRESS,5)==-1&&wq_rej==WJ_RANGE&&setting_mcu_push(S_PIPRESS,2)==-1); wq.n=0;
 
-    printf("== selftest: trigger-ord-audit (PARITY §1.5/§6.2: ord 3/6/9 + 26/27/30) ==\n");
+    printf("== selftest: trigger word audit (PARITY §1.5/§6.2: words 3/6/9 + 26/27/30) ==\n");
     { int ok=1, nfr=0;
       for(int i=0;i<NSET;i++){ Setting*s=&SET[i]; if(s->mcu==M_NONE) continue;
           int vals[3]={s->lo,s->hi,s->val};
@@ -7303,122 +7309,122 @@ static int selftest(const char*cfgsrc){
               if(r!=1||wq.n!=1){ ok=0; printf("     %s=%d: push r=%d rej=%d\n",s->key,vals[k],r,wq_rej); continue; }
               const WFrame*f=&wq.q[0]; nfr++;
               if(!frame_trig_audit(f,0)) ok=0;
-              static const int never[]={3,6,9,16,22,24,26,27,30}; for(unsigned q=0;q<sizeof never/sizeof never[0];q++) if(frame_covers(f,never[q])){ ok=0; printf("     %s: frame daekker ord %d\n",s->key,never[q]); } } }
-      wq.n=0; char nm[120]; snprintf(nm,sizeof nm,"settings-GEM: %d frames (min/max/aktuel) daekker ALDRIG et trigger-/start-ord",nfr); st_check(nm,ok&&nfr>=30); }
+              static const int never[]={3,6,9,16,22,24,26,27,30}; for(unsigned q=0;q<sizeof never/sizeof never[0];q++) if(frame_covers(f,never[q])){ ok=0; printf("     %s: frame covers word %d\n",s->key,never[q]); } } }
+      wq.n=0; char nm[120]; snprintf(nm,sizeof nm,"settings SAVE: %d frames (min/max/current) NEVER cover a trigger/start word",nfr); st_check(nm,ok&&nfr>=30); }
     { uint16_t on=1,awk=0; int ok=wq_push(0,&on,1)&&wq_push(1,&awk,1)&&wq.n==2&&frame_trig_audit(&wq.q[0],0)&&frame_trig_audit(&wq.q[1],0)&&q_hex(0,"aa 55 06 00 01 01 00 c5 5f")&&q_hex(1,"aa 55 06 01 01 00 00 c5 33");
-      wq.n=0; st_check("keep-awake/PowerOn: sub0=[1], sub1=[0] — ingen trigger-ord",ok); }
-    act_push(ACT_GRIND); st_check("KVAERN: kun start-ord 3+6 sat (eksplicit intent)",wq.n==1&&frame_trig_audit(&wq.q[0],I_GRIND)&&!frame_trig_audit(&wq.q[0],0)); wq.n=0;
-    act_push(ACT_WATER); st_check("VAND:   kun start-ord 9+16 sat; ord 19 (manuel) = 0",wq.n==1&&frame_trig_audit(&wq.q[0],I_WATER)&&wq.q[0].w[10]==0); wq.n=0;
-    act_push(ACT_BREW);  st_check("BRYG:   kun start-ord 9+22 sat; ord 6/16 = 0",wq.n==1&&frame_trig_audit(&wq.q[0],I_BREW)&&wq.q[0].w[1]==0&&wq.q[0].w[11]==0); wq.n=0;
+      wq.n=0; st_check("keep-awake/PowerOn: sub0=[1], sub1=[0] — no trigger words",ok); }
+    act_push(ACT_GRIND); st_check("GRIND: only start words 3+6 set (explicit intent)",wq.n==1&&frame_trig_audit(&wq.q[0],I_GRIND)&&!frame_trig_audit(&wq.q[0],0)); wq.n=0;
+    act_push(ACT_WATER); st_check("WATER:  only start words 9+16 set; word 19 (manual) = 0",wq.n==1&&frame_trig_audit(&wq.q[0],I_WATER)&&wq.q[0].w[10]==0); wq.n=0;
+    act_push(ACT_BREW);  st_check("BREW:   only start words 9+22 set; words 6/16 = 0",wq.n==1&&frame_trig_audit(&wq.q[0],I_BREW)&&wq.q[0].w[1]==0&&wq.q[0].w[11]==0); wq.n=0;
     act_push(ACT_STEAM);
-    { const WFrame*f=&wq.q[0]; st_check("DAMP start: ord 26/27/28/29/30/31 = 0 (atlas §3.4)",wq.n==1&&f->sub==24&&f->len==8&&f->w[0]==1&&!f->w[2]&&!f->w[3]&&!f->w[4]&&!f->w[5]&&!f->w[6]&&!f->w[7]&&frame_trig_audit(f,I_STEAM)); } wq.n=0;
+    { const WFrame*f=&wq.q[0]; st_check("STEAM start: words 26/27/28/29/30/31 = 0 (atlas §3.4)",wq.n==1&&f->sub==24&&f->len==8&&f->w[0]==1&&!f->w[2]&&!f->w[3]&&!f->w[4]&&!f->w[5]&&!f->w[6]&&!f->w[7]&&frame_trig_audit(f,I_STEAM)); } wq.n=0;
     act_push_steam_stop();
-    { const WFrame*f=&wq.q[0]; st_check("DAMP stop:  ord 24 = 0 og ord 26..31 = 0",wq.n==1&&f->w[0]==0&&!f->w[2]&&!f->w[3]&&!f->w[4]&&!f->w[5]&&!f->w[6]&&!f->w[7]&&frame_trig_audit(f,0)); } wq.n=0;
-    /* bryg m. afvigende spejl: sync-frames + start, alle auditeret */
+    { const WFrame*f=&wq.q[0]; st_check("STEAM stop:  word 24 = 0 and words 26..31 = 0",wq.n==1&&f->w[0]==0&&!f->w[2]&&!f->w[3]&&!f->w[4]&&!f->w[5]&&!f->w[6]&&!f->w[7]&&frame_trig_audit(f,0)); } wq.n=0;
+    /* brew with a diverging mirror: sync frames + start, all audited */
     sim_ready(5000); reg[23]=300; reg[112]=0x0003; act_push(ACT_BREW);
-    st_check("BRYG m. afvigende spejl: sub23 len1 + sub112 len3 + sub5 len18, kun sidste har start-ord",wq.n==3&&wq.q[0].sub==23&&wq.q[1].sub==112&&wq.q[1].len==3&&wq.q[2].sub==5
+    st_check("BREW with a diverging mirror: sub23 len1 + sub112 len3 + sub5 len18, only the last has start words",wq.n==3&&wq.q[0].sub==23&&wq.q[1].sub==112&&wq.q[1].len==3&&wq.q[2].sub==5
              &&frame_trig_audit(&wq.q[0],0)&&frame_trig_audit(&wq.q[1],0)&&frame_trig_audit(&wq.q[2],I_BREW)&&q_hex(1,"aa 55 06 70 03 04 01 05 06 46 00 c7 02")); wq.n=0;
     sim_ready(5000); reg[113]=0x0606; act_push(ACT_BREW);
-    st_check("BRYG efter MCU har overskrevet ord113 lo (0606): ingen re-sync (kun hi-byte sammenlignes)",wq.n==1&&wq.q[0].sub==5); wq.n=0;
-    /* negative: politikken afviser */
+    st_check("BREW after the MCU has overwritten word113 lo (0606): no re-sync (only the hi byte is compared)",wq.n==1&&wq.q[0].sub==5); wq.n=0;
+    /* negative: the policy rejects */
     ms_t nb0=wq.n_block;
-    st_check("AFVIST: damp-blok m. ord30=1 (MCU-REBOOT)",rej(24,(uint16_t[8]){1,650,0,0,0,0,1,0},8,I_STEAM,WJ_TRIG));
-    st_check("AFVIST: damp-blok m. ord26=100 (kvaern-kalibrering)",rej(24,(uint16_t[8]){1,650,100,0,0,0,0,0},8,I_STEAM,WJ_TRIG));
-    st_check("AFVIST: damp-blok m. ord27=500 (ekstrakt-kalibrering)",rej(24,(uint16_t[8]){1,650,0,500,0,0,0,0},8,I_STEAM,WJ_TRIG));
-    st_check("AFVIST: sub30 len1 = 1, sub26 len1 = 100, sub27 len1 = 200",rej(30,W1(1),1,0,WJ_TRIG)&&rej(26,W1(100),1,0,WJ_TRIG)&&rej(27,W1(200),1,0,WJ_TRIG));
-    st_check("AFVIST: intent der naevner ord 30 — selv m. nul-payload",rej(24,(uint16_t[8]){0,650,0,0,0,0,0,0},8,I_STEAM|WBIT(30),WJ_TRIG));
-    st_check("AFVIST: start-ord uden intent (sub3=1, sub9=1, sub24=1, sub22=1, sub16=1)",rej(3,W1(1),1,0,WJ_TRIG)&&rej(9,W1(1),1,0,WJ_TRIG)&&rej(24,W1(1),1,0,WJ_TRIG)&&rej(22,W1(1),1,0,WJ_TRIG)&&rej(16,W1(1),1,0,WJ_TRIG));
-    st_check("AFVIST: bryg-blok m. forkert intent (I_GRIND)",rej(5,(uint16_t[18]){60,0,0,0,1,0,870,0,60,3,60,0,400,0,0,0,0,1},18,I_GRIND,WJ_TRIG));
-    st_check("AFVIST: stock's sub2 len2 m. ord3=1 (grind-mode + start)",rej(2,(uint16_t[2]){1,1},2,0,WJ_TRIG));
-    st_check("AFVIST: service-ord — ord1=1 (sleep/drain), ord0=0 (power off) UDEN sluk-intent (v6.14: WJ_TRIG), ord8=1 (self-test)",rej(1,W1(1),1,0,WJ_RANGE)&&rej(0,W1(0),1,0,WJ_TRIG)&&rej(8,W1(1),1,0,WJ_RANGE));
-    st_check("AFVIST: service-ord — ord20=1 (back-flush), ord28/29=1 (drain), ord19=1 (manuel vand), ord21=1",rej(20,W1(1),1,0,WJ_RANGE)&&rej(28,W1(1),1,0,WJ_RANGE)&&rej(29,W1(1),1,0,WJ_RANGE)&&rej(19,W1(1),1,0,WJ_RANGE)&&rej(21,W1(1),1,0,WJ_RANGE));
-    st_check("AFVIST: vaerdier uden for spec — temp 1200/840, gruppe 110, maelk 710, dosis 310/9",rej(11,W1(1200),1,0,WJ_RANGE)&&rej(11,W1(840),1,0,WJ_RANGE)&&rej(114,W1(110),1,0,WJ_RANGE)&&rej(25,W1(710),1,0,WJ_RANGE)&&rej(4,W1(310),1,0,WJ_RANGE)&&rej(4,W1(9),1,0,WJ_RANGE));
-    st_check("AFVIST: vaerdier uden for spec — vand 250/5100, bryg-vaegt 95/1000, niveau 0/5, tilstand 0/3",rej(17,W1(250),1,0,WJ_RANGE)&&rej(17,W1(5100),1,0,WJ_RANGE)&&rej(23,W1(95),1,0,WJ_RANGE)&&rej(23,W1(1000),1,0,WJ_RANGE)&&rej(14,W1(0),1,0,WJ_RANGE)&&rej(14,W1(5),1,0,WJ_RANGE)&&rej(2,W1(0),1,0,WJ_RANGE)&&rej(2,W1(3),1,0,WJ_RANGE));
-    st_check("AFVIST: ord112 m. tryk 5 / switch-byte 2; ord113 m. tid 4; opskrifts-ord 13 != 60",rej(112,(uint16_t[2]){0x0105,0x0605},2,0,WJ_RANGE)&&rej(112,(uint16_t[2]){0x0204,0x0605},2,0,WJ_RANGE)&&rej(113,W1(0x0405),1,0,WJ_RANGE)&&rej(13,W1(340),1,0,WJ_RANGE));
-    st_check("afviste frames taelles (DIAGNOSE 'BLOK') og intet er koeet",wq.n_block>nb0+30&&wq.n==0);
+    st_check("REJECTED: steam block with word30=1 (MCU REBOOT)",rej(24,(uint16_t[8]){1,650,0,0,0,0,1,0},8,I_STEAM,WJ_TRIG));
+    st_check("REJECTED: steam block with word26=100 (grind calibration)",rej(24,(uint16_t[8]){1,650,100,0,0,0,0,0},8,I_STEAM,WJ_TRIG));
+    st_check("REJECTED: steam block with word27=500 (extraction calibration)",rej(24,(uint16_t[8]){1,650,0,500,0,0,0,0},8,I_STEAM,WJ_TRIG));
+    st_check("REJECTED: sub30 len1 = 1, sub26 len1 = 100, sub27 len1 = 200",rej(30,W1(1),1,0,WJ_TRIG)&&rej(26,W1(100),1,0,WJ_TRIG)&&rej(27,W1(200),1,0,WJ_TRIG));
+    st_check("REJECTED: intent naming word 30 — even with a zero payload",rej(24,(uint16_t[8]){0,650,0,0,0,0,0,0},8,I_STEAM|WBIT(30),WJ_TRIG));
+    st_check("REJECTED: start words without intent (sub3=1, sub9=1, sub24=1, sub22=1, sub16=1)",rej(3,W1(1),1,0,WJ_TRIG)&&rej(9,W1(1),1,0,WJ_TRIG)&&rej(24,W1(1),1,0,WJ_TRIG)&&rej(22,W1(1),1,0,WJ_TRIG)&&rej(16,W1(1),1,0,WJ_TRIG));
+    st_check("REJECTED: brew block with the wrong intent (I_GRIND)",rej(5,(uint16_t[18]){60,0,0,0,1,0,870,0,60,3,60,0,400,0,0,0,0,1},18,I_GRIND,WJ_TRIG));
+    st_check("REJECTED: stock's sub2 len2 with word3=1 (grind mode + start)",rej(2,(uint16_t[2]){1,1},2,0,WJ_TRIG));
+    st_check("REJECTED: service words — word1=1 (sleep/drain), word0=0 (power off) WITHOUT power-off intent (v6.14: WJ_TRIG), word8=1 (self-test)",rej(1,W1(1),1,0,WJ_RANGE)&&rej(0,W1(0),1,0,WJ_TRIG)&&rej(8,W1(1),1,0,WJ_RANGE));
+    st_check("REJECTED: service words — word20=1 (back-flush), word28/29=1 (drain), word19=1 (manual water), word21=1",rej(20,W1(1),1,0,WJ_RANGE)&&rej(28,W1(1),1,0,WJ_RANGE)&&rej(29,W1(1),1,0,WJ_RANGE)&&rej(19,W1(1),1,0,WJ_RANGE)&&rej(21,W1(1),1,0,WJ_RANGE));
+    st_check("REJECTED: values out of spec — temp 1200/840, group 110, milk 710, dose 310/9",rej(11,W1(1200),1,0,WJ_RANGE)&&rej(11,W1(840),1,0,WJ_RANGE)&&rej(114,W1(110),1,0,WJ_RANGE)&&rej(25,W1(710),1,0,WJ_RANGE)&&rej(4,W1(310),1,0,WJ_RANGE)&&rej(4,W1(9),1,0,WJ_RANGE));
+    st_check("REJECTED: values out of spec — water 250/5100, brew weight 95/1000, level 0/5, mode 0/3",rej(17,W1(250),1,0,WJ_RANGE)&&rej(17,W1(5100),1,0,WJ_RANGE)&&rej(23,W1(95),1,0,WJ_RANGE)&&rej(23,W1(1000),1,0,WJ_RANGE)&&rej(14,W1(0),1,0,WJ_RANGE)&&rej(14,W1(5),1,0,WJ_RANGE)&&rej(2,W1(0),1,0,WJ_RANGE)&&rej(2,W1(3),1,0,WJ_RANGE));
+    st_check("REJECTED: word112 with pressure 5 / switch byte 2; word113 with time 4; recipe word 13 != 60",rej(112,(uint16_t[2]){0x0105,0x0605},2,0,WJ_RANGE)&&rej(112,(uint16_t[2]){0x0204,0x0605},2,0,WJ_RANGE)&&rej(113,W1(0x0405),1,0,WJ_RANGE)&&rej(13,W1(340),1,0,WJ_RANGE));
+    st_check("rejected frames are counted (DIAGNOSE 'BLK') and nothing is queued",wq.n_block>nb0+30&&wq.n==0);
     { int keep=SET[S_STEAMT].val; SET[S_STEAMT].val=9999; int r=act_push_steam_stop(); int ok=r&&wq.n==1&&wq.q[0].w[0]==0&&wq.q[0].w[1]==700; wq.n=0; SET[S_STEAMT].val=keep;
-      st_check("STOP DAMP kan ikke blokeres: maal-ord klemmes til spec (9999 -> 700)",ok); }
+      st_check("STOP STEAM cannot be blocked: the target word is clamped to spec (9999 -> 700)",ok); }
 
-    printf("== selftest: boot-push-ækvivalens (PARITY §1.3-1.4) ==\n");
-    { /* stock: model_data_init fylder spejlet fra config; fuart_thread sender sub1 len30 + sub112 len3.
-         Uafhængig model direkte fra config-felterne (ikke via SET[]). */
+    printf("== selftest: boot push equivalence (PARITY §1.3-1.4) ==\n");
+    { /* stock: model_data_init fills the mirror from config; fuart_thread sends sub1 len30 + sub112 len3.
+         Independent model straight from the config fields (not via SET[]). */
       int m[129]; memset(m,0,sizeof m); int v,sw=0,pr=0,ti=0,br=0,ok=1;
       ok&=cfg_get_int("brewTemper",&v); m[11]=v; ok&=cfg_get_int("autoGrindWeight",&v); m[4]=v; ok&=cfg_get_int("grindMode",&v); m[2]=v;
       ok&=cfg_get_int("steamGears",&v); m[14]=v; ok&=cfg_get_int("autobrewWeight",&v); m[23]=v; ok&=cfg_get_int("AtuoSteamTarge",&v); m[25]=v;
       ok&=cfg_get_int("autoHotWaterTarget",&v); m[17]=v; ok&=cfg_get_int("preInfusionSwitch",&sw); ok&=cfg_get_int("preInfusionPressure",&pr);
       ok&=cfg_get_int("preInfusionTime",&ti); ok&=cfg_get_int("breakTime",&br); ok&=cfg_get_int("headTemper",&v); m[114]=v;
       m[112]=(sw?0x100:0)|(pr&0xFF); m[113]=(ti<<8)|(br&0xFF); m[5]=m[13]=m[15]=60;
-      st_check("config-felter til boot-push-model fundet",ok);
+      st_check("config fields for the boot push model found",ok);
       int same=1,pol=1,nw=0;
       for(int i=0;i<NSET;i++){ Setting*s=&SET[i]; if(s->mcu==M_NONE) continue; wq.n=0;
           if(setting_mcu_push(i,s->val)!=1){ same=0; continue; }
-          const WFrame*f=&wq.q[0]; for(int k=0;k<f->len;k++){ nw++; if(f->w[k]!=(uint16_t)m[f->sub+k]){ same=0; printf("     %s: ord %d = %u, boot-push ville give %d\n",s->key,f->sub+k,f->w[k],m[f->sub+k]); } } }
+          const WFrame*f=&wq.q[0]; for(int k=0;k<f->len;k++){ nw++; if(f->w[k]!=(uint16_t)m[f->sub+k]){ same=0; printf("     %s: word %d = %u, boot push would give %d\n",s->key,f->sub+k,f->w[k],m[f->sub+k]); } } }
       wq.n=0;
-      st_check("GEM skriver praecis de ord/vaerdier, som stock's boot-push ville saette fra samme config",same&&nw>=12);
+      st_check("SAVE writes exactly the words/values that stock's boot push would set from the same config",same&&nw>=12);
       static const int bw[]={2,4,5,11,13,14,15,17,23,25,112,113,114}; for(unsigned q=0;q<sizeof bw/sizeof bw[0];q++) if(!word_ok(bw[q],(uint16_t)m[bw[q]])) pol=0;
-      st_check("alle boot-push-ord fra nuvaerende config ligger inden for frame-politikken",pol);
+      st_check("all boot push words from the current config are within the frame policy",pol);
       uint16_t p3[3]={(uint16_t)m[112],(uint16_t)m[113],(uint16_t)m[114]}; n=build_write(b,112,p3,3);
-      st_check("GEM-vejens pakning (PARITY §1.3: tid<<8 | breakTime) af samme config = aa 55 06 70 03 04 01 05 06 46 00 c7 02 (ord 113 = 0605)",hexeq(b,n,"aa 55 06 70 03 04 01 05 06 46 00 c7 02"));
-      /* v6.7: stock's EGEN boot-push er optaget paa enheden (boot/ondevice/GROUND-TRUTH.md): ord 113 lo-byte = 0, ikke breakTime */
+      st_check("the SAVE path's packing (PARITY §1.3: time<<8 | breakTime) of the same config = aa 55 06 70 03 04 01 05 06 46 00 c7 02 (word 113 = 0605)",hexeq(b,n,"aa 55 06 70 03 04 01 05 06 46 00 c7 02"));
+      /* v6.7: stock's OWN boot push was captured on the device (boot/ondevice/GROUND-TRUTH.md): word 113 lo byte = 0, not breakTime */
       { uint16_t g3[3]={(uint16_t)m[112],(uint16_t)(ti<<8),(uint16_t)m[114]}; n=build_write(b,112,g3,3);
-        st_check("v6.7 VEKTOR 1: stock's optagede boot-push sub112 len3 = aa 55 06 70 03 04 01 00 06 46 00 c7 ce (ord 113 = 0600: breakTime-byten er 0)",br==5&&hexeq(b,n,"aa 55 06 70 03 04 01 00 06 46 00 c7 ce"));
+        st_check("v6.7 VECTOR 1: stock's captured boot push sub112 len3 = aa 55 06 70 03 04 01 00 06 46 00 c7 ce (word 113 = 0600: the breakTime byte is 0)",br==5&&hexeq(b,n,"aa 55 06 70 03 04 01 00 06 46 00 c7 ce"));
         uint16_t a30g[30],p3g[3]; boot_push_words(a30g,p3g); n=build_write(b,1,a30g,30);
-        st_check("v6.7 VEKTOR 2: boot-pushens sub1 len30 = stock's optagede 67 bytes (… 62 3e), byte for byte",
+        st_check("v6.7 VECTOR 2: the boot push's sub1 len30 = stock's captured 67 bytes (… 62 3e), byte for byte",
                  hexeq(b,n,"aa 55 06 01 1e 00 00 01 00 00 00 b9 00 3c 00 00 00 00 00 00 00 00 00 00 00 66 03 00 00 3c 00 03 00 3c 00 00 00 90 01 00 00 00 00 00 00 00 00 00 00 68 01 00 00 8a 02 00 00 00 00 00 00 00 00 00 00 62 3e"));
         n=build_write(b,112,p3g,3);
-        st_check("v6.7: boot_push_words() giver ord 112..114 = 0104 / 0600 / 70 = stock's optagede sub112 len3, byte for byte",p3g[0]==0x0104&&p3g[1]==0x0600&&p3g[2]==70&&hexeq(b,n,"aa 55 06 70 03 04 01 00 06 46 00 c7 ce"));
+        st_check("v6.7: boot_push_words() gives words 112..114 = 0104 / 0600 / 70 = stock's captured sub112 len3, byte for byte",p3g[0]==0x0104&&p3g[1]==0x0600&&p3g[2]==70&&hexeq(b,n,"aa 55 06 70 03 04 01 00 06 46 00 c7 ce"));
         int bk=SET[S_BREAK].val, okb=1;
         for(int q=0;q<3;q++){ static const int tv[3]={0,9,255}; SET[S_BREAK].val=tv[q]; boot_push_words(a30g,p3g); okb&=(p3g[1]==0x0600);
             wq.n=0; setting_mcu_push(S_PITIME,7); okb&=(wq.n==1&&wq.q[0].sub==113&&wq.q[0].w[0]==(uint16_t)(0x0700|tv[q])); wq.n=0; }
         SET[S_BREAK].val=bk;
-        st_check("v6.7: breakTime 0 / 9 / 255 i config -> boot-pushens ord 113 er stadig 0600; GEM-vejen pakker fortsat breakTime (07xx)",okb);
-        st_check("v6.7: ord 113 = 0600 er inden for frame-politikken, og er ikke MCU'ens startvaerdi-signatur (hi-byten >= 5)",word_ok(113,0x0600)&&SET[S_PITIME].lo>=5); }
-      /* v6.4: SIM-build'ets boot-push (boot_push_step UDEN aktivitets-vagt = kontrakt-tilstanden) — samme kode som i
-         SIM, kørt mod write-køen her. v6.5: enheden bruger samme kode MED vagt — se "boot-push paa enheden" nedenfor. */
+        st_check("v6.7: breakTime 0 / 9 / 255 in config -> the boot push's word 113 is still 0600; the SAVE path still packs breakTime (07xx)",okb);
+        st_check("v6.7: word 113 = 0600 is within the frame policy, and is not the MCU's start-value signature (hi byte >= 5)",word_ok(113,0x0600)&&SET[S_PITIME].lo>=5); }
+      /* v6.4: the SIM build's boot push (boot_push_step WITHOUT the activity guard = the contract mode) — same code as in
+         SIM, run against the write queue here. v6.5: the device uses the same code WITH the guard — see "boot push on the device" below. */
       { __typeof__(wq) wq0=wq; ms_t rx0=last_rx_ms; uint16_t ws0=reg[33]; int tx0=txq_len, bt0=SET[S_BREWT].val; ms_t T=sim_now+500000;
         uint16_t a30[30],p3b[3]; boot_push_words(a30,p3b); int eq=1;
         for(int k=1;k<=30;k++) if(a30[k-1]!=(uint16_t)m[k]) eq=0;
-        for(int k=0;k<3;k++) if(p3b[k]!=(uint16_t)(k==1?(ti<<8):m[112+k])) eq=0;      /* v6.7: ord 113 lo = 0 i boot-pushen */
-        st_check("v6.4 SIM-boot-push: ord 1..30 + 112..114 = den uafhaengige config-model (start-/trigger-ord = 0, ord 5/13/15 = 60)",eq&&a30[0]==0&&!a30[2]&&!a30[5]&&!a30[8]&&!a30[15]&&!a30[21]&&!a30[23]&&!a30[25]&&!a30[26]&&!a30[29]);
+        for(int k=0;k<3;k++) if(p3b[k]!=(uint16_t)(k==1?(ti<<8):m[112+k])) eq=0;      /* v6.7: word 113 lo = 0 in the boot push */
+        st_check("v6.4 SIM boot push: words 1..30 + 112..114 = the independent config model (start/trigger words = 0, words 5/13/15 = 60)",eq&&a30[0]==0&&!a30[2]&&!a30[5]&&!a30[8]&&!a30[15]&&!a30[21]&&!a30[23]&&!a30[25]&&!a30[26]&&!a30[29]);
         memset(&wq,0,sizeof wq); wq.sim_ack=1; memset(&bp,0,sizeof bp); memset(&sav,0,sizeof sav); act.pending=ACT_NONE; reg[33]=0x0101; txq_len=0;
         last_rx_ms=T-5000; boot_push_start(0); boot_push_step(T);
-        int off=(bp.state==BP_WAIT_A&&wq.n==0);                                  /* intet link: vent */
-        last_rx_ms=T; reg[33]=0x0141; boot_push_step(T); off&=(bp.state==BP_WAIT_A&&wq.n==0);   /* kværn kører: vent (blokken nulstiller start-ordene) */
+        int off=(bp.state==BP_WAIT_A&&wq.n==0);                                  /* no link: wait */
+        last_rx_ms=T; reg[33]=0x0141; boot_push_step(T); off&=(bp.state==BP_WAIT_A&&wq.n==0);   /* grind running: wait (the block zeroes the start words) */
         reg[33]=0x0101;
-        st_check("v6.4 SIM-boot-push: udskydes uden link og mens en aktivitet koerer",off);
+        st_check("v6.4 SIM boot push: postponed without a link and while an activity is running",off);
         boot_push_step(T);
         int okA=bp.state==BP_A&&wq.n==1&&wq.q[0].sub==1&&wq.q[0].len==30&&frame_trig_audit(&wq.q[0],0);
         wq_step(T); wq_step(T+50); boot_push_step(T+50); boot_push_step(T+50);
         int okB=bp.ra==BPR_OK&&bp.state==BP_B&&wq.n==1&&q_hex(0,"aa 55 06 70 03 04 01 00 06 46 00 c7 ce");
         wq_step(T+60); wq_step(T+110); boot_push_step(T+110);
-        st_check("v6.4 SIM-boot-push: sub1 len30 (ingen start-/trigger-ord) -> ACK -> sub112 len3 = stock-vektoren -> faerdig",okA&&okB&&bp.state==BP_DONE&&bp.rb==BPR_OK&&wq.n==0&&wq.n_ok==2&&wq.n_block==0);
-        /* config uden for spec: HELE sub1-blokken afvises af frame-politikken og tælles; intet sendes */
+        st_check("v6.4 SIM boot push: sub1 len30 (no start/trigger words) -> ACK -> sub112 len3 = the stock vector -> done",okA&&okB&&bp.state==BP_DONE&&bp.rb==BPR_OK&&wq.n==0&&wq.n_ok==2&&wq.n_block==0);
+        /* config out of spec: the WHOLE sub1 block is rejected by the frame policy and counted; nothing is sent */
         SET[S_BREWT].val=1200; memset(&wq,0,sizeof wq); wq.sim_ack=1; txq_len=0; boot_push_start(0); boot_push_step(T+200);
         int blk=bp.ra==BPR_BLOCKED&&bp.state==BP_WAIT_B&&wq.n==0&&wq.n_block==1&&wq_rej==WJ_RANGE&&txq_len==0;
         boot_push_step(T+200); blk&=(bp.state==BP_B&&wq.q[0].sub==112); wq_step(T+200); wq_step(T+250); boot_push_step(T+250);
         SET[S_BREWT].val=bt0;
-        st_check("v6.4 SIM-boot-push: brewTemper=1200 -> sub1 len30 AFVIST af frame-politikken (BLOK +1, 0 bytes sendt); sub112 len3 sendes",blk&&bp.state==BP_DONE&&bp.rb==BPR_OK);
-        /* ingen ACK: blokken fejler efter én retransmit, næste blok sendes alligevel */
+        st_check("v6.4 SIM boot push: brewTemper=1200 -> sub1 len30 REJECTED by the frame policy (BLK +1, 0 bytes sent); sub112 len3 is sent",blk&&bp.state==BP_DONE&&bp.rb==BPR_OK);
+        /* no ACK: the block fails after one retransmit, the next block is sent anyway */
         memset(&wq,0,sizeof wq); txq_len=0; boot_push_start(0); boot_push_step(T+400); wq_step(T+400); wq_step(T+550); wq_step(T+860); boot_push_step(T+860);
         int na=bp.ra==BPR_NOACK&&bp.state==BP_WAIT_B&&wq.n_retx==1&&wq.n_fail==1; boot_push_step(T+860); na&=(bp.state==BP_B&&wq.n==1&&wq.q[0].sub==112);
-        st_check("v6.4 SIM-boot-push: uden ACK -> 1 retransmit, FEJL, og sub112 len3 sendes alligevel",na);
-        st_check("v6.5: write-koeens blok-graense er 30 ord i ALLE build-typer (v6.4-enheden: 24)",WQ_WMAX==30&&sizeof(((WFrame*)0)->w)==60&&sizeof last_tx>=2*WQ_WMAX+7);
+        st_check("v6.4 SIM boot push: without ACK -> 1 retransmit, FAILED, and sub112 len3 is sent anyway",na);
+        st_check("v6.5: the write queue's block limit is 30 words in ALL build types (the v6.4 device: 24)",WQ_WMAX==30&&sizeof(((WFrame*)0)->w)==60&&sizeof last_tx>=2*WQ_WMAX+7);
         wq=wq0; memset(&bp,0,sizeof bp); last_rx_ms=rx0; reg[33]=ws0; txq_len=tx0; } }
     st_bootpush_device(cfgsrc);
     st_rx_resync();
 
-    printf("== selftest: settings-tabel, graenser og editor ==\n");
+    printf("== selftest: settings table, limits and editor ==\n");
     { int ok=1; static const char*const gone[]={"brewMode","sleepMode","sleepModeSetting","ssid","password","wifionoff","theme","presetStore","init","patch"};
       for(int i=0;i<NSET;i++) for(unsigned q=0;q<sizeof gone/sizeof gone[0];q++) if(SET[i].key&&!strcmp(SET[i].key,gone[q])) ok=0;
-      st_check("ikke i tabellen: brewMode, sleepMode, sleepModeSetting, wifi-felter, theme, presetStore",ok); }
-    st_check("varmt-vand-TEMPERATUR er sensor (ord 40): ingen config-noegle, ingen write, laast",SET[S_HOTT].key==NULL&&SET[S_HOTT].mcu==M_NONE&&(SET[S_HOTT].flags&SF_SENSOR)&&(SET[S_HOTT].flags&SF_LOCK)&&SET[S_HOTT].def==40);
-    st_check("breakTime er laast (ingen editor) men pakkes fortsat i ord113 lo",(SET[S_BREAK].flags&SF_LOCK)&&SET[S_BREAK].lo==SET[S_BREAK].hi&&SET[S_BREAK].mcu==M_W113);
-    st_check("sprog oplaast 0..10 (11 navne); tidszone fortsat laast",!(SET[S_LANG].flags&SF_LOCK)&&SET[S_LANG].lo==0&&SET[S_LANG].hi==10&&sizeof OPT_LANG/sizeof OPT_LANG[0]==11&&(SET[S_TZ].flags&SF_LOCK));
+      st_check("not in the table: brewMode, sleepMode, sleepModeSetting, wifi fields, theme, presetStore",ok); }
+    st_check("hot water TEMPERATURE is a sensor (word 40): no config key, no write, locked",SET[S_HOTT].key==NULL&&SET[S_HOTT].mcu==M_NONE&&(SET[S_HOTT].flags&SF_SENSOR)&&(SET[S_HOTT].flags&SF_LOCK)&&SET[S_HOTT].def==40);
+    st_check("breakTime is locked (no editor) but is still packed into word113 lo",(SET[S_BREAK].flags&SF_LOCK)&&SET[S_BREAK].lo==SET[S_BREAK].hi&&SET[S_BREAK].mcu==M_W113);
+    st_check("language unlocked 0..10 (11 names); time zone still locked",!(SET[S_LANG].flags&SF_LOCK)&&SET[S_LANG].lo==0&&SET[S_LANG].hi==10&&sizeof OPT_LANG/sizeof OPT_LANG[0]==11&&(SET[S_TZ].flags&SF_LOCK));
     { int ok=1; for(int i=0;i<NSET;i++){ Setting*s=&SET[i]; if(s->kind==K_ENUM&&(s->flags&SF_LOCK)) ok=0; if((s->flags&SF_EST)&&!s->hint) ok=0;
           if(!(s->flags&(SF_LOCK|SF_SENSOR))&&((s->max-s->min)%s->step||s->min%s->step)) ok=0; }
-      st_check("tabel-invarianter: skoen har hint, max ligger paa trin-gitteret",ok); }
-    { int ok=1; for(int i=0;i<NSET;i++){ Setting*s=&SET[i]; if(set_oor(s)){ printf("     %s=%d uden for %d..%d\n",s->key,s->val,s->lo,s->hi); ok=0; } if(!(s->flags&SF_SENSOR)&&!s->loaded){ printf("     %s mangler i config\n",s->key); ok=0; } }
-      st_check("alle config-vaerdier er indlaest og ligger inden for spec-graenserne",ok); }
+      st_check("table invariants: estimates have a hint, max lies on the step grid",ok); }
+    { int ok=1; for(int i=0;i<NSET;i++){ Setting*s=&SET[i]; if(set_oor(s)){ printf("     %s=%d outside %d..%d\n",s->key,s->val,s->lo,s->hi); ok=0; } if(!(s->flags&SF_SENSOR)&&!s->loaded){ printf("     %s missing from config\n",s->key); ok=0; } }
+      st_check("all config values are loaded and within the spec limits",ok); }
     { int ok=1; view=V_DETAIL;
       sel=S_BREWT; edit_val=960; edit_step(1,1); ok&=edit_val==960; edit_val=850; edit_step(-1,1); ok&=edit_val==850; edit_val=856; edit_step(-1,1); ok&=edit_val==850; edit_val=856; edit_step(1,1); ok&=edit_val==860;
       sel=S_HOTW; edit_val=400; edit_step(1,1); ok&=edit_val==500; edit_step(1,5); ok&=edit_val==1000; edit_val=5000; edit_step(1,5); ok&=edit_val==5000; edit_val=300; edit_step(-1,5); ok&=edit_val==300;
@@ -7426,90 +7432,90 @@ static int selftest(const char*cfgsrc){
       sel=S_BREWW; edit_val=360; edit_step(1,1); ok&=edit_val==370; edit_val=990; edit_step(1,1); ok&=edit_val==990;
       sel=S_PIPRESS; edit_val=4; edit_step(1,1); ok&=edit_val==4; edit_step(-1,1); ok&=edit_val==3; edit_step(-1,1); ok&=edit_val==3;
       sel=S_BREAK; edit_val=5; edit_step(1,1); ok&=edit_val==5; sel=S_TZ; edit_val=48; edit_step(1,1); ok&=edit_val==48; sel=S_HOTT; edit_val=900; edit_step(1,1); ok&=edit_val==900;
-      sel=-1; view=V_MAIN; st_check("stepper: clamp til spec-interval, trin-gitter, laaste raekker kan ikke aendres",ok); }
-    for(int lg=0;lg<NLANG;lg++){ /* layout: alle tekster i detalje-visningen ligger inden for ring/korde (ellers klippes de lydløst) — begge sprog */
+      sel=-1; view=V_MAIN; st_check("stepper: clamp to the spec interval, step grid, locked rows cannot be changed",ok); }
+    for(int lg=0;lg<NLANG;lg++){ /* layout: all texts in the detail view lie within ring/chord (otherwise they are silently clipped) — both languages */
       int ok=1, nell=0; char l[112]; const char*l1,*l2; lang_set(lg);
       int ktu=SET[S_TUNIT].val;
       for(int i=0;i<NSET;i++) for(int tu=0;tu<2;tu++){ const Setting*s=&SET[i]; const char*lab=TR(s->label);
-          if(tu&&!(s->flags&(SF_TEMP10|SF_TEMP1))) continue;                 /* temperatur-rækker: både °C og °F */
+          if(tu&&!(s->flags&(SF_TEMP10|SF_TEMP1))) continue;                 /* temperature rows: both °C and °F */
           SET[S_TUNIT].val=(s->flags&(SF_TEMP10|SF_TEMP1))?tu:ktu; detail_text(i,l,sizeof l,&l1,&l2);
           char iv[200]; snprintf(iv,sizeof iv,"%s%s%s",l,(s->hint&&!(s->flags&SF_LOCK))?" · ":"",(s->hint&&!(s->flags&SF_LOCK))?TR(s->hint):"");
-          LAY(text_wf(lab,F_S),2*ring_half(82,14)-12,"detalje-label",lab);
-          LAY(text_wf(iv,F_XS),2*ring_half(106,11)-12,"interval+hint (inden for gauge-ringen)",iv);
+          LAY(text_wf(lab,F_S),2*ring_half(82,14)-12,"detail label",lab);
+          LAY(text_wf(iv,F_XS),2*ring_half(106,11)-12,"interval+hint (inside the gauge ring)",iv);
           LAY(text_wf(TR(s->note),F_XS),KB[KNOTE].maxw,"note",TR(s->note));
-          LAY(text_wf(l1,F_XS),KB[KF1].maxw,"fodlinje 1",l1); LAY(text_wf(l2,F_XS),KB[KF2].maxw,"fodlinje 2",l2);
+          LAY(text_wf(l1,F_XS),KB[KF1].maxw,"footer 1",l1); LAY(text_wf(l2,F_XS),KB[KF2].maxw,"footer 2",l2);
           char vb[40]; int xr=(s->flags&SF_LOCK)?388:372;
           if(s->kind==K_ENUM){
-              LAY(94+text_w(lab,F_S)+12+60,xr,"liste-raekke: label levner < 60 px til vaerdien",lab);
+              LAY(94+text_w(lab,F_S)+12+60,xr,"list row: label leaves < 60 px for the value",lab);
               for(int v=s->min;v<=s->max;v++){ set_fmt(i,v,vb,sizeof vb-4); LAY(text_w(vb,F_M),228,"enum-hero (F_M)",vb);
-                  int room; if(row_val_font(lab,vb,xr,&room)==F_XS&&text_w(vb,F_XS)>room){ nell++; char full[40]; strcpy(full,vb); fit_text(vb,F_XS,room); LAY(text_w(vb,F_XS),room,"afkortet enum-navn",vb);
-                      printf("     [%s] %s: '%s' vises afkortet i listen som '%s' (fuldt navn i detaljen)\n",LANG_CODE[ui_lang],lab,full,vb); } }
-          } else {   /* tal-række: label + bredeste værdi + enhed (+ skøn-markør) */
+                  int room; if(row_val_font(lab,vb,xr,&room)==F_XS&&text_w(vb,F_XS)>room){ nell++; char full[40]; strcpy(full,vb); fit_text(vb,F_XS,room); LAY(text_w(vb,F_XS),room,"truncated enum name",vb);
+                      printf("     [%s] %s: '%s' is shown truncated in the list as '%s' (full name in the detail)\n",LANG_CODE[ui_lang],lab,full,vb); } }
+          } else {   /* number row: label + widest value + unit (+ estimate marker) */
               const char*u=set_unit(i); int uw=*u?text_w(u,F_XS)+6:0, vw=0;
               int probe[3]={s->lo,s->hi,(s->flags&SF_SENSOR)?1200:s->val}; for(int q=0;q<3;q++){ int kl=s->loaded; ((Setting*)s)->loaded=1; set_fmt(i,probe[q],vb,sizeof vb); ((Setting*)s)->loaded=kl; if(text_w(vb,F_M)>vw) vw=text_w(vb,F_M); }
-              LAY(94+text_w(lab,F_S)+12+vw+uw+((s->hint&&!(s->flags&SF_LOCK))?18:0),xr,"liste-raekke (label + vaerdi + enhed)",lab);
-              set_fmt(i,s->hi,vb,sizeof vb); LAY(text_wf(vb,F_M)+(*u?text_wf(u,F_M)+10:0),228,"tal-hero (mindste skrift F_M)",vb);
+              LAY(94+text_w(lab,F_S)+12+vw+uw+((s->hint&&!(s->flags&SF_LOCK))?18:0),xr,"list row (label + value + unit)",lab);
+              set_fmt(i,s->hi,vb,sizeof vb); LAY(text_wf(vb,F_M)+(*u?text_wf(u,F_M)+10:0),228,"number hero (smallest font F_M)",vb);
           } }
       SET[S_TUNIT].val=ktu;
-      char nm[200]; snprintf(nm,sizeof nm,"layout: label, interval+hint, note, fodlinjer, hero og liste-raekke passer for alle %d raekker (%d enum-navn(e) afkortes i listen)",NSET,nell);
+      char nm[200]; snprintf(nm,sizeof nm,"layout: label, interval+hint, note, footers, hero and list row fit for all %d rows (%d enum name(s) truncated in the list)",NSET,nell);
       st_check(stl(nm),ok&&nell<=1); }
     lang_set(base_lang);
 
-    printf("== selftest: config-persist (atomisk, byte-eksakt, md5-log) ==\n");
+    printf("== selftest: config persist (atomic, byte-exact, md5 log) ==\n");
     char dir[300]; snprintf(dir,sizeof dir,"/tmp/ourui_v6_selftest_%d",(int)getpid()); mkdir(dir,0755);
     snprintf(cfg_path,sizeof cfg_path,"%s/config.json",dir); snprintf(cfg_bakdir,sizeof cfg_bakdir,"%s/cfgbak",dir);
-    st_check("kopi af config.json",copy_file(cfgsrc,cfg_path));
+    st_check("copy of config.json",copy_file(cfgsrc,cfg_path));
     cfg_read(); cfg_writes=0; char m0[33]; strcpy(m0,cfg_md5); char orig[CFG_MAX]; int on=cfglen; memcpy(orig,cfgbuf,on);
     printf("     md5 baseline = %s (%d bytes)\n",m0,on);
     st_check("brewTemper 870 -> 880",cfg_set_int("brewTemper",880));
     int diff=0; if(cfglen!=on) diff=-1; else for(int i=0;i<on;i++) if(cfgbuf[i]!=orig[i]) diff++;
-    st_check("praecis 1 byte aendret, samme laengde (kun tal-token)",diff==1);
-    char m1[33]; strcpy(m1,cfg_md5); printf("     md5 efter    = %s\n",m1);
+    st_check("exactly 1 byte changed, same length (number token only)",diff==1);
+    char m1[33]; strcpy(m1,cfg_md5); printf("     md5 after    = %s\n",m1);
     char p[400]; char bb[CFG_MAX]; snprintf(p,sizeof p,"%s/config.json.orig",cfg_bakdir); int fd=open(p,O_RDONLY); int bn=fd>=0?read(fd,bb,sizeof bb):-1; if(fd>=0)close(fd);
     st_check("pristine backup == baseline",bn==on&&!memcmp(bb,orig,on));
-    st_check("volume 31 -> 100 (laengere token)",cfg_set_int("volume",100)&&cfglen==on+1);
+    st_check("volume 31 -> 100 (longer token)",cfg_set_int("volume",100)&&cfglen==on+1);
     st_check("volume 100 -> 31",cfg_set_int("volume",31));
-    st_check("hotWaterMode (felt efter presetStore) 1 -> 2 -> 1",cfg_set_int("hotWaterMode",2)&&cfg_set_int("hotWaterMode",1));
-    st_check("ukendt felt afvises (ourui tilfoejer aldrig noegler)",!cfg_set_int("doesNotExist",1)&&!cfg_set_int("theme",0));
-    st_check("streng-felt (ssid) afvises",!cfg_set_int("ssid",1));
+    st_check("hotWaterMode (field after presetStore) 1 -> 2 -> 1",cfg_set_int("hotWaterMode",2)&&cfg_set_int("hotWaterMode",1));
+    st_check("unknown field rejected (ourui never adds keys)",!cfg_set_int("doesNotExist",1)&&!cfg_set_int("theme",0));
+    st_check("string field (ssid) rejected",!cfg_set_int("ssid",1));
     st_check("brewTemper 880 -> 870 (revert)",cfg_set_int("brewTemper",870));
-    st_check("md5 efter revert == baseline",!strcmp(cfg_md5,m0));
-    /* hele tabellen: hvert redigerbart felt gemmes som min, max og tilbage */
+    st_check("md5 after revert == baseline",!strcmp(cfg_md5,m0));
+    /* the whole table: every editable field is saved as min, max and back */
     { int ok=1,nf=0; for(int i=0;i<NSET;i++){ Setting*s=&SET[i]; if(s->flags&(SF_LOCK|SF_SENSOR|SF_LOCAL)) continue; int o; nf++;
           if(!cfg_get_int(s->key,&o)||!cfg_set_int(s->key,s->min)||!cfg_set_int(s->key,s->max)||!cfg_set_int(s->key,o)){ ok=0; printf("     %s: %s\n",s->key,cfg_err); } }
-      char nm[120]; snprintf(nm,sizeof nm,"alle %d redigerbare felter: gem min -> max -> original",nf); st_check(nm,ok&&nf==21);
-      st_check("md5 efter fuld tabel-rundtur == baseline",!strcmp(cfg_md5,m0)&&cfglen==on&&!memcmp(cfgbuf,orig,on)); }
+      char nm[120]; snprintf(nm,sizeof nm,"all %d editable fields: save min -> max -> original",nf); st_check(nm,ok&&nf==21);
+      st_check("md5 after a full table round trip == baseline",!strcmp(cfg_md5,m0)&&cfglen==on&&!memcmp(cfgbuf,orig,on)); }
     snprintf(p,sizeof p,"%s/config.json.orig",cfg_bakdir); fd=open(p,O_RDONLY); bn=fd>=0?read(fd,bb,sizeof bb):-1; if(fd>=0)close(fd);
-    st_check("pristine backup stadig urørt",bn==on&&!memcmp(bb,orig,on));
-    snprintf(p,sizeof p,"%s/.ourui_cfg.tmp",dir); st_check("ingen tmp-fil efterladt",access(p,F_OK)!=0);
-    /* nøgle gemt inde i presetStore må ikke forveksles med top-niveau */
+    st_check("pristine backup still untouched",bn==on&&!memcmp(bb,orig,on));
+    snprintf(p,sizeof p,"%s/.ourui_cfg.tmp",dir); st_check("no tmp file left behind",access(p,F_OK)!=0);
+    /* a key hidden inside presetStore must not be mistaken for the top level */
     const char*nest="{\n\t\"presetStore\":\t{\n\t\t\"a\":\t{\"brewTemper\":\t111}\n\t},\n\t\"brewTemper\":\t870\n}";
-    int a,e2; st_check("nested key ignoreres (dybde 1)",cfg_find(nest,strlen(nest),"brewTemper",&a,&e2)&&atoi(nest+a)==870);
+    int a,e2; st_check("nested key ignored (depth 1)",cfg_find(nest,strlen(nest),"brewTemper",&a,&e2)&&atoi(nest+a)==870);
     snprintf(p,sizeof p,"%s/config_writes.log",cfg_bakdir); FILE*lf=fopen(p,"r"); int lines=0; char ln[400];
     if(lf){ while(fgets(ln,sizeof ln,lf)){ lines++; if(lines<=2||lines==6) printf("     log: %s",ln); } fclose(lf); }
-    { char nm[80]; snprintf(nm,sizeof nm,"md5-log har én linje pr. write (%d)",cfg_writes); st_check(nm,lines==cfg_writes&&lines>=6+63); }
-    snprintf(p,sizeof p,"%s/RESTART_NEEDED",cfg_bakdir); st_check("RESTART_NEEDED-flag skrevet",access(p,F_OK)==0);
+    { char nm[80]; snprintf(nm,sizeof nm,"md5 log has one line per write (%d)",cfg_writes); st_check(nm,lines==cfg_writes&&lines>=6+63); }
+    snprintf(p,sizeof p,"%s/RESTART_NEEDED",cfg_bakdir); st_check("RESTART_NEEDED flag written",access(p,F_OK)==0);
 
-    printf("== selftest: config uden for spec (ændret uden om stock-UI'et) ==\n");
+    printf("== selftest: config out of spec (changed bypassing the stock UI) ==\n");
     { char op[400]; snprintf(op,sizeof op,"%s/oor.json",dir); char keepb[256]; strcpy(keepb,cfg_bakdir);
       int ok=copy_file(cfgsrc,op); snprintf(cfg_path,sizeof cfg_path,"%s",op); snprintf(cfg_bakdir,sizeof cfg_bakdir,"%s/oorbak",dir);
       ok&=cfg_set_int("brewTemper",990)&&cfg_set_int("headTemper",90)&&cfg_set_int("preInfusionTime",20)&&cfg_set_int("preInfusionPressure",6)&&cfg_set_int("grindMode",0)&&cfg_set_int("language",11);
-      st_check("testkopi m. brewTemper=990, headTemper=90, preInfusionTime=20, tryk=6, grindMode=0, language=11",ok);
+      st_check("test copy with brewTemper=990, headTemper=90, preInfusionTime=20, pressure=6, grindMode=0, language=11",ok);
       settings_load(); char vb[24];
-      st_check("bevist graense udvides IKKE: brewTemper 990 markeres uden for spec (850..960)",set_oor(&SET[S_BREWT])&&SET[S_BREWT].hi==960);
-      st_check("skoennet max udvides til stock-gemt vaerdi: gruppe-temp 90 (<= 100), pre-inf. tid 20 (<= 60)",!set_oor(&SET[S_HEADT])&&SET[S_HEADT].hi==90&&!set_oor(&SET[S_PITIME])&&SET[S_PITIME].hi==20);
+      st_check("a proven limit is NOT widened: brewTemper 990 is marked out of spec (850..960)",set_oor(&SET[S_BREWT])&&SET[S_BREWT].hi==960);
+      st_check("an estimated max is widened to the stock-saved value: group temp 90 (<= 100), pre-inf. time 20 (<= 60)",!set_oor(&SET[S_HEADT])&&SET[S_HEADT].hi==90&&!set_oor(&SET[S_PITIME])&&SET[S_PITIME].hi==20);
       set_fmt(S_GRINDMODE,sv(S_GRINDMODE),vb,sizeof vb); int e1=!strcmp(vb,"(0)"); set_fmt(S_LANG,sv(S_LANG),vb,sizeof vb);
-      st_check("enum uden for tabel vises som raat tal — ingen opslag uden for navne-tabellen",e1&&!strcmp(vb,"(11)")&&set_oor(&SET[S_GRINDMODE])&&set_oor(&SET[S_LANG])&&set_oor(&SET[S_PIPRESS]));
+      st_check("an enum outside the table is shown as a raw number — no lookup outside the name table",e1&&!strcmp(vb,"(11)")&&set_oor(&SET[S_GRINDMODE])&&set_oor(&SET[S_LANG])&&set_oor(&SET[S_PIPRESS]));
       sim_ready(9000); memset(&wq,0,sizeof wq); memset(&sav,0,sizeof sav); act.pending=ACT_NONE;
-      const char*g=act_guard(ACT_BREW,9000); st_check("aktivitets-start spaerret: CONFIG UDEN FOR SPEC",g&&g==TR(TX_G_OOR)&&act_guard(ACT_STEAM,9000)==g);
-      st_check("frame-politikken afviser bryg-blokken selv hvis UI-vagten omgaas",!act_push(ACT_BREW)&&wq_rej==WJ_RANGE&&wq.n==0);
+      const char*g=act_guard(ACT_BREW,9000); st_check("activity start blocked: CONFIG OUT OF SPEC",g&&g==TR(TX_G_OOR)&&act_guard(ACT_STEAM,9000)==g);
+      st_check("the frame policy rejects the brew block even if the UI guard is bypassed",!act_push(ACT_BREW)&&wq_rej==WJ_RANGE&&wq.n==0);
       view=V_DETAIL; sel=S_BREWT; edit_val=sv(S_BREWT); edit_step(-1,1); int e3=edit_val==960; edit_val=sv(S_BREWT); edit_step(1,1); e3&=edit_val==960; sel=-1; view=V_MAIN;
-      st_check("stepper foerer en vaerdi uden for spec ind i intervallet (990 -> 960)",e3);
+      st_check("the stepper brings an out-of-spec value into the interval (990 -> 960)",e3);
       ok=cfg_set_int("headTemper",120); settings_load();
-      st_check("skoen over loft udvides ikke: gruppe-temp 120 > 100 er uden for spec",ok&&set_oor(&SET[S_HEADT])&&SET[S_HEADT].hi==80);
+      st_check("an estimate above the cap is not widened: group temp 120 > 100 is out of spec",ok&&set_oor(&SET[S_HEADT])&&SET[S_HEADT].hi==80);
       strcpy(cfg_bakdir,keepb); snprintf(cfg_path,sizeof cfg_path,"%s",cfgsrc); settings_load(); }
     /* ============================ v6.2 ============================ */
-    printf("== selftest: boot-slot + BOOT-UI-flag (mock-rod) ==\n");
+    printf("== selftest: boot slot + BOOT UI flag (mock root) ==\n");
     char root[360]; snprintf(root,sizeof root,"%s/root",dir); snprintf(sysroot,sizeof sysroot,"%s",root);
     char keepbak[256]; strcpy(keepbak,cfg_bakdir); snprintf(cfg_bakdir,sizeof cfg_bakdir,"%s/bootbak",dir);
     char fl[440],bl[440],rn[440],cdir[440],tx[400];
@@ -7517,59 +7523,61 @@ static int selftest(const char*cfgsrc){
     snprintf(rn,sizeof rn,"%s/RESTART_NEEDED",cfg_bakdir); snprintf(cdir,sizeof cdir,"%s/customer",root);
     bs.self_pid=MOCK_SELF_PID;
     mock_reset(root); mock_slot_b(root,0,MB_NONE); mock_self(root,"/new_customer/ourui/ourui"); boot_refresh();
-    st_check("mock-rod: flag-stien er <rod>/customer/new; stock-binaeren findes i slot A",!strcmp(rp(BOOT_FLAG),fl)&&bs.a_bin);
-    st_check("slot B ikke mountet: LAAST — touch afvises, flaget oprettes ikke",bs.lock==BL_NOMOUNT&&!boot_flag_set(1)&&access(fl,F_OK)!=0&&strstr(boot_err,"mountet"));
+    st_check("mock root: the flag path is <root>/customer/new; the stock binary exists in slot A",!strcmp(rp(BOOT_FLAG),fl)&&bs.a_bin);
+    st_check("slot B not mounted: LOCKED — touch rejected, the flag is not created",bs.lock==BL_NOMOUNT&&!boot_flag_set(1)&&access(fl,F_OK)!=0&&strstr(boot_err,"not mounted"));
     mock_slot_b(root,1,MB_NONE);
-    st_check("mountet, men demo_v9 mangler i slot B: LAAST",!boot_flag_set(1)&&bs.lock==BL_NOBIN&&access(fl,F_OK)!=0);
+    st_check("mounted, but demo_v9 missing in slot B: LOCKED",!boot_flag_set(1)&&bs.lock==BL_NOBIN&&access(fl,F_OK)!=0);
     mock_slot_b(root,1,MB_OURS_NOEXEC);
-    st_check("ourui i slot B uden x-bit (kan ikke boote): LAAST",!boot_flag_set(1)&&bs.lock==BL_NOBIN&&access(fl,F_OK)!=0);
+    st_check("ourui in slot B without the x bit (cannot boot): LOCKED",!boot_flag_set(1)&&bs.lock==BL_NOBIN&&access(fl,F_OK)!=0);
     mock_slot_b(root,1,MB_VENDOR); mock_flag(root,1);
     { int a=boot_flag_set(0), e1=access(fl,F_OK)==0, b2=boot_flag_set(1);
-      st_check("vendor-binaer i slot B: LAAST i BEGGE retninger — vendor'ens OTA-flag roeres ikke; naeste boot vises som SLOT B",!a&&!b2&&e1&&bs.lock==BL_VENDOR&&boot_next_kind()==BN_SLOTB&&boot_next_name()==TR(TX_BN_SLOTB)); }
+      st_check("vendor binary in slot B: LOCKED in BOTH directions — the vendor's OTA flag is not touched; the next boot is shown as SLOT B",!a&&!b2&&e1&&bs.lock==BL_VENDOR&&boot_next_kind()==BN_SLOTB&&boot_next_name()==TR(TX_BN_SLOTB)); }
     mock_flag(root,0); mock_slot_b(root,1,MB_OURS); boot_refresh();
     int nc0=dir_count(cdir);
-    st_check("ourui i slot B + mountet: ULAAST; intet flag = ORIGINAL ved naeste boot",bs.lock==BL_OK&&!bs.flag&&boot_next_kind()==BN_ORIGINAL);
+    st_check("ourui in slot B + mounted: UNLOCKED; no flag = ORIGINAL on the next boot",bs.lock==BL_OK&&!bs.flag&&boot_next_kind()==BN_ORIGINAL);
     { struct stat fs; int ok=boot_flag_set(1)&&stat(fl,&fs)==0&&S_ISREG(fs.st_mode)&&fs.st_size==0&&bs.flag==1&&dir_count(cdir)==nc0+1;
-      st_check("vaelg OURUI: touch /customer/new (tom fil) — intet andet i /customer aendret",ok&&boot_next_kind()==BN_OURS&&!strcmp(boot_next_name(),PRODUCT)); }
-    st_check("vaelg OURUI igen: idempotent",boot_flag_set(1)&&bs.flag==1&&dir_count(cdir)==nc0+1);
-    st_check("vaelg ORIGINAL: rm /customer/new — /customer er praecis som foer",boot_flag_set(0)&&access(fl,F_OK)!=0&&!bs.flag&&dir_count(cdir)==nc0);
-    st_check("vaelg ORIGINAL igen: idempotent (manglende fil er ikke en fejl)",boot_flag_set(0)&&!bs.flag);
+      st_check("choose OURUI: touch /customer/new (empty file) — nothing else in /customer changed",ok&&boot_next_kind()==BN_OURS&&!strcmp(boot_next_name(),PRODUCT)); }
+    st_check("choose OURUI again: idempotent",boot_flag_set(1)&&bs.flag==1&&dir_count(cdir)==nc0+1);
+    st_check("choose ORIGINAL: rm /customer/new — /customer is exactly as before",boot_flag_set(0)&&access(fl,F_OK)!=0&&!bs.flag&&dir_count(cdir)==nc0);
+    st_check("choose ORIGINAL again: idempotent (a missing file is not an error)",boot_flag_set(0)&&!bs.flag);
     { chmod(cdir,0555); int r1=boot_flag_set(1), f1=bs.flag, e1=boot_err[0]!=0; chmod(cdir,0755);
       mock_flag(root,1); boot_refresh(); chmod(cdir,0555); int r2=boot_flag_set(0), f2=bs.flag; chmod(cdir,0755); mock_flag(root,0); boot_refresh();
-      if(geteuid()==0) printf("     (koerer som root — skrivebeskyttelses-testen er ikke meningsfuld, sprunget over)\n");
-      else st_check("skrivebeskyttet /customer (§9.1): fejl meldes, flaget og den viste tilstand er uaendret — i begge retninger",!r1&&!f1&&e1&&!r2&&f2==1); }
-    st_check("boot_ui.log: én linje pr. FAKTISK aendring (2), ingen for de idempotente kald",file_lines(bl)==2&&file_has(bl,"oprettet")&&file_has(bl,"fjernet"));
+      if(geteuid()==0) printf("     (running as root — the write-protection test is not meaningful, skipped)\n");
+      else st_check("read-only /customer (§9.1): the error is reported, the flag and the displayed state are unchanged — in both directions",!r1&&!f1&&e1&&!r2&&f2==1); }
+    st_check("boot_ui.log: one line per ACTUAL change (2), none for the idempotent calls",file_lines(bl)==2&&file_has(bl,"created")&&file_has(bl,"removed"));
     file_print(bl,"     log: ");
     { mock_flag(root,1); boot_refresh(); int a=bs.flag; mock_flag(root,0); boot_refresh();
-      st_check("flag-tilstanden laeses live (stat): aendring udefra (telnet touch/rm) ses",a==1&&bs.flag==0); }
+      st_check("the flag state is read live (stat): an external change (telnet touch/rm) is seen",a==1&&bs.flag==0); }
     boot_flag_set(1); mock_slot_b(root,0,MB_OURS);
-    st_check("slot B forsvinder efter flaget er sat: LAAST, flaget fjernes ikke bag om ryggen; naeste boot vises aerligt som ORIGINAL",!boot_flag_set(0)&&access(fl,F_OK)==0&&bs.lock==BL_NOMOUNT&&boot_next_kind()==BN_ORIGINAL);
+    st_check("slot B disappears after the flag is set: LOCKED, the flag is not removed behind the user's back; the next boot is shown honestly as ORIGINAL",!boot_flag_set(0)&&access(fl,F_OK)==0&&bs.lock==BL_NOMOUNT&&boot_next_kind()==BN_ORIGINAL);
     mock_slot_b(root,1,MB_OURS); boot_flag_set(0);
-    mock_slot_b(root,1,MB_V61); boot_refresh(); st_check("v6.1-binaer i slot B genkendes (exit-strengen) -> ulaast",bs.lock==BL_OK);
-    mock_slot_b(root,1,MB_OURS_EDGE); boot_refresh(); st_check("maerke der krydser 64 KiB-laesegraensen findes alligevel",bs.lock==BL_OK);
+    mock_slot_b(root,1,MB_V61); boot_refresh(); st_check("v6.1 binary in slot B is recognised (the exit string) -> unlocked",bs.lock==BL_OK);
+    mock_slot_b(root,1,MB_OURS_EDGE); boot_refresh(); st_check("a marker straddling the 64 KiB read boundary is still found",bs.lock==BL_OK);
     { char vb[400]; snprintf(vb,sizeof vb,"%s",cfgsrc); char*q=strrchr(vb,'/'); char*t=q?q+1:vb; snprintf(t,sizeof vb-(size_t)(t-vb),"demo_v9");
-      if(access(vb,R_OK)==0){ bs.m_valid=0; st_check("den aegte vendor-binaer (artifacts/demo_v9) genkendes IKKE som ourui",!bin_is_ourui(vb)); bs.m_valid=0; }
-      else printf("     (ingen demo_v9 ved siden af config — tjek af aegte vendor-binaer sprunget over)\n"); }
+      if(access(vb,R_OK)==0){ bs.m_valid=0; st_check("the real vendor binary (artifacts/demo_v9) is NOT recognised as ourui",!bin_is_ourui(vb)); bs.m_valid=0; }
+      else printf("     (no demo_v9 next to config — check of the real vendor binary skipped)\n"); }
     mock_slot_b(root,1,MB_OURS);
     { mock_self(root,SLOT_B_EXE); boot_refresh(); int sB=bs.self_slot; mock_self(root,SLOT_A_EXE); boot_refresh(); int sA=bs.self_slot; mock_self(root,"/new_customer/ourui/ourui"); boot_refresh();
-      st_check("exe-slot via /proc/self/exe: /new_customer/demo_v9 = B, /customer/demo_v9 = A, alt andet = run.sh/manuelt",sB==SLOT_B&&sA==SLOT_A&&bs.self_slot==SLOT_OTHER&&!strcmp(bs.self_exe,"/new_customer/ourui/ourui")); }
-    st_check("ingen stock-proces, ingen switcher -> skift ville STARTE stock (launch)",bs.n_stock==0&&bs.sw_pid==0&&switch_mode()==SWM_LAUNCH);
+      st_check("exe slot via /proc/self/exe: /new_customer/demo_v9 = B, /customer/demo_v9 = A, anything else = run.sh/manual",sB==SLOT_B&&sA==SLOT_A&&bs.self_slot==SLOT_OTHER&&!strcmp(bs.self_exe,"/new_customer/ourui/ourui")); }
+    st_check("no stock process, no switcher -> a switch would START stock (launch)",bs.n_stock==0&&bs.sw_pid==0&&switch_mode()==SWM_LAUNCH);
     mock_proc(root,MOCK_STOCK_PID,SLOT_A_EXE,"demo_v9",'T',40); mock_proc(root,MOCK_SW_PID,"/new_customer/ourui/boot/switcher","switcher",'S',12);
     mock_proc(root,MOCK_SELF_PID,SLOT_A_EXE,"demo_v9",'R',95); mock_proc(root,77,"/bin/busybox","sh",'S',3); boot_refresh();
-    st_check("SIGSTOP'et stock-proces + switcher fundet (pidof); egen pid og fremmede processer taeller ikke -> skift = kun SIGCONT",bs.n_stock==1&&bs.stock[0]==MOCK_STOCK_PID&&bs.stock_run==0&&bs.sw_pid==MOCK_SW_PID&&switch_mode()==SWM_CONT);
+    st_check("SIGSTOPped stock process + switcher found (pidof); own pid and foreign processes do not count -> switch = SIGCONT only",bs.n_stock==1&&bs.stock[0]==MOCK_STOCK_PID&&bs.stock_run==0&&bs.sw_pid==MOCK_SW_PID&&switch_mode()==SWM_CONT);
     { mock_proc(root,MOCK_STOCK_PID,SLOT_A_EXE,"demo_v9",'S',40); boot_refresh(); int runs=bs.stock_run;
       mock_proc(root,MOCK_STOCK_PID,SLOT_A_EXE " (deleted)","demo_v9",'T',40); boot_refresh();
-      st_check("et KOERENDE stock-UI ved siden af ourui markeres; exe '... (deleted)' er stadig stock",runs==1&&bs.n_stock==1&&bs.stock_run==0); }
+      st_check("a RUNNING stock UI next to ourui is flagged; exe '... (deleted)' is still stock",runs==1&&bs.n_stock==1&&bs.stock_run==0); }
     mock_proc(root,MOCK_STOCK_PID,SLOT_B_EXE,"demo_v9",'S',40); boot_refresh();
-    st_check("en demo_v9 fra slot B er ikke stock",bs.n_stock==0);
+    st_check("a demo_v9 from slot B is not stock",bs.n_stock==0);
     { mock_swlog(root,NULL); boot_refresh(); int g0=bs.sw_log;
-      mock_swlog(root,"[2026-11-17 12:40:41 UTC] switcher startet (pid 301)\n[2026-11-17 12:40:41 UTC] input: /dev/input/event0\n"); boot_refresh(); int g1=bs.sw_log;
+      mock_swlog(root,"[2026-11-17 12:40:41 UTC] switcher started (pid 301)\n[2026-11-17 12:40:41 UTC] input: /dev/input/event0\n"); boot_refresh(); int g1=bs.sw_log;
       mock_swlog(root,MOCK_SWLOG); boot_refresh();
-      st_check("switcher.log: mangler -> 'ikke laesbar'; uden skift -> 'ingen haendelse'; ellers sidste skift-linje m. klokkeslaet",g0==0&&g1==1&&bs.sw_log==2&&!strncmp(bs.sw_evt,"12:41:07 skift A",16)&&strstr(bs.sw_evt,"ingen reboot"));
-      printf("     haendelse: %s\n",bs.sw_evt); }
-    { static char big[9000]; int o=0,k=0; while(o<6000) o+=snprintf(big+o,sizeof big-o,"[2026-11-17 12:50:%02d UTC] gestus: gyldig long-press i hj\xC3\xB8rne talt (1/3)\n",(k++)%60);
-      o+=snprintf(big+o,sizeof big-o,"[2026-11-17 12:59:59 UTC] skift FEJL: B (pid 9) kom ikke op \xE2\x80\x94 fallback: SIGCONT A, dr\xC3\xA6" "b B\n[2026-11-17 13:00:00 UTC] input: POLLERR/HUP \xE2\x80\x94 gen\xC3\xA5" "bner\n");
-      mock_swlog(root,big); boot_refresh(); st_check("stor log (> 4 KiB): kun halen laeses, sidste skift-linje findes",bs.sw_log==2&&!strncmp(bs.sw_evt,"12:59:59 skift FEJL",19)); }
+      st_check("switcher.log: missing -> 'not readable'; no switch -> 'no event'; otherwise the last switch line with time of day",g0==0&&g1==1&&bs.sw_log==2&&!strncmp(bs.sw_evt,"12:41:07 switch A",17)&&strstr(bs.sw_evt,"no reboot"));
+      printf("     event: %s\n",bs.sw_evt);
+      mock_swlog(root,"[2026-11-17 12:41:07 UTC] skift A\xE2\x86\x92" "B F\xC3\x86RDIG: ourui k\xC3\xB8rer, stock-A exit'et, ingen reboot\n"); boot_refresh();
+      st_check("switcher.log from a pre-English switcher build ('skift …'): still recognised as a switch event",bs.sw_log==2&&!strncmp(bs.sw_evt,"12:41:07 skift A",16)); }
+    { static char big[9000]; int o=0,k=0; while(o<6000) o+=snprintf(big+o,sizeof big-o,"[2026-11-17 12:50:%02d UTC] gesture: valid corner long-press counted (1/3)\n",(k++)%60);
+      o+=snprintf(big+o,sizeof big-o,"[2026-11-17 12:59:59 UTC] switch FAILED: B (pid 9) did not come up \xE2\x80\x94 fallback: SIGCONT A, kill B\n[2026-11-17 13:00:00 UTC] input: POLLERR/HUP \xE2\x80\x94 reopening\n");
+      mock_swlog(root,big); boot_refresh(); st_check("large log (> 4 KiB): only the tail is read, the last switch line is found",bs.sw_log==2&&!strncmp(bs.sw_evt,"12:59:59 switch FAILED",22)); }
     { char o[512]; int ok=1;
       ld_path_for_a(NULL,o,sizeof o); ok&=!strcmp(o,"/customer/libs:/config/wifi");
       ld_path_for_a("",o,sizeof o); ok&=!strcmp(o,"/customer/libs:/config/wifi");
@@ -7578,318 +7586,318 @@ static int selftest(const char*cfgsrc){
       ld_path_for_a("/lib:/config/lib:/new_customer/libs:/config/wifi",o,sizeof o); ok&=!strcmp(o,"/lib:/config/lib:/customer/libs:/config/wifi");
       ld_path_for_a("/lib:/customer/libs:/config/wifi",o,sizeof o); ok&=!strcmp(o,"/lib:/customer/libs:/config/wifi");
       ld_path_for_a("/a'b:/lib:/x y",o,sizeof o); ok&=!strcmp(o,"/lib:/customer/libs:/config/wifi");
-      st_check("LD_LIBRARY_PATH til slot A: B's libs ud, system-praefiks bevares, A's libs + /config/wifi sidst (som demo.sh's A-gren)",ok); }
+      st_check("LD_LIBRARY_PATH for slot A: B's libs out, system prefix kept, A's libs + /config/wifi last (like demo.sh's A branch)",ok); }
 
-    printf("== selftest: exit-paamindelsen — hvornaar er den sand? ==\n");
+    printf("== selftest: the exit reminder — when is it true? ==\n");
 #define RN_PUT(txt) do{ FILE*rf=fopen(rn,"w"); if(rf){ fputs(txt,rf); fclose(rf); } }while(0)
     char bid[64]; boot_id_read(bid,sizeof bid);
     unlink(rn); mock_proc(root,MOCK_STOCK_PID,SLOT_A_EXE,"demo_v9",'T',40); boot_refresh();
-    st_check("ingen RESTART_NEEDED -> ingen paamindelse",bid[0]&&!restart_pending());
-    snprintf(tx,sizeof tx,"config.json aendret af ourui.\nboot_id=%s mono_s=5000\n",bid); RN_PUT(tx);
-    st_check("stock-UI startet (t=40 s) FOER seneste GEM (t=5000 s), samme boot -> paamindelse",restart_pending());
+    st_check("no RESTART_NEEDED -> no reminder",bid[0]&&!restart_pending());
+    snprintf(tx,sizeof tx,"config.json changed by ourui.\nboot_id=%s mono_s=5000\n",bid); RN_PUT(tx);
+    st_check("stock UI started (t=40 s) BEFORE the latest SAVE (t=5000 s), same boot -> reminder",restart_pending());
     mock_proc(root,MOCK_STOCK_PID,SLOT_A_EXE,"demo_v9",'T',6000); boot_refresh();
-    st_check("stock-UI startet EFTER seneste GEM -> ingen paamindelse (det har selv laest config)",!restart_pending());
+    st_check("stock UI started AFTER the latest SAVE -> no reminder (it has read config itself)",!restart_pending());
     mock_proc(root,MOCK_STOCK_PID,SLOT_A_EXE,"demo_v9",'T',40); boot_refresh();
-    RN_PUT("config.json aendret af ourui.\nboot_id=aaaaaaaa-0000-0000-0000-000000000000 mono_s=5000\n");
-    st_check("maskinen er genstartet siden GEM (andet boot_id) -> ingen paamindelse",!restart_pending());
-    RN_PUT("config.json aendret af ourui. (v6.1-format uden stempel)\n");
-    st_check("v6.1-flag uden stempel -> antag at paamindelsen gaelder",restart_pending());
+    RN_PUT("config.json changed by ourui.\nboot_id=aaaaaaaa-0000-0000-0000-000000000000 mono_s=5000\n");
+    st_check("the machine has rebooted since SAVE (different boot_id) -> no reminder",!restart_pending());
+    RN_PUT("config.json aendret af ourui. (v6.1 format, no stamp)\n");
+    st_check("v6.1 flag without a stamp -> assume the reminder applies",restart_pending());
     mock_proc_rm(root,MOCK_STOCK_PID); boot_refresh();
-    st_check("intet stock-UI i live (slot B-boot) -> ingen paamindelse, uanset flag",!restart_pending());
+    st_check("no stock UI alive (slot B boot) -> no reminder, regardless of the flag",!restart_pending());
     { char cp[440],kp[256]; snprintf(cp,sizeof cp,"%s/config_rn.json",dir); copy_file(cfgsrc,cp); strcpy(kp,cfg_path); snprintf(cfg_path,sizeof cfg_path,"%s",cp);
       mono_fake=7777; int ok=cfg_set_int("volume",32); mono_fake=-1; snprintf(tx,sizeof tx,"boot_id=%s mono_s=7777\n",bid); ok&=file_has(rn,tx); strcpy(cfg_path,kp);
-      st_check("GEM stempler RESTART_NEEDED m. boot_id + monoton tid",ok); }
+      st_check("SAVE stamps RESTART_NEEDED with boot_id + monotonic time",ok); }
 
-    printf("== selftest: runtime-skift B->A efter BOOT.md §9.2 (mock-rod; 'stock' er en kopi af denne test-binaer) ==\n");
+    printf("== selftest: runtime switch B->A per BOOT.md §9.2 (mock root; 'stock' is a copy of this test binary) ==\n");
     { char ss[440],rel[440],real[700]="",want[800],er[72]=""; ms_t tn=20000; int pp[2]={-1,-1};
       snprintf(ss,sizeof ss,"%s/tmp/stock_started",root); snprintf(rel,sizeof rel,"%s/tmp/released",root);
 #define SW_PREP() do{ sim_ready(tn); memset(&wq,0,sizeof wq); memset(&sav,0,sizeof sav); act.pending=ACT_NONE; view=V_MAIN; page=PG_T2; sel=-1; xsel=-1; tr.type=0; run=1; toast.dur=0; rip.on=0; \
                       sw_child=0; sw_seq=sw_seq_frame=sw_seq_release=sw_seq_launch=0; st_rel=st_reacq=0; unlink(ss); unlink(rel); }while(0)
       st_relfile=rel; dev_release=st_release_hook; dev_reacquire=st_reacq_hook; sw_sim=0; sw_dry=0;
-      if(!self_bin||!strchr(self_bin,'/')||access(self_bin,X_OK)!=0){ printf("     (kender ikke egen binaer-sti — launch-testene sprunget over)\n"); st_check("launch-test kunne koeres",0); }
+      if(!self_bin||!strchr(self_bin,'/')||access(self_bin,X_OK)!=0){ printf("     (own binary path unknown — launch tests skipped)\n"); st_check("launch test could run",0); }
       else {
-        /* --- vellykket skift --- */
+        /* --- successful switch --- */
         mock_boot_b(root); snprintf(tx,sizeof tx,"%s%s",root,SLOT_A_EXE); int cp=copy_big(self_bin,tx,0755);
         if(realpath(cdir,real)==NULL) snprintf(real,sizeof real,"%s",cdir);
         mkdir(cfg_bakdir,0755); snprintf(tx,sizeof tx,"x\nboot_id=%s mono_s=5000\n",bid); RN_PUT(tx); unlink(bl);
         setenv("OURUI_MOCK_STOCK",ss,1); setenv("OURUI_MOCK_RELEASED",rel,1); setenv("LD_LIBRARY_PATH","/lib:/config/lib:/new_customer/libs:/config/wifi",1);
-        if(pipe(pp)!=0){} fcntl(pp[0],F_SETFL,O_NONBLOCK); st_relfd=pp[1];          /* pp[1] spiller ourui's UART/fb/touch-fd */
+        if(pipe(pp)!=0){} fcntl(pp[0],F_SETFL,O_NONBLOCK); st_relfd=pp[1];          /* pp[1] plays ourui's UART/fb/touch fd */
         SW_PREP(); sys_open(X_SWITCH,tn); tr.type=0;
         double t0=msnow(); sys_confirm(tn); double el=msnow()-t0;
-        st_check("mock-stock lagt som <rod>/customer/demo_v9; SKIFT NU gennemfoert: run=0, sidste frame vist, stock-pid kendt",cp&&run==0&&view==V_BYE&&bye_mode==SWM_LAUNCH&&sw_child>0);
-        st_check("raekkefoelge (§9.2): sidste frame -> trin 1 slip UART/touch/fb -> trin 2 start stock; fb tages ikke igen",sw_seq_frame==1&&sw_seq_release==2&&sw_seq_launch==3&&st_rel==1&&st_reacq==0);
-        { char nm[160]; snprintf(nm,sizeof nm,"trin 3: ourui venter %d ms foer exit (maalt %.0f ms; krav 300-500 ms)",SW_WAIT_MS,el); st_check(nm,el>=300&&el<=520&&SW_WAIT_MS>=300&&SW_WAIT_MS<=500); }
+        st_check("mock stock placed as <root>/customer/demo_v9; SWITCH NOW completed: run=0, last frame shown, stock pid known",cp&&run==0&&view==V_BYE&&bye_mode==SWM_LAUNCH&&sw_child>0);
+        st_check("order (§9.2): last frame -> step 1 release UART/touch/fb -> step 2 start stock; fb is not taken back",sw_seq_frame==1&&sw_seq_release==2&&sw_seq_launch==3&&st_rel==1&&st_reacq==0);
+        { char nm[160]; snprintf(nm,sizeof nm,"step 3: ourui waits %d ms before exit (measured %.0f ms; requirement 300-500 ms)",SW_WAIT_MS,el); st_check(nm,el>=300&&el<=520&&SW_WAIT_MS>=300&&SW_WAIT_MS<=500); }
         snprintf(want,sizeof want,"pid=%d sid=%d argv0=./demo_v9 cwd=%s extra_fds=0 stdio_null=1 released_before_start=1\n",sw_child,sw_child,real);
-        st_check("stock-processen: egen session (setsid), argv0 = ./demo_v9, cwd = /customer, stdio = /dev/null, 0 arvede fds, startet EFTER trin 1",file_has(ss,want));
-        st_check("LD_LIBRARY_PATH til stock: B's libs ude, praefiks bevaret, A's libs sidst",file_has(ss,"\nLD=/lib:/config/lib:/customer/libs:/config/wifi\n"));
-        { char c1; int r=(int)read(pp[0],&c1,1); st_check("ourui's 'device-fd' er lukket alle steder (EOF paa pipen) — touch-grab/fb/UART kan ikke overleve i stock-UI'et",r==0); }
-        st_check("trin 4: flaget /customer/new er uroert af runtime-skiftet",access(fl,F_OK)==0);
-        st_check("trin 6: boot_ui.log har skiftet m. tid + aarsag=bruger-knap; RESTART_NEEDED fjernet (stock startede frisk)",file_has(bl,"RUNTIME-SKIFT B->A: aarsag=bruger-knap, stock-UI pid")&&file_has(bl,"RESTART_NEEDED fjernet")&&access(rn,F_OK)!=0);
+        st_check("the stock process: own session (setsid), argv0 = ./demo_v9, cwd = /customer, stdio = /dev/null, 0 inherited fds, started AFTER step 1",file_has(ss,want));
+        st_check("LD_LIBRARY_PATH for stock: B's libs out, prefix kept, A's libs last",file_has(ss,"\nLD=/lib:/config/lib:/customer/libs:/config/wifi\n"));
+        { char c1; int r=(int)read(pp[0],&c1,1); st_check("ourui's 'device fd' is closed everywhere (EOF on the pipe) — touch grab/fb/UART cannot survive into the stock UI",r==0); }
+        st_check("step 4: the flag /customer/new is untouched by the runtime switch",access(fl,F_OK)==0);
+        st_check("step 6: boot_ui.log has the switch with time + reason=user-button; RESTART_NEEDED removed (stock started fresh)",file_has(bl,"RUNTIME SWITCH B->A: reason=user-button, stock UI pid")&&file_has(bl,"RESTART_NEEDED removed")&&access(rn,F_OK)!=0);
         file_print(ss,"     mock-stock: "); file_print(bl,"     boot_ui.log: ");
-        { int ws=0; waitpid(sw_child,&ws,0); st_check("mock-stock koerte videre efter ourui's 'exit' og sluttede selv (rc 0) — ingen signaler sendt",WIFEXITED(ws)&&WEXITSTATUS(ws)==0); }
+        { int ws=0; waitpid(sw_child,&ws,0); st_check("mock stock kept running after ourui's 'exit' and ended by itself (rc 0) — no signals sent",WIFEXITED(ws)&&WEXITSTATUS(ws)==0); }
         close(pp[0]);
-        /* uden arvet praefiks: præcis BOOT.md-værdien */
+        /* without an inherited prefix: exactly the BOOT.md value */
         unsetenv("LD_LIBRARY_PATH"); SW_PREP(); st_relfd=-1; sys_open(X_SWITCH,tn); tr.type=0; sys_confirm(tn);
-        st_check("uden arvet sti faar stock PRAECIS LD_LIBRARY_PATH=/customer/libs:/config/wifi (BOOT.md §9.2)",run==0&&sw_child>0&&file_has(ss,"\nLD=/customer/libs:/config/wifi\n"));
+        st_check("without an inherited path stock gets EXACTLY LD_LIBRARY_PATH=/customer/libs:/config/wifi (BOOT.md §9.2)",run==0&&sw_child>0&&file_has(ss,"\nLD=/customer/libs:/config/wifi\n"));
         if(sw_child>0) waitpid(sw_child,NULL,0);
-        /* --- stock dør straks: ourui må IKKE afslutte --- */
+        /* --- stock dies immediately: ourui must NOT exit --- */
         setenv("OURUI_MOCK_STOCK_FAIL","1",1); RN_PUT("x\n"); unlink(bl);
         SW_PREP(); sys_open(X_SWITCH,tn); tr.type=0; sys_confirm(tn);
-        st_check("stock-UI doer straks: ourui afslutter IKKE, tager UART/fb/touch igen, viser fejlen; RESTART_NEEDED urørt",run==1&&view==V_SYS&&xsel==X_SWITCH&&sw_child==0&&st_rel==1&&st_reacq==1&&sw_fail==SWF_DIED&&!strcmp(toast.msg,TR(TX_T_SW_FAIL_DIED))&&access(rn,F_OK)==0&&file_has(bl,"RUNTIME-SKIFT FEJLEDE"));
+        st_check("stock UI dies immediately: ourui does NOT exit, takes UART/fb/touch back, shows the error; RESTART_NEEDED untouched",run==1&&view==V_SYS&&xsel==X_SWITCH&&sw_child==0&&st_rel==1&&st_reacq==1&&sw_fail==SWF_DIED&&!strcmp(toast.msg,TR(TX_T_SW_FAIL_DIED))&&access(rn,F_OK)==0&&file_has(bl,"RUNTIME SWITCH FAILED"));
         unsetenv("OURUI_MOCK_STOCK_FAIL");
         /* --- OURUI_SWITCH_DRY --- */
         sw_dry=1; unlink(bl); SW_PREP(); sys_open(X_SWITCH,tn); tr.type=0; sys_confirm(tn); sw_dry=0;
-        st_check("OURUI_SWITCH_DRY=1: intet slippes, intet startes, ourui koerer videre; loggen siger hvad der VILLE ske",run==1&&st_rel==0&&sw_child==0&&access(ss,F_OK)!=0&&file_has(bl,"DRY-RUN: ville lukke UART/touch/fb")&&!strcmp(toast.msg,TR(TX_T_DRYRUN)));
-        /* --- run.sh-tilstand: stock findes (pauset) -> intet startes, intet signal; ren exit --- */
+        st_check("OURUI_SWITCH_DRY=1: nothing is released, nothing is started, ourui keeps running; the log says what WOULD happen",run==1&&st_rel==0&&sw_child==0&&access(ss,F_OK)!=0&&file_has(bl,"DRY-RUN: would close UART/touch/fb")&&!strcmp(toast.msg,TR(TX_T_DRYRUN)));
+        /* --- run.sh mode: stock exists (paused) -> nothing is started, no signal; clean exit --- */
         mock_runsh(root,6000); snprintf(tx,sizeof tx,"%s%s",root,SLOT_A_EXE); copy_big(self_bin,tx,0755); unlink(bl); unlink(rn);
         SW_PREP(); sys_open(X_SWITCH,tn); tr.type=0; sys_confirm(tn);
-        st_check("run.sh-tilstand: SKIFT NU = ren exit som REVERT — INTET startes (aldrig to demo_v9), run.sh SIGCONT'er",run==0&&view==V_BYE&&bye_mode==SWM_CONT&&sw_child==0&&st_rel==0&&access(ss,F_OK)!=0&&file_has(bl,"run.sh-tilstand"));
+        st_check("run.sh mode: SWITCH NOW = clean exit like REVERT — NOTHING is started (never two demo_v9), run.sh SIGCONTs",run==0&&view==V_BYE&&bye_mode==SWM_CONT&&sw_child==0&&st_rel==0&&access(ss,F_OK)!=0&&file_has(bl,"run.sh mode"));
         unsetenv("OURUI_MOCK_STOCK"); unsetenv("OURUI_MOCK_RELEASED");
       }
-      /* --- stock-binæren mangler helt --- */
+      /* --- the stock binary is missing entirely --- */
       mock_boot_b(root); mock_rm(root,SLOT_A_EXE); boot_refresh();
-      st_check("/customer/demo_v9 mangler: switch_launch afviser foer fork",switch_locked()&&!switch_launch(er,sizeof er)&&strstr(er,"mangler")&&sw_fail==SWF_NOBIN);
+      st_check("/customer/demo_v9 missing: switch_launch refuses before fork",switch_locked()&&!switch_launch(er,sizeof er)&&strstr(er,"missing")&&sw_fail==SWF_NOBIN);
       dev_release=NULL; dev_reacquire=NULL; st_relfile=NULL; st_relfd=-1; view=V_MAIN; xsel=-1; run=1; sw_child=0; }
 
-    printf("== selftest: UI-ruter (SKIFT NU, BOOT-UI; v6.8: ingen REVERT-knap) ==\n");
+    printf("== selftest: UI routes (SWITCH NOW, BOOT UI; v6.8: no REVERT button) ==\n");
     { ms_t tn=20000; int ns=tier_count(2);
       sw_sim=1; sim_ready(tn); memset(&wq,0,sizeof wq); memset(&sav,0,sizeof sav); act.pending=ACT_NONE; view=V_MAIN; page=PG_HOME; sel=-1; xsel=-1; tr.type=0; run=1; toast.dur=0; rip.on=0;
       mock_boot_b(root); unlink(rn);
       sys_open(X_SWITCH,tn); tr.type=0;
-      st_check("SKIFT TIL ORIGINAL NU i slot B-boot (intet stock-UI): skift-bekraeftelsen aabner (SKIFT + TILBAGE kan rammes)",view==V_SYS&&xsel==X_SWITCH&&run==1&&switch_mode()==SWM_LAUNCH&&hit_test(310,316,tn)==T_SAVE&&hit_test(168,316,tn)==T_CANCEL);
+      st_check("SWITCH TO ORIGINAL NOW in a slot B boot (no stock UI): the switch confirmation opens (SWITCH + BACK are hittable)",view==V_SYS&&xsel==X_SWITCH&&run==1&&switch_mode()==SWM_LAUNCH&&hit_test(310,316,tn)==T_SAVE&&hit_test(168,316,tn)==T_CANCEL);
       reg[33]=0x4121; sys_confirm(tn);
-      st_check("SKIFT NU under aktivitet (damp): afvist m. besked, ourui koerer videre",run==1&&view==V_SYS&&!strcmp(toast.msg,TR(TX_T_WAIT_ACT)));
+      st_check("SWITCH NOW during an activity (steam): refused with a message, ourui keeps running",run==1&&view==V_SYS&&!strcmp(toast.msg,TR(TX_T_WAIT_ACT)));
       reg[33]=0x0101; rip.on=1; sys_confirm(tn);
-      st_check("SKIFT NU: sidste frame (uden ripple/toast) + run=0 — tilstand 'start stock'",run==0&&view==V_BYE&&bye_mode==SWM_LAUNCH&&!rip.on&&!toast.dur);
+      st_check("SWITCH NOW: last frame (without ripple/toast) + run=0 — mode 'start stock'",run==0&&view==V_BYE&&bye_mode==SWM_LAUNCH&&!rip.on&&!toast.dur);
       run=1; view=V_MAIN; xsel=-1; tr.type=0; mock_runsh(root,6000); unlink(rn);
       sys_open(X_SWITCH,tn); tr.type=0; sys_confirm(tn);
-      st_check("SKIFT NU i run.sh-tilstand uden gemte aendringer: ren exit (run.sh SIGCONT'er) — det REVERT-knappen gjorde til og med v6.7",run==0&&view==V_BYE&&bye_mode==SWM_CONT&&sw_child==0);
+      st_check("SWITCH NOW in run.sh mode without saved changes: clean exit (run.sh SIGCONTs) — what the REVERT button did up to and including v6.7",run==0&&view==V_BYE&&bye_mode==SWM_CONT&&sw_child==0);
       run=1; view=V_MAIN; xsel=-1; tr.type=0; mock_runsh(root,40); snprintf(tx,sizeof tx,"x\nboot_id=%s mono_s=5000\n",bid); RN_PUT(tx);
       sys_open(X_SWITCH,tn); tr.type=0; sys_confirm(tn); tr.type=0;
       int remind=view==V_SYS&&xsel==X_EXIT&&x_from_switch&&run==1;
       activate(T_CANCEL,tn); tr.type=0;
-      st_check("  efter GEM: exit-paamindelsen vises FOER exit; TILBAGE annullerer, intet startes",remind&&view==V_MAIN&&run==1&&sw_child==0);
+      st_check("  after SAVE: the exit reminder is shown BEFORE exit; BACK cancels, nothing is started",remind&&view==V_MAIN&&run==1&&sw_child==0);
       run=1; view=V_MAIN; xsel=-1; tr.type=0;
       sys_open(X_SWITCH,tn); tr.type=0; sys_confirm(tn); tr.type=0;
       int viaexit=view==V_SYS&&xsel==X_EXIT&&x_from_switch&&run==1; sys_confirm(tn);
-      st_check("SKIFT NU i run.sh-tilstand efter GEM: paamindelsen foerst, derefter exit (run.sh SIGCONT'er)",viaexit&&run==0&&view==V_BYE&&bye_mode==SWM_CONT);
+      st_check("SWITCH NOW in run.sh mode after SAVE: the reminder first, then exit (run.sh SIGCONTs)",viaexit&&run==0&&view==V_BYE&&bye_mode==SWM_CONT);
       run=1; view=V_MAIN; xsel=-1; tr.type=0; x_from_switch=0;
       mock_boot_b(root); mock_rm(root,SLOT_A_EXE); sys_open(X_SWITCH,tn); tr.type=0;
       int lk=sys_locked()&&hit_test(310,316,tn)==T_NONE&&hit_test(240,316,tn)==T_CANCEL; sys_confirm(tn); lk&=run==1;
       sys_close(tn); tr.type=0;
-      st_check("stock-binaeren mangler: SKIFT er laast (kun TILBAGE), ourui koerer videre",lk&&run==1&&view==V_MAIN);
+      st_check("the stock binary is missing: SWITCH is locked (BACK only), ourui keeps running",lk&&run==1&&view==V_MAIN);
       run=1; view=V_MAIN; xsel=-1; tr.type=0;
-      { int z=1; page=PG_HOME; sel=-1; static const uint16_t ws[2]={0x0101,0x1307};          /* v6.8: REVERT-pillen er vaek */
+      { int z=1; page=PG_HOME; sel=-1; static const uint16_t ws[2]={0x0101,0x1307};          /* v6.8: the REVERT pill is gone */
         for(int q=0;q<2;q++){ reg[33]=ws[q]; for(int y=404;y<480;y+=2) for(int x=150;x<330;x+=2){ int t=hit_test(x,y,tn);
-            if(t!=T_NONE&&!(t==T_GEAR&&in_r(x,y,CX-GEAR_HW,GEAR_Y-22,2*GEAR_HW,46))) z=0; } }   /* v6.11: kun tandhjulet (side-skift, ingen frame) */
+            if(t!=T_NONE&&!(t==T_GEAR&&in_r(x,y,CX-GEAR_HW,GEAR_Y-22,2*GEAR_HW,46))) z=0; } }   /* v6.11: only the gear (page change, no frame) */
         reg[33]=0x0101; int nr=1; for(int lg=0;lg<NLANG;lg++) for(int i=0;i<NSTR;i++) if(STR[lg][i]&&strstr(STR[lg][i],"REVERT")) nr=0;
-        st_check("v6.8 HJEM: ingen tryk-zone hvor REVERT-pillen sad (feltet 150..329 x 404..479 giver T_NONE — ledig og under bryg — undtagen v6.11's tandhjul, som kun skifter side); ingen UI-streng (EN/DA) naevner REVERT",z&&nr); }
+        st_check("v6.8 HOME: no touch zone where the REVERT pill used to be (the area 150..329 x 404..479 gives T_NONE — idle and during a brew — except v6.11's gear, which only changes page); no UI string (EN/DA) mentions REVERT",z&&nr); }
       mock_boot_b(root); page=PG_T2; scroll[PG_T2]=scroll_max(PG_T2);
       int yb=(int)(row_y0(PG_T2,ns+X_BOOTUI)-scroll[PG_T2])+25, ys=(int)(row_y0(PG_T2,ns+X_SWITCH)-scroll[PG_T2])+25;
-      st_check("SYSTEM-listen: BOOT-UI og SKIFT TIL ORIGINAL NU er raekke 12 og 13 (efter UI-SPROG + 10 config-raekker) — begge kan rammes i bunden af listen",ns==11&&hit_test(240,yb,tn)==T_ROW0+ns&&hit_test(240,ys,tn)==T_ROW0+ns+1&&ys+25<LIST_VY1&&hit_test(240,(int)(row_y0(PG_T2,0)-scroll[PG_T2])+25,tn)!=T_ROW0);
+      st_check("SYSTEM list: BOOT UI and SWITCH TO ORIGINAL NOW are rows 12 and 13 (after UI LANGUAGE + 10 config rows) — both hittable at the bottom of the list",ns==11&&hit_test(240,yb,tn)==T_ROW0+ns&&hit_test(240,ys,tn)==T_ROW0+ns+1&&ys+25<LIST_VY1&&hit_test(240,(int)(row_y0(PG_T2,0)-scroll[PG_T2])+25,tn)!=T_ROW0);
       activate(T_ROW0+ns,tn); tr.type=0;
-      st_check("BOOT-UI aabner m. det aktuelle valg (flag sat -> OURUI)",view==V_SYS&&xsel==X_BOOTUI&&x_edit==1&&x_orig==1);
+      st_check("BOOT UI opens with the current choice (flag set -> OURUI)",view==V_SYS&&xsel==X_BOOTUI&&x_edit==1&&x_orig==1);
       ui_touch(TE_DOWN,84,184,tn); ui_touch(TE_UP,84,184,tn);
-      st_check("− vaelger ORIGINAL; intet skrives foer GEM",x_edit==0&&x_orig==1&&access(fl,F_OK)==0);
+      st_check("− selects ORIGINAL; nothing is written before SAVE",x_edit==0&&x_orig==1&&access(fl,F_OK)==0);
       activate(T_SAVE,tn); tr.type=0;
-      st_check("GEM fjerner flaget, lukker visningen og kvitterer",access(fl,F_OK)!=0&&view==V_MAIN&&!strcmp(toast.msg,TR(TX_T_BOOT_SAVED_ORIG)));
+      st_check("SAVE removes the flag, closes the view and confirms",access(fl,F_OK)!=0&&view==V_MAIN&&!strcmp(toast.msg,TR(TX_T_BOOT_SAVED_ORIG)));
       activate(T_ROW0+ns,tn); tr.type=0; ui_touch(TE_DOWN,396,184,tn); ui_touch(TE_UP,396,184,tn); int e1=x_edit; activate(T_CANCEL,tn); tr.type=0;
-      st_check("+ og derefter ANNULLER: flaget er uaendret",e1==1&&access(fl,F_OK)!=0&&view==V_MAIN);
-      if(geteuid()!=0){   /* §9.1: skrivefejl -> vis fejl, behold gammel tilstand */
+      st_check("+ and then CANCEL: the flag is unchanged",e1==1&&access(fl,F_OK)!=0&&view==V_MAIN);
+      if(geteuid()!=0){   /* §9.1: write error -> show the error, keep the old state */
           activate(T_ROW0+ns,tn); tr.type=0; ui_touch(TE_DOWN,396,184,tn); ui_touch(TE_UP,396,184,tn);
           chmod(cdir,0555); activate(T_SAVE,tn); chmod(cdir,0755);
-          st_check("GEM paa skrivebeskyttet filsystem: fejl-besked, visningen bliver staaende m. den GAMLE tilstand, intet flag",view==V_SYS&&xsel==X_BOOTUI&&!strcmp(toast.msg,TR(TX_T_BOOT_ERR))&&x_edit==0&&x_orig==0&&access(fl,F_OK)!=0);
+          st_check("SAVE on a read-only file system: error message, the view stays with the OLD state, no flag",view==V_SYS&&xsel==X_BOOTUI&&!strcmp(toast.msg,TR(TX_T_BOOT_ERR))&&x_edit==0&&x_orig==0&&access(fl,F_OK)!=0);
           tr.type=0; activate(T_CANCEL,tn); tr.type=0; toast.dur=0; }
       mock_slot_b(root,1,MB_VENDOR); activate(T_ROW0+ns,tn); tr.type=0;
       int lk2=sys_locked()&&hit_test(84,184,tn)==T_NONE&&hit_test(396,184,tn)==T_NONE&&hit_test(310,316,tn)==T_NONE&&hit_test(240,316,tn)==T_CANCEL;
       x_edit=1; sys_confirm(tn);
-      st_check("laast BOOT-UI: ingen −/+/GEM i hit-testen (kun TILBAGE) — og et direkte GEM-kald afvises af vagten",lk2&&access(fl,F_OK)!=0);
+      st_check("locked BOOT UI: no −/+/SAVE in the hit test (BACK only) — and a direct SAVE call is refused by the guard",lk2&&access(fl,F_OK)!=0);
       view=V_MAIN; xsel=-1; tr.type=0; page=PG_HOME; run=1; toast.dur=0; sw_sim=0; }
 
-    printf("== selftest: layout (alle tilstande, begge sprog: tekst inden for ring/cirkel/felt) ==\n");
+    printf("== selftest: layout (all states, both languages: text within ring/circle/field) ==\n");
     for(int lg=0;lg<NLANG;lg++){ int ok=1; SysT t; view=V_SYS; lang_set(lg);
       for(int x=X_BOOTUI;x<=X_EXIT;x++) for(int lock=0;lock<4;lock++) for(int f=0;f<2;f++) for(int e=0;e<2;e++) for(int m=0;m<4;m++){
           xsel=x; bs.lock=lock; bs.flag=f; x_orig=f; x_edit=e; bs.a_bin=!(m==3); bs.n_stock=(m==1||m==2)?1:0; bs.stock[0]=18712; x_pending=(m==2); bs.sw_pid=(lock&1)?301:0;
           sys_text(&t);
           float tw=text_wf(t.title,F_S)+(x==X_EXIT?text_wf(IC_WARN,F_IC)+9:0);
-          LAY(tw,2*ring_half(78,20),"titel",t.title); LAY(text_wf(t.sub,F_XS),2*ring_half(106,11),"underlinje",t.sub);
+          LAY(tw,2*ring_half(78,20),"title",t.title); LAY(text_wf(t.sub,F_XS),2*ring_half(106,11),"subline",t.sub);
           if(t.hero) LAY(text_wf(t.hero,sys_hero_font(t.hero)),x==X_BOOTUI?212:2*ring_half(151,44),"hero",t.hero);
-          if(t.status) LAY(text_wf(t.status,F_XS),KB[KST].maxw,"status (felt 360 px)",t.status);
-          LAY(text_wf(t.note,F_XS),KB[KNOTE].maxw,"note (felt 400 px)",t.note);
-          LAY(text_wf(t.l1,F_XS),KB[KF1].maxw,"fodlinje 1 (fri af gauge-enderne)",t.l1); LAY(text_wf(t.l2,F_XS),2*chord_half(416,11)-12,"fodlinje 2",t.l2);
-          if(t.ok) LAY(text_wf(t.ok,x==X_SWITCH?F_XS:F_S),104,"knap",t.ok); LAY(text_wf(t.cancel,F_XS),104,"knap",t.cancel);
+          if(t.status) LAY(text_wf(t.status,F_XS),KB[KST].maxw,"status (field 360 px)",t.status);
+          LAY(text_wf(t.note,F_XS),KB[KNOTE].maxw,"note (field 400 px)",t.note);
+          LAY(text_wf(t.l1,F_XS),KB[KF1].maxw,"footer 1 (clear of the gauge ends)",t.l1); LAY(text_wf(t.l2,F_XS),2*chord_half(416,11)-12,"footer 2",t.l2);
+          if(t.ok) LAY(text_wf(t.ok,x==X_SWITCH?F_XS:F_S),104,"button",t.ok); LAY(text_wf(t.cancel,F_XS),104,"button",t.cancel);
       }
-      LAY(text_wf(TR(TX_Y_EXIT_L1),F_S),2*ring_half(138,14)-12,"exit-linje 1",TR(TX_Y_EXIT_L1)); LAY(text_wf(TR(TX_Y_EXIT_L2),F_S),2*ring_half(162,17)-12,"exit-linje 2",TR(TX_Y_EXIT_L2));
-      LAY(text_wf(TR(TX_Y_EXIT_CMD),F_M)+40,2*ring_half(188,38)-12,"kommando-felt",TR(TX_Y_EXIT_CMD));
-      st_check(stl("system-visningerne (BOOT-UI / SKIFT / exit-paamindelse): titel, hero, status, note, fodlinjer og knapper passer i alle tilstande"),ok);
+      LAY(text_wf(TR(TX_Y_EXIT_L1),F_S),2*ring_half(138,14)-12,"exit line 1",TR(TX_Y_EXIT_L1)); LAY(text_wf(TR(TX_Y_EXIT_L2),F_S),2*ring_half(162,17)-12,"exit line 2",TR(TX_Y_EXIT_L2));
+      LAY(text_wf(TR(TX_Y_EXIT_CMD),F_M)+40,2*ring_half(188,38)-12,"command field",TR(TX_Y_EXIT_CMD));
+      st_check(stl("the system views (BOOT UI / SWITCH / exit reminder): title, hero, status, note, footers and buttons fit in all states"),ok);
       ok=1; view=V_MAIN;
       for(int lock=0;lock<4;lock++) for(int f=0;f<2;f++) for(int a=0;a<2;a++) for(int x=0;x<NXROW;x++){
           const char*label,*sub,*val; int lk; bs.lock=lock; bs.flag=f; bs.a_bin=a; bs.n_stock=0; xrow_text(x,&label,&sub,&val,&lk);
-          LAY(text_wf(sub,F_XS),KB[KXSUB].maxw,"raekke-underlinje",sub); LAY(94+text_wf(label,F_S)+12+(val?text_wf(val,F_M):0),lk?388:372,"raekke-label+vaerdi",label);
+          LAY(text_wf(sub,F_XS),KB[KXSUB].maxw,"row subline",sub); LAY(94+text_wf(label,F_S)+12+(val?text_wf(val,F_M):0),lk?388:372,"row label+value",label);
       }
-      LAY(text_wf(TR(TX_X_CAP),F_XS),250,"sektions-overskrift",TR(TX_X_CAP));
-      st_check(stl("SYSTEM-raekkerne BOOT-UI / SKIFT: label, vaerdi og underlinje (inkl. alle laase-aarsager) passer i raekken"),ok);
-      /* ---- DIAGNOSE: de 14 øverste celler, boot-blokken og OM-blokken ---- */
+      LAY(text_wf(TR(TX_X_CAP),F_XS),250,"section heading",TR(TX_X_CAP));
+      st_check(stl("SYSTEM rows BOOT UI / SWITCH: label, value and subline (incl. all lock reasons) fit in the row"),ok);
+      /* ---- DIAGNOSE: the top 14 cells, the boot block and the ABOUT block ---- */
       ok=1; { char v[DG_NB][28]; uint32_t col[DG_NB]; char exe[160],evt[128],pids[48],lng[96]; char tv[DG_N][28]; uint32_t tc[DG_N];
       for(int i=0;i<DG_N+DG_NB;i+=2){ const char*la=TR(DG_LAB[i]),*lb=TR(DG_LAB[i+1]); float a=text_wf(la,F_XS),b2=text_wf(lb,F_XS);
-          LAY(a/2+b2/2+8,DG_COL_R-DG_COL_L,"diagnose label-par (skal ikke roere hinanden)",la); LAY(a,2*(DG_COL_L-40),"diagnose-label v.",la); LAY(b2,2*(440-DG_COL_R),"diagnose-label h.",lb); }
+          LAY(a/2+b2/2+8,DG_COL_R-DG_COL_L,"diagnose label pair (must not touch)",la); LAY(a,2*(DG_COL_L-40),"diagnose label L",la); LAY(b2,2*(440-DG_COL_R),"diagnose label R",lb); }
       { int kro=ro_mode,kw=cfg_writes,kok=cfg_ok,kph=act.ph; ms_t ko=rx_ok,kb=rx_bad; uint16_t kr[REGN]; memcpy(kr,reg,sizeof reg); float kf=ft_last,km=ft_max;
         ro_mode=1; cfg_writes=1; rx_ok=4294967295u; rx_bad=9999; rx_resync=9999; reg[33]=0xFFFF; reg[34]=reg[35]=reg[36]=0xFF; reg[49]=255; reg[61]=60; reg[50]=reg[58]=9999; reg[112]=reg[113]=0xFFFF; reg[114]=100; reg_seen[112]=1; ft_last=99.9f; ft_max=99.9f;
         wq.n_ok=9999; wq.n_retx=99; wq.n_fail=99; wq.n_block=99;
         for(int c=0;c<2;c++) for(int ph=0;ph<NPHASE;ph++) for(int br=0;br<=BPR_SKIP+2;br++){ act.ph=ph; cfg_ok=c; diag_top_text(tv,tc,1000000000L);
             memset(&bp,0,sizeof bp); if(br<=BPR_SKIP){ bp.ra=bp.rb=br; bp.state=br?BP_DONE:BP_OFF; } else bp.state=br==BPR_SKIP+1?BP_WAIT_A:BP_A;
             diag_top_text(tv,tc,1000000000L);
-            for(int i=0;i<DG_N;i+=2){ float a=text_wf(tv[i],F_S),b2=text_wf(tv[i+1],F_S); LAY(a/2+b2/2+6,DG_COL_R-DG_COL_L,"diagnose celle-par",tv[i]); LAY(a,2*(DG_COL_L-40),"diagnose-celle v.",tv[i]); LAY(b2,2*(440-DG_COL_R),"diagnose-celle h.",tv[i+1]); } }
+            for(int i=0;i<DG_N;i+=2){ float a=text_wf(tv[i],F_S),b2=text_wf(tv[i+1],F_S); LAY(a/2+b2/2+6,DG_COL_R-DG_COL_L,"diagnose cell pair",tv[i]); LAY(a,2*(DG_COL_L-40),"diagnose cell L",tv[i]); LAY(b2,2*(440-DG_COL_R),"diagnose cell R",tv[i+1]); } }
         ro_mode=kro; cfg_writes=kw; cfg_ok=kok; act.ph=kph; rx_ok=ko; rx_bad=kb; rx_resync=0; memset(&bp,0,sizeof bp); memcpy(reg,kr,sizeof reg); ft_last=kf; ft_max=km; memset(&wq,0,sizeof wq); }
-      for(int i=0;i<DG_NB;i++) LAY(text_wf(TR(DG_LAB[DG_N+i]),F_XS),KB[KDL].maxw,"diagnose-label",TR(DG_LAB[DG_N+i]));
+      for(int i=0;i<DG_NB;i++) LAY(text_wf(TR(DG_LAB[DG_N+i]),F_XS),KB[KDL].maxw,"diagnose label",TR(DG_LAB[DG_N+i]));
       for(int lock=0;lock<4;lock++) for(int f=0;f<2;f++) for(int sl=0;sl<3;sl++) for(int m=0;m<3;m++) for(int g=0;g<3;g++){
           bs.lock=lock; bs.flag=f; bs.self_slot=sl; bs.self_pid=32767; bs.sw_pid=m?32766:0; bs.n_stock=m?1:0; bs.stock[0]=32765; bs.stock_run=(m==2); bs.sw_log=g;
-          snprintf(bs.self_exe,sizeof bs.self_exe,"%s",sl==SLOT_B?SLOT_B_EXE:(g?"/new_customer/ourui/en/meget/lang/sti/som/ikke/kan/vaere/paa/en/linje/ourui_v6_testbuild":""));
-          snprintf(bs.sw_evt,sizeof bs.sw_evt,"12:59:59 skift FEJL: B (pid 32767) kom ikke op \xE2\x80\x94 fallback: SIGCONT A, dr\xC3\xA6" "b B");
+          snprintf(bs.self_exe,sizeof bs.self_exe,"%s",sl==SLOT_B?SLOT_B_EXE:(g?"/new_customer/ourui/a/very/long/path/that/cannot/ever/fit/on/one/line/ourui_v6_testbuild":""));
+          snprintf(bs.sw_evt,sizeof bs.sw_evt,"12:59:59 switch FAILED: B (pid 32767) did not come up \xE2\x80\x94 fallback: SIGCONT A, kill B");
           bs.n_stock=m?(m==2?2:1):0;
           diag_boot_text(v,col,exe,sizeof exe,evt,sizeof evt,pids,sizeof pids);
-          for(int i=0;i<DG_NB;i++) LAY(text_wf(v[i],F_S),KB[KDV].maxw,"diagnose-celle",v[i]);
-          LAY(text_wf(pids,F_S),DG_FULL_W,"diagnose pid-linje",pids);
-          LAY(text_wf(exe,F_XS),DG_FULL_W,"diagnose exe",exe); LAY(text_wf(evt,F_XS),DG_FULL_W,"diagnose haendelse",evt);
+          for(int i=0;i<DG_NB;i++) LAY(text_wf(v[i],F_S),KB[KDV].maxw,"diagnose cell",v[i]);
+          LAY(text_wf(pids,F_S),DG_FULL_W,"diagnose pid line",pids);
+          LAY(text_wf(exe,F_XS),DG_FULL_W,"diagnose exe",exe); LAY(text_wf(evt,F_XS),DG_FULL_W,"diagnose event",evt);
       }
-      LAY(text_wf(TR(TX_DG_CAP),F_XS),250,"diagnose-overskrift",TR(TX_DG_CAP)); LAY(text_wf(TR(TX_DG_ABOUT),F_XS),250,"diagnose-overskrift",TR(TX_DG_ABOUT));
-      { int ks=lang_src; for(lang_src=LS_DEFAULT;lang_src<=LS_SESSION;lang_src++){ diag_lang_text(lng,sizeof lng); LAY(text_wf(lng,F_S),DG_FULL_W,"OM: UI-sprog-linje",lng); } lang_src=ks; }
-      LAY(text_wf(PRODUCT " " OURUI_VERSION,F_S),DG_FULL_W,"OM: ordmaerke + version",PRODUCT " " OURUI_VERSION);
-      /* v6.10: TRYK · ESTIMAT-blokken — anker 1..15 bar, nu-linjen m. 5-cifret raa vaerdi i alle tre former, noterne, toasten */
+      LAY(text_wf(TR(TX_DG_CAP),F_XS),250,"diagnose heading",TR(TX_DG_CAP)); LAY(text_wf(TR(TX_DG_ABOUT),F_XS),250,"diagnose heading",TR(TX_DG_ABOUT));
+      { int ks=lang_src; for(lang_src=LS_DEFAULT;lang_src<=LS_SESSION;lang_src++){ diag_lang_text(lng,sizeof lng); LAY(text_wf(lng,F_S),DG_FULL_W,"ABOUT: UI language line",lng); } lang_src=ks; }
+      LAY(text_wf(PRODUCT " " OURUI_VERSION,F_S),DG_FULL_W,"ABOUT: wordmark + version",PRODUCT " " OURUI_VERSION);
+      /* v6.10: the PRESSURE · ESTIMATE block — anchor 1..15 bar, the now line with a 5-digit raw value in all three forms, the notes, the toast */
       { uint16_t k51=reg[51]; int kph=act.ph,kv=SET[S_PIPRESS].val; char anc[64],nw[64],n2[64],tb[96]; uint32_t c;
-        LAY(text_wf(TR(TX_DG_PCAP),F_XS),250,"diagnose-overskrift",TR(TX_DG_PCAP));
+        LAY(text_wf(TR(TX_DG_PCAP),F_XS),250,"diagnose heading",TR(TX_DG_PCAP));
         for(int av=1;av<=15;av+=14) for(int q=0;q<4;q++){ SET[S_PIPRESS].val=av; reg[51]=(uint16_t)(q==0?1790*av/4:(q==1?1790*4/av:65535)); act.ph=q==3?PH_EXT:PH_READY;
             diag_press_text(anc,sizeof anc,nw,sizeof nw,&c,n2,sizeof n2);
-            LAY(text_wf(anc,F_S),DG_FULL_W,"TRYK · ESTIMAT: anker-linjen",anc); LAY(text_wf(nw,F_S),DG_FULL_W,"TRYK · ESTIMAT: nu-linjen",nw); LAY(text_wf(n2,F_XS),DG_FULL_W,"TRYK · ESTIMAT: note 2",n2);
-            snprintf(tb,sizeof tb,TR(TX_T_PINFO),p_anchor_bar(),P_ANCHOR_RAW); LAY(text_wf(tb,F_XS),TOAST_TW,"grundlags-toast",tb); }
+            LAY(text_wf(anc,F_S),DG_FULL_W,"PRESSURE · ESTIMATE: anchor line",anc); LAY(text_wf(nw,F_S),DG_FULL_W,"PRESSURE · ESTIMATE: now line",nw); LAY(text_wf(n2,F_XS),DG_FULL_W,"PRESSURE · ESTIMATE: note 2",n2);
+            snprintf(tb,sizeof tb,TR(TX_T_PINFO),p_anchor_bar(),P_ANCHOR_RAW); LAY(text_wf(tb,F_XS),TOAST_TW,"basis toast",tb); }
         reg[51]=k51; act.ph=kph; SET[S_PIPRESS].val=kv; }
-      LAY(text_wf(TR(TX_ST_PULSE),F_M),STAT_PITCH-8,"BAR-feltet: PULS",TR(TX_ST_PULSE)); LAY(text_wf("65535",F_M),STAT_PITCH-8,"BAR-feltet: raa vaerdi","65535"); }
-      st_check(stl("DIAGNOSE: label-/celle-par roerer ikke hinanden, boot-celler <= kolonnebredde, lange stier/haendelser afkortes m. …, TRYK · ESTIMAT og OM-blokken passer"),ok);
-      ok=1; for(bye_mode=0;bye_mode<2;bye_mode++) LAY(text_wf(bye_sub(),F_XS),340,"farvel",bye_sub()); bye_mode=0;
-      LAY(text_wf(TR(TX_Y_BYE_T),F_M),340,"farvel",TR(TX_Y_BYE_T)); LAY(text_wf(TR(TX_Y_BYE_CLOSED),F_XS),340,"farvel",TR(TX_Y_BYE_CLOSED));
+      LAY(text_wf(TR(TX_ST_PULSE),F_M),STAT_PITCH-8,"BAR field: PULSE",TR(TX_ST_PULSE)); LAY(text_wf("65535",F_M),STAT_PITCH-8,"BAR field: raw value","65535"); }
+      st_check(stl("DIAGNOSE: label/cell pairs do not touch, boot cells <= column width, long paths/events truncated with …, PRESSURE · ESTIMATE and the ABOUT block fit"),ok);
+      ok=1; for(bye_mode=0;bye_mode<2;bye_mode++) LAY(text_wf(bye_sub(),F_XS),340,"goodbye",bye_sub()); bye_mode=0;
+      LAY(text_wf(TR(TX_Y_BYE_T),F_M),340,"goodbye",TR(TX_Y_BYE_T)); LAY(text_wf(TR(TX_Y_BYE_CLOSED),F_XS),340,"goodbye",TR(TX_Y_BYE_CLOSED));
       { char q[64]="LC-test " LC "kill $(pidof demo_v9)" UC " OK"; int w0=text_w(q,F_XS); fit_text(q,F_XS,90); ok&=text_w(q,F_XS)<=90&&w0>90&&strstr(q,"\xE2\x80\xA6")!=NULL;
         ok&=text_w(LC "demo_v9",F_S)<text_w("DEMO_V9",F_S)&&text_w(LC UC,F_S)==0; }
-      st_check(stl("skift-skaerm + kode-spaend (smaa bogstaver kun mellem LC/UC, styretegn fylder 0 px, afkortning m. …)"),ok);
-      /* ---- HJEM + splash (v6.3) ---- */
+      st_check(stl("switch screen + code spans (lowercase only between LC/UC, control characters take 0 px, truncation with …)"),ok);
+      /* ---- HOME + splash (v6.3) ---- */
       ok=1;
       for(int ss=0;ss<NSS;ss++){ float w[3]; for(int i=0;i<3;i++) w[i]=text_wf(TR(STAT_SET[ss][i]),F_XS);
-          LAY(w[0],2*(CX-STAT_PITCH-96),"stat-label v. (felt 96..384)",TR(STAT_SET[ss][0])); LAY(w[2],2*(384-CX-STAT_PITCH),"stat-label h.",TR(STAT_SET[ss][2]));
-          LAY(w[0]/2+w[1]/2+STAT_GAP,STAT_PITCH,"stat-label-par (v6.11: >= 16 px luft)",TR(STAT_SET[ss][1])); LAY(w[1]/2+w[2]/2+STAT_GAP,STAT_PITCH,"stat-label-par (v6.11: >= 16 px luft)",TR(STAT_SET[ss][2]));
-          if(STAT_SET[ss][1]==TX_ST_BAR){ float wr=text_wf(TR(TX_ST_PRAW),F_XS); LAY(w[0]/2+wr/2+STAT_GAP,STAT_PITCH,"stat-label-par (RAA, v6.10)",TR(TX_ST_PRAW)); LAY(wr/2+w[2]/2+STAT_GAP,STAT_PITCH,"stat-label-par (RAA, v6.10)",TR(TX_ST_PRAW)); } }
+          LAY(w[0],2*(CX-STAT_PITCH-96),"stat label L (field 96..384)",TR(STAT_SET[ss][0])); LAY(w[2],2*(384-CX-STAT_PITCH),"stat label R",TR(STAT_SET[ss][2]));
+          LAY(w[0]/2+w[1]/2+STAT_GAP,STAT_PITCH,"stat label pair (v6.11: >= 16 px gap)",TR(STAT_SET[ss][1])); LAY(w[1]/2+w[2]/2+STAT_GAP,STAT_PITCH,"stat label pair (v6.11: >= 16 px gap)",TR(STAT_SET[ss][2]));
+          if(STAT_SET[ss][1]==TX_ST_BAR){ float wr=text_wf(TR(TX_ST_PRAW),F_XS); LAY(w[0]/2+wr/2+STAT_GAP,STAT_PITCH,"stat label pair (RAW, v6.10)",TR(TX_ST_PRAW)); LAY(wr/2+w[2]/2+STAT_GAP,STAT_PITCH,"stat label pair (RAW, v6.10)",TR(TX_ST_PRAW)); } }
       { static const short cp[3][2]={{TX_C_PRESS,TX_C_WEIGHT},{TX_C_WEIGHT,TX_C_TARGET},{TX_C_MILK,TX_C_TARGET}};
-        for(int i=0;i<3;i++) LAY(text_wf(TR(cp[i][0]),F_XS)+text_wf(TR(cp[i][1]),F_XS)+12,236,"chart-billedtekster (felt 236)",TR(cp[i][0]));
-        for(int i=0;i<3;i++) LAY(text_wf(TR(cp[i][0]),F_XS)+text_wf(TR(TX_C_RAW),F_XS)+12,236,"chart-billedtekst + RAA-maerket (v6.9)",TR(TX_C_RAW));
-        /* v6.11: hint-linjerne i det tomme chart-felt (felt HINT_W, 4 px luft i hver side) — alle tekster, der kan staa der */
+        for(int i=0;i<3;i++) LAY(text_wf(TR(cp[i][0]),F_XS)+text_wf(TR(cp[i][1]),F_XS)+12,236,"chart captions (field 236)",TR(cp[i][0]));
+        for(int i=0;i<3;i++) LAY(text_wf(TR(cp[i][0]),F_XS)+text_wf(TR(TX_C_RAW),F_XS)+12,236,"chart caption + RAW tag (v6.9)",TR(TX_C_RAW));
+        /* v6.11: the hint lines in the empty chart field (field HINT_W, 4 px margin on each side) — every text that can appear there */
         { static const short hl[]={TX_C_HINT,TX_C_HINT2,TX_C_DIAGREF,TX_G_RO,TX_G_BUSY,TX_G_WAIT,TX_G_NOCFG,TX_G_OOR};
-          for(size_t i=0;i<sizeof hl/sizeof hl[0];i++) LAY(text_wf(TR(hl[i]),F_XS),HINT_W-8,"chart-hint (felt 304, v6.11)",TR(hl[i]));
-          char eb[96]; snprintf(eb,sizeof eb,TR(TX_C_ERRCODE),"E3"); LAY(text_wf(eb,F_XS),HINT_W-8,"chart-hint (felt 304, v6.11)",eb); } }
-      for(int k=0;k<4;k++){ LAY(text_wf(TR(STOP_BTN[k]),stop_font(1)),STOP_PILL1_W-28,"STOP-knap (v6.13: pille 160, F_S)",TR(STOP_BTN[k]));
-                            LAY(text_wf(TR(STOP_BTN[k]),stop_font(2)),STOP_PILL2_W-28,"STOP-knap, to side om side (v6.13: pille 136, F_XS)",TR(STOP_BTN[k])); }
-      for(int k=0;k<4;k++){ char sb[96]; snprintf(sb,sizeof sb,TR(TX_H_STARTING),TR(ACT_NAME[k])); LAY(text_wf(sb,F_XS),KB[KSUB].maxw,"HJEM-underlinje",sb); }
-      LAY(hypotf(brand_wf(F_XS)/2,(float)(CY-HOME_BRAND_Y)),196.5f-4,"HJEM-titellinjen (skal ligge inden for fremskridts-ringen r 196.5)",PRODUCT);
-      LAY(HOME_BRAND_Y+(int)FS[F_XS].cap+8,76,"HJEM-titellinjen (fri af fase-chippen y 76)",PRODUCT);
-      LAY(brand_wf(F_XL),SPLASH_W-8,"splash-ordmaerke",PRODUCT);
-      { int kok=cfg_ok; char sb[96]; for(cfg_ok=0;cfg_ok<2;cfg_ok++){ splash_status(sb,sizeof sb); LAY(text_wf(sb,F_XS),SPLASH_W-8,"splash-status",sb); } cfg_ok=kok; }
-      st_check(stl("HJEM + splash: stat-labels, chart-tekster, knapper, 'STARTER …', titellinje og ordmaerke passer"),ok);
+          for(size_t i=0;i<sizeof hl/sizeof hl[0];i++) LAY(text_wf(TR(hl[i]),F_XS),HINT_W-8,"chart hint (field 304, v6.11)",TR(hl[i]));
+          char eb[96]; snprintf(eb,sizeof eb,TR(TX_C_ERRCODE),"E3"); LAY(text_wf(eb,F_XS),HINT_W-8,"chart hint (field 304, v6.11)",eb); } }
+      for(int k=0;k<4;k++){ LAY(text_wf(TR(STOP_BTN[k]),stop_font(1)),STOP_PILL1_W-28,"STOP button (v6.13: pill 160, F_S)",TR(STOP_BTN[k]));
+                            LAY(text_wf(TR(STOP_BTN[k]),stop_font(2)),STOP_PILL2_W-28,"STOP button, two side by side (v6.13: pill 136, F_XS)",TR(STOP_BTN[k])); }
+      for(int k=0;k<4;k++){ char sb[96]; snprintf(sb,sizeof sb,TR(TX_H_STARTING),TR(ACT_NAME[k])); LAY(text_wf(sb,F_XS),KB[KSUB].maxw,"HOME subline",sb); }
+      LAY(hypotf(brand_wf(F_XS)/2,(float)(CY-HOME_BRAND_Y)),196.5f-4,"HOME title line (must lie within the progress ring r 196.5)",PRODUCT);
+      LAY(HOME_BRAND_Y+(int)FS[F_XS].cap+8,76,"HOME title line (clear of the phase chip y 76)",PRODUCT);
+      LAY(brand_wf(F_XL),SPLASH_W-8,"splash wordmark",PRODUCT);
+      { int kok=cfg_ok; char sb[96]; for(cfg_ok=0;cfg_ok<2;cfg_ok++){ splash_status(sb,sizeof sb); LAY(text_wf(sb,F_XS),SPLASH_W-8,"splash status",sb); } cfg_ok=kok; }
+      st_check(stl("HOME + splash: stat labels, chart texts, buttons, 'STARTING …', title line and wordmark fit"),ok);
       xsel=-1; view=V_MAIN; }
     lang_set(base_lang);
 
     /* ============================ v6.3 ============================ */
-    printf("== selftest: i18n — streng-tabellen (%d id'er x %d sprog) ==\n",NSTR,NLANG);
+    printf("== selftest: i18n — the string table (%d ids x %d languages) ==\n",NSTR,NLANG);
     { int ok=1,same=0;
-      for(int i=0;i<NSTR;i++) for(int lg=0;lg<NLANG;lg++){ const char*s=STR[lg][i]; if(!s||(!*s&&i!=TX_NONE)){ ok=0; printf("     %s mangler paa %s\n",STR_ID[i],LANG_CODE[lg]); } }
-      st_check("hvert streng-id har baade EN og DA (ingen NULL, ingen tomme ud over TX_NONE)",ok&&NSTR>300&&!STR[LANG_EN][TX_NONE][0]);
-      ok=1; for(int i=0;i<NSTR;i++){ char a[64],b[64]; fmt_sig(STR[LANG_EN][i],a,sizeof a); fmt_sig(STR[LANG_DA][i],b,sizeof b); if(strcmp(a,b)){ ok=0; printf("     %s: printf-konverteringer afviger: EN '%s' / DA '%s'\n",STR_ID[i],a,b); } }
-      st_check("samme printf-konverteringer i samme raekkefoelge i EN og DA (format-sikkerhed)",ok);
-      ok=1; for(int i=0;i<NSTR;i++){ char a[96],b[96]; num_sig(STR[LANG_EN][i],a,sizeof a); num_sig(STR[LANG_DA][i],b,sizeof b); if(strcmp(a,b)){ ok=0; printf("     %s: tal afviger: EN '%s' / DA '%s'\n",STR_ID[i],a,b); }
-          if(!strncmp(STR_ID[i],"TX_U_",5)&&strcmp(STR[LANG_EN][i],STR[LANG_DA][i])){ ok=0; printf("     %s: enhed afviger\n",STR_ID[i]); } }
+      for(int i=0;i<NSTR;i++) for(int lg=0;lg<NLANG;lg++){ const char*s=STR[lg][i]; if(!s||(!*s&&i!=TX_NONE)){ ok=0; printf("     %s missing in %s\n",STR_ID[i],LANG_CODE[lg]); } }
+      st_check("every string id has both EN and DA (no NULL, no empty ones apart from TX_NONE)",ok&&NSTR>300&&!STR[LANG_EN][TX_NONE][0]);
+      ok=1; for(int i=0;i<NSTR;i++){ char a[64],b[64]; fmt_sig(STR[LANG_EN][i],a,sizeof a); fmt_sig(STR[LANG_DA][i],b,sizeof b); if(strcmp(a,b)){ ok=0; printf("     %s: printf conversions differ: EN '%s' / DA '%s'\n",STR_ID[i],a,b); } }
+      st_check("same printf conversions in the same order in EN and DA (format safety)",ok);
+      ok=1; for(int i=0;i<NSTR;i++){ char a[96],b[96]; num_sig(STR[LANG_EN][i],a,sizeof a); num_sig(STR[LANG_DA][i],b,sizeof b); if(strcmp(a,b)){ ok=0; printf("     %s: numbers differ: EN '%s' / DA '%s'\n",STR_ID[i],a,b); }
+          if(!strncmp(STR_ID[i],"TX_U_",5)&&strcmp(STR[LANG_EN][i],STR[LANG_DA][i])){ ok=0; printf("     %s: unit differs\n",STR_ID[i]); } }
       { static const short u[]={TX_U_G,TX_U_S,TX_U_BAR,TX_U_C,TX_U_F}; static const char*const w[]={"G","S","BAR","\xC2\xB0" "C","\xC2\xB0" "F"}; for(int q=0;q<5;q++) for(int lg=0;lg<NLANG;lg++) if(strcmp(STR[lg][u[q]],w[q])) ok=0; }
-      st_check("tal, decimalpunktum og enheder (G, S, BAR, °C, °F) er identiske i EN og DA — kun ord er oversat",ok);
+      st_check("numbers, decimal point and units (G, S, BAR, °C, °F) are identical in EN and DA — only words are translated",ok);
       ok=1; { static const char*const ban[]={"GEN 1","GEN1","GEN-1","GEN 2","GEN2","GEN-2","GENERATION","MERAKITECH"};
         char vt[700];
         for(int i=0;i<NSTR;i++) for(int lg=0;lg<NLANG;lg++){ vis_text(STR[lg][i],vt,sizeof vt,1);
-            for(unsigned q=0;q<sizeof ban/sizeof ban[0];q++) if(strstr(vt,ban[q])){ ok=0; printf("     %s [%s] indeholder '%s'\n",STR_ID[i],LANG_CODE[lg],ban[q]); } }
+            for(unsigned q=0;q<sizeof ban/sizeof ban[0];q++) if(strstr(vt,ban[q])){ ok=0; printf("     %s [%s] contains '%s'\n",STR_ID[i],LANG_CODE[lg],ban[q]); } }
         vis_text(OURUI_MARK,vt,sizeof vt,1); for(unsigned q=0;q<sizeof ban/sizeof ban[0];q++) if(strstr(vt,ban[q])) ok=0;
         vis_text(PRODUCT " " OURUI_VERSION,vt,sizeof vt,1); for(unsigned q=0;q<sizeof ban/sizeof ban[0];q++) if(strstr(vt,ban[q])) ok=0; }
-      st_check("intet generations-navn (se forbuds-listen) i nogen streng, i binaer-maerket eller i produktnavnet — i begge tabeller",ok&&!strcmp(PRODUCT,"MERAKI+"));
+      st_check("no generation name (see the ban list) in any string, in the binary marker or in the product name — in both tables",ok&&!strcmp(PRODUCT,"MERAKI+"));
       ok=1; { char vt[700]; for(int i=0;i<NSTR;i++) for(int lg=0;lg<NLANG;lg++){ if(STR_K[i]==KCON) continue; vis_text(STR[lg][i],vt,sizeof vt,0);
-            if(strstr(vt,"OURUI")){ ok=0; printf("     %s [%s]: kode-navnet staar i synlig tekst\n",STR_ID[i],LANG_CODE[lg]); } } }
-      st_check("produktnavnet er " PRODUCT ": kode-navnet 'ourui' staar kun i kode-spaend (stier) og paa konsollen",ok);
+            if(strstr(vt,"OURUI")){ ok=0; printf("     %s [%s]: the code name appears in visible text\n",STR_ID[i],LANG_CODE[lg]); } } }
+      st_check("the product name is " PRODUCT ": the code name 'ourui' appears only in code spans (paths) and on the console",ok);
       ok=1; { char ex[700],bad[16]; for(int i=0;i<NSTR;i++) for(int lg=0;lg<NLANG;lg++){ if(STR_K[i]==KCON) continue; fmt_fill(STR[lg][i],ex,sizeof ex);
-            if(!glyphs_ok(ex,bad,sizeof bad)){ ok=0; printf("     %s [%s]: tegnet '%s' findes ikke i stroke-fonten\n",STR_ID[i],LANG_CODE[lg],bad); } } }
-      st_check("hvert tegn i begge tabeller har en glyf i stroke-fonten (intet tegnes som '?')",ok);
+            if(!glyphs_ok(ex,bad,sizeof bad)){ ok=0; printf("     %s [%s]: the character '%s' does not exist in the stroke font\n",STR_ID[i],LANG_CODE[lg],bad); } } }
+      st_check("every character in both tables has a glyph in the stroke font (nothing is drawn as '?')",ok);
       ok=1; { char ex[700]; int nk=0;
         for(int i=0;i<NSTR;i++){ int k=STR_K[i]; if(k==K0||k==KCON) continue; nk++;
             for(int lg=0;lg<NLANG;lg++){ fmt_fill(STR[lg][i],ex,sizeof ex); int w=text_w(ex,KB[k].font);
-                if(w>KB[k].maxw){ ok=0; printf("     %s [%s] (%s): '%s' er %d px, plads %d px\n",STR_ID[i],LANG_CODE[lg],KB[k].what,ex,w,KB[k].maxw); } } }
-        char nm[160]; snprintf(nm,sizeof nm,"pixel-budget pr. klasse: %d klassificerede strenge x 2 sprog passer i deres felt (toasts, noter, fodlinjer, knapper, titler, celler)",nk); st_check(nm,ok&&nk>150); }
+                if(w>KB[k].maxw){ ok=0; printf("     %s [%s] (%s): '%s' is %d px, room %d px\n",STR_ID[i],LANG_CODE[lg],KB[k].what,ex,w,KB[k].maxw); } } }
+        char nm[160]; snprintf(nm,sizeof nm,"pixel budget per class: %d classified strings x 2 languages fit in their field (toasts, notes, footers, buttons, titles, cells)",nk); st_check(nm,ok&&nk>150); }
       for(int i=0;i<NSTR;i++) if(!strcmp(STR[LANG_EN][i],STR[LANG_DA][i])) same++;
-      st_check("endonymer: ENGLISH / DANSK hedder det samme i begge tabeller (man kan altid genkende sit sprog)",!strcmp(STR[LANG_EN][TX_UL_DA],"DANSK")&&!strcmp(STR[LANG_DA][TX_UL_DA],"DANSK")&&!strcmp(STR[LANG_EN][TX_UL_EN],STR[LANG_DA][TX_UL_EN]));
-      printf("     %d af %d strenge er ens i EN og DA (enheder, egennavne, tekniske ord som OFFLINE/FLOW/SLOT B, kommandoer)\n",same,NSTR);
+      st_check("endonyms: ENGLISH / DANSK are named the same in both tables (you can always recognise your own language)",!strcmp(STR[LANG_EN][TX_UL_DA],"DANSK")&&!strcmp(STR[LANG_DA][TX_UL_DA],"DANSK")&&!strcmp(STR[LANG_EN][TX_UL_EN],STR[LANG_DA][TX_UL_EN]));
+      printf("     %d of %d strings are identical in EN and DA (units, proper names, technical words like OFFLINE/FLOW/SLOT B, commands)\n",same,NSTR);
       { int k=ui_lang; ui_lang=LANG_EN; const char*e=TR(TX_B_SAVE); ui_lang=LANG_DA; const char*d=TR(TX_B_SAVE); ui_lang=7; const char*u=TR(TX_B_SAVE); const char*o=TR(99999); ui_lang=k;
-        st_check("TR(): opslag pr. kald (EN 'SAVE' / DA 'GEM'); ukendt sprog -> engelsk; ukendt id -> tom streng",!strcmp(e,"SAVE")&&!strcmp(d,"GEM")&&u==e&&o&&!*o); } }
+        st_check("TR(): lookup per call (EN 'SAVE' / DA 'GEM'); unknown language -> English; unknown id -> empty string",!strcmp(e,"SAVE")&&!strcmp(d,"GEM")&&u==e&&o&&!*o); } }
 
-    printf("== selftest: i18n — sprog-filen (%s; her: <arbejdsmappe>/lang) ==\n",lang_path);
+    printf("== selftest: i18n — the language file (%s; here: <work dir>/lang) ==\n",lang_path);
     { char lp[440],lt[460],keepl[256],nodir[460]; strcpy(keepl,lang_path); int keeps=lang_src;
-      st_check("default-sti = /new_customer/ourui/lang (ourui's egen mappe — ikke /customer, ikke config.json)",!strcmp(keepl,"/new_customer/ourui/lang")||getenv("OURUI_LANGFILE")!=NULL||strstr(keepl,"_preview_lang")!=NULL);
+      st_check("default path = /new_customer/ourui/lang (ourui's own directory — not /customer, not config.json)",!strcmp(keepl,"/new_customer/ourui/lang")||getenv("OURUI_LANGFILE")!=NULL||strstr(keepl,"_preview_lang")!=NULL);
       snprintf(lp,sizeof lp,"%s/lang",dir); snprintf(lt,sizeof lt,"%s.tmp",lp); snprintf(lang_path,sizeof lang_path,"%s",lp);
       unlink(lp); ui_lang=LANG_DA; lang_load();
-      st_check("filen mangler -> ENGELSK (default), kilde = default",ui_lang==LANG_EN&&lang_src==LS_DEFAULT);
-      st_check("\"da\" -> DANSK, \"en\" -> ENGELSK (kilde = fil)",lang_from(lp,"da",2)==LANG_DA&&lang_src==LS_FILE&&lang_from(lp,"en",2)==LANG_EN&&lang_src==LS_FILE);
-      st_check("tolerant laesning: \"da\\n\" (echo da > lang), \" DA \\r\\n\", \"Da\" -> DANSK; \"EN\\n\" -> ENGELSK",lang_from(lp,"da\n",3)==LANG_DA&&lang_from(lp," DA \r\n",6)==LANG_DA&&lang_from(lp,"Da",2)==LANG_DA&&lang_from(lp,"EN\n",3)==LANG_EN);
+      st_check("file missing -> ENGLISH (default), source = default",ui_lang==LANG_EN&&lang_src==LS_DEFAULT);
+      st_check("\"da\" -> DANISH, \"en\" -> ENGLISH (source = file)",lang_from(lp,"da",2)==LANG_DA&&lang_src==LS_FILE&&lang_from(lp,"en",2)==LANG_EN&&lang_src==LS_FILE);
+      st_check("tolerant reading: \"da\\n\" (echo da > lang), \" DA \\r\\n\", \"Da\" -> DANISH; \"EN\\n\" -> ENGLISH",lang_from(lp,"da\n",3)==LANG_DA&&lang_from(lp," DA \r\n",6)==LANG_DA&&lang_from(lp,"Da",2)==LANG_DA&&lang_from(lp,"EN\n",3)==LANG_EN);
       { int ok=1; static const struct { const char*d; int n; } bad[]={{"de",2},{"dansk",5},{"d",1},{"daa",3},{"danish\n",7},{"e n",3},{"sv",2},{"\xff\xfe",2},{"da da",5},{"0",1},{"da\0x",4},{"en;rm -rf /",11},{"da..............................",32}};
-        for(unsigned q=0;q<sizeof bad/sizeof bad[0];q++){ if(lang_from(lp,bad[q].d,bad[q].n)!=LANG_EN||lang_src!=LS_UNKNOWN){ ok=0; printf("     '%s' gav ikke EN/ukendt\n",bad[q].d); } }
-        st_check("alt andet end en/da (de, dansk, d, daa, sv, binaert, for langt, …) -> ENGELSK, kilde = ukendt vaerdi",ok);
-        st_check("tom fil -> ENGELSK (ukendt vaerdi)",lang_from(lp,"",0)==LANG_EN&&lang_src==LS_UNKNOWN); }
+        for(unsigned q=0;q<sizeof bad/sizeof bad[0];q++){ if(lang_from(lp,bad[q].d,bad[q].n)!=LANG_EN||lang_src!=LS_UNKNOWN){ ok=0; printf("     '%s' did not give EN/unknown\n",bad[q].d); } }
+        st_check("anything other than en/da (de, dansk, d, daa, sv, binary, too long, …) -> ENGLISH, source = unknown value",ok);
+        st_check("empty file -> ENGLISH (unknown value)",lang_from(lp,"",0)==LANG_EN&&lang_src==LS_UNKNOWN); }
       unlink(lp); mkdir(lp,0755); ui_lang=LANG_DA; lang_load(); int e1=ui_lang==LANG_EN&&lang_src==LS_DEFAULT; rmdir(lp);
-      st_check("ulaeselig (stien er en mappe: read fejler) -> ENGELSK",e1);
-      if(geteuid()!=0){ put_bytes(lp,"da",2); chmod(lp,0000); ui_lang=LANG_DA; lang_load(); int e2=ui_lang==LANG_EN&&lang_src==LS_DEFAULT; chmod(lp,0644); st_check("ulaeselig (ingen laeserettighed) -> ENGELSK",e2); }
+      st_check("unreadable (the path is a directory: read fails) -> ENGLISH",e1);
+      if(geteuid()!=0){ put_bytes(lp,"da",2); chmod(lp,0000); ui_lang=LANG_DA; lang_load(); int e2=ui_lang==LANG_EN&&lang_src==LS_DEFAULT; chmod(lp,0644); st_check("unreadable (no read permission) -> ENGLISH",e2); }
       unlink(lp); lang_load();
-      st_check("lang_save(DA): filen indeholder PRAECIS \"da\" (2 bytes), ingen tmp-fil efterladt, genlaeses som DANSK",lang_save(LANG_DA)&&file_is(lp,"da")&&access(lt,F_OK)!=0&&lang_load()==LANG_DA&&lang_src==LS_FILE);
-      st_check("lang_save(EN) oven i: PRAECIS \"en\"; ugyldigt sprog (-1, 2, 7) afvises og roerer ikke filen",lang_save(LANG_EN)&&file_is(lp,"en")&&!lang_save(-1)&&!lang_save(NLANG)&&!lang_save(7)&&file_is(lp,"en"));
-      snprintf(nodir,sizeof nodir,"%s/findes-ikke/lang",dir); snprintf(lang_path,sizeof lang_path,"%s",nodir);
-      st_check("mappen findes ikke: lang_save melder fejl og opretter intet",!lang_save(LANG_DA)&&access(nodir,F_OK)!=0);
+      st_check("lang_save(DA): the file contains EXACTLY \"da\" (2 bytes), no tmp file left behind, reads back as DANISH",lang_save(LANG_DA)&&file_is(lp,"da")&&access(lt,F_OK)!=0&&lang_load()==LANG_DA&&lang_src==LS_FILE);
+      st_check("lang_save(EN) on top: EXACTLY \"en\"; an invalid language (-1, 2, 7) is rejected and does not touch the file",lang_save(LANG_EN)&&file_is(lp,"en")&&!lang_save(-1)&&!lang_save(NLANG)&&!lang_save(7)&&file_is(lp,"en"));
+      snprintf(nodir,sizeof nodir,"%s/does-not-exist/lang",dir); snprintf(lang_path,sizeof lang_path,"%s",nodir);
+      st_check("the directory does not exist: lang_save reports an error and creates nothing",!lang_save(LANG_DA)&&access(nodir,F_OK)!=0);
       snprintf(lang_path,sizeof lang_path,"%s",lp);
       if(geteuid()!=0){ char rd[460],rl[480]; snprintf(rd,sizeof rd,"%s/rolang",dir); mkdir(rd,0755); snprintf(rl,sizeof rl,"%s/lang",rd); put_bytes(rl,"en",2); chmod(rd,0555);
           snprintf(lang_path,sizeof lang_path,"%s",rl); int r=lang_save(LANG_DA); chmod(rd,0755); snprintf(lang_path,sizeof lang_path,"%s",lp);
           char rt[500]; snprintf(rt,sizeof rt,"%s.tmp",rl);
-          st_check("skrivebeskyttet mappe: lang_save fejler, den gamle fil er intakt (\"en\"), ingen tmp-fil",!r&&file_is(rl,"en")&&access(rt,F_OK)!=0); }
+          st_check("read-only directory: lang_save fails, the old file is intact (\"en\"), no tmp file",!r&&file_is(rl,"en")&&access(rt,F_OK)!=0); }
 
-      /* ---- gennem UI'et: SYSTEM -> UI LANGUAGE ---- */
-      printf("== selftest: i18n — UI-SPROG-raekken (live-skift, ANNULLER, GEM, uafhaengig af stock-UI'ets config.language) ==\n");
+      /* ---- through the UI: SYSTEM -> UI LANGUAGE ---- */
+      printf("== selftest: i18n — the UI LANGUAGE row (live switch, CANCEL, SAVE, independent of the stock UI's config.language) ==\n");
       ms_t tn=40000; char cp[460],kcfg[256],kbak[256],rnl[500]; strcpy(kcfg,cfg_path); strcpy(kbak,cfg_bakdir);
       snprintf(cp,sizeof cp,"%s/config_lang.json",dir); copy_file(cfgsrc,cp); snprintf(cfg_path,sizeof cfg_path,"%s",cp); snprintf(cfg_bakdir,sizeof cfg_bakdir,"%s/langbak",dir); snprintf(rnl,sizeof rnl,"%s/RESTART_NEEDED",cfg_bakdir);
       unlink(lp); lang_load(); settings_load(); char md0[33]; strcpy(md0,cfg_md5); int cw0=cfg_writes, stock0=sv(S_LANG);
 #define UL_PREP() do{ sim_ready(tn); memset(&wq,0,sizeof wq); memset(&sav,0,sizeof sav); act.pending=ACT_NONE; view=V_MAIN; page=PG_T2; sel=-1; xsel=-1; tr.type=0; run=1; toast.dur=0; rip.on=0; memset(scroll,0,sizeof scroll); txq_len=0; }while(0)
       UL_PREP();
-      st_check("UI LANGUAGE / UI-SPROG er FOERSTE raekke paa SYSTEM, er ikke en config-noegle og har intet MCU-ord; stock-raekken (config.language) findes stadig",
+      st_check("UI LANGUAGE / UI-SPROG is the FIRST row on SYSTEM, is not a config key and has no MCU word; the stock row (config.language) still exists",
                tier_item(2,0)==S_UILANG&&SET[S_UILANG].key==NULL&&SET[S_UILANG].mcu==M_NONE&&(SET[S_UILANG].flags&SF_LOCAL)&&hit_test(240,row_y0(PG_T2,0)+25,tn)==T_ROW0&&!strcmp(SET[S_LANG].key,"language")&&!(SET[S_LANG].flags&SF_LOCAL));
       activate(T_ROW0,tn); tr.type=0;
-      st_check("raekken aabner stepper-detaljen m. det aktive sprog (ENGLISH); valgmulighederne er ENGLISH / DANSK",view==V_DETAIL&&sel==S_UILANG&&edit_val==LANG_EN&&SET[S_UILANG].lo==0&&SET[S_UILANG].hi==1&&hit_test(396,184,tn)==T_PLUS&&hit_test(310,316,tn)==T_SAVE);
+      st_check("the row opens the stepper detail with the active language (ENGLISH); the options are ENGLISH / DANSK",view==V_DETAIL&&sel==S_UILANG&&edit_val==LANG_EN&&SET[S_UILANG].lo==0&&SET[S_UILANG].hi==1&&hit_test(396,184,tn)==T_PLUS&&hit_test(310,316,tn)==T_SAVE);
       const char*t_en=TR(TX_B_CANCEL); static_dirty=0;
       ui_touch(TE_DOWN,396,184,tn); ui_touch(TE_UP,396,184,tn);
-      st_check("+ : LIVE — hele UI'et slaar straks om til dansk (opslag pr. render, statisk lag gentegnes); intet er skrevet endnu",edit_val==LANG_DA&&ui_lang==LANG_DA&&static_dirty==1&&TR(TX_B_CANCEL)!=t_en&&!strcmp(TR(TX_B_CANCEL),"ANNULLER")&&SET[S_UILANG].val==LANG_EN&&access(lp,F_OK)!=0);
+      st_check("+ : LIVE — the whole UI switches to Danish immediately (lookup per render, static layer redrawn); nothing is written yet",edit_val==LANG_DA&&ui_lang==LANG_DA&&static_dirty==1&&TR(TX_B_CANCEL)!=t_en&&!strcmp(TR(TX_B_CANCEL),"ANNULLER")&&SET[S_UILANG].val==LANG_EN&&access(lp,F_OK)!=0);
       ui_frame(tn+40); tr.type=0;
-      { char l[112]; const char*l1,*l2; detail_text(S_UILANG,l,sizeof l,&l1,&l2); st_check("  detaljen viser 'ENGLISH / DANSK' (endonymer) og peger paa egen fil + uaendret stock-sprog",!strcmp(l,"ENGLISH / DANSK")&&l1==TR(TX_D_LANG_L1)&&l2==TR(TX_D_LANG_L2)); }
+      { char l[112]; const char*l1,*l2; detail_text(S_UILANG,l,sizeof l,&l1,&l2); st_check("  the detail shows 'ENGLISH / DANSK' (endonyms) and points to its own file + the unchanged stock language",!strcmp(l,"ENGLISH / DANSK")&&l1==TR(TX_D_LANG_L1)&&l2==TR(TX_D_LANG_L2)); }
       activate(T_CANCEL,tn); tr.type=0;
-      st_check("ANNULLER: tilbage til engelsk, ingen fil",view==V_MAIN&&ui_lang==LANG_EN&&SET[S_UILANG].val==LANG_EN&&access(lp,F_OK)!=0);
+      st_check("CANCEL: back to English, no file",view==V_MAIN&&ui_lang==LANG_EN&&SET[S_UILANG].val==LANG_EN&&access(lp,F_OK)!=0);
       activate(T_ROW0,tn); tr.type=0; ui_touch(TE_DOWN,396,184,tn); ui_touch(TE_UP,396,184,tn); activate(T_SAVE,tn); tr.type=0;
-      st_check("GEM: filen = \"da\", sproget er dansk, kvitteringen staar paa det NYE sprog, visningen lukker",file_is(lp,"da")&&ui_lang==LANG_DA&&SET[S_UILANG].val==LANG_DA&&lang_src==LS_FILE&&view==V_MAIN&&!sav.active&&!strcmp(toast.msg,STR[LANG_DA][TX_T_LANG_SAVED]));
+      st_check("SAVE: file = \"da\", the language is Danish, the confirmation is in the NEW language, the view closes",file_is(lp,"da")&&ui_lang==LANG_DA&&SET[S_UILANG].val==LANG_DA&&lang_src==LS_FILE&&view==V_MAIN&&!sav.active&&!strcmp(toast.msg,STR[LANG_DA][TX_T_LANG_SAVED]));
       cfg_read(); int v_lang=-1; cfg_get_int("language",&v_lang);
-      st_check("GEM roerer IKKE stock: config.json md5 uaendret, config.language uaendret, 0 config-writes, intet RESTART_NEEDED, ingen backup-mappe",!strcmp(cfg_md5,md0)&&v_lang==stock0&&cfg_writes==cw0&&access(rnl,F_OK)!=0&&access(cfg_bakdir,F_OK)!=0);
-      st_check("GEM sender INGEN cmd6-frame (write-koe tom, 0 bytes til UART) — frame-politikken er uberoert",wq.n==0&&txq_len==0&&wq.n_block==0);
+      st_check("SAVE does NOT touch stock: config.json md5 unchanged, config.language unchanged, 0 config writes, no RESTART_NEEDED, no backup directory",!strcmp(cfg_md5,md0)&&v_lang==stock0&&cfg_writes==cw0&&access(rnl,F_OK)!=0&&access(cfg_bakdir,F_OK)!=0);
+      st_check("SAVE sends NO cmd6 frame (write queue empty, 0 bytes to the UART) — the frame policy is untouched",wq.n==0&&txq_len==0&&wq.n_block==0);
       ui_lang=LANG_EN; lang_src=LS_DEFAULT; lang_load(); settings_load();
-      st_check("'genstart' (lang_load + settings_load): dansk huskes fra filen",ui_lang==LANG_DA&&lang_src==LS_FILE&&SET[S_UILANG].val==LANG_DA);
+      st_check("'restart' (lang_load + settings_load): Danish is remembered from the file",ui_lang==LANG_DA&&lang_src==LS_FILE&&SET[S_UILANG].val==LANG_DA);
       UL_PREP(); activate(T_ROW0,tn); tr.type=0; ui_touch(TE_DOWN,84,184,tn); ui_touch(TE_UP,84,184,tn); int live_en=ui_lang==LANG_EN; activate(T_SAVE,tn); tr.type=0;
-      st_check("− og GEM: tilbage til engelsk, filen = \"en\", kvittering paa engelsk",live_en&&file_is(lp,"en")&&ui_lang==LANG_EN&&!strcmp(toast.msg,STR[LANG_EN][TX_T_LANG_SAVED]));
+      st_check("− and SAVE: back to English, file = \"en\", confirmation in English",live_en&&file_is(lp,"en")&&ui_lang==LANG_EN&&!strcmp(toast.msg,STR[LANG_EN][TX_T_LANG_SAVED]));
       { int ok=cfg_set_int("language",3); settings_load(); int a=sv(S_LANG)==3&&ui_lang==LANG_EN&&file_is(lp,"en"); ok&=cfg_set_int("language",stock0); settings_load();
-        st_check("omvendt: stock-SPROG (config.language 0 -> 3 -> tilbage) aendrer hverken UI-sproget eller lang-filen",ok&&a&&sv(S_LANG)==stock0&&ui_lang==LANG_EN); }
+        st_check("conversely: the stock LANGUAGE (config.language 0 -> 3 -> back) changes neither the UI language nor the lang file",ok&&a&&sv(S_LANG)==stock0&&ui_lang==LANG_EN); }
       snprintf(lang_path,sizeof lang_path,"%s",nodir); UL_PREP(); activate(T_ROW0,tn); tr.type=0; ui_touch(TE_DOWN,396,184,tn); ui_touch(TE_UP,396,184,tn); activate(T_SAVE,tn); tr.type=0;
-      st_check("filen kan ikke skrives: sproget gaelder alligevel (denne session), advarsel i toast, DIAGNOSE-kilde = ikke gemt",ui_lang==LANG_DA&&lang_src==LS_SESSION&&view==V_MAIN&&!strcmp(toast.msg,STR[LANG_DA][TX_T_LANG_NOFILE])&&access(nodir,F_OK)!=0);
+      st_check("the file cannot be written: the language applies anyway (this session), warning in a toast, DIAGNOSE source = not saved",ui_lang==LANG_DA&&lang_src==LS_SESSION&&view==V_MAIN&&!strcmp(toast.msg,STR[LANG_DA][TX_T_LANG_NOFILE])&&access(nodir,F_OK)!=0);
       { int ok=1; for(int lg=0;lg<NLANG;lg++){ lang_set(lg); settings_load(); UL_PREP(); static_dirty=1; force_all=1; ui_frame(tn+100);
             const char*g=act_guard(ACT_BREW,tn+100); ok&=(g==NULL); reg[35]=1; ok&=!strcmp(err_text(),STR[lg][TX_ER_E2_BREW])&&!strcmp(ph_name(PH_ERROR),STR[lg][TX_PH_ERROR]); reg[35]=0;
             home_model(tn+100); ok&=!strcmp(hm.sl[2],STR[lg][TX_ST_WEIGHT])&&!strcmp(hm.label,STR[lg][TX_H_BOILER]); }
-        st_check("live-opslag overalt: fase-navn, fejltekst, HJEM-label og stat-labels foelger sproget uden genstart",ok); }
+        st_check("live lookup everywhere: phase name, error text, HOME label and stat labels follow the language without a restart",ok); }
       snprintf(lang_path,sizeof lang_path,"%s",keepl); lang_src=keeps; lang_set(base_lang); strcpy(cfg_path,kcfg); strcpy(cfg_bakdir,kbak); toast.dur=0; view=V_MAIN; sel=-1; page=PG_HOME; }
     mock_boot_b(root); boot_refresh();
     strcpy(cfg_bakdir,keepbak);    mock_boot_b(root); boot_refresh();
@@ -7910,31 +7918,31 @@ static int selftest(const char*cfgsrc){
     st_press(cfgsrc,dir);
     /* ============================ v6.11 ============================ */
     st_v611();
-    printf("== selftest [%s]: %s (%d checks, %d fejl) — arbejdsmappe %s ==\n",LANG_CODE[base_lang],st_fail?"FEJL":"ALT OK",st_n,st_fail,dir);
+    printf("== selftest [%s]: %s (%d checks, %d failed) — work dir %s ==\n",LANG_CODE[base_lang],st_fail?"FAILED":"ALL OK",st_n,st_fail,dir);
     return st_fail?1:0;
 }
 static void dump_table(void){
     printf("#key\tlabel\tpage\tspec_tier\tmin\tmax\tstep\tdefault\thard\tlock\test\tsensor\tmcu\thint\n");
     static const char*const MW[]={"-","4","23","11","112","113","114","25","14","17","2"};
     for(int i=0;i<NSET;i++){ const Setting*s=&SET[i];
-        if(s->flags&SF_LOCAL) continue;        /* ourui's egne indstillinger (UI-sprog) er ikke spec-parametre */
+        if(s->flags&SF_LOCAL) continue;        /* ourui's own settings (UI language) are not spec parameters */
         printf("%s\t%s\t%s\t%d\t%d\t%d\t%d\t%d\t%d\t%d\t%d\t%d\t%s\t%s\n",s->key?s->key:"-",TR(s->label),TR(TIER_NAME[s->tier]),s->ptier,s->min,s->max,s->step,s->def,s->hard,
                !!(s->flags&SF_LOCK),!!(s->flags&SF_EST),!!(s->flags&SF_SENSOR),MW[s->mcu],s->hint?TR(s->hint):"-"); }
 }
-/* streng-tabellen som TSV (id, klasse, EN, DA). Kode-spænd vises i `backticks`, ikoner som {ikonN}, linjeskift som \\n. */
+/* the string table as TSV (id, class, EN, DA). Code spans are shown in `backticks`, icons as {iconN}, line breaks as \\n. */
 static void dump_str1(const char*s){
     int lc=0;
     for(const unsigned char*p=(const unsigned char*)s;*p;p++){
         if(*p==0x0E){ if(!lc){ putchar('`'); lc=1; } }
         else if(*p==0x0F){ if(lc){ putchar('`'); lc=0; } }
         else if(*p=='\n') fputs("\\n",stdout);
-        else if(*p<32) printf("{ikon%d}",*p);
+        else if(*p<32) printf("{icon%d}",*p);
         else putchar(*p);
     }
     if(lc) putchar('`');
 }
 static void dump_strings(void){
-    printf("#id\tklasse\tEN\tDA\n");
+    printf("#id\tclass\tEN\tDA\n");
     for(int i=0;i<NSTR;i++){ printf("%s\t%s\t",STR_ID[i],KNAME[STR_K[i]]); dump_str1(STR[LANG_EN][i]); putchar('\t'); dump_str1(STR[LANG_DA][i]); putchar('\n'); }
 }
 static void bench(void){
@@ -7942,16 +7950,16 @@ static void bench(void){
     double t0=msnow(), mx=0; int n=0;
     for(int i=0;i<600;i++){ double a=msnow(); sim_run(33); double d=msnow()-a; if(d>mx)mx=d; n++; }
     double avg=(msnow()-t0)/n;
-    printf("bench brew (animeret gauge+chart+tal): avg %.3f ms/frame, max %.3f ms (host)\n",avg,mx);
-    t0=msnow(); for(int i=0;i<200;i++){ force_all=1; static_dirty=1; compose(sim_now); } printf("bench fuld genopbygning (static+alt):  %.3f ms/frame (host)\n",(msnow()-t0)/200);
-    sim_reset(); sim_run(500); t0=msnow(); n=0; go_page(PG_T0,1,sim_now); while(tr.type){ sim_run(33); n++; } printf("bench slide-overgang:                 %.3f ms/frame over %d frames (host)\n",(msnow()-t0)/(n?n:1),n);
-    sim_reset(); sim_run(3000); t0=msnow(); for(int i=0;i<300;i++) sim_run(33); printf("bench idle (ingen ændring):           %.3f ms/frame (host)\n",(msnow()-t0)/300);
+    printf("bench brew (animated gauge+chart+numbers): avg %.3f ms/frame, max %.3f ms (host)\n",avg,mx);
+    t0=msnow(); for(int i=0;i<200;i++){ force_all=1; static_dirty=1; compose(sim_now); } printf("bench full rebuild (static+all):       %.3f ms/frame (host)\n",(msnow()-t0)/200);
+    sim_reset(); sim_run(500); t0=msnow(); n=0; go_page(PG_T0,1,sim_now); while(tr.type){ sim_run(33); n++; } printf("bench slide transition:               %.3f ms/frame over %d frames (host)\n",(msnow()-t0)/(n?n:1),n);
+    sim_reset(); sim_run(3000); t0=msnow(); for(int i=0;i<300;i++) sim_run(33); printf("bench idle (no change):               %.3f ms/frame (host)\n",(msnow()-t0)/300);
 }
 int main(int argc,char**argv){
     if(getenv("OURUI_MOCK_STOCK")) return mock_stock_main(argv[0]);
     self_bin=argv[0];
     int ai=1;
-    if(argc>2&&!strcmp(argv[1],"--lang")){ int l=lang_parse(argv[2],(int)strlen(argv[2])); if(l<0){ fprintf(stderr,"brug: --lang en|da\n"); return 2; } pv_lang=l; ai=3; }
+    if(argc>2&&!strcmp(argv[1],"--lang")){ int l=lang_parse(argv[2],(int)strlen(argv[2])); if(l<0){ fprintf(stderr,"usage: --lang en|da\n"); return 2; } pv_lang=l; ai=3; }
     const char*out=argc>ai?argv[ai]:"/tmp/ourui_v6_preview_out";
     const char*cfgsrc=argc>ai+1?argv[ai+1]:"artifacts/config.json";
     gfx_init(); lang_set(pv_lang);
@@ -7963,17 +7971,17 @@ int main(int argc,char**argv){
     if(!strcmp(out,"--bench")){ bench(); return 0; }
     if(!strcmp(out,"--is-ourui")){ int all=1; for(int i=ai+1;i<argc;i++){ bs.m_valid=0; int o=bin_is_ourui(argv[i]); printf("%d %s\n",o,argv[i]); all&=o; } return all?0:1; }
     mkdir(out,0755);
-    /* v6.2: boot-tilstanden læses fra en mock-rod i out-mappen — aldrig fra værtens filsystem */
+    /* v6.2: the boot state is read from a mock root in the out directory — never from the host's file system */
     static char pvr[400]; snprintf(pvr,sizeof pvr,"%s/_preview_root",out); snprintf(sysroot,sizeof sysroot,"%s",pvr);
     mock_boot_b(pvr); sw_sim=1; mono_fake=5000;
-    /* gem-scenarier arbejder på en KOPI af config.json i out-mappen */
+    /* save scenarios work on a COPY of config.json in the out directory */
     char cpy[400]; snprintf(cpy,sizeof cpy,"%s/_preview_config.json",out); copy_file(cfgsrc,cpy);
     snprintf(cfg_bakdir,sizeof cfg_bakdir,"%s/_preview_cfgbak",out);
-    /* v6.3: sprog-filen ligger også i out-mappen. Engelsk = ingen fil (default); dansk = filen "da" */
+    /* v6.3: the language file also lives in the out directory. English = no file (default); Danish = the file "da" */
     snprintf(lang_path,sizeof lang_path,"%s/_preview_lang",out);
 #define PV_LANG_BASE() do{ unlink(lang_path); lang_src=LS_DEFAULT; if(pv_lang!=LANG_EN) lang_save(pv_lang); lang_set(pv_lang); }while(0)
     PV_LANG_BASE();
-    printf("preview-sprog: %s (%s)\n",LANG_CODE[pv_lang],STR[pv_lang][TX_UL_EN+pv_lang]);
+    printf("preview language: %s (%s)\n",LANG_CODE[pv_lang],STR[pv_lang][TX_UL_EN+pv_lang]);
 
     sim_reset(); view=V_SPLASH; ui_start=sim_now; sim_run(900); dump(out,"00_splash");
     sim_reset(); sim_run(1500); dump(out,"01_home_ready");
@@ -7999,21 +8007,21 @@ int main(int argc,char**argv){
     sim_reset(); page=PG_T2; sim_run(300); detail_open(S_TZ,sim_now); sim_run(900); dump(out,"21_detail_locked");
     sim_reset(); page=PG_T0; sim_run(300); detail_open(S_GRINDW,sim_now); sim_run(700);
     ui_touch(TE_DOWN,84,184,sim_now); sim_run(2600); dump(out,"22_detail_hold_accel"); ui_touch(TE_UP,84,184,sim_now);
-    /* gem OK: MCU-ACK simuleret + ægte config-persist på kopi */
+    /* save OK: MCU ACK simulated + real config persist on a copy */
     snprintf(cfg_path,sizeof cfg_path,"%s",cpy);
     sim_reset(); page=PG_T0; sim_run(300); detail_open(S_BREWT,sim_now); sim_run(600); tap(396,184); sim_run(100); tap(396,184); sim_run(200);
     tap(310,316); sim_run(700); dump(out,"23_saved_toast");
-    printf("   (gem-scenarie: brewTemper=%d, md5 %s, cmd6 ok=%ld)\n",sv(S_BREWT),cfg_md5,wq.n_ok);
-    /* gem FEJL: ingen ACK */
+    printf("   (save scenario: brewTemper=%d, md5 %s, cmd6 ok=%ld)\n",sv(S_BREWT),cfg_md5,wq.n_ok);
+    /* save FAILED: no ACK */
     sim_reset(); wq.sim_ack=0; page=PG_T0; sim_run(300); detail_open(S_BREWW,sim_now); sim_run(600); tap(396,184); sim_run(200);
     tap(310,316); sim_run(160); dump(out,"24_detail_saving"); sim_run(700); dump(out,"25_save_fail_no_ack");
-    printf("   (fejl-scenarie: autobrewWeight=%d uændret, retx=%ld fail=%ld)\n",sv(S_BREWW),wq.n_retx,wq.n_fail);
+    printf("   (failure scenario: autobrewWeight=%d unchanged, retx=%ld fail=%ld)\n",sv(S_BREWW),wq.n_retx,wq.n_fail);
     snprintf(cfg_path,sizeof cfg_path,"%s",cfgsrc);
     sim_reset(); page=PG_DIAG; sim_run(600); dump(out,"26_diag");
     sim_reset(); sim_run(1500); go_page(PG_T0,1,sim_now); sim_run(110); dump(out,"27_slide_transition");
     sim_reset(); sim_run(1500); tap(150,372); sim_run(400); dump(out,"28_home_tap_hint_toast");
     sim_reset(); sim_run(1500); ui_touch(TE_DOWN,330,372,sim_now); sim_run(800); ui_touch(TE_UP,330,372,sim_now); sim_run(500); dump(out,"29_home_steam_armed");
-    /* ---- v6.1: spec-afstemning ---- */
+    /* ---- v6.1: spec alignment ---- */
     sim_reset(); page=PG_T0; sim_run(300); detail_open(S_PITIME,sim_now); sim_run(900); dump(out,"30_detail_estimate_hint");
     sim_reset(); page=PG_T1; sim_run(300); detail_open(S_HOTT,sim_now); sim_run(900); dump(out,"31_detail_sensor_vandtemp");
     sim_reset(); page=PG_T0; sim_run(300); detail_open(S_BREAK,sim_now); sim_run(900); dump(out,"32_detail_breaktime_locked");
@@ -8021,16 +8029,16 @@ int main(int argc,char**argv){
     sim_reset(); page=PG_T1; sim_run(300); detail_open(S_STEAMG,sim_now); sim_run(900); dump(out,"34_detail_steam_gear");
     sim_reset(); page=PG_T2; sim_run(300);
     for(int k=0;k<2;k++){ ui_touch(TE_DOWN,240,330,sim_now); sim_run(60); ui_touch(TE_MOVE,240,200,sim_now); sim_run(60); ui_touch(TE_MOVE,240,60,sim_now); sim_run(120); ui_touch(TE_UP,240,60,sim_now); sim_run(200); }
-    dump(out,"35_list_system_scrolled");      /* v6.2: bunden af SYSTEM = OPSTART · UI-VALG (BOOT-UI + SKIFT) */
-    /* config uden for spec (kopi m. brewTemper=990): markering, spærret start, stepper fører ind */
+    dump(out,"35_list_system_scrolled");      /* v6.2: the bottom of SYSTEM = STARTUP · UI CHOICE (BOOT UI + SWITCH) */
+    /* config out of spec (copy with brewTemper=990): marking, blocked start, the stepper brings it back in */
     { char oor[400]; snprintf(oor,sizeof oor,"%s/_preview_config_oor.json",out); copy_file(cfgsrc,oor);
       snprintf(cfg_path,sizeof cfg_path,"%s",oor); cfg_set_int("brewTemper",990); cfg_set_int("preInfusionPressure",6);
       sim_reset(); page=PG_T0; sim_run(600); dump(out,"36_list_bryg_out_of_spec");
       sim_reset(); page=PG_T0; sim_run(300); detail_open(S_BREWT,sim_now); sim_run(900); dump(out,"37_detail_out_of_spec");
       sim_reset(); sim_run(1500); ui_touch(TE_DOWN,210,372,sim_now); sim_run(900); ui_touch(TE_UP,210,372,sim_now); sim_run(300); dump(out,"38_home_start_blocked_out_of_spec");
-      printf("   (uden-for-spec-scenarie: bryg-start %s, cmd6 køet=%d, blokeret=%ld)\n",act.pending==ACT_NONE?"SPÆRRET":"STARTET",wq.n,wq.n_block);
+      printf("   (out-of-spec scenario: brew start %s, cmd6 queued=%d, blocked=%ld)\n",act.pending==ACT_NONE?"BLOCKED":"STARTED",wq.n,wq.n_block);
       snprintf(cfg_path,sizeof cfg_path,"%s",cfgsrc); }
-    /* ---- v6.2: boot-slot, runtime-skift, exit-påmindelse (alt mod mock-roden) ---- */
+    /* ---- v6.2: boot slot, runtime switch, exit reminder (all against the mock root) ---- */
 #define SYS_BOTTOM() do{ sim_reset(); page=PG_T2; scroll[PG_T2]=scroll_max(PG_T2); }while(0)
 #define ROW_TAP(k) tap(240,(int)(row_y0(PG_T2,(k))-scroll[PG_T2])+25)
     int nsys=tier_count(2);
@@ -8040,60 +8048,60 @@ int main(int argc,char**argv){
     SYS_BOTTOM(); sim_run(300); ROW_TAP(nsys+X_BOOTUI); sim_run(900); dump(out,"40_bootui_detail");
     tap(84,184); sim_run(500); dump(out,"41_bootui_changed");
     tap(310,316); sim_run(700); dump(out,"42_bootui_saved_toast");
-    printf("   (BOOT-UI-scenarie: flag %s efter GEM, %s)\n",mock_exists(pvr,BOOT_FLAG)?"FINDES":"fjernet",bs.flag?"OURUI":"ORIGINAL ved naeste genstart");
+    printf("   (BOOT UI scenario: flag %s after SAVE, %s)\n",mock_exists(pvr,BOOT_FLAG)?"EXISTS":"removed",bs.flag?"OURUI":"ORIGINAL on next restart");
     mock_boot_b(pvr); mock_slot_b(pvr,1,MB_VENDOR);
     SYS_BOTTOM(); sim_run(300); ROW_TAP(nsys+X_BOOTUI); sim_run(900); dump(out,"43_bootui_locked");
     mock_boot_b(pvr);
     SYS_BOTTOM(); sim_run(300); ROW_TAP(nsys+X_SWITCH); sim_run(900); dump(out,"44_switch_confirm_boot");
     tap(310,316); sim_run(200); dump(out,"47_switching_bye");
-    printf("   (skift-scenarie: view=%s, run=%d, stock startet=%s)\n",view==V_BYE?"BYE":"?",(int)run,sw_child?"JA":"nej (preview)");
+    printf("   (switch scenario: view=%s, run=%d, stock started=%s)\n",view==V_BYE?"BYE":"?",(int)run,sw_child?"YES":"no (preview)");
     mock_runsh(pvr,6000);
     SYS_BOTTOM(); sim_run(300); ROW_TAP(nsys+X_SWITCH); sim_run(900); dump(out,"45_switch_confirm_runsh");
     mock_boot_b(pvr);
     SYS_BOTTOM(); sim_tick=tick_steam; sim_t0=sim_now; sim_run(4000); ROW_TAP(nsys+X_SWITCH); sim_run(600); tap(310,316); sim_run(400); dump(out,"46_switch_blocked_activity");
-    /* exit-påmindelse: run.sh-tilstand, stock-UI startet FØR seneste GEM (RESTART_NEEDED fra scenarie 23) */
+    /* exit reminder: run.sh mode, stock UI started BEFORE the latest SAVE (RESTART_NEEDED from scenario 23) */
     mock_runsh(pvr,40);
-    /* v6.8: via SKIFT NU (REVERT-knappen er vaek). Uret saettes bagefter til det, v6.6-scenariet endte paa (sim_run(1500) + tryk + sim_run(900)),
-     * saa de senere scenariers animations-fase (puls, ripple) er uaendret og kan sammenlignes byte for byte med v6.6. */
-    { sim_reset(); ms_t t48=sim_now; SYS_BOTTOM(); sim_run(1500); ROW_TAP(nsys+X_SWITCH); sim_run(900); tap(310,316); sim_run(900); dump(out,"48_exit_banner"); sim_now=t48+1518+99+924; }   /* sim_run gaar i 33-ms-skridt: 1500 -> 1518, tryk 70 -> 99, 900 -> 924 */
-    printf("   (exit-scenarie: paamindelse %s, run=%d)\n",(view==V_SYS&&xsel==X_EXIT)?"VIST":"ikke vist",(int)run);
+    /* v6.8: via SWITCH NOW (the REVERT button is gone). Afterwards the clock is set to where the v6.6 scenario ended (sim_run(1500) + tap + sim_run(900)),
+     * so the later scenarios' animation phase (pulse, ripple) is unchanged and can be compared byte for byte with v6.6. */
+    { sim_reset(); ms_t t48=sim_now; SYS_BOTTOM(); sim_run(1500); ROW_TAP(nsys+X_SWITCH); sim_run(900); tap(310,316); sim_run(900); dump(out,"48_exit_banner"); sim_now=t48+1518+99+924; }   /* sim_run moves in 33 ms steps: 1500 -> 1518, tap 70 -> 99, 900 -> 924 */
+    printf("   (exit scenario: reminder %s, run=%d)\n",(view==V_SYS&&xsel==X_EXIT)?"SHOWN":"not shown",(int)run);
     mock_boot_b(pvr);
-#define DG_SC_BOOT (DG_BOOT-28-LIST_VY0-26)   /* scroll der viser hele boot-blokken (overskriften øverst i feltet) */
+#define DG_SC_BOOT (DG_BOOT-28-LIST_VY0-26)   /* scroll that shows the whole boot block (the heading at the top of the field) */
     sim_reset(); page=PG_DIAG; scroll[PG_DIAG]=DG_SC_BOOT; sim_run(600); dump(out,"49_diag_boot");
     mock_runsh(pvr,40);
     sim_reset(); page=PG_DIAG; scroll[PG_DIAG]=DG_SC_BOOT; sim_run(600); dump(out,"50_diag_boot_runsh");
     mock_boot_b(pvr);
-    /* ---- v6.3: UI-sprog (egen fil), live-skift, OM-blok ---- */
-    { int other=pv_lang==LANG_EN?LANG_DA:LANG_EN, bx=other>pv_lang?396:84;       /* + mod DANSK, − mod ENGLISH */
+    /* ---- v6.3: UI language (own file), live switch, ABOUT block ---- */
+    { int other=pv_lang==LANG_EN?LANG_DA:LANG_EN, bx=other>pv_lang?396:84;       /* + towards DANSK, − towards ENGLISH */
       sim_reset(); page=PG_T2; sim_run(300); detail_open(S_UILANG,sim_now); sim_run(900); dump(out,"51_detail_ui_language");
       tap(bx,184); sim_run(500); dump(out,"52_ui_language_live_preview");
-      printf("   (sprog-scenarie: live preview = %s, gemt = %s, fil %s)\n",LANG_CODE[ui_lang],LANG_CODE[SET[S_UILANG].val],access(lang_path,F_OK)==0?"findes":"findes ikke");
+      printf("   (language scenario: live preview = %s, saved = %s, file %s)\n",LANG_CODE[ui_lang],LANG_CODE[SET[S_UILANG].val],access(lang_path,F_OK)==0?"exists":"does not exist");
       tap(310,316); sim_run(700); dump(out,"53_ui_language_saved_toast");
       { char lb[8]=""; int fd=open(lang_path,O_RDONLY); int n=fd>=0?(int)read(fd,lb,sizeof lb-1):0; if(fd>=0) close(fd); lb[n>0?n:0]=0;
-        printf("   (sprog-scenarie: GEM -> %s indeholder \"%s\", UI-sprog %s, cmd6 koeet=%d, config-writes=%d)\n",lang_path,lb,LANG_CODE[ui_lang],wq.n,cfg_writes); }
-      sim_run(2600); page=PG_HOME; static_dirty=1; sim_run(600); dump(out,"54_home_other_language");   /* samme kørsel, HJEM på det netop valgte sprog */
+        printf("   (language scenario: SAVE -> %s contains \"%s\", UI language %s, cmd6 queued=%d, config writes=%d)\n",lang_path,lb,LANG_CODE[ui_lang],wq.n,cfg_writes); }
+      sim_run(2600); page=PG_HOME; static_dirty=1; sim_run(600); dump(out,"54_home_other_language");   /* same run, HOME in the newly chosen language */
       PV_LANG_BASE(); (void)other; }
     sim_reset(); page=PG_DIAG; scroll[PG_DIAG]=scroll_max(PG_DIAG); sim_run(600); dump(out,"55_diag_about");
-    /* v6.5: DIAGNOSE scrollet én række: RX CRC / RESYNC øverst (1 CRC-fejl, 2 resync) og boot-push-rækken nederst */
+    /* v6.5: DIAGNOSE scrolled by one row: RX CRC / RESYNC at the top (1 CRC error, 2 resync) and the boot push row at the bottom */
     sim_reset(); page=PG_DIAG; scroll[PG_DIAG]=DG_P; rx_bad=1; rx_resync=2; sim_run(600); dump(out,"56_diag_bootpush"); rx_bad=0; rx_resync=0;
-    /* v6.6: fase-semantik efter STEAMLIVE (to damp-veje, samtidige faser) + re-push-tælleren */
+    /* v6.6: phase semantics per STEAMLIVE (two steam paths, concurrent phases) + the re-push counter */
     sim_reset(); sim_run(400); sim_tick=tick_wand; sim_t0=sim_now; sim_run(2000); dump(out,"57_home_steam_wand");
-    sim_run(2600); dump(out,"58_home_wand_over_target");                       /* proben 69,5° > målet 65,0°: stadig DAMP·WAND, ingen auto-stop */
+    sim_run(2600); dump(out,"58_home_wand_over_target");                       /* probe 69.5° > target 65.0°: still STEAM·WAND, no auto-stop */
     sim_reset(); sim_run(400); sim_tick=tick_brew_wand; sim_t0=sim_now; sim_run(22400); dump(out,"59_home_brew_wand");   /* work_sta 5327 */
-    sim_reset(); sim_run(400); sim_tick=tick_steam; sim_t0=sim_now; sim_run(34000); dump(out,"60_home_steam_done");       /* auto-stop: FÆRDIG + efterstigning */
+    sim_reset(); sim_run(400); sim_tick=tick_steam; sim_t0=sim_now; sim_run(34000); dump(out,"60_home_steam_done");       /* auto-stop: DONE + post-stop rise */
     sim_reset(); page=PG_DIAG; scroll[PG_DIAG]=DG_P; rps.n_ver=1; rps.n_def=1; rps.last=RPC_VER; sim_run(600); dump(out,"61_diag_repush"); memset(&rps,0,sizeof rps);
-    /* v6.7: NET-raekken midt i en selv-heal (wpa_supplicant draebt, IP'en staar stadig paa wlan0) */
-    /* v6.10: DIAGNOSE er længere (TRYK · ESTIMAT) — 62 og 66 scrolles til v6.9's bund (DG_SC_V69), saa NET- og GRAF-raekken staar samme sted */
+    /* v6.7: the NET row in the middle of a self-heal (wpa_supplicant killed, the IP still on wlan0) */
+    /* v6.10: DIAGNOSE is longer (PRESSURE · ESTIMATE) — 62 and 66 are scrolled to v6.9's bottom (DG_SC_V69), so the NET and GRAPH rows are in the same place */
 #define DG_SC_V69 (DG_PRESS+133-(LIST_VY1-14))
     sim_reset(); page=PG_DIAG; scroll[PG_DIAG]=DG_SC_V69; nm.wpa_pid=0; nm.carrier=0; nh_probe(&net.p,sim_now,1); net.state=NS_STARTING; sim_run(600); dump(out,"62_diag_net_heal");
-    /* v6.9: visnings-konditionering — bryg m. deadhead-pulser (GLAT + RAA), ro efter bryg m. vedligehold-pulser, DIAGNOSE GRAF = RAA */
+    /* v6.9: display conditioning — brew with deadhead pulses (SMOOTH + RAW), idle after a brew with maintenance pulses, DIAGNOSE GRAPH = RAW */
     sim_reset(); cs_ws=0x1107; cs_p=358; cs_w39=0xFFFD; cs_w38=0; cs_pulse=0; cs_glitch=0; sim_tick=tick_cs; sim_t0=sim_now; sim_run(3000);
     cs_ws=0x1307; cs_p=1320; cs_pulse=1; for(int q=0;q<14;q++){ cs_w39=q*22; sim_run(1000); } dump(out,"63_home_brew_spikes");
     cd.raw=1; sim_run(200); dump(out,"64_home_brew_spikes_raw"); cd.raw=0;
     cs_w39=367; sim_tick=tick_idle_maint; sim_run(20000); dump(out,"65_home_idle_after_brew_pulses");
     sim_reset(); page=PG_DIAG; scroll[PG_DIAG]=DG_SC_V69; cd.raw=1; sim_run(600); dump(out,"66_diag_graph_raw"); cd.raw=0;
-    /* v6.10: tryk-estimat — DIAGNOSE TRYK · ESTIMAT under ekstraktion (1346 = ≈15.0 BAR) og i ro m. vedligehold-puls (16670 = VEDLIGEHOLD-PULS),
-     * og grundlags-toasten ved tryk paa chartet under bryg */
+    /* v6.10: pressure estimate — DIAGNOSE PRESSURE · ESTIMATE during extraction (1346 = ≈15.0 BAR) and idle with a maintenance pulse (16670 = MAINTENANCE PULSE),
+     * and the basis toast on tapping the chart during a brew */
 #define DG_SC_PRESS (DG_PRESS-LIST_VY0-62)
     sim_reset(); cs_ws=0x1107; cs_p=358; cs_w39=0xFFFD; cs_w38=0; cs_pulse=0; cs_glitch=0; sim_tick=tick_cs; sim_t0=sim_now; sim_run(3000);
     cs_ws=0x1307; cs_p=1346; for(int q=0;q<6;q++){ cs_w39=q*30; sim_run(1000); } page=PG_DIAG; scroll[PG_DIAG]=DG_SC_PRESS; static_dirty=1; sim_run(600); dump(out,"67_diag_pressure_ext");
@@ -8101,19 +8109,19 @@ int main(int argc,char**argv){
     page=PG_DIAG; scroll[PG_DIAG]=DG_SC_PRESS; sim_run(600); dump(out,"68_diag_pressure_maint_pulse");
     sim_reset(); cs_ws=0x1107; cs_p=358; cs_w39=0xFFFD; cs_w38=0; cs_pulse=0; sim_tick=tick_cs; sim_t0=sim_now; sim_run(3000);
     cs_ws=0x1307; cs_p=1346; for(int q=0;q<8;q++){ cs_w39=q*25; sim_run(1000); } tap(240,268); sim_run(500); dump(out,"69_home_brew_pinfo_toast");
-    /* v6.11: UX-review — tryk-feedback paa tandhjulet og luk-chevronen (holdt nede), og DIAGNOSE's RAA TAELLERE-sektion */
+    /* v6.11: UX review — press feedback on the gear and the close chevron (held down), and DIAGNOSE's RAW COUNTERS section */
     sim_reset(); sim_run(1500); ui_touch(TE_DOWN,CX,GEAR_Y,sim_now); sim_run(120); dump(out,"70_home_gear_pressed"); memset(&tch,0,sizeof tch);
     sim_reset(); page=PG_T0; static_dirty=1; sim_run(400); activate(T_ROW0+3,sim_now); sim_run(400); ui_touch(TE_DOWN,CX,57,sim_now); sim_run(120); dump(out,"71_detail_back_pressed"); memset(&tch,0,sizeof tch);
     sim_reset(); page=PG_DIAG; scroll[PG_DIAG]=DG_RAW-LIST_VY0-12; sim_run(600); dump(out,"72_diag_raw_counters");
-    /* v6.13: manuel STOP — vand: knappen holdes nede, "STOPPER VAND…" efter slip, "VAND STOPPET" naar MCU'en har ryddet bits'ene;
-     * to knapper (bryg + latchet damp); og "STOP IKKE BEKRAEFTET", naar bits'ene bliver staaende i 5 s */
+    /* v6.13: manual STOP — water: the button held down, "STOPPING WATER…" after release, "WATER STOPPED" once the MCU has cleared the bits;
+     * two buttons (brew + latched steam); and "STOP NOT CONFIRMED" when the bits stay set for 5 s */
     sim_reset(); sim_run(400); sim_tick=tick_water; sim_t0=sim_now; sim_run(4200); ui_touch(TE_DOWN,240,372,sim_now); sim_run(120); dump(out,"73_home_stop_water_pressed");
     ui_touch(TE_UP,240,372,sim_now); sim_run(170); dump(out,"74_home_stop_water_sending");
     sim_tick=NULL; reg[33]=0x0101; reg[16]=0; reg[51]=3; reg[52]=0; sim_run(400); dump(out,"75_home_stop_water_stopped");
     sim_reset(); sim_run(400); sim_tick=tick_brew_latched; sim_t0=sim_now; sim_run(12000); dump(out,"76_home_stop_dual_brew_steam");
     sim_reset(); sim_run(400); sim_tick=tick_water; sim_t0=sim_now; sim_run(1200); tap(240,372); sim_run(5300); dump(out,"77_home_stop_unconfirmed");
-    /* v6.14: taend/sluk-knappen — HOLD 1,5 s: SLUKKER… (cmd8 + sub0 len2 paa vej), SLUKKET (controlleren tavs), TAENDER… (knappen igen);
-     * spaerret under bryg (toast); DIAGNOSE's TAEND/SLUK-KNAP-blok */
+    /* v6.14: the power button — HOLD 1.5 s: TURNING OFF… (cmd8 + sub0 len2 on the way), OFF (controller silent), TURNING ON… (the button again);
+     * blocked during a brew (toast); DIAGNOSE's POWER BUTTON block */
     sim_reset(); sim_run(400); pw_key(116,1,sim_now); sim_run(1560); dump(out,"78_power_turning_off");
     pw_key(116,0,sim_now); sim_link=0; sim_run(2000); dump(out,"79_power_off");
     pw_key(116,1,sim_now); sim_run(300); dump(out,"80_power_turning_on"); pw_key(116,0,sim_now);

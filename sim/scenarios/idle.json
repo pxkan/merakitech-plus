@@ -1,6 +1,6 @@
 {
   "name": "idle",
-  "description": "Idle/klar: poll-rotation, keep-awake, boot-push, ingen aktivitet",
+  "description": "Idle/ready: poll rotation, keep-awake, boot push, no activity",
   "duration_s": 12,
   "events": [
     {

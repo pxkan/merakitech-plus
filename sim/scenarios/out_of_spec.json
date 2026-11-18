@@ -1,6 +1,6 @@
 {
   "name": "out_of_spec",
-  "description": "Out-of-spec config: UI spærrer start + frame-politikken blokerer boot-push (BLOK≥1); rettelse → start virker",
+  "description": "Out-of-spec config: UI blocks start + the frame policy blocks the boot push (BLOCK≥1); fix → start works",
   "duration_s": 14,
   "events": [
     {

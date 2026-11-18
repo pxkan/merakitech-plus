@@ -9,8 +9,8 @@ With play mode you can start the whole sim environment with one command and **cl
 a browser** with a simulated MCU and data: live framebuffer, state panel, protocol log, touch
 injection (real evdev format), fault injection, ACK profiles, language, speed and more.
 
-> Some viewer labels and log messages are still in Danish (e.g. "Genstart UI" = restart UI,
-> "GESTUS UDLØST" = gesture triggered).
+> The viewer and its logs are in English; only the UI under test can be switched to Danish
+> ("UI language" control).
 
 ---
 
@@ -68,7 +68,7 @@ reference mode is still available with `--force-reference`.
   button for at least 650 ms). A yellow/green ring shows the hold time.
 * **Right-click** (or the "gesture test" button) = gesture test: the trigger gesture is injected as
   an evdev stream, and the **real `switcher_host`** is run in file mode against the same stream. The
-  result ("GESTUS UDLØST" = triggered / "ingen trigger" = no trigger) is shown in the panel.
+  result ("GESTURE TRIGGERED" / "no trigger") is shown in the panel.
 * **Coordinate overlay**: a crosshair + `x=… y=… (raw …,…)` follows the mouse, so you can see exactly
   where you hit. Mapping: `raw = px*4096/480` (inverse: `px = raw*480/4096`), the same formula as
   `tinj_hold`/CONTRACT §4.

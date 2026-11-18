@@ -232,7 +232,7 @@ Exit codes as in §6. `SIGTERM` gives exit 0 (a clean shutdown, like the device)
 
 ### C. Reference client ≠ the real UI: the UI profile
 
-Five scenarios have expectations that are tied to the reference client's synthetic layout, or to it having neither ourui's guards nor ourui's deliberate deviations from `parity_spec.json`. The scenario files are **not** changed. Instead the runner reads a UI profile when the client is the SIM build, and replaces the affected expectations **1:1** (the number of checks is unchanged) with what ourui actually does. Each override must hit exactly one expectation, otherwise the scenario fails; all applied overrides are listed in the report and marked `[ui-profil]`. `--no-ui-profile` runs the scenarios raw.
+Five scenarios have expectations that are tied to the reference client's synthetic layout, or to it having neither ourui's guards nor ourui's deliberate deviations from `parity_spec.json`. The scenario files are **not** changed. Instead the runner reads a UI profile when the client is the SIM build, and replaces the affected expectations **1:1** (the number of checks is unchanged) with what ourui actually does. Each override must hit exactly one expectation, otherwise the scenario fails; all applied overrides are listed in the report and marked `[ui-profile]`. `--no-ui-profile` runs the scenarios raw.
 
 | Scenario | Tied to the reference client | In ourui | Override |
 |---|---|---|---|
@@ -400,7 +400,7 @@ The contract and ADDENDUM v6.4/v6.5/v6.6 (UI work stream) are unchanged. Full do
   | BREW | `cmd6 sub22 len1 [0]` | stops on `word22` 1→0 (brew ctl `0x1E9C`): the same `_tick_post("brew")` as the weight stop — bits 1+2+9+12 are cleared, valve pulse `0x0105` for ~0.21 s, after-drip +12, word22=0. |
   | GRIND | `cmd6 sub6 len1 [0]` | stops on `word6==0` during a grind (grind ctl `0x19C6`: runs while word6≠0; word3 is the tare trigger). Bit6 is cleared, **the weight holds** (no ramp towards target+2), cur2 decay like the auto-stop. |
 * All stop writes are ACKed (exact echo, the same latency/loss profile). New assertion event **`ack`** (`sub`, `len`, `words`) on a scheduled ACK echo — used by the new sim_log assert `ack_words`.
-* **Unchanged:** auto-stop (weight/milk/timeout), error stop, replay serve/verify (the recordings have no stop writes; verify rates unchanged), idle pulses, all other curves. The `activity_stop` log now has an additive `manual` field; the reason for a manual stop is `"manuel stop ord…=0"` (manual stop word…=0).
+* **Unchanged:** auto-stop (weight/milk/timeout), error stop, replay serve/verify (the recordings have no stop writes; verify rates unchanged), idle pulses, all other curves. The `activity_stop` log now has an additive `manual` field; the reason for a manual stop is `"manual stop word…=0"`.
 
 ### B. New in `sim/ref_client.py` (oracle parity, additive)
 * **Ctrl actions:** `action grind_stop | brew_stop | water_stop` (the same names as ourui v6.13's `STOP_KEY`). A stop is not blocked by the active phase; frames = zeros only, no intent. The water stop sends `sub19=[0]` after the `sub16` ACK if word19≠0 (never half a water stop).

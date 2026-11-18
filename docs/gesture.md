@@ -206,7 +206,7 @@ pushed scripts, md5 round trips):
    `kill` of the stock UI (the watchdog restarts it WITH the shim env; fallback launch after 20 s) →
    `/proc/<pid>/maps` must show `grab_shim.so`.
 7. **Switcher restart** (new binary); the startup log must show CENTER hold + sources.
-8. **The USER holds the center ≥ 5 s** → A→B is verified: `GESTUS UDLØST` + `skift A→B FÆRDIG` in
+8. **The USER holds the center ≥ 5 s** → A→B is verified: `GESTUS UDLØST` + `skift A→B FÆRDIG` (today: `GESTURE TRIGGERED` + `switch A→B DONE`) in
    switcher.log + exe link `/new_customer/demo_v9` (no reboot).
 9. **The USER taps SWITCH NOW** (gear → SYSTEM → SWITCH TO ORIGINAL NOW → SWITCH NOW, physically) →
    B→A is verified: exe link `/customer/demo_v9` + boot_ui.log.

@@ -1,6 +1,6 @@
 {
   "name": "offline",
-  "description": "Offline (link silent i 5 s): UI viser OFFLINE → recovery ved link up",
+  "description": "Offline (link silent for 5 s): UI shows OFFLINE → recovery on link up",
   "duration_s": 14,
   "events": [
     {

@@ -1,6 +1,6 @@
 {
   "name": "no_ack",
-  "description": "ACK-udeblivelse: GEM skal blokere (retransmit→FAIL, config uændret), derefter recovery med normal profil",
+  "description": "Missing ACK: SAVE must block (retransmit→FAIL, config unchanged), then recovery with the normal profile",
   "duration_s": 12,
   "events": [
     {

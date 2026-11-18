@@ -1,6 +1,6 @@
 {
   "name": "replay_v2",
-  "description": "REPLAY serve: v2 hot water-trace (2 dispenseringer, 8× hastighed)",
+  "description": "REPLAY serve: v2 hot water trace (2 dispenses, 8× speed)",
   "duration_s": 20,
   "events": [
     {

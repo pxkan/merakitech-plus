@@ -1,6 +1,6 @@
 {
   "name": "power_off_wake",
-  "description": "v6.14: HOLD 1,6 s → cmd8 (alarm 0/0/0) + cmd6 sub0 len2 [0,0] ACK → MCU i dvale (tavs UART, regs bevaret, keep-awake pause) → knap-hold 1,6 s på sim → MCU REBOOT til fabriks-defaults (ord11=920, ord114=50) → 0x89 → re-push genskaber config (ord11=870) → PowerOn + HJEM",
+  "description": "v6.14: HOLD 1.6 s → cmd8 (alarm 0/0/0) + cmd6 sub0 len2 [0,0] ACK → MCU in deep sleep (silent UART, regs kept, keep-awake paused) → button hold 1.6 s on the sim → MCU REBOOT to factory defaults (word11=920, word114=50) → 0x89 → re-push restores config (word11=870) → PowerOn + HOME",
   "duration_s": 55,
   "events": [
     {

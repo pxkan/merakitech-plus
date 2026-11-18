@@ -1,6 +1,6 @@
 {
   "name": "replay_v3",
-  "description": "REPLAY serve: v3 grind+bryg-trace som sandhed (8× hastighed)",
+  "description": "REPLAY serve: v3 grind+brew trace as ground truth (8× speed)",
   "duration_s": 42,
   "events": [
     {

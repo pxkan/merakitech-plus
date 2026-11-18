@@ -1,6 +1,6 @@
 {
   "name": "replay_steam_live",
-  "description": "REPLAY serve: LIVE-session 2026-11-17 (steam+grind+bryg+flush-under-bryg) som sandhed, 8x hastighed. Verificerer steam-auto-stop ved ord48>=ord25=650, wand-flush (ord24=0) uden mælk-auto-stop, og samtidig brew+steam (0x5327).",
+  "description": "REPLAY serve: LIVE session 2026-11-17 (steam+grind+brew+flush-during-brew) as ground truth, 8x speed. Verifies steam auto-stop at word48>=word25=650, wand flush (word24=0) without milk auto-stop, and simultaneous brew+steam (0x5327).",
   "duration_s": 34,
   "expect": [
     {"kind": "phase", "t": 8, "window": 1.5, "value": "STEAM"},

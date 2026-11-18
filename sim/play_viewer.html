@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="da">
+<html lang="en">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -87,10 +87,10 @@
   <span class="pill" id="p-ui">UI: …</span>
   <span class="pill" id="p-sim">MCU: …</span>
   <span class="pill" id="p-speed">1×</span>
-  <span class="pill" id="p-lang">sprog: …</span>
-  <span class="pill" id="p-flag">boot-flag: …</span>
+  <span class="pill" id="p-lang">language: …</span>
+  <span class="pill" id="p-flag">boot flag: …</span>
   <span style="flex:1"></span>
-  <button id="btn-help" title="Tastatur-genveje (?)">?</button>
+  <button id="btn-help" title="Keyboard shortcuts (?)">?</button>
 </header>
 <div id="banner"></div>
 <main>
@@ -103,22 +103,22 @@
         <div id="coord">x=– y=–</div>
       </div>
       <div class="hint">
-        Klik = tap · <b>hold ≥650 ms</b> på aktivitets-knap = start ·
-        <b>swipe</b> = træk vandret ≥60 px (skifter side) ·
-        <b>scroll</b> = træk lodret i lister/DIAGNOSE (eller musehjul) ·
-        højreklik = gestus-test (3× hold i hjørnet)<br>
-        <label><input type="checkbox" id="zones"> vis tryk-mål (layout)</label>
+        Click = tap · <b>hold ≥650 ms</b> on an activity button = start ·
+        <b>swipe</b> = drag horizontally ≥60 px (switches page) ·
+        <b>scroll</b> = drag vertically in lists/DIAGNOSE (or mouse wheel) ·
+        right-click = gesture test (3× hold in the corner)<br>
+        <label><input type="checkbox" id="zones"> show touch targets (layout)</label>
         <label style="margin-left:12px"><input type="checkbox" id="autoref" checked> auto-refresh</label>
       </div>
     </div>
     <div class="card">
-      <h2>Seneste toasts</h2>
+      <h2>Latest toasts</h2>
       <div id="toasts"></div>
     </div>
     <div class="card">
-      <h2>Snapshot-eksport</h2>
+      <h2>Snapshot export</h2>
       <div class="row">
-        <button id="btn-snap" class="primary">Eksportér PNG + state</button>
+        <button id="btn-snap" class="primary">Export PNG + state</button>
         <span id="snapmsg" style="color:var(--dim);font-size:12px"></span>
       </div>
       <div id="snaps"></div>
@@ -129,28 +129,28 @@
       <h2>State</h2>
       <div class="row" style="justify-content:space-between">
         <span id="phase">–</span>
-        <span class="pill" id="p-page">side: –</span>
+        <span class="pill" id="p-page">page: –</span>
         <span class="pill" id="p-link">link: –</span>
       </div>
       <table class="state"><tbody id="statetab"></tbody></table>
     </div>
     <div class="grid2">
       <div class="card">
-        <h2>Aktiviteter</h2>
+        <h2>Activities</h2>
         <div class="row">
           <button data-act="grind">Grind (g)</button>
-          <button data-act="brew">Bryg (b)</button>
-          <button data-act="water">Vand (h)</button>
-          <button data-act="steam">Damp (s)</button>
-          <button data-act="steam_stop" class="danger">Stop damp</button>
+          <button data-act="brew">Brew (b)</button>
+          <button data-act="water">Water (h)</button>
+          <button data-act="steam">Steam (s)</button>
+          <button data-act="steam_stop" class="danger">Stop steam</button>
         </div>
         <div class="row">
-          <button id="btn-gesture">Gestus-test (3× hold)</button>
-          <button id="btn-calm">Glat graf: FRA</button>
+          <button id="btn-gesture">Gesture test (3× hold)</button>
+          <button id="btn-calm">Smooth graph: OFF</button>
           <span id="gesturemsg" style="color:var(--dim);font-size:12px"></span>
         </div>
         <div class="row">
-          <span class="lbl">Side</span>
+          <span class="lbl">Page</span>
           <select id="page">
             <option>home</option><option>settings</option><option>detail</option>
             <option>sys</option><option>diag</option>
@@ -158,7 +158,7 @@
           <span class="lbl" style="min-width:auto">via ctrl</span>
         </div>
         <div class="row">
-          <span class="lbl">Settings-GEM</span>
+          <span class="lbl">Settings SAVE</span>
           <select id="saveparam">
             <option value="brew_temp">brew_temp (850–960)</option>
             <option value="grind_weight">grind_weight (10–309)</option>
@@ -171,24 +171,24 @@
             <option value="break_time">break_time</option>
           </select>
           <input type="number" id="saveval" value="880">
-          <button id="btn-save" class="primary">GEM</button>
+          <button id="btn-save" class="primary">SAVE</button>
           <span id="savemsg" style="color:var(--dim);font-size:12px"></span>
         </div>
       </div>
       <div class="card">
-        <h2>Fejl &amp; link</h2>
+        <h2>Faults &amp; link</h2>
         <div class="row">
-          <button id="btn-fault" class="danger">Fejl-cycle (e)</button>
+          <button id="btn-fault" class="danger">Fault cycle (e)</button>
           <span id="faultmsg" style="color:var(--dim);font-size:12px"></span>
         </div>
         <div class="row">
           <button id="btn-garbage">CRC-garbage (2 s)</button>
           <button id="btn-offline">Offline</button>
-          <button id="btn-online">Genonline</button>
-          <button id="btn-closed">Luk pty</button>
+          <button id="btn-online">Back online</button>
+          <button id="btn-closed">Close pty</button>
         </div>
         <div class="row">
-          <span class="lbl">ACK-profil</span>
+          <span class="lbl">ACK profile</span>
           <select id="ack">
             <option>normal</option><option>observed_v3</option>
             <option>slow</option><option>lossy</option><option>no_ack</option>
@@ -196,64 +196,64 @@
         </div>
         <div class="row">
           <span class="lbl">Wand (PE.2)</span>
-          <button id="btn-wand">Wand til/fra</button>
+          <button id="btn-wand">Wand on/off</button>
           <label style="font-size:12px;color:var(--dim)">
-            <input type="checkbox" id="reqwand"> kræv wand for damp
+            <input type="checkbox" id="reqwand"> require wand for steam
           </label>
         </div>
       </div>
       <div class="card">
-        <h2>System &amp; tid</h2>
+        <h2>System &amp; time</h2>
         <div class="row">
-          <span class="lbl">Hastighed</span>
+          <span class="lbl">Speed</span>
           <button data-speed="1">1×</button>
           <button data-speed="2">2×</button>
           <button data-speed="8">8×</button>
           <button id="btn-pause">Pause (space)</button>
         </div>
         <div class="row">
-          <span class="lbl">UI-sprog (l)</span>
-          <button data-lang="da">Dansk</button>
-          <button data-lang="en">Engelsk</button>
-          <span class="lbl" style="min-width:auto">Stock-sprog</span>
+          <span class="lbl">UI language (l)</span>
+          <button data-lang="da">Danish</button>
+          <button data-lang="en">English</button>
+          <span class="lbl" style="min-width:auto">Stock language</span>
           <select id="stocklang"></select>
         </div>
         <div class="row">
-          <button id="btn-boot">Boot-flag toggle</button>
-          <button id="btn-switch">Runtime-skift (dry)</button>
-          <button id="btn-reboot">MCU-genstart</button>
+          <button id="btn-boot">Boot flag toggle</button>
+          <button id="btn-switch">Runtime switch (dry)</button>
+          <button id="btn-reboot">MCU restart</button>
         </div>
         <div class="row">
-          <button id="btn-restart">Genstart UI</button>
+          <button id="btn-restart">Restart UI</button>
           <button id="btn-reset" class="danger">Reset sandbox (r)</button>
         </div>
       </div>
       <div class="card">
-        <h2>Protokol-log (writes/ACKs/hændelser)</h2>
+        <h2>Protocol log (writes/ACKs/events)</h2>
         <div id="log"></div>
       </div>
     </div>
   </div>
 </main>
 <footer>
-  Kun lokal udvikling — ingen kontakt med den fysiske enhed.
-  Sandbox + exports: se <code>sim/reports/</code>. Dokumentation: <code>sim/PLAY.md</code>.
+  Local development only — no contact with the physical device.
+  Sandbox + exports: see <code>sim/reports/</code>. Documentation: <code>sim/PLAY.md</code>.
 </footer>
 <div id="help"><div class="box">
-  <h2 style="margin-top:0">Tastatur-genveje</h2>
+  <h2 style="margin-top:0">Keyboard shortcuts</h2>
   <table>
-    <tr><td><kbd>g</kbd> <kbd>b</kbd> <kbd>h</kbd> <kbd>s</kbd></td><td>start grind / bryg / vand / damp (simuleret hold)</td></tr>
-    <tr><td><kbd>e</kbd></td><td>fejl-cycle: ingen → E1 → E2 → E3 → ingen</td></tr>
-    <tr><td><kbd>l</kbd></td><td>UI-sprog dansk ↔ engelsk</td></tr>
-    <tr><td><kbd>r</kbd></td><td>reset sandbox (frisk session)</td></tr>
-    <tr><td><kbd>space</kbd></td><td>pause / resume sim-tid</td></tr>
-    <tr><td><kbd>?</kbd> / <kbd>Esc</kbd></td><td>vis / luk denne hjælp</td></tr>
+    <tr><td><kbd>g</kbd> <kbd>b</kbd> <kbd>h</kbd> <kbd>s</kbd></td><td>start grind / brew / water / steam (simulated hold)</td></tr>
+    <tr><td><kbd>e</kbd></td><td>fault cycle: none → E1 → E2 → E3 → none</td></tr>
+    <tr><td><kbd>l</kbd></td><td>UI language Danish ↔ English</td></tr>
+    <tr><td><kbd>r</kbd></td><td>reset sandbox (fresh session)</td></tr>
+    <tr><td><kbd>space</kbd></td><td>pause / resume sim time</td></tr>
+    <tr><td><kbd>?</kbd> / <kbd>Esc</kbd></td><td>show / close this help</td></tr>
   </table>
-  <p style="color:var(--dim)">Touch (1:1 som maskinen): tap = tryk, hold ≥650 ms = start,
-  vandret træk = swipe/sideskift, lodret træk = scroll i lister/DIAGNOSE.
-  Mus (desktop): samme via drag; højreklik = gestus-test.
+  <p style="color:var(--dim)">Touch (1:1 like the machine): tap = press, hold ≥650 ms = start,
+  horizontal drag = swipe/page switch, vertical drag = scroll in lists/DIAGNOSE.
+  Mouse (desktop): same via drag; right-click = gesture test.
   <span id="touchmode" style="color:var(--dim)"></span></p>
-  <button onclick="document.getElementById('help').style.display='none'">Luk</button>
+  <button onclick="document.getElementById('help').style.display='none'">Close</button>
 </div></div>
 <script>
 "use strict";
@@ -285,7 +285,7 @@ async function poll(){
     render();
   } catch(e){
     serverGone = true;
-    banner("Play-serveren svarer ikke — er den stoppet?", "bad");
+    banner("The play server is not responding — has it stopped?", "bad");
   }
 }
 setInterval(poll, 500); poll();
@@ -312,60 +312,60 @@ function render(){
   const s = SNAP.state||{}, ui = SNAP.ui||{}, sim = SNAP.sim||{}, ping = sim.ping||{};
   const sess = SNAP.session||{};
   const isRef = sess.client === "reference";
-  pill("p-client", isRef ? "REFERENCE-klient" : "ourui SIM-build", isRef?"warn":"ok");
+  pill("p-client", isRef ? "REFERENCE client" : "ourui SIM-build", isRef?"warn":"ok");
   pill("p-ui", "UI: "+ui.status, ui.status==="running"?"ok":"bad");
   pill("p-sim", "MCU: "+(sim.status||"?")+(ping.link?" · link "+ping.link:""),
        sim.status==="running"?"ok":"bad");
   pill("p-speed", (SNAP.paused?"PAUSE · ":"")+(SNAP.speed||1)+"×", SNAP.paused?"warn":"");
-  pill("p-lang", "sprog: "+(SNAP.ui_lang||"?")+(SNAP.lang_file?" (fil: "+SNAP.lang_file+")":""), "");
-  pill("p-flag", "boot-flag: "+(s.boot_flag?"B (new)":"A"), s.boot_flag?"warn":"");
-  pill("p-page", "side: "+(s.page||"–"), "");
-  pill("p-link", "link: "+(s.link_up?"oppe":"NEDE"), s.link_up?"ok":"bad");
+  pill("p-lang", "language: "+(SNAP.ui_lang||"?")+(SNAP.lang_file?" (file: "+SNAP.lang_file+")":""), "");
+  pill("p-flag", "boot flag: "+(s.boot_flag?"B (new)":"A"), s.boot_flag?"warn":"");
+  pill("p-page", "page: "+(s.page||"–"), "");
+  pill("p-link", "link: "+(s.link_up?"up":"DOWN"), s.link_up?"ok":"bad");
   const ph = $("phase"); ph.textContent = s.phase||"–"; ph.style.color = PHCOL[s.phase]||"#fff";
   // banners
   const b = $("banner");
   if (ui.status === "crashed"){
-    banner("UI-klienten crashede (exit "+ui.exit_code+").<br><code style='font-size:11px'>"+
+    banner("The UI client crashed (exit "+ui.exit_code+").<br><code style='font-size:11px'>"+
            (ui.stderr_tail||[]).slice(-4).join("<br>")+"</code>", "bad",
-           {label:"Genstart UI", fn:async()=>{ await post("/api/restart_ui"); poll(); }});
+           {label:"Restart UI", fn:async()=>{ await post("/api/restart_ui"); poll(); }});
   } else if (sim.status === "dead" || sim.status === "unreachable"){
-    banner("mcu_sim svarer ikke ("+sim.status+") — forventet offline-state i UI'en. Reset kan genskabe sessionen.",
+    banner("mcu_sim is not responding ("+sim.status+") — expect an offline state in the UI. Reset can restore the session.",
            "bad", {label:"Reset sandbox", fn:doReset});
   } else if (isRef){
-    banner("REFERENCE-KLIENT: protokol/state-play med simpel fb-emulering (placeholder-grafik). "+
-           "Fuld visuel play kræver Fable's v6.4-binær <code>artifacts/ourui/ourui_v6_sim</code> — "+
-           "den auto-detekteres når den lander.", "ref");
+    banner("REFERENCE CLIENT: protocol/state play with simple fb emulation (placeholder graphics). "+
+           "Full visual play requires Fable's v6.4 binary <code>artifacts/ourui/ourui_v6_sim</code> — "+
+           "it is auto-detected once it lands.", "ref");
   } else if (!serverGone){ b.style.display="none"; }
-  // state-tabel
+  // state table
   const c6 = s.cmd6||{};
   const rows = [
     ["work_sta", "0x"+(s.work_sta||0).toString(16).padStart(4,"0")],
-    ["fase / side", (s.phase||"–")+" / "+(s.page||"–")],
-    ["sprog (config-index)", s.lang],
+    ["phase / page", (s.phase||"–")+" / "+(s.page||"–")],
+    ["language (config index)", s.lang],
     ["CRC ok / bad", (s.crc_ok||0)+" / "+(s.crc_bad||0)],
-    ["cmd6 ok/retx/fail/blok", [c6.ok,c6.retx,c6.fail,c6.block].join(" / ")],
+    ["cmd6 ok/retx/fail/block", [c6.ok,c6.retx,c6.fail,c6.block].join(" / ")],
     ["frame-time", (s.frame_ms!=null?s.frame_ms+" ms":"–")],
     ["link_up", String(s.link_up)],
-    ["config_oor", (s.config_oor||[]).map(o=>o.param+"="+o.value).join(", ")||"ingen"],
+    ["config_oor", (s.config_oor||[]).map(o=>o.param+"="+o.value).join(", ")||"none"],
     ["save", s.save ? s.save.state+" ("+s.save.param+"="+s.save.value+")" : "–"],
     ["activity_pending", s.activity_pending||"–"],
     ["toast", s.toast ? s.toast.text : "–"],
     ["config md5", SNAP.config_md5||"–"],
     ["MCU mode / t", (ping.mode||"–")+" / "+(ping.t!=null?ping.t.toFixed(1)+" s":"–")],
-    ["ACK-profil", SNAP.ack_profile||"–"],
-    ["klient-t", s.t_ms!=null?(s.t_ms/1000).toFixed(1)+" s":"–"],
+    ["ACK profile", SNAP.ack_profile||"–"],
+    ["client t", s.t_ms!=null?(s.t_ms/1000).toFixed(1)+" s":"–"],
   ];
   $("statetab").innerHTML = rows.map(r=>"<tr><td>"+r[0]+"</td><td>"+r[1]+"</td></tr>").join("");
   // toasts
   $("toasts").innerHTML = (SNAP.toasts||[]).map(t=>
     "<div class='"+(t.kind||"")+"'>"+((t.t_ms||0)/1000).toFixed(1)+" s · "+t.text+"</div>").join("")
-    || "<div style='color:var(--dim)'>ingen endnu</div>";
-  // protokol-log
+    || "<div style='color:var(--dim)'>none yet</div>";
+  // protocol log
   const log = $("log");
   const stick = log.scrollTop + log.clientHeight >= log.scrollHeight - 30;
   log.innerHTML = (SNAP.log||[]).map(fmtLog).join("");
   if (stick) log.scrollTop = log.scrollHeight;
-  // pills/knapper
+  // pills/buttons
   $("faultmsg").textContent = SNAP.fault||"";
   document.querySelectorAll("[data-speed]").forEach(btn=>
     btn.classList.toggle("on", Number(btn.dataset.speed)===SNAP.speed && !SNAP.paused));
@@ -377,7 +377,7 @@ function render(){
   if (SNAP.ack_profile && $("ack").value !== SNAP.ack_profile &&
       [...$("ack").options].some(o=>o.value===SNAP.ack_profile))
     $("ack").value = SNAP.ack_profile;
-  // stock-sprog select (én gang)
+  // stock language select (once)
   if (!$("stocklang").options.length && SNAP.stock_langs){
     SNAP.stock_langs.forEach((n,i)=>{
       const o=document.createElement("option"); o.value=i; o.textContent=i+" · "+n;
@@ -385,7 +385,7 @@ function render(){
     });
     $("stocklang").onchange = async e=>{
       const r = await post("/api/stock_lang",{value:Number(e.target.value)});
-      $("savemsg").textContent = r.ok?"stock-sprog gemt (config)":"fejl: "+r.error;
+      $("savemsg").textContent = r.ok?"stock language saved (config)":"error: "+r.error;
     };
   }
   if (s.lang!=null && document.activeElement!==$("stocklang")) $("stocklang").value=s.lang;
@@ -402,42 +402,42 @@ function fmtLog(e){
   switch(e.kind){
     case "write": cls="w"; txt="WRITE sub"+e.sub+" len"+e.len+" ["+(e.words||[]).join(",")+"]"+
       (e.verdict==="ok"?"":" · "+e.verdict); break;
-    case "write_rejected": cls="e"; txt="AFVIST sub"+e.sub+" ["+(e.words||[]).join(",")+"] "+
+    case "write_rejected": cls="e"; txt="REJECTED sub"+e.sub+" ["+(e.words||[]).join(",")+"] "+
       (e.reasons||[]).join(";"); break;
     case "range_violation": cls="e"; txt="RANGE "+e.reason; break;
-    case "ack_dropped": cls="e"; txt="ACK TABT sub"+e.sub; break;
+    case "ack_dropped": cls="e"; txt="ACK DROPPED sub"+e.sub; break;
     case "activity_start": cls="a"; txt="START "+e.activity+" (ws="+e.work_sta+")"; break;
     case "activity_stop": cls="a"; txt="STOP "+e.activity+" · "+e.reason; break;
-    case "fault_set": cls="e"; txt="FEJL ord"+e.word+"="+e.value; break;
-    case "fault_clear": cls="a"; txt="FEJL ryddet (ord"+e.word+")"; break;
+    case "fault_set": cls="e"; txt="FAULT word"+e.word+"="+e.value; break;
+    case "fault_clear": cls="a"; txt="FAULT cleared (word"+e.word+")"; break;
     case "boot_push": cls="a"; txt="BOOT-PUSH "+e.block; break;
-    case "boot_push_missing": cls="e"; txt="BOOT-PUSH MANGLER "+e.block; break;
+    case "boot_push_missing": cls="e"; txt="BOOT-PUSH MISSING "+e.block; break;
     case "version_handshake": cls="a"; txt="VERSION "+e.version; break;
     case "keepalive_gap": cls="e"; txt="KEEP-ALIVE GAP "+e.gap_s+" s"; break;
     case "link_connect": cls="a"; txt="LINK connect"; break;
     case "link_state": cls="m"; txt="LINK "+e.state; break;
-    case "link_closed": cls="e"; txt="LINK lukket (pty væk)"; break;
+    case "link_closed": cls="e"; txt="LINK closed (pty gone)"; break;
     case "link_reopened": cls="a"; txt="LINK reopen "+e.pty; break;
     case "garbage_start": cls="m"; txt="GARBAGE "+e.dur+" s"; break;
     case "reboot": cls="m"; txt="MCU REBOOT"; break;
-    case "sleep_write": cls="m"; txt="SLEEP ord1="+e.value; break;
+    case "sleep_write": cls="m"; txt="SLEEP word1="+e.value; break;
     case "config_md5": cls="m"; txt="CONFIG md5 "+e.md5; break;
-    case "wand": cls="m"; txt="WAND "+(e.on?"til":"fra"); break;
-    case "set_reg": cls="m"; txt="SET ord"+e.word+"="+e.value; break;
-    case "touch_error": cls="e"; txt="TOUCH-FEJL "+e.error; break;
+    case "wand": cls="m"; txt="WAND "+(e.on?"on":"off"); break;
+    case "set_reg": cls="m"; txt="SET word"+e.word+"="+e.value; break;
+    case "touch_error": cls="e"; txt="TOUCH ERROR "+e.error; break;
     default: txt=e.kind+" "+JSON.stringify(e).slice(0,110);
   }
   return "<span class='"+cls+"'>t="+t+"  "+txt+"</span>";
 }
 
-// ---- touch-overlay + klik ----
+// ---- touch overlay + click ----
 const ov = $("ov"), ctx = ov.getContext("2d");
 function drawOverlay(){
   ctx.clearRect(0,0,480,480);
   if ($("zones").checked){
     ctx.lineWidth=1.5; ctx.font="11px monospace";
     if (SNAP.targets && SNAP.targets.length){
-      // RIGTIGE tryk-mål (SIM-build ctrl layout) ell. reference-fallback
+      // REAL touch targets (SIM build ctrl layout) or reference fallback
       for (const t of SNAP.targets){
         ctx.strokeStyle="rgba(255,255,255,.55)"; ctx.fillStyle="rgba(255,255,255,.85)";
         if (t.r){ ctx.beginPath(); ctx.arc(t.x,t.y,t.r,0,7); ctx.stroke(); }
@@ -457,7 +457,7 @@ function drawOverlay(){
     }
     ctx.strokeStyle="rgba(255,186,84,.6)";
     ctx.strokeRect(40,40,70,70);
-    ctx.fillStyle="rgba(255,186,84,.9)"; ctx.fillText("gestus", 46, 36);
+    ctx.fillStyle="rgba(255,186,84,.9)"; ctx.fillText("gesture", 46, 36);
   }
   if (mouse){
     ctx.strokeStyle="rgba(98,222,168,.8)"; ctx.lineWidth=1;
@@ -489,16 +489,16 @@ $("fbwrap").addEventListener("mousemove", e=>{
   $("coord").textContent = "x="+mouse.x+" y="+mouse.y+"  (raw "+rx+","+ry+")";
 });
 $("fbwrap").addEventListener("mouseleave", ()=>{ mouse=null; $("coord").textContent="x=– y=–"; });
-// ---- 1:1 touch: pointer-events forwardes LIVE (down/move/up) til evdev-FIFO'et.
-// ourui's egen inp_poll/ui_touch afgør tap/hold/swipe/scroll = præcis som enheden.
-// Ingen klient-side klassifikations-hacks. Touch detecteres; desktop uden touch
-// får et hint om Chrome device-mode, men mus-drag virker også (pointer-events).
+// ---- 1:1 touch: pointer events are forwarded LIVE (down/move/up) to the evdev FIFO.
+// ourui's own inp_poll/ui_touch decides tap/hold/swipe/scroll = exactly like the device.
+// No client-side classification hacks. Touch is detected; desktop without touch
+// gets a hint about Chrome device mode, but mouse drag works too (pointer events).
 const IS_TOUCH = (matchMedia && matchMedia('(pointer:coarse)').matches) || navigator.maxTouchPoints > 0;
 (function(){
   const el = $("touchmode");
   if (el) el.textContent = IS_TOUCH
-    ? "Touch-tilstand: 1:1 som maskinen (tap/hold/swipe/scroll)."
-    : "Desktop uden touch: brug Chrome DevTools → device-mode (touch) for 1:1; mus-drag virker også.";
+    ? "Touch mode: 1:1 like the machine (tap/hold/swipe/scroll)."
+    : "Desktop without touch: use Chrome DevTools → device mode (touch) for 1:1; mouse drag works too.";
 })();
 const fbw = $("fbwrap");
 fbw.style.touchAction = "none";
@@ -537,26 +537,26 @@ let calmOn = false;
 $("btn-calm").onclick = async ()=>{
   calmOn = !calmOn;
   const r = await post("/api/calm", calmOn ? {factor:0.30, maint:false} : {factor:1.0, maint:true});
-  $("btn-calm").textContent = "Glat graf: " + (calmOn && r.ok ? "TIL" : "FRA");
-  if (!r.ok) $("coord").textContent = "calm-fejl: "+r.error;
+  $("btn-calm").textContent = "Smooth graph: " + (calmOn && r.ok ? "ON" : "OFF");
+  if (!r.ok) $("coord").textContent = "calm error: "+r.error;
 };
 $("fbwrap").addEventListener("contextmenu", async e=>{
   e.preventDefault();
-  if (IS_TOUCH) return;   // mobil long-press = hold-for-start, IKKE gestus
-  $("gesturemsg").textContent = "gestus kører (3×1,6 s hold)…";
+  if (IS_TOUCH) return;   // mobile long-press = hold-for-start, NOT the gesture
+  $("gesturemsg").textContent = "gesture running (3×1.6 s hold)…";
   const r = await post("/api/gesture", {presses:3});
   $("gesturemsg").textContent = r.ok
-    ? (r.ran ? (r.trigger?"GESTUS UDLØST ✓":"kørt — ingen trigger") : "switcher_host ikke bygget")
-    : "fejl: "+r.error;
+    ? (r.ran ? (r.trigger?"GESTURE TRIGGERED ✓":"ran — no trigger") : "switcher_host not built")
+    : "error: "+r.error;
 });
 
-// ---- knapper ----
+// ---- buttons ----
 document.querySelectorAll("[data-act]").forEach(btn=>{
   btn.onclick = async ()=>{
     btn.classList.add("on");
     const r = await post("/api/activity",{name:btn.dataset.act});
     setTimeout(()=>btn.classList.remove("on"), 800);
-    if (!r.ok) alert("Aktivitet fejlede: "+(r.error||"ukendt"));
+    if (!r.ok) alert("Activity failed: "+(r.error||"unknown"));
   };
 });
 document.querySelectorAll("[data-speed]").forEach(btn=>{
@@ -565,7 +565,7 @@ document.querySelectorAll("[data-speed]").forEach(btn=>{
 document.querySelectorAll("[data-lang]").forEach(btn=>{
   btn.onclick = async ()=>{
     const r = await post("/api/lang",{value:btn.dataset.lang});
-    if (!r.ok) alert("Sprog-skift fejlede: "+r.error);
+    if (!r.ok) alert("Language switch failed: "+r.error);
   };
 });
 $("btn-pause").onclick = ()=>post("/api/pause",{});
@@ -577,36 +577,36 @@ $("btn-online").onclick = ()=>post("/api/link",{state:"up"});
 $("btn-closed").onclick = ()=>post("/api/link",{state:"closed"});
 $("ack").onchange = e=>post("/api/ack",{profile:e.target.value});
 $("btn-wand").onclick = async ()=>{
-  // toggler ud fra sidste kendte wand-tilstand i loggen
+  // toggles based on the last known wand state in the log
   const last = (SNAP.log||[]).filter(e=>e.kind==="wand").pop();
   await post("/api/wand",{on: last ? !last.on : true});
 };
 $("reqwand").onchange = e=>post("/api/require_wand",{value:e.target.checked});
 $("page").onchange = e=>post("/api/page",{name:e.target.value});
 $("btn-save").onclick = async ()=>{
-  $("savemsg").textContent = "gemmer…";
+  $("savemsg").textContent = "saving…";
   const r = await post("/api/save",{param:$("saveparam").value, value:Number($("saveval").value)});
-  $("savemsg").textContent = r.ok ? "sendt (se save-state + md5)" : "fejl: "+r.error;
+  $("savemsg").textContent = r.ok ? "sent (see save state + md5)" : "error: "+r.error;
 };
 $("btn-boot").onclick = ()=>post("/api/boot_flag",{});
 $("btn-switch").onclick = ()=>post("/api/runtime_switch",{});
 $("btn-reboot").onclick = ()=>post("/api/reboot",{});
 $("btn-restart").onclick = ()=>post("/api/restart_ui",{});
 async function doReset(){
-  if (!confirm("Reset sandbox? Alt kørende state nulstilles (exports bevares).")) return;
+  if (!confirm("Reset sandbox? All running state is reset (exports are kept).")) return;
   await post("/api/reset",{}); poll();
 }
 $("btn-reset").onclick = doReset;
 $("btn-snap").onclick = async ()=>{
-  $("snapmsg").textContent = "eksporterer…";
+  $("snapmsg").textContent = "exporting…";
   const r = await post("/api/snapshot",{label:"play"});
-  $("snapmsg").textContent = r.ok ? "gemt: "+r.dir : "fejl: "+r.error;
+  $("snapmsg").textContent = r.ok ? "saved: "+r.dir : "error: "+r.error;
   poll();
 };
 $("btn-help").onclick = ()=>$("help").style.display="flex";
 $("help").onclick = e=>{ if (e.target===$("help")) $("help").style.display="none"; };
 
-// ---- tastatur ----
+// ---- keyboard ----
 window.addEventListener("keydown", async e=>{
   const tag = (document.activeElement||{}).tagName;
   if (tag==="INPUT"||tag==="SELECT"||tag==="TEXTAREA") return;

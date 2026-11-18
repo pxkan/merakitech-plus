@@ -1,6 +1,6 @@
 {
   "name": "steam_auto_overshoot",
-  "description": "Kold mælk → auto-stop 650 → overshoot-peak ~689 (+39) ~11 s efter stop; cur1 7340 / ord51 16650",
+  "description": "Cold milk → auto-stop 650 → overshoot peak ~689 (+39) ~11 s after stop; cur1 7340 / word51 16650",
   "duration_s": 60,
   "events": [
     {
@@ -86,7 +86,7 @@
       "kind": "sim_log",
       "assert": "activity_stop",
       "activity": "steam",
-      "reason_contains": "mælk",
+      "reason_contains": "milk",
       "t0": 41,
       "t1": 45
     },

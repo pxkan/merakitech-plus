@@ -1,32 +1,32 @@
 #!/usr/bin/env python3
-"""play.py — INTERAKTIV play-mode til E2E-simmiljøet (Meraki+ / ourui).
+"""play.py — INTERACTIVE play mode for the E2E sim environment (Meraki+ / ourui).
 
-Starter sandbox + mcu_sim + UI-klient i ét kald (genbruger run_e2e.py's
-launch-mekanik) og serverer en lokal web-viewer, hvor man kan klikke rundt
-på UI'et med simuleret MCU og data:
+Starts sandbox + mcu_sim + UI client in one call (reuses run_e2e.py's
+launch mechanics) and serves a local web viewer where you can click around
+the UI with a simulated MCU and data:
 
   python3 sim/play.py [--ui-bin PATH] [--port 8765] [--lang en|da]
                       [--scenario idle|brew|steam_auto|...]
                       [--ack normal|observed_v3|no_ack|lossy]
 
-* UI-binæren auto-detekteres (build/ourui_sim, OURUI_SIM_BIN,
-  --ui-bin). Indtil Fable's v6.4-SIM-build lander, køres mod reference-
-  klienten (sim/ref_client.py): protokol/state-play med en simpel fb-emulering
-  (placeholder-grafik + state-panel). Fuld visuel play kræver v6.4-binæren.
-* Viewer: live fb (PNG ~6 Hz), state-panel, protokol-log, klik→touch
-  (evdev-FIFO, tinj_hold-format), hold ≥650 ms = hold-for-start, højreklik =
-  gestus-test (v6.12: center-hold ≥5 s + corner-fallback, ægte switcher_host i fil-mode).
-* Kontrol-panel: aktiviteter, fejl-injektion (E1/E2/E3), CRC-garbage,
-  offline/genonline, ACK-profil live, sprog (lang-fil + config), boot-flag,
-  runtime-skift (dry), MCU-genstart, hastighed 1×/2×/8×, pause, snapshot-
-  eksport (PNG+state), reset sandbox, UI-genstart ved crash.
-* Tastatur i viewer'en: g/b/h/s = grind/brew/hotwater/steam, e = fejl-cycle,
-  l = sprog, r = reset, space = pause/resume.
+* The UI binary is auto-detected (build/ourui_sim, OURUI_SIM_BIN,
+  --ui-bin). Until Fable's v6.4 SIM build lands, it runs against the reference
+  client (sim/ref_client.py): protocol/state play with a simple fb emulation
+  (placeholder graphics + state panel). Full visual play requires the v6.4 binary.
+* Viewer: live fb (PNG ~6 Hz), state panel, protocol log, click→touch
+  (evdev FIFO, tinj_hold format), hold ≥650 ms = hold-for-start, right-click =
+  gesture test (v6.12: center hold ≥5 s + corner fallback, real switcher_host in file mode).
+* Control panel: activities, fault injection (E1/E2/E3), CRC garbage,
+  offline/back online, live ACK profile, language (lang file + config), boot flag,
+  runtime switch (dry), MCU restart, speed 1×/2×/8×, pause, snapshot
+  export (PNG+state), reset sandbox, UI restart after a crash.
+* Keyboard in the viewer: g/b/h/s = grind/brew/hotwater/steam, e = fault cycle,
+  l = language, r = reset, space = pause/resume.
 
-Kun Python stdlib. Ingen enhedskontakt — alt kører lokalt. Writes sker kun
-i sandbox (sim/reports/play-*/), designated exports (sim/reports/play-exports/)
-og en kort /tmp-mappe til ctrl-sockets (ryddes ved exit). Ctrl-C rydder
-pty/FIFO/socket/sandbox. Se sim/PLAY.md for fuld dokumentation.
+Python stdlib only. No device contact — everything runs locally. Writes happen only
+in the sandbox (sim/reports/play-*/), designated exports (sim/reports/play-exports/)
+and a short-lived /tmp dir for ctrl sockets (removed on exit). Ctrl-C cleans up
+pty/FIFO/socket/sandbox. See sim/PLAY.md for full documentation.
 """
 import argparse
 import hashlib
@@ -62,10 +62,10 @@ REPORTS = HERE / "reports"
 EXPORTS = REPORTS / "play-exports"
 VIEWER_HTML = HERE / "play_viewer.html"
 
-HOLD_START_MS = 650             # ourui: hold-for-start på aktivitets-knapper
-ACTIVITY_MS = 750               # play's simulerede hold (lidt over 650)
+HOLD_START_MS = 650             # ourui: hold-for-start on activity buttons
+ACTIVITY_MS = 750               # play's simulated hold (a bit over 650)
 FAULT_CYCLE = [None, {"e1": 32}, {"e2": 16}, {"e3": 16}]
-FAULT_NAMES = ["ingen fejl", "E1 (ord34=32)", "E2 (ord35=16)", "E3 (ord36=16)"]
+FAULT_NAMES = ["no fault", "E1 (word34=32)", "E2 (word35=16)", "E3 (word36=16)"]
 STOCK_LANGS = ["English", "Deutsch", "Français", "Italiano", "Español",
                "Polski", "العربية", "简中", "繁中", "Korean", "Japanese"]
 
@@ -77,7 +77,7 @@ def _ts():
 
 
 def touch_down_bytes(x, y):
-    """Down-record-sekvens præcis som tinj_hold (CONTRACT §4)."""
+    """Down record sequence exactly like tinj_hold (CONTRACT §4)."""
     sec, usec = _ts()
     rx, ry = touch_raw(x), touch_raw(y)
     return b"".join(evdev_event(sec, usec, typ, code, val) for typ, code, val in (
@@ -95,7 +95,7 @@ def touch_up_bytes():
 
 
 def touch_move_bytes(x, y):
-    """Move-record under et hold (samme tracking-id): POSITION_X/Y + ABS_X/Y + SYN."""
+    """Move record during a hold (same tracking id): POSITION_X/Y + ABS_X/Y + SYN."""
     sec, usec = _ts()
     rx, ry = touch_raw(x), touch_raw(y)
     return b"".join(evdev_event(sec, usec, typ, code, val) for typ, code, val in (
@@ -113,22 +113,22 @@ def md5_file(path):
 
 # ---------------------------------------------------------------- play-session
 class Play:
-    """Én interaktiv session: sandbox + mcu_sim + UI-klient + sampler."""
+    """One interactive session: sandbox + mcu_sim + UI client + sampler."""
 
     def __init__(self, args):
         self.args = args
         self.lock = threading.Lock()
         self.stop = threading.Event()
         self.gen = 0                    # session-generation (reset/restart)
-        self.sr = None                  # ScenarioRun (genbrugt launch-mekanik)
+        self.sr = None                  # ScenarioRun (reused launch mechanics)
         self.ui_bin = None if args.force_reference else find_ui_bin(args.ui_bin)
-        self.ui_lang = args.lang        # "en"/"da" (ourui's egen lang-fil)
+        self.ui_lang = args.lang        # "en"/"da" (ourui's own lang file)
         self.fault_idx = 0
         self.link_closed = False
-        self.ui_intentional = False     # sand mens vi selv stopper UI'en
-        self.snapshot = {}              # seneste sampler-snapshot (til viewer)
+        self.ui_intentional = False     # true while we stop the UI ourselves
+        self.snapshot = {}              # latest sampler snapshot (for the viewer)
         self.toasts = deque(maxlen=30)
-        self.plog = deque(maxlen=300)   # protokol-log (sim assertions + md5)
+        self.plog = deque(maxlen=300)   # protocol log (sim assertions + md5)
         self.exports = deque(maxlen=20)
         self.last_gesture = None
         self.ui_stderr = deque(maxlen=200)
@@ -141,23 +141,23 @@ class Play:
         self.placeholder_png = self._make_placeholder()
         EXPORTS.mkdir(parents=True, exist_ok=True)
 
-    # ------------------------------------------------------------ opstart
+    # ------------------------------------------------------------ startup
     def _build_scen(self):
-        """--scenario bruger scenariets config/sim-del (ikke tidslinjen)."""
-        scen = {"name": "play", "description": "interaktiv play-mode",
+        """--scenario uses the scenario's config/sim part (not the timeline)."""
+        scen = {"name": "play", "description": "interactive play mode",
                 "config": {}, "sim": {"profile": self.args.ack, "seed": 1}}
         if self.args.scenario:
             p = HERE / "scenarios" / (self.args.scenario + ".json")
             if not p.exists():
-                raise SystemExit(f"ukendt scenarie: {self.args.scenario} "
-                                 f"(se sim/scenarios/ eller run_e2e.py --list)")
+                raise SystemExit(f"unknown scenario: {self.args.scenario} "
+                                 f"(see sim/scenarios/ or run_e2e.py --list)")
             src = json.loads(p.read_text())
             scen["config"] = src.get("config", {})
             scen["sim"].update(src.get("sim", {}))
             scen["sim"]["profile"] = self.args.ack
             if src.get("boot_flag_initial"):
                 scen["boot_flag_initial"] = True
-            # replay/events/expect hører til runneren — ikke interaktiv play
+            # replay/events/expect belong to the runner — not interactive play
         scen["sim"]["require_wand"] = bool(self.args.require_wand)
         return scen
 
@@ -169,7 +169,7 @@ class Play:
             self.sr = ScenarioRun(self._build_scen(), run_dir, ui_bin=self.ui_bin)
             sr = self.sr
             sr.make_sandbox()
-            # UI-sprogfil (v6.3+): "en"/"da" — ourui's egne labels, ikke config
+            # UI language file (v6.3+): "en"/"da" — ourui's own labels, not config
             lang_path = sr.sandbox / "new_customer" / "ourui" / "lang"
             lang_path.parent.mkdir(parents=True, exist_ok=True)
             lang_path.write_text(self.ui_lang)
@@ -190,14 +190,14 @@ class Play:
             self._last_slow = 0.0
             self._drain(sr.ui_proc, self.ui_stderr)
             self._drain(sr.sim_proc, self.sim_stderr)
-        kind = "ourui SIM-build" if self.ui_bin else "REFERENCE-klient (placeholder-fb)"
-        print(f"[play] UI-klient: {kind}"
+        kind = "ourui SIM-build" if self.ui_bin else "REFERENCE client (placeholder fb)"
+        print(f"[play] UI client: {kind}"
               + (f" ({self.ui_bin})" if self.ui_bin else ""), flush=True)
         print(f"[play] sandbox: {self.sr.sandbox}", flush=True)
         if not self.ui_bin:
-            print("[play] NOTE: Fable's v6.4-SIM-build (build/ourui_sim) "
-                  "findes ikke endnu — kører mod ref_client med simpel fb-emulering. "
-                  "Fuld visuel play kræver v6.4-binæren (auto-detekteres).", flush=True)
+            print("[play] NOTE: Fable's v6.4 SIM build (build/ourui_sim) "
+                  "does not exist yet — running against ref_client with simple fb emulation. "
+                  "Full visual play requires the v6.4 binary (auto-detected).", flush=True)
 
     def _drain(self, proc, buf):
         def run():
@@ -208,7 +208,7 @@ class Play:
                 pass
         threading.Thread(target=run, daemon=True).start()
 
-    # ------------------------------------------------------------ nedlukning
+    # ------------------------------------------------------------ shutdown
     def _teardown_session(self, remove=True):
         with self.lock:
             sr = self.sr
@@ -234,15 +234,15 @@ class Play:
                     proc.kill()
         shutil.rmtree(sr.sock_dir, ignore_errors=True)
         if remove:
-            # sr.dir = <play-run_dir>/play — ryd hele play-run_dir
+            # sr.dir = <play-run_dir>/play — remove the whole play-run_dir
             shutil.rmtree(sr.dir.parent, ignore_errors=True)
 
     def cleanup(self):
         self.stop.set()
         self._teardown_session(remove=not self.args.keep)
-        print("[play] ryddet: pty/FIFO/ctrl-sockets"
+        print("[play] cleaned up: pty/FIFO/ctrl sockets"
               + ("" if self.args.keep else " + sandbox")
-              + f" · exports bevaret i {EXPORTS}", flush=True)
+              + f" · exports kept in {EXPORTS}", flush=True)
 
     def reset(self):
         self._teardown_session(remove=True)
@@ -253,7 +253,7 @@ class Play:
         with self.lock:
             sr = self.sr
         if sr is None:
-            return {"ok": False, "error": "ingen session"}
+            return {"ok": False, "error": "no session"}
         self.ui_intentional = True
         try:
             sr.ui_ctrl.call({"cmd": "exit", "code": 0}, timeout=1.0)
@@ -267,7 +267,7 @@ class Play:
                 sr.ui_proc.wait(timeout=3)
             except Exception:
                 pass
-        # frisk state-fil + pty-sti (MCU'en kan have fået ny pty ved link reopen)
+        # fresh state file + pty path (the MCU may have got a new pty on link reopen)
         try:
             sr.state_path.write_text("")
             pf = sr.dir / "pty_path"
@@ -284,7 +284,7 @@ class Play:
         self._drain(sr.ui_proc, self.ui_stderr)
         return {"ok": True}
 
-    # ------------------------------------------------------------ ctrl-kald
+    # ------------------------------------------------------------ ctrl calls
     def _sim_call(self, req, timeout=2.0):
         with self.lock:
             sr = self.sr
@@ -310,7 +310,7 @@ class Play:
         with self.lock:
             sr = self.sr
         if sr is None:
-            raise RuntimeError("ingen session")
+            raise RuntimeError("no session")
         fd = os.open(str(sr.touch_path), os.O_WRONLY | os.O_NONBLOCK)
         try:
             os.write(fd, data)
@@ -322,7 +322,7 @@ class Play:
         y = max(0, min(H - 1, int(y)))
         ms = max(0, min(10000, int(ms)))
         if not self.touch_lock.acquire(blocking=False):
-            return {"ok": False, "error": "touch optaget (anden hold i gang)"}
+            return {"ok": False, "error": "touch busy (another hold in progress)"}
 
         def worker():
             try:
@@ -341,9 +341,9 @@ class Play:
                 "raw_x": touch_raw(x), "raw_y": touch_raw(y),
                 "hold": ms >= HOLD_START_MS}
 
-    # ---- 1:1 live touch-forwarding (pointer/touch events → evdev FIFO) ----
-    # Viewer'en sender down/move/up præcis som fingeren bevæger sig; ourui's
-    # inp_poll/ui_touch afgør selv tap/hold/swipe/scroll = samme adfærd som enheden.
+    # ---- 1:1 live touch forwarding (pointer/touch events → evdev FIFO) ----
+    # The viewer sends down/move/up exactly as the finger moves; ourui's
+    # inp_poll/ui_touch decides tap/hold/swipe/scroll itself = same behavior as the device.
     def _touch_io(self, data):
         with self.tio:
             self._fifo_write(data)
@@ -363,13 +363,13 @@ class Play:
         return {"ok": True, "ev": "up"}
 
     def inject_swipe(self, x0, y0, x1, y1, ms=260):
-        """Drag/swipe: down i (x0,y0) → interpolerede MOVE-records → up i (x1,y1).
-        ourui skifter side ved vandret >= 60 px (state-kontraktens 'swipe')."""
+        """Drag/swipe: down at (x0,y0) → interpolated MOVE records → up at (x1,y1).
+        ourui switches page on horizontal >= 60 px (the state contract's 'swipe')."""
         x0 = max(0, min(W - 1, int(x0))); y0 = max(0, min(H - 1, int(y0)))
         x1 = max(0, min(W - 1, int(x1))); y1 = max(0, min(H - 1, int(y1)))
         ms = max(60, min(2000, int(ms)))
         if not self.touch_lock.acquire(blocking=False):
-            return {"ok": False, "error": "touch optaget (anden hold i gang)"}
+            return {"ok": False, "error": "touch busy (another hold in progress)"}
 
         def worker():
             try:
@@ -392,8 +392,8 @@ class Play:
                 "dx": x1 - x0, "dy": y1 - y0}
 
     def layout(self):
-        """De RIGTIGE tryk-mål: SIM-build'ets ctrl `layout` (hit_test-geometri);
-        reference-klientens kendte knap-layout som fallback."""
+        """The REAL touch targets: the SIM build's ctrl `layout` (hit_test geometry);
+        the reference client's known button layout as fallback."""
         with self.lock:
             kind = self.sr.client_kind if self.sr else "reference"
         if kind == "sim-build":
@@ -407,9 +407,9 @@ class Play:
         return {"ok": True, "page": "home", "targets": targets, "reference": True}
 
     def activity(self, name, via="auto"):
-        """Aktivitets-knap: simuleret touch-hold (750 ms) på knappens tryk-mål
-        (reference-layout eller SIM-build'ets ctrl `layout`) — ctrl `action`
-        som fallback når målet ikke findes (kontrakt-hook = eksplicit intent)."""
+        """Activity button: simulated touch hold (750 ms) on the button's touch target
+        (reference layout or the SIM build's ctrl `layout`) — ctrl `action`
+        as fallback when the target is not found (contract hook = explicit intent)."""
         if name == "steam_stop":
             return self._ui_call({"cmd": "action", "name": "steam_stop"})
         with self.lock:
@@ -419,7 +419,7 @@ class Play:
         if via == "touch":
             if kind == "reference":
                 if name not in refc.BUTTONS:
-                    return {"ok": False, "error": f"ukendt aktivitet {name}"}
+                    return {"ok": False, "error": f"unknown activity {name}"}
                 bx, by, _ = refc.BUTTONS[name]
             else:
                 lay = self.layout()
@@ -439,15 +439,15 @@ class Play:
         return r
 
     def gesture(self, presses=3, mode="center"):
-        """v6.12: switcher's default-gestus = CENTER-hold ≥5 s (én finger, radius 40
-        om (240,240)); mode='corner' tester fallback'en (3×1,6 s i hjørne-boksen).
-        run_e2e.run_gesture arver os.environ og bruger sim's stream-range 4095 →
-        SWITCHER_RAW_MAX=4095 + SWITCHER_GESTURE sættes midlertidigt (switcher's
-        fil-mode-default er enhedens raw 0..480 + center-gestus)."""
+        """v6.12: the switcher's default gesture = CENTER hold ≥5 s (one finger, radius 40
+        around (240,240)); mode='corner' tests the fallback (3×1.6 s in the corner box).
+        run_e2e.run_gesture inherits os.environ and uses the sim's stream range 4095 →
+        SWITCHER_RAW_MAX=4095 + SWITCHER_GESTURE are set temporarily (the switcher's
+        file-mode default is the device's raw 0..480 + center gesture)."""
         with self.lock:
             sr = self.sr
         if sr is None:
-            return {"ok": False, "error": "ingen session"}
+            return {"ok": False, "error": "no session"}
         keys = ("SWITCHER_GESTURE", "SWITCHER_RAW_MAX")
         saved = {k: os.environ.get(k) for k in keys}
         try:
@@ -473,7 +473,7 @@ class Play:
                 else:
                     os.environ[k] = v
 
-    # ------------------------------------------------------------ kontrol-API
+    # ------------------------------------------------------------ control API
     def fault_cycle(self):
         self.fault_idx = (self.fault_idx + 1) % len(FAULT_CYCLE)
         ev = FAULT_CYCLE[self.fault_idx]
@@ -486,12 +486,12 @@ class Play:
 
     def set_lang(self, lang):
         if lang not in ("en", "da"):
-            return {"ok": False, "error": "lang skal være en|da"}
+            return {"ok": False, "error": "lang must be en|da"}
         self.ui_lang = lang
         with self.lock:
             sr = self.sr
         if sr is None:
-            return {"ok": False, "error": "ingen session"}
+            return {"ok": False, "error": "no session"}
         lp = sr.sandbox / "new_customer" / "ourui" / "lang"
         try:
             lp.parent.mkdir(parents=True, exist_ok=True)
@@ -502,15 +502,15 @@ class Play:
             return {"ok": False, "error": str(e)}
         restarted = False
         if self.ui_bin:
-            # ourui indlæser lang-filen ved boot → genstart UI for live-skift
+            # ourui loads the lang file at boot → restart the UI for a live switch
             r = self.restart_ui()
             restarted = bool(r.get("ok"))
         else:
-            # reference-klienten har ikke i18n; config-sproget reloades
+            # the reference client has no i18n; the config language is reloaded
             self._ui_call({"cmd": "config_reload"})
         return {"ok": True, "lang": lang, "ui_restarted": restarted,
-                "note": "DA findes ikke i stock's 11 sprog — ourui's labels er "
-                        "fast dansk/engelsk via lang-filen (v6.3+)"}
+                "note": "DA is not one of stock's 11 languages — ourui's labels are "
+                        "fixed Danish/English via the lang file (v6.3+)"}
 
     def link(self, state):
         r = self._sim_call({"cmd": "inject", "event": {"type": "link", "state": state}})
@@ -518,7 +518,7 @@ class Play:
             self.link_closed = True
         elif state == "up" and self.link_closed:
             self.link_closed = False
-            # ny pty efter reopen → UI'en skal genstartes med den nye sti
+            # new pty after reopen → the UI must be restarted with the new path
             rr = self.restart_ui()
             r["ui_restarted"] = bool(rr.get("ok"))
         return r
@@ -528,12 +528,12 @@ class Play:
             sr = self.sr
             state = dict(self.snapshot.get("state") or {})
         if sr is None:
-            return {"ok": False, "error": "ingen session"}
+            return {"ok": False, "error": "no session"}
         stamp = time.strftime("%Y%m%d-%H%M%S")
         safe = "".join(c for c in label if c.isalnum() or c in "-_")[:32] or "snap"
         out = EXPORTS / f"{stamp}_{safe}"
         out.mkdir(parents=True, exist_ok=True)
-        # fb: bed UI'en om frisk dump (kontrakt), ellers seneste fb.bin
+        # fb: ask the UI for a fresh dump (contract), otherwise the latest fb.bin
         dump = out / "fb.bin"
         r = self._ui_call({"cmd": "fb_dump", "path": str(dump)})
         if not r.get("ok") or not dump.exists():
@@ -566,7 +566,7 @@ class Play:
 
     # ------------------------------------------------------------ sampler
     def _read_new_lines(self, path, off):
-        """Binær læsning fra byte-offset (JSONL er UTF-8 m. danske tegn)."""
+        """Binary read from a byte offset (the JSONL is UTF-8 with Danish characters)."""
         try:
             size = path.stat().st_size
             if size < off:
@@ -576,7 +576,7 @@ class Play:
             with open(path, "rb") as f:
                 f.seek(off)
                 data = f.read()
-            idx = data.rfind(b"\n")     # kun hele linjer (undgå split i UTF-8-tegn)
+            idx = data.rfind(b"\n")     # whole lines only (avoid splitting a UTF-8 character)
             if idx < 0:
                 return [], off
             chunk = data[:idx + 1]
@@ -596,7 +596,7 @@ class Play:
                 self._sampler_gen = gen
                 self._state_off = 0
                 self._assert_off = 0
-            # state-JSONL (nye linjer)
+            # state JSONL (new lines)
             lines, self._state_off = self._read_new_lines(sr.state_path, self._state_off)
             latest = self.snapshot.get("state")
             for line in lines:
@@ -608,7 +608,7 @@ class Play:
                 toast = st.get("toast")
                 if toast and (not self.toasts or self.toasts[0]["text"] != toast["text"]):
                     self.toasts.appendleft({"t_ms": st.get("t_ms"), **toast})
-            # assertions-log (protokol-log)
+            # assertions log (protocol log)
             alines, self._assert_off = self._read_new_lines(sr.assert_path, self._assert_off)
             for line in alines:
                 try:
@@ -619,7 +619,7 @@ class Play:
             slow = now - getattr(self, "_last_slow", 0) >= 0.5
             if slow:
                 self._last_slow = now
-            # proces-status
+            # process status
             ui_status, ui_exit = "running", None
             if sr.ui_proc is not None and sr.ui_proc.poll() is not None:
                 ui_exit = sr.ui_proc.returncode
@@ -648,7 +648,7 @@ class Play:
                 lang_file = (sr.sandbox / "new_customer" / "ourui" / "lang").read_text().strip()
             except OSError:
                 pass
-            # rigtige tryk-mål fra SIM-build'et (ctrl layout) — caches mellem ticks
+            # real touch targets from the SIM build (ctrl layout) — cached between ticks
             if slow and sr.client_kind == "sim-build" and ui_status == "running":
                 try:
                     lr = sr.ui_ctrl.call({"cmd": "layout"}, timeout=1.0)
@@ -697,7 +697,7 @@ class Play:
         rgb = bytearray(W * H * 3)
         for i in range(W * H):
             rgb[i * 3], rgb[i * 3 + 1], rgb[i * 3 + 2] = 24, 26, 32
-        png.draw_text(rgb, W, H, 130, 220, "VENTER PAA FB", (200, 200, 210), 2)
+        png.draw_text(rgb, W, H, 130, 220, "WAITING FOR FB", (200, 200, 210), 2)
         png.draw_text(rgb, W, H, 105, 260, "SIM-PLAY MODE", (120, 130, 150), 1)
         return png.rgb_to_png_bytes(W, H, bytes(rgb))
 
@@ -732,12 +732,12 @@ class Handler(BaseHTTPRequestHandler):
         try:
             super().handle_one_request()
         except (ConnectionResetError, BrokenPipeError, TimeoutError):
-            pass  # mobil-klienter resetter ofte forbindelsen (reload/sleep) — ignorer støj
+            pass  # mobile clients often reset the connection (reload/sleep) — ignore the noise
     play = None
     protocol_version = "HTTP/1.1"
 
     def log_message(self, fmt, *a):
-        pass                            # ingen støjende access-log
+        pass                            # no noisy access log
 
     def _send(self, code, body, ctype="application/json; charset=utf-8", extra=None):
         if isinstance(body, str):
@@ -774,7 +774,7 @@ class Handler(BaseHTTPRequestHandler):
             try:
                 html = VIEWER_HTML.read_text()
             except OSError:
-                return self._send(500, "play_viewer.html mangler", "text/plain")
+                return self._send(500, "play_viewer.html missing", "text/plain")
             return self._send(200, html, "text/html; charset=utf-8")
         if path == "/fb.png":
             return self._send(200, play.fb_png(), "image/png")
@@ -782,7 +782,7 @@ class Handler(BaseHTTPRequestHandler):
             with play.lock:
                 snap = dict(play.snapshot)
             if not snap:
-                snap = {"ok": False, "error": "sampler ikke klar endnu"}
+                snap = {"ok": False, "error": "sampler not ready yet"}
             return self._json(snap)
         if path == "/api/scenarios":
             names = sorted(q.stem for q in (HERE / "scenarios").glob("*.json"))
@@ -886,7 +886,7 @@ class Handler(BaseHTTPRequestHandler):
             with play.lock:
                 sr = play.sr
             if sr is None:
-                return {"ok": False, "error": "ingen session"}
+                return {"ok": False, "error": "no session"}
             cfg = json.loads(sr.cfg_path.read_text())
             cfg[b["field"]] = b["value"]
             tmp = sr.cfg_path.with_suffix(".tmp")
@@ -901,14 +901,14 @@ class Handler(BaseHTTPRequestHandler):
             return play.restart_ui()
         if path == "/api/reset":
             return play.reset()
-        return {"ok": False, "error": f"ukendt endpoint: {path}"}
+        return {"ok": False, "error": f"unknown endpoint: {path}"}
 
 
 # ---------------------------------------------------------------- smoke
 def run_smoke(play, base):
-    """Headless smoke: viewer-sider + touch/API-injektion + state-ændringer.
-    Kører mod reference-klienten nu; samme checks køres mod v6.4-binæren
-    når den lander (auto-detect) = fuld visuel smoke."""
+    """Headless smoke: viewer pages + touch/API injection + state changes.
+    Runs against the reference client now; the same checks run against the v6.4 binary
+    once it lands (auto-detect) = full visual smoke."""
     import urllib.request
     import urllib.error
     checks = []
@@ -955,24 +955,24 @@ def run_smoke(play, base):
             time.sleep(0.2)
         return False, None
 
-    print(f"[smoke] klient: {play.sr.client_kind} · base: {base}", flush=True)
-    # 1. viewer-sider
+    print(f"[smoke] client: {play.sr.client_kind} · base: {base}", flush=True)
+    # 1. viewer pages
     code, html = get("/")
-    chk("GET / = viewer-HTML", code == 200 and b"Meraki" in html)
+    chk("GET / = viewer HTML", code == 200 and b"Meraki" in html)
     snap = json.loads(get("/api/state")[1])
     need = {"t_ms", "page", "phase", "work_sta", "regs", "lang", "boot_flag",
             "crc_ok", "crc_bad", "cmd6", "frame_ms"}
     st = snap.get("state") or {}
-    chk("state-panel: kontrakt-felter i JSONL", need <= set(st.keys()),
-        f"mangler={sorted(need - set(st.keys()))}")
+    chk("state panel: contract fields in JSONL", need <= set(st.keys()),
+        f"missing={sorted(need - set(st.keys()))}")
     code, fb = get("/fb.png")
     chk("GET /fb.png = PNG", code == 200 and fb[:8] == b"\x89PNG\r\n\x1a\n" and len(fb) > 1000)
-    # 2. touch via API → brew (reference: hold på BREW-knap; sim-build: ctrl-action)
+    # 2. touch via API → brew (reference: hold on BREW button; sim-build: ctrl-action)
     r = post("/api/activity", {"name": "brew"})
-    chk("activity brew accepteret", r.get("ok"), json.dumps(r))
-    ok, st = wait_state(lambda s, _: s.get("phase") in ("PRE", "EXT"), 12, "brew-fase")
-    chk("BREW → fase PRE/EXT i state", ok, f"phase={st.get('phase') if st else None}")
-    # state-ændringen skal også kunne ses direkte i JSONL-filen
+    chk("activity brew accepted", r.get("ok"), json.dumps(r))
+    ok, st = wait_state(lambda s, _: s.get("phase") in ("PRE", "EXT"), 12, "brew phase")
+    chk("BREW → phase PRE/EXT in state", ok, f"phase={st.get('phase') if st else None}")
+    # the state change must also be visible directly in the JSONL file
     jsonl_ok = False
     try:
         for line in play.sr.state_path.read_text().splitlines()[-80:]:
@@ -980,120 +980,120 @@ def run_smoke(play, base):
                 jsonl_ok = True
     except (OSError, json.JSONDecodeError):
         pass
-    chk("brew-fase synlig i state.jsonl", jsonl_ok)
+    chk("brew phase visible in state.jsonl", jsonl_ok)
     code, fb2 = get("/fb.png")
-    chk("fb ændrer sig under brew (PNG-hash)", fb2 != fb)
-    # 3. speed 8× → brew auto-stop hurtigere
+    chk("fb changes during brew (PNG hash)", fb2 != fb)
+    # 3. speed 8× → brew auto-stop sooner
     r = post("/api/speed", {"factor": 8})
-    chk("hastighed 8×", r.get("ok") and r.get("speed") == 8)
+    chk("speed 8×", r.get("ok") and r.get("speed") == 8)
     ok, e = wait_log("activity_stop", 25, activity="brew")
     chk("brew auto-stop (sim-log)", ok, "timeout")
-    # 4. steam → auto-stop ved mælk-setpoint
+    # 4. steam → auto-stop at the milk setpoint
     r = post("/api/activity", {"name": "steam"})
-    chk("activity steam accepteret", r.get("ok"), json.dumps(r))
-    ok, st = wait_state(lambda s, _: s.get("phase") == "STEAM", 10, "steam-fase")
-    chk("STEAM-fase i state", ok, f"phase={st.get('phase') if st else None}")
+    chk("activity steam accepted", r.get("ok"), json.dumps(r))
+    ok, st = wait_state(lambda s, _: s.get("phase") == "STEAM", 10, "steam phase")
+    chk("STEAM phase in state", ok, f"phase={st.get('phase') if st else None}")
     ok, e = wait_log("activity_stop", 20, activity="steam")
-    chk("steam auto-stop ved setpoint (sim-log)", ok,
+    chk("steam auto-stop at setpoint (sim log)", ok,
         "timeout" if not ok else "")
     if ok:
-        chk("steam-stopgrund = mælk ≥ setpoint", "mælk" in (e.get("reason") or ""),
+        chk("steam stop reason = milk ≥ setpoint", "milk" in (e.get("reason") or ""),
             e.get("reason", ""))
     post("/api/speed", {"factor": 1})
-    # 5. fejl-injektion E1 → ERROR → clear → READY
+    # 5. fault injection E1 → ERROR → clear → READY
     r = post("/api/fault", {})
     ok, st = wait_state(lambda s, _: s.get("phase") == "ERROR", 5, "ERROR")
-    chk("fejl-cycle E1 → ERROR-fase", ok and r.get("ok"), json.dumps(r))
+    chk("fault cycle E1 → ERROR phase", ok and r.get("ok"), json.dumps(r))
     post("/api/fault", {})              # E2
     post("/api/fault", {})              # E3
     r = post("/api/fault", {})          # clear
     ok, st = wait_state(lambda s, _: s.get("phase") in ("READY", "HEAT"), 8, "READY")
-    chk("fejl clear → READY/HEAT", ok, f"phase={st.get('phase') if st else None}")
-    # 6. no_ack → GEM blokerer (config uændret) → normal → GEM ok + md5-log
+    chk("fault clear → READY/HEAT", ok, f"phase={st.get('phase') if st else None}")
+    # 6. no_ack → SAVE blocks (config unchanged) → normal → SAVE ok + md5 log
     md5_before = md5_file(play.sr.cfg_path)
     post("/api/ack", {"profile": "no_ack"})
     post("/api/save", {"param": "brew_temp", "value": 890})
     ok, st = wait_state(lambda s, _: (s.get("save") or {}).get("state") == "fail", 6, "save fail")
-    chk("no_ack: GEM fejler (save=fail)", ok)
-    chk("no_ack: config uændret (md5)", md5_file(play.sr.cfg_path) == md5_before)
+    chk("no_ack: SAVE fails (save=fail)", ok)
+    chk("no_ack: config unchanged (md5)", md5_file(play.sr.cfg_path) == md5_before)
     post("/api/ack", {"profile": "normal"})
     post("/api/save", {"param": "brew_temp", "value": 880})
     ok, st = wait_state(lambda s, _: (s.get("save") or {}).get("state") == "ok", 6, "save ok")
-    chk("normal: GEM ok (save=ok)", ok)
+    chk("normal: SAVE ok (save=ok)", ok)
     cfg = json.loads(play.sr.cfg_path.read_text())
-    chk("settings-GEM: config.brewTemper=880 i sandbox", cfg.get("brewTemper") == 880)
+    chk("settings SAVE: config.brewTemper=880 in sandbox", cfg.get("brewTemper") == 880)
     md5_after = md5_file(play.sr.cfg_path)
-    chk("settings-GEM: config-md5 ændret", md5_after != md5_before)
+    chk("settings SAVE: config md5 changed", md5_after != md5_before)
     ok, e = wait_log("write", 3, sub=11, words=[880])
-    chk("settings-GEM: MCU-write sub11=[880] i log", ok)
+    chk("settings SAVE: MCU write sub11=[880] in log", ok)
     ok, e = wait_log("config_md5", 3)
-    chk("config-md5 logget i protokol-log", ok)
-    # 7. sprog-fil, boot-flag, pause, gestus, snapshot, touch-tap, reset
+    chk("config md5 logged in protocol log", ok)
+    # 7. language file, boot flag, pause, gesture, snapshot, touch tap, reset
     r = post("/api/lang", {"value": "da"})
     lp = play.sr.sandbox / "new_customer" / "ourui" / "lang"
-    chk("sprog-skift: lang-fil = 'da'", r.get("ok") and lp.read_text().strip() == "da")
+    chk("language switch: lang file = 'da'", r.get("ok") and lp.read_text().strip() == "da")
     flag0 = (json.loads(get("/api/state")[1]).get("state") or {}).get("boot_flag")
     post("/api/boot_flag", {})
-    ok, st = wait_state(lambda s, _: s.get("boot_flag") != flag0, 4, "boot-flag")
-    chk("boot-flag toggle i state", ok)
+    ok, st = wait_state(lambda s, _: s.get("boot_flag") != flag0, 4, "boot flag")
+    chk("boot flag toggle in state", ok)
     r = post("/api/pause", {"value": True})
-    chk("pause sim-tid", r.get("ok") and r.get("paused"))
+    chk("pause sim time", r.get("ok") and r.get("paused"))
     r = post("/api/pause", {"value": False})
-    chk("resume sim-tid", r.get("ok") and not r.get("paused"))
+    chk("resume sim time", r.get("ok") and not r.get("paused"))
     if run_e2e.SWITCHER_HOST.exists():
         r = post("/api/gesture", {"mode": "center"})
-        chk("gestus: center-hold 5,2 s udløser switcher (v6.12)", r.get("ran") and r.get("trigger"),
+        chk("gesture: center hold 5.2 s triggers switcher (v6.12)", r.get("ran") and r.get("trigger"),
             json.dumps(r)[:200])
         r = post("/api/gesture", {"presses": 3, "mode": "corner"})
-        chk("gestus: corner-fallback 3× hjørne-hold udløser switcher", r.get("ran") and r.get("trigger"),
+        chk("gesture: corner fallback 3× corner hold triggers switcher", r.get("ran") and r.get("trigger"),
             json.dumps(r)[:200])
     else:
-        chk("gestus: switcher_host ikke bygget (springes over)", True)
+        chk("gesture: switcher_host not built (skipped)", True)
     r = post("/api/touch", {"x": 240, "y": 240, "ms": 80})
-    chk("touch-tap via API (raw-mapping)", r.get("ok") and r.get("raw_x") == 2048,
+    chk("touch tap via API (raw mapping)", r.get("ok") and r.get("raw_x") == 2048,
         json.dumps(r))
     r = post("/api/snapshot", {"label": "smoke"})
-    chk("snapshot-eksport (PNG+state)", r.get("ok") and r.get("png")
+    chk("snapshot export (PNG+state)", r.get("ok") and r.get("png")
         and Path(r["png"]).exists() and Path(r["state"]).exists(), json.dumps(r)[:200])
     r = post("/api/reset")
-    ok, st = wait_state(lambda s, _: s.get("t_ms", 1e9) < 8000, 10, "frisk session")
-    chk("reset sandbox → frisk session", r.get("ok") and ok)
+    ok, st = wait_state(lambda s, _: s.get("t_ms", 1e9) < 8000, 10, "fresh session")
+    chk("reset sandbox → fresh session", r.get("ok") and ok)
     npass = sum(1 for _, ok in checks if ok)
-    print(f"[smoke] {npass}/{len(checks)} PASS · klient={play.sr.client_kind}", flush=True)
+    print(f"[smoke] {npass}/{len(checks)} PASS · client={play.sr.client_kind}", flush=True)
     return 0 if npass == len(checks) else 1
 
 
 # ---------------------------------------------------------------- main
 def main():
-    ap = argparse.ArgumentParser(description="Interaktiv play-mode til ourui SIM-miljøet")
-    ap.add_argument("--ui-bin", help="ourui SIM-build (auto-detekteres ellers)")
+    ap = argparse.ArgumentParser(description="Interactive play mode for the ourui SIM environment")
+    ap.add_argument("--ui-bin", help="ourui SIM build (auto-detected otherwise)")
     ap.add_argument("--force-reference", action="store_true",
-                    help="kør mod ref_client selv hvis en SIM-binær findes")
+                    help="run against ref_client even if a SIM binary exists")
     ap.add_argument("--port", type=int, default=8765)
     ap.add_argument("--calm", action="store_true",
-                    help="start med EMA-udjævnede sensor-værdier (glat graf); kan toggles i viewer'en")
+                    help="start with EMA-smoothed sensor values (smooth graph); can be toggled in the viewer")
     ap.add_argument("--host", default="127.0.0.1",
-                    help="bind-adresse; brug 0.0.0.0 for at kunne nå viewer'en fra andre maskiner på LAN'et")
+                    help="bind address; use 0.0.0.0 to reach the viewer from other machines on the LAN")
     ap.add_argument("--lang", choices=["en", "da"], default="da",
-                    help="UI-sprog (ourui's lang-fil; default da)")
-    ap.add_argument("--scenario", help="scenarie-navn: bruger dets config/sim-del "
-                    "(ikke tidslinjen) som udgangspunkt")
+                    help="UI language (ourui's lang file; default da)")
+    ap.add_argument("--scenario", help="scenario name: uses its config/sim part "
+                    "(not the timeline) as the starting point")
     ap.add_argument("--ack", default="normal",
-                    choices=list(proto.ACK_PROFILES), help="ACK-profil ved start")
+                    choices=list(proto.ACK_PROFILES), help="ACK profile at start")
     ap.add_argument("--require-wand", action="store_true",
-                    help="kræv wand-kontakt (PE.2) for steam (default: nej i play)")
+                    help="require wand contact (PE.2) for steam (default: no in play)")
     ap.add_argument("--keep", action="store_true",
-                    help="bevar sandbox/run-dir ved exit (fejlfinding)")
-    ap.add_argument("--no-browser", action="store_true", help="åbn ikke browser automatisk")
+                    help="keep sandbox/run dir on exit (debugging)")
+    ap.add_argument("--no-browser", action="store_true", help="do not open a browser automatically")
     ap.add_argument("--smoke", action="store_true",
-                    help="headless smoke-test (viewer + API + state-ændringer) og exit")
+                    help="headless smoke test (viewer + API + state changes) and exit")
     args = ap.parse_args()
 
     play = Play(args)
     play.start()
     sampler = threading.Thread(target=play._sampler, daemon=True)
     sampler.start()
-    # vent på første state-snapshot
+    # wait for the first state snapshot
     for _ in range(100):
         if play.snapshot.get("state"):
             break
@@ -1105,15 +1105,15 @@ def main():
     try:
         httpd = ThreadingHTTPServer((args.host, args.port), Handler)
     except OSError as e:
-        print(f"[play] kan ikke binde port {args.port}: {e}", file=sys.stderr)
+        print(f"[play] cannot bind port {args.port}: {e}", file=sys.stderr)
         play.cleanup()
         return 2
     httpd.daemon_threads = True
     port = httpd.server_address[1]
     base = f"http://127.0.0.1:{port}"
-    print(f"[play] viewer: {base}  (Ctrl-C stopper og rydder op)", flush=True)
+    print(f"[play] viewer: {base}  (Ctrl-C stops and cleans up)", flush=True)
     if args.host == "0.0.0.0":
-        print(f"[play] LAN: http://<denne-maskines-ip>:{port}  (bundet på alle interfaces)", flush=True)
+        print(f"[play] LAN: http://<this-machine-ip>:{port}  (bound on all interfaces)", flush=True)
 
     rc = 0
     if args.smoke:
@@ -1124,7 +1124,7 @@ def main():
         except Exception as e:
             import traceback
             traceback.print_exc()
-            print(f"[smoke] FEJL: {e}", flush=True)
+            print(f"[smoke] ERROR: {e}", flush=True)
             rc = 1
         finally:
             httpd.shutdown()
@@ -1143,8 +1143,8 @@ def main():
     signal.signal(signal.SIGTERM, on_sigterm)
 
     def on_sigint(*_):
-        # eksplicit handler: baggrunds-jobs i non-interaktive shells arver
-        # SIG_IGN for SIGINT — ellers ville Ctrl-C/kill -INT ikke rydde op
+        # explicit handler: background jobs in non-interactive shells inherit
+        # SIG_IGN for SIGINT — otherwise Ctrl-C/kill -INT would not clean up
         raise KeyboardInterrupt
     signal.signal(signal.SIGINT, on_sigint)
     try:

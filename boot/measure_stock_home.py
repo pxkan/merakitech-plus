@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
-"""measure_stock_home.py — mål stock-home-knappernes geometri fra fb-capture (uden PIL).
+"""measure_stock_home.py — measure the stock home buttons' geometry from an fb capture (no PIL).
 
-Finder de lyse ring-pixels (Grinder/Hot Water/Brew/Steam-cirklerne) og beregner
-center+radius pr. klynge samt afstand fra skærmcenter (240,240) til nærmeste
-ring-kant. Bruges til at vælge sikker gestus-radius (GESTUS-FIX.md).
+Finds the bright ring pixels (the Grinder/Hot Water/Brew/Steam circles) and computes
+center+radius per cluster plus the distance from the screen center (240,240) to the nearest
+ring edge. Used to choose a safe gesture radius (GESTUS-FIX.md).
 """
 import struct
 import sys
@@ -59,7 +59,7 @@ def read_png(path):
 def main():
     path = sys.argv[1] if len(sys.argv) > 1 else "test-logs/final_A_stock_v611.png"
     w, h, ch, px = read_png(path)
-    # ring-pixels: lyse grå (alle kanaler høje og ens) — baggrunden er brun
+    # ring pixels: light gray (all channels high and equal) — the background is brown
     pts = []
     for y in range(h):
         for x in range(w):
@@ -67,35 +67,35 @@ def main():
             r, g, b = px[i], px[i + 1], px[i + 2]
             if r > 150 and g > 150 and b > 150 and abs(r - g) < 24 and abs(g - b) < 24:
                 pts.append((x, y))
-    # klyng pr. kvadrant (de fire cirkler) — ikoner/labels er også lyse men
-    # ligger INDEN i cirklen; ringen dominerer yderpunkterne.
+    # cluster per quadrant (the four circles) — icons/labels are also bright but
+    # lie INSIDE the circle; the ring dominates the extreme points.
     quads = {(0, 0): [], (1, 0): [], (0, 1): [], (1, 1): []}
     for x, y in pts:
-        if y < 40 or y > 396:    # chevron (top) + ur (bund) er ikke ringe
+        if y < 40 or y > 396:    # chevron (top) + clock (bottom) are not rings
             continue
         quads[(x >= w // 2, y >= h // 2)].append((x, y))
-    print(f"capture {w}x{h}, lyse pixels: {len(pts)}")
+    print(f"capture {w}x{h}, bright pixels: {len(pts)}")
     import math
     centers = []
     for q, qp in sorted(quads.items()):
         xs = [p[0] for p in qp]; ys = [p[1] for p in qp]
-        # ringens yderpunkter giver center+radius (label ligger over ringen:
-        # brug x-extremerne og bund-punktet; top estimeres symmetrisk)
+        # the ring's extreme points give center+radius (the label sits above the ring:
+        # use the x extremes and the bottom point; top is estimated symmetrically)
         x0, x1 = min(xs), max(xs)
         y1 = max(ys)
         cx = (x0 + x1) / 2
         r = (x1 - x0) / 2
         cy = y1 - r
         centers.append((cx, cy, r))
-        print(f"  kvadrant {q}: ring x {x0}..{x1} y..{y1} → center ({cx:.0f},{cy:.0f}) r={r:.0f}")
+        print(f"  quadrant {q}: ring x {x0}..{x1} y..{y1} → center ({cx:.0f},{cy:.0f}) r={r:.0f}")
     cx0, cy0 = w / 2, h / 2
     for cx, cy, r in centers:
         d = math.hypot(cx - cx0, cy - cy0)
-        print(f"  center ({cx:.0f},{cy:.0f}) r={r:.0f}: afstand fra ({cx0:.0f},{cy0:.0f}) = {d:.1f} → ring-kant {d - r:.1f} px")
-    # største sikre radius: min afstand til ring-kant (touch-mål kan være lidt
-    # større end den tegnede ring; træk 8 px margin)
+        print(f"  center ({cx:.0f},{cy:.0f}) r={r:.0f}: distance from ({cx0:.0f},{cy0:.0f}) = {d:.1f} → ring edge {d - r:.1f} px")
+    # largest safe radius: min distance to the ring edge (the touch target can be slightly
+    # larger than the drawn ring; subtract an 8 px margin)
     gap = min(math.hypot(cx - cx0, cy - cy0) - r for cx, cy, r in centers)
-    print(f"mindste gap center→ring-kant: {gap:.1f} px; anbefalet sikker radius ≤ {gap - 8:.0f} px")
+    print(f"smallest gap center→ring edge: {gap:.1f} px; recommended safe radius ≤ {gap - 8:.0f} px")
 
 
 if __name__ == "__main__":

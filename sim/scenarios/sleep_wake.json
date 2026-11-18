@@ -1,6 +1,6 @@
 {
   "name": "sleep_wake",
-  "description": "Sleep/drain (ord1=1) → wake (ord1=0) → opvarmning → klar",
+  "description": "Sleep/drain (word1=1) → wake (word1=0) → heat-up → ready",
   "duration_s": 28,
   "events": [
     {

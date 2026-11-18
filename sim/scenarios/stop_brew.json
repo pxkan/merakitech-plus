@@ -1,6 +1,6 @@
 {
   "name": "stop_brew",
-  "description": "v6.13: BRYG startes; MANUEL STOP midt i ekstraktionen (cmd6 sub22 len1 ord22=0) → ACK, bits 1+2+9+12 ryddet ≤0,5 s, ventil-puls 0x0105 (~0,21 s), vægt-ramp standser + efter-dryp (+12) som auto-stop, stop.ok=1",
+  "description": "v6.13: BREW started; MANUAL STOP mid-extraction (cmd6 sub22 len1 word22=0) → ACK, bits 1+2+9+12 cleared ≤0.5 s, valve pulse 0x0105 (~0.21 s), weight ramp stops + post-drip (+12) as with auto-stop, stop.ok=1",
   "duration_s": 20,
   "events": [
     {
@@ -126,7 +126,7 @@
       "kind": "sim_log",
       "assert": "activity_stop",
       "activity": "brew",
-      "reason_contains": "manuel",
+      "reason_contains": "manual",
       "t0": 14.8,
       "t1": 15.8
     },

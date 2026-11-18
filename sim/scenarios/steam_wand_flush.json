@@ -1,6 +1,6 @@
 {
   "name": "steam_wand_flush",
-  "description": "Wand-flush UNDER bryg: 0x5327, ord24=0, ingen auto-stop >650, release-stop, bryg fortsætter (ingen flush-writes)",
+  "description": "Wand flush DURING brew: 0x5327, word24=0, no auto-stop >650, release stop, brew continues (no flush writes)",
   "duration_s": 34,
   "events": [
     {
@@ -173,7 +173,7 @@
       "kind": "sim_log",
       "assert": "activity_stop",
       "activity": "brew",
-      "reason_contains": "vægt",
+      "reason_contains": "weight",
       "t0": 27.5,
       "t1": 30
     },

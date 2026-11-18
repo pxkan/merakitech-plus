@@ -1,6 +1,6 @@
 {
   "name": "runtime_switch",
-  "description": "SKIFT TIL ORIGINAL NU (OURUI_SWITCH_DRY=1): bye-view → tilbage, flag uændret, proces bliver kørende",
+  "description": "SWITCH TO ORIGINAL NOW (OURUI_SWITCH_DRY=1): bye view → back, flag unchanged, process keeps running",
   "duration_s": 10,
   "events": [
     {

@@ -1,6 +1,6 @@
 {
   "name": "stop_control_auto",
-  "description": "v6.13-kontrol: VAND (auto) UDEN stop-word — ingen writes til stop-ordene, ord16=1 hele doseringen, MCU auto-stopper ved ord39≥ord17 (ord16 MCU-ryddet), uændret auto-stop-adfærd",
+  "description": "v6.13 control: WATER (auto) WITHOUT stop word — no writes to the stop words, word16=1 for the whole dosing, MCU auto-stops at word39≥word17 (word16 cleared by the MCU), unchanged auto-stop behaviour",
   "duration_s": 15,
   "events": [
     {
@@ -60,7 +60,7 @@
       "kind": "sim_log",
       "assert": "activity_stop",
       "activity": "water",
-      "reason_contains": "vægt",
+      "reason_contains": "weight",
       "t0": 7.5,
       "t1": 10
     },

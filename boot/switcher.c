@@ -1,76 +1,76 @@
-/* switcher.c — boot-persistens daemon til MerakiTech Gen 1 (Sanbon SAT62091M).
+/* switcher.c — boot-persistence daemon for MerakiTech Gen 1 (Sanbon SAT62091M).
  *
- * FORMÅL: Observér touch READ-ONLY og udløs runtime-skift A→B (stock-UI → ourui)
- * ved en hemmelig gestus. v6.12 (GESTUS-FIX.md): ÉN sammenhængende hold ≥5000 ms
- * i skærmens CENTER (inden for radius R af (240,240)) — ingen multi-press.
- * Hjørne-gestus'en (3× long-press ≥1,5 s i x<90,y<90 inden for 6 s) bevares som
+ * PURPOSE: Observe touch READ-ONLY and trigger a runtime switch A→B (stock UI → ourui)
+ * on a secret gesture. v6.12 (GESTUS-FIX.md): ONE continuous hold ≥5000 ms
+ * in the screen CENTER (within radius R of (240,240)) — no multi-press.
+ * The corner gesture (3× long-press ≥1.5 s at x<90,y<90 within 6 s) is kept as
  * fallback (SWITCHER_GESTURE=corner).
  *
- * GRAB-BYPASS (FINDINGS 'Gestus-debug': stock demo_v9 griber event0 EKSKLUSIVT
- * med EVIOCGRAB → en read-only switcher ser ingen events):
- *  (a) DUPLIKAT-NODE: åbner ALLE touch-noder (event0..9 med ABS_MT_POSITION_X,
- *      navn TECHWIN/tw31xx eller samme abs-range) read-only samtidigt og læser
- *      fra dem alle. Findes en duplikat-node som stock ikke grabber, leverer den
- *      events → gestus virker uden indgreb. (Stock's grab påvirker kun evdev-
- *      klienter på den grabbede node.)
- *  (b) SYSFS-FALLBACK: tw31xx-driveren eksponerer lu_coordinate_x/lu_coordinate_y/
- *      point_num i sysfs (grab påvirker ikke sysfs). Hvis evdev er blind (0 events
- *      mens sysfs ser touch) skiftes automatisk til sysfs-polling (50 ms).
- *  (c) LD_PRELOAD-SHIM (grab_shim.so): no-op'er ioctl(EVIOCGRAB) for stock-processen
- *      (/customer/demo_v9) via demo.sh's guard-linje-env. Forberedt lokalt; anvendes
- *      af boot/ondevice/verify_gesture_v612.py hvis (a)+(b) fejler på enheden.
- *  Kilde-vælg: SWITCHER_SOURCE=auto|evdev|sysfs (default auto).
+ * GRAB BYPASS (FINDINGS 'Gestus-debug': stock demo_v9 grabs event0 EXCLUSIVELY
+ * with EVIOCGRAB → a read-only switcher sees no events):
+ *  (a) DUPLICATE NODE: opens ALL touch nodes (event0..9 with ABS_MT_POSITION_X,
+ *      name TECHWIN/tw31xx or the same abs range) read-only at the same time and reads
+ *      from all of them. If there is a duplicate node that stock does not grab, it delivers
+ *      events → the gesture works without intervention. (Stock's grab only affects evdev
+ *      clients on the grabbed node.)
+ *  (b) SYSFS FALLBACK: the tw31xx driver exposes lu_coordinate_x/lu_coordinate_y/
+ *      point_num in sysfs (a grab does not affect sysfs). If evdev is blind (0 events
+ *      while sysfs sees touches) it switches automatically to sysfs polling (50 ms).
+ *  (c) LD_PRELOAD SHIM (grab_shim.so): no-ops ioctl(EVIOCGRAB) for the stock process
+ *      (/customer/demo_v9) via the env in demo.sh's guard line. Prepared locally; used
+ *      by boot/ondevice/verify_gesture_v612.py if (a)+(b) fail on the device.
+ *  Source select: SWITCHER_SOURCE=auto|evdev|sysfs (default auto).
  *
- * DESIGN (se BOOT.md for fuld dokumentation):
- *  - Åbner input-noder O_RDONLY|O_NONBLOCK. ALDRIG EVIOCGRAB, ALDRIG writes til
- *    input/UART/fb/config. Stock-UI'ets input-kø påvirkes ikke.
- *  - I B-mode griber ourui touch eksklusivt (EVIOCGRAB) → switcher får ingen events
- *    og idler naturligt. Skift B→A håndteres af ourui's egen knap (BOOT.md §UI-krav).
- *  - Mode verificeres via readlink(/proc/<pid>/exe) for hver pidof demo_v9:
- *      /customer/demo_v9     → A-mode (stock)  → gestus må skifte til B
- *      /new_customer/demo_v9 → B-mode (ourui)  → gør ingenting
- *      ingen demo_v9         → gør ingenting
- *  - Watchdog-race undgås med SIGSTOP-først: test.sh checker kun ps-grep "demo_v9"
- *    (1 s-loop). Kill→vent→launch ville efterlade et vindue hvor watchdog'en
- *    genstarter A oven i B. Derfor: SIGSTOP A (PID findes stadig) → launch B →
- *    verifikér B's exe-link → SIGKILL A → vent exit. Fejler B → SIGCONT A (fallback).
- *  - Robusthed: genåbner input-node ved fejl, poll-loop 50 ms, flock-single-instance,
- *    logrotation ved 64 KB, ingen reboot, ingen writes uden for /tmp.
+ * DESIGN (see BOOT.md for full documentation):
+ *  - Opens input nodes O_RDONLY|O_NONBLOCK. NEVER EVIOCGRAB, NEVER writes to
+ *    input/UART/fb/config. The stock UI's input queue is not affected.
+ *  - In B mode ourui grabs touch exclusively (EVIOCGRAB) → the switcher gets no events
+ *    and idles naturally. Switching B→A is handled by ourui's own button (BOOT.md §UI-krav).
+ *  - Mode is verified via readlink(/proc/<pid>/exe) for each pidof demo_v9:
+ *      /customer/demo_v9     → A mode (stock)  → the gesture may switch to B
+ *      /new_customer/demo_v9 → B mode (ourui)  → does nothing
+ *      no demo_v9            → does nothing
+ *  - The watchdog race is avoided with SIGSTOP-first: test.sh only checks ps-grep "demo_v9"
+ *    (1 s loop). Kill→wait→launch would leave a window where the watchdog
+ *    restarts A on top of B. Therefore: SIGSTOP A (PID still exists) → launch B →
+ *    verify B's exe link → SIGKILL A → wait for exit. If B fails → SIGCONT A (fallback).
+ *  - Robustness: reopens the input node on error, 50 ms poll loop, flock single instance,
+ *    log rotation at 64 KB, no reboot, no writes outside /tmp.
  *
- * RAW-RANGE: auto-detekteres via EVIOCGABS ved åbning (virker også på en grab'et
- * node — grab blokerer ikke ioctl). Enhedens faktiske range er 0..480 (FINDINGS
- * 'Gestus-debug'); fallback-konstanten er derfor 480 (ikke 4095). Samme formel som
- * tinj.c/ourui: screen = (raw−min)·480/(max−min+1). SIM-beholder sit deklarerede
- * 0..4095 (sim/proto.py) og passer SWITCHER_RAW_MAX=4095 i fil-mode.
+ * RAW RANGE: auto-detected via EVIOCGABS on open (also works on a grabbed
+ * node — a grab does not block ioctl). The device's actual range is 0..480 (FINDINGS
+ * 'Gestus-debug'); the fallback constant is therefore 480 (not 4095). Same formula as
+ * tinj.c/ourui: screen = (raw−min)·480/(max−min+1). The SIM keeps its declared
+ * 0..4095 (sim/proto.py) and passes SWITCHER_RAW_MAX=4095 in file mode.
  *
- * BUILD (ARM, statisk, 0 warnings):
+ * BUILD (ARM, static, 0 warnings):
  *   zig cc -target arm-linux-musleabihf -mcpu=cortex_a7 -static -O2 \
  *       -Wall -Wextra -Werror -o switcher switcher.c
- * SELF-TEST (host, deterministisk syntetisk input):
+ * SELF-TEST (host, deterministic synthetic input):
  *   zig cc -DSWITCHER_SELFTEST -O2 -Wall -Wextra -Werror -o switcher_selftest switcher.c
- * HOST-DAEMON (host, til fil-stream-test via test_switcher.py):
+ * HOST DAEMON (host, for the file-stream test via test_switcher.py):
  *   zig cc -O2 -Wall -Wextra -Werror -o switcher_host switcher.c
  *
  * ENV (test/override):
- *   SWITCHER_GESTURE     center (default) | corner (fallback: 3×long-press i hjørne)
- *   SWITCHER_HOLD_MS     minimum hold-tid (default 5000 center / 1500 corner)
- *   SWITCHER_CENTER_X/Y  gestus-center (default 240/240)
- *   SWITCHER_CENTER_R    gestus-radius i px (default 40; stock-knappernes kant
- *                        ligger ~45 px fra center — 60 ville overlappe, se GESTUS-FIX.md)
- *   SWITCHER_INPUT       eksplicit input-node (ellers autodiscovery, alle touch-noder)
- *   SWITCHER_INPUT_FILE  læs rå input_event-stream fra fil/FIFO i stedet for node
- *                        (gestus-timing følger event-tidsstempler, ikke wall-clock)
- *   SWITCHER_RAW_MAX     raw-akse-max i fil-mode (default 480 = enhedens konstant;
- *                        sim-passede streams bruger 4095)
+ *   SWITCHER_GESTURE     center (default) | corner (fallback: 3×long-press in the corner)
+ *   SWITCHER_HOLD_MS     minimum hold time (default 5000 center / 1500 corner)
+ *   SWITCHER_CENTER_X/Y  gesture center (default 240/240)
+ *   SWITCHER_CENTER_R    gesture radius in px (default 40; the stock buttons' edge
+ *                        is ~45 px from center — 60 would overlap, see GESTUS-FIX.md)
+ *   SWITCHER_INPUT       explicit input node (otherwise autodiscovery, all touch nodes)
+ *   SWITCHER_INPUT_FILE  read a raw input_event stream from a file/FIFO instead of a node
+ *                        (gesture timing follows event timestamps, not wall clock)
+ *   SWITCHER_RAW_MAX     raw axis max in file mode (default 480 = the device's constant;
+ *                        sim-fed streams use 4095)
  *   SWITCHER_SOURCE      auto (default) | evdev | sysfs
- *   SWITCHER_SYSFS_DIR   sysfs-mappe med lu_coordinate_x/y + point_num (ellers auto-scan)
- *   SWITCHER_SYSFS_SCREEN=1  sysfs-koordinater er allerede skærmpixels (ellers raw)
- *   SWITCHER_LOG         logfil (default /tmp/switcher.log)
- *   SWITCHER_LOCK        lockfil (default /tmp/switcher.lock)
+ *   SWITCHER_SYSFS_DIR   sysfs dir with lu_coordinate_x/y + point_num (otherwise auto-scan)
+ *   SWITCHER_SYSFS_SCREEN=1  sysfs coordinates are already screen pixels (otherwise raw)
+ *   SWITCHER_LOG         log file (default /tmp/switcher.log)
+ *   SWITCHER_LOCK        lock file (default /tmp/switcher.lock)
  *
- * Egne evdev-definitioner (ingen linux-headers → kan bygges på Mac til tests).
- * struct input_event er 16 byte på enhedens kernel 4.9/arm (32-bit timeval) —
- * bevist via strace: read(6</dev/input/event0>, ..., 16).
+ * Own evdev definitions (no linux headers → can be built on a Mac for tests).
+ * struct input_event is 16 bytes on the device's kernel 4.9/arm (32-bit timeval) —
+ * proven via strace: read(6</dev/input/event0>, ..., 16).
  */
 #define _GNU_SOURCE
 #include <stdint.h>
@@ -89,7 +89,7 @@
 #include <sys/stat.h>
 #include <sys/wait.h>
 
-/* ---- evdev-konstanter (linux/input.h-værdier, asm-generic ioctl-kodning) ---- */
+/* ---- evdev constants (linux/input.h values, asm-generic ioctl encoding) ---- */
 #define EV_SYN_        0x00
 #define EV_KEY_        0x01
 #define EV_ABS_        0x03
@@ -115,39 +115,39 @@ struct sw_input_event {
 #define SW_EVIOCGABS(abs)  SW_IOC(SW_IOC_READ,'E',0x40+(abs),24)
 struct sw_input_absinfo { int32_t value, minimum, maximum, fuzz, flat, resolution; };
 
-/* ---- gestus-parametre (BOOT.md §2 + GESTUS-FIX.md) ---- */
+/* ---- gesture parameters (BOOT.md §2 + GESTUS-FIX.md) ---- */
 #define SCREEN_W      480
 #define SCREEN_H      480
-#define CORNER_X      90     /* fallback: øverste venstre hjørne x<90 && y<90 */
+#define CORNER_X      90     /* fallback: top-left corner x<90 && y<90 */
 #define CORNER_Y      90
-#define CORNER_HOLD_MS 1500  /* fallback: hver press ≥1,5 s */
-#define WINDOW_MS     6000   /* fallback: 3 presses inden for 6 s */
-#define COOLDOWN_MS   10000  /* efter trigger: ignorér gestus i 10 s */
+#define CORNER_HOLD_MS 1500  /* fallback: each press ≥1.5 s */
+#define WINDOW_MS     6000   /* fallback: 3 presses within 6 s */
+#define COOLDOWN_MS   10000  /* after a trigger: ignore the gesture for 10 s */
 #define GEST_CENTER   0
 #define GEST_CORNER   1
-#define CENTER_X_D    240    /* default center-hold punkt */
+#define CENTER_X_D    240    /* default center-hold point */
 #define CENTER_Y_D    240
-#define CENTER_R_D    40     /* sikker radius: stock-knapkant ~45 px fra center */
-#define HOLD_MS_D     5000   /* center: ét sammenhængende hold ≥5 s */
-#define RAW_MAX_D     480    /* enhedens faktiske ABS_MT-max (FINDINGS Gestus-debug) */
+#define CENTER_R_D    40     /* safe radius: stock button edge ~45 px from center */
+#define HOLD_MS_D     5000   /* center: one continuous hold ≥5 s */
+#define RAW_MAX_D     480    /* the device's actual ABS_MT max (FINDINGS Gestus-debug) */
 
-/* Debug-hook: NULL i self-test, logline i daemon (deles af gestus-maskinen). */
+/* Debug hook: NULL in the self-test, logline in the daemon (shared by the gesture state machine). */
 static void (*sw_dbg)(const char *fmt, ...) = NULL;
 
 typedef struct {
     int raw_min_x, raw_max_x, raw_min_y, raw_max_y;
-    int cur_x, cur_y;          /* skærmpixels */
-    int down;                  /* finger nede */
-    int pending;               /* down-position endnu ikke latch'et (afventer SYN) */
+    int cur_x, cur_y;          /* screen pixels */
+    int down;                  /* finger down */
+    int pending;               /* down position not latched yet (waiting for SYN) */
     int64_t down_ms;
     int down_in_zone;
     int stayed_in_zone;
-    int count;                 /* corner: antal gyldige long-presses i vinduet */
-    int64_t window_start_ms;   /* corner: første gyldige press' down-tid */
-    /* konfiguration */
+    int count;                 /* corner: number of valid long-presses in the window */
+    int64_t window_start_ms;   /* corner: down time of the first valid press */
+    /* configuration */
     int mode;                  /* GEST_CENTER | GEST_CORNER */
-    int cx, cy, r, r2;         /* center-zone: radius + radius i anden */
-    int hold_ms;               /* minimum hold/press-tid */
+    int cx, cy, r, r2;         /* center zone: radius + radius squared */
+    int hold_ms;               /* minimum hold/press time */
 } Gesture;
 
 static void gesture_reset_state(Gesture *g)
@@ -185,7 +185,7 @@ static void gesture_set_corner(Gesture *g, int hold_ms)
     gesture_reset_state(g);
 }
 
-/* ENV-konfiguration (daemon + fil-mode; self-test bruger setterne direkte). */
+/* ENV configuration (daemon + file mode; the self-test uses the setters directly). */
 static void gesture_config_env(Gesture *g)
 {
     const char *e;
@@ -213,8 +213,8 @@ static int scale_axis(int raw, int rmin, int rmax, int screen)
     return (int)v;
 }
 
-/* Raw-range-valg (ren logik, unit-testes): EVIOCGABS-resultater hvis til stede,
- * ellers enhedens konstant 0..480. MT-akser har forrang over ST-akser. */
+/* Raw range choice (pure logic, unit-tested): EVIOCGABS results if present,
+ * otherwise the device's constant 0..480. MT axes take precedence over ST axes. */
 typedef struct {
     int have_x, have_y, have_mx, have_my;
     struct sw_input_absinfo x, y, mx, my;
@@ -249,8 +249,8 @@ static void press_begin(Gesture *g, int64_t now_ms)
     if (g->down) return;
     g->down = 1;
     g->down_ms = now_ms;
-    /* positionen latch'es ved første SYN_REPORT efter down: tracking-id/BTN_TOUCH
-     * ankommer FØR positions-events i samme batch (jf. tinj.c's rækkefølge). */
+    /* the position is latched at the first SYN_REPORT after down: tracking-id/BTN_TOUCH
+     * arrive BEFORE the position events in the same batch (cf. tinj.c's ordering). */
     g->pending = 1;
     g->down_in_zone = 0;
     g->stayed_in_zone = 0;
@@ -263,19 +263,19 @@ static void latch_zone(Gesture *g)
     g->pending = 0;
 }
 
-/* Returnerer 1 præcis når gestus'en udløses:
- *  center: ét gyldigt hold ≥hold_ms der blev i zonen (ved release).
- *  corner: tredje gyldige release inden for vinduet (legacy). */
+/* Returns 1 exactly when the gesture triggers:
+ *  center: one valid hold ≥hold_ms that stayed in the zone (on release).
+ *  corner: third valid release within the window (legacy). */
 static int press_end(Gesture *g, int64_t now_ms)
 {
     if (!g->down) return 0;
-    if (g->pending) latch_zone(g);   /* ingen SYN set → best-effort med aktuel position */
+    if (g->pending) latch_zone(g);   /* no SYN seen → best effort with the current position */
     int64_t dur = now_ms - g->down_ms;
     int valid = g->down_in_zone && g->stayed_in_zone && dur >= g->hold_ms;
     g->down = 0;
     if (g->mode == GEST_CENTER) {
         if (!valid && g->down_in_zone && dur >= 1000 && sw_dbg)
-            sw_dbg("gestus: center-hold %d ms ugyldig (for kort eller drev ud af zonen)",
+            sw_dbg("gesture: center hold %d ms invalid (too short or drifted out of the zone)",
                    (int)dur);
         return valid;
     }
@@ -290,11 +290,11 @@ static int press_end(Gesture *g, int64_t now_ms)
     return 0;
 }
 
-/* Feed ét evdev-event. now_ms = event-tidsstempel (ms). Returnerer 1 ved trigger. */
+/* Feed one evdev event. now_ms = event timestamp (ms). Returns 1 on trigger. */
 static int gesture_feed(Gesture *g, uint16_t type, uint16_t code, int32_t value,
                         int64_t now_ms)
 {
-    /* vindues-udløb (corner): nulstil tælling (press-sporing bevares) */
+    /* window expiry (corner): reset the count (press tracking is kept) */
     if (g->mode == GEST_CORNER && g->count > 0 &&
         now_ms - g->window_start_ms > WINDOW_MS)
         g->count = 0;
@@ -317,9 +317,9 @@ static int gesture_feed(Gesture *g, uint16_t type, uint16_t code, int32_t value,
     return 0;
 }
 
-/* Sysfs-sample (bypass b): point_num > 0 = finger nede i (x,y) SKÆRM-pixels.
- * Driveren opdaterer kun ved touch-ændringer → polling caller med mono-tid.
- * Returnerer 1 ved trigger (release efter gyldigt hold). */
+/* Sysfs sample (bypass b): point_num > 0 = finger down at (x,y) SCREEN pixels.
+ * The driver only updates on touch changes → the polling caller passes mono time.
+ * Returns 1 on trigger (release after a valid hold). */
 static int gesture_sysfs_sample(Gesture *g, int x, int y, int points, int64_t now_ms)
 {
     if (points > 0) {
@@ -336,7 +336,7 @@ static int gesture_sysfs_sample(Gesture *g, int x, int y, int points, int64_t no
     return 0;
 }
 
-/* ---- mode-klassifikation (ren logik, unit-testes) ---- */
+/* ---- mode classification (pure logic, unit-tested) ---- */
 typedef enum { MODE_NONE = 0, MODE_A, MODE_B } Mode;
 typedef enum { ACT_SWITCH_A = 0, ACT_IDLE_B, ACT_IDLE_NONE, ACT_IDLE_MIXED } Action;
 
@@ -348,8 +348,8 @@ static Mode classify_exe(const char *exe)
     return MODE_NONE;
 }
 
-/* Beslutning ud fra exe-links for alle demo_v9-PIDs.
- * Blandet A+B (må ikke ske) → ingen handling (sikrest). */
+/* Decision based on the exe links of all demo_v9 PIDs.
+ * Mixed A+B (must not happen) → no action (safest). */
 static Action decide_action(const Mode *modes, int n)
 {
     int na = 0, nb = 0;
@@ -381,7 +381,7 @@ typedef struct {
     int fx, fy, fn;            /* fds: lu_coordinate_x, lu_coordinate_y, point_num */
     int rminx, rmaxx, rminy, rmaxy;
     int last_x, last_y, last_points;
-    int64_t touch_ms;          /* mono-tid for sidste sete touch-aktivitet */
+    int64_t touch_ms;          /* mono time of the last seen touch activity */
 } Sysfs;
 
 static const char *LOG_PATH  = "/tmp/switcher.log";
@@ -399,7 +399,7 @@ static int64_t mono_ms(void)
 static void logline(const char *fmt, ...)
 {
     if (!logf) return;
-    if (ftell(logf) > 65536) {           /* simpel rotation: truncate */
+    if (ftell(logf) > 65536) {           /* simple rotation: truncate */
         fclose(logf);
         logf = fopen(LOG_PATH, "w");
         if (!logf) return;
@@ -420,7 +420,7 @@ static void logline(const char *fmt, ...)
 
 static void on_signal(int sig) { (void)sig; stopflag = 1; }
 
-/* Find demo_v9-PIDs via pidof (busybox). Returnerer antal; pids[i] + exe[i]. */
+/* Find demo_v9 PIDs via pidof (busybox). Returns the count; pids[i] + exe[i]. */
 static int find_demos(int *pids, char exes[][256], int max)
 {
     int n = 0;
@@ -439,7 +439,7 @@ static int find_demos(int *pids, char exes[][256], int max)
 
 static int pid_alive(int pid) { return kill(pid, 0) == 0 || errno != ESRCH; }
 
-/* Vent til /proc/<pid>/exe matcher expected (ms-budget). 1=ok. */
+/* Wait until /proc/<pid>/exe matches expected (ms budget). 1=ok. */
 static int wait_exe(int pid, const char *expected, int budget_ms)
 {
     int64_t deadline = mono_ms() + budget_ms;
@@ -457,22 +457,22 @@ static int wait_exe(int pid, const char *expected, int budget_ms)
     return 0;
 }
 
-/* SIGSTOP-først-skift A→B (se filhoved for watchdog-race-begrundelse). */
+/* SIGSTOP-first switch A→B (see the file header for the watchdog-race rationale). */
 static void do_switch(int pid_a)
 {
-    logline("skift A→B: SIGSTOP pid %d (watchdog ser stadig PID)", pid_a);
+    logline("switch A→B: SIGSTOP pid %d (watchdog still sees the PID)", pid_a);
     if (kill(pid_a, SIGSTOP) != 0) {
-        logline("skift FEJL: SIGSTOP pid %d: %s", pid_a, strerror(errno));
+        logline("switch FAILED: SIGSTOP pid %d: %s", pid_a, strerror(errno));
         return;
     }
     pid_t child = fork();
     if (child < 0) {
-        logline("skift FEJL: fork: %s — SIGCONT pid %d", strerror(errno), pid_a);
+        logline("switch FAILED: fork: %s — SIGCONT pid %d", strerror(errno), pid_a);
         kill(pid_a, SIGCONT);
         return;
     }
     if (child == 0) {
-        /* barn: detach + start B's demo_v9 (ourui) med B-libs */
+        /* child: detach + start B's demo_v9 (ourui) with the B libs */
         setsid();
         if (chdir("/new_customer") != 0) _exit(126);
         setenv("LD_LIBRARY_PATH", "/new_customer/libs:/config/wifi", 1);
@@ -483,18 +483,18 @@ static void do_switch(int pid_a)
         execl("/new_customer/demo_v9", "./demo_v9", (char *)NULL);
         _exit(127);
     }
-    logline("skift A→B: launchede B pid %d (/new_customer/demo_v9)", (int)child);
+    logline("switch A→B: launched B pid %d (/new_customer/demo_v9)", (int)child);
     if (wait_exe((int)child, "/new_customer/demo_v9", 2000)) {
-        logline("skift A→B: B verificeret (exe-link) — SIGKILL pid %d", pid_a);
+        logline("switch A→B: B verified (exe link) — SIGKILL pid %d", pid_a);
         kill(pid_a, SIGKILL);
         int64_t deadline = mono_ms() + 2000;
         while (pid_alive(pid_a) && mono_ms() < deadline) usleep(50000);
         if (pid_alive(pid_a))
-            logline("skift ADVARSEL: pid %d lever stadig efter SIGKILL", pid_a);
+            logline("switch WARNING: pid %d still alive after SIGKILL", pid_a);
         else
-            logline("skift A→B FÆRDIG: ourui kører, stock-A exit'et, ingen reboot");
+            logline("switch A→B DONE: ourui running, stock A exited, no reboot");
     } else {
-        logline("skift FEJL: B (pid %d) kom ikke op — fallback: SIGCONT A, dræb B",
+        logline("switch FAILED: B (pid %d) did not come up — fallback: SIGCONT A, kill B",
                 (int)child);
         if (pid_alive((int)child)) kill((int)child, SIGKILL);
         kill(pid_a, SIGCONT);
@@ -511,27 +511,27 @@ static void handle_trigger(void)
     Action a = decide_action(modes, n);
     for (int i = 0; i < n; i++)
         logline("mode-check: pid %d exe=%s → %s", pids[i], exes[i],
-                modes[i] == MODE_A ? "A" : modes[i] == MODE_B ? "B" : "ukendt");
+                modes[i] == MODE_A ? "A" : modes[i] == MODE_B ? "B" : "unknown");
     switch (a) {
     case ACT_SWITCH_A:
-        logline("GESTUS UDLØST + mode A → runtime-skift til ourui");
+        logline("GESTURE TRIGGERED + mode A → runtime switch to ourui");
         for (int i = 0; i < n; i++)
             if (modes[i] == MODE_A) { do_switch(pids[i]); break; }
         break;
     case ACT_IDLE_B:
-        logline("GESTUS UDLØST men mode B (ourui kører) → ingen handling "
-                "(ourui har selv skift-knap)");
+        logline("GESTURE TRIGGERED but mode B (ourui running) → no action "
+                "(ourui has its own switch button)");
         break;
     case ACT_IDLE_MIXED:
-        logline("GESTUS UDLØST men A+B kører samtidigt → ingen handling (sikrest)");
+        logline("GESTURE TRIGGERED but A+B running at the same time → no action (safest)");
         break;
     default:
-        logline("GESTUS UDLØST men ingen demo_v9 → ingen handling");
+        logline("GESTURE TRIGGERED but no demo_v9 → no action");
         break;
     }
 }
 
-/* Åbn ÉN node og probe abs-ranges + navn. Returnerer fd eller -1. */
+/* Open ONE node and probe abs ranges + name. Returns fd or -1. */
 static int probe_node(const char *path, AbsProbe *p, char *name, size_t namesz, int *has_mt)
 {
     int fd = open(path, O_RDONLY | O_NONBLOCK);
@@ -547,10 +547,10 @@ static int probe_node(const char *path, AbsProbe *p, char *name, size_t namesz, 
     return fd;
 }
 
-/* Input-discovery (bypass a): ALLE touch-noder åbnes read-only samtidigt.
- * event0 først (bevist touch-node), derefter event1..9; duplikater (samme navn
- * eller samme abs-range) beholdes — en duplikat stock ikke grabber leverer events.
- * Returnerer antal noder; gesture-ranges sættes fra den foretrukne node. */
+/* Input discovery (bypass a): ALL touch nodes are opened read-only at the same time.
+ * event0 first (proven touch node), then event1..9; duplicates (same name
+ * or same abs range) are kept — a duplicate that stock does not grab delivers events.
+ * Returns the number of nodes; gesture ranges are set from the preferred node. */
 static int open_nodes(Node *nodes, Gesture *g)
 {
     const char *override = getenv("SWITCHER_INPUT");
@@ -573,7 +573,7 @@ static int open_nodes(Node *nodes, Gesture *g)
         if (!has_mt && !name_ok) { close(fd); continue; }
         int rminx, rmaxx, rminy, rmaxy;
         pick_ranges(&p, &rminx, &rmaxx, &rminy, &rmaxy);
-        logline("input: %s (navn '%s', raw x %d..%d y %d..%d) — READ-ONLY, ingen grab",
+        logline("input: %s (name '%s', raw x %d..%d y %d..%d) — READ-ONLY, no grab",
                 path, name, rminx, rmaxx, rminy, rmaxy);
         if (first < 0 && (has_mt || name_ok)) {
             first = n;
@@ -588,7 +588,7 @@ static int open_nodes(Node *nodes, Gesture *g)
     return n;
 }
 
-/* ---- sysfs-probe (bypass b): tw31xx's lu_coordinate_x/y + point_num ---- */
+/* ---- sysfs probe (bypass b): tw31xx's lu_coordinate_x/y + point_num ---- */
 static int sysfs_open_dir(Sysfs *s, const char *dir)
 {
     char p[200];
@@ -621,8 +621,8 @@ static void sysfs_probe(Sysfs *s, const Gesture *g)
 {
     memset(s, 0, sizeof *s);
     s->fx = s->fy = s->fn = -1;
-    /* range: evdev-detekteret hvis tilgængelig (ioctl virker også på grab'et node),
-     * ellers enhedens konstant 0..480. SCREEN=1: koordinater er allerede pixels. */
+    /* range: evdev-detected if available (ioctl also works on a grabbed node),
+     * otherwise the device's constant 0..480. SCREEN=1: coordinates are already pixels. */
     if (getenv("SWITCHER_SYSFS_SCREEN")) {
         s->rminx = 0; s->rmaxx = SCREEN_W - 1;
         s->rminy = 0; s->rmaxy = SCREEN_H - 1;
@@ -633,7 +633,7 @@ static void sysfs_probe(Sysfs *s, const Gesture *g)
     const char *env = getenv("SWITCHER_SYSFS_DIR");
     if (env && *env) {
         if (sysfs_open_dir(s, env))
-            logline("input: sysfs %s (env) — grab-bypass (b) klar", s->dir);
+            logline("input: sysfs %s (env) — grab bypass (b) ready", s->dir);
         return;
     }
     DIR *d = opendir("/sys/bus/i2c/devices");
@@ -644,7 +644,7 @@ static void sysfs_probe(Sysfs *s, const Gesture *g)
         char dir[200];
         snprintf(dir, sizeof dir, "/sys/bus/i2c/devices/%s", de->d_name);
         if (sysfs_open_dir(s, dir)) {
-            logline("input: sysfs %s (auto-scan) — grab-bypass (b) klar", s->dir);
+            logline("input: sysfs %s (auto-scan) — grab bypass (b) ready", s->dir);
             break;
         }
     }
@@ -662,7 +662,7 @@ static int sysfs_read_int(int fd, int *out)
     return 1;
 }
 
-/* Læs sysfs-sample; returnerer 1 hvis læst. x/y i skærmpixels. */
+/* Read a sysfs sample; returns 1 if read. x/y in screen pixels. */
 static int sysfs_sample(Sysfs *s, int *x, int *y, int *points)
 {
     int rx = 0, ry = 0, pn = 0;
@@ -696,10 +696,10 @@ int main(void)
 
     logf = fopen(LOG_PATH, "a");
     sw_dbg = logline;
-    /* single-instance: flock (ikke-blokerende) */
+    /* single instance: flock (non-blocking) */
     int lockfd = open(LOCK_PATH, O_CREAT | O_RDWR, 0644);
     if (lockfd >= 0 && flock(lockfd, LOCK_EX | LOCK_NB) != 0) {
-        logline("anden switcher-instans kører allerede — exit");
+        logline("another switcher instance is already running — exit");
         if (logf) fclose(logf);
         return 0;
     }
@@ -711,12 +711,12 @@ int main(void)
     gesture_init(&g, 0, RAW_MAX_D, 0, RAW_MAX_D);
     gesture_config_env(&g);
     if (g.mode == GEST_CENTER)
-        logline("switcher startet (pid %d): gestus = CENTER-hold ≥%d ms i (%d,%d) "
-                "radius %d px (én finger, bliv i zonen, slip efter ≥%d ms)",
+        logline("switcher started (pid %d): gesture = CENTER hold ≥%d ms at (%d,%d) "
+                "radius %d px (one finger, stay in the zone, release after ≥%d ms)",
                 (int)getpid(), g.hold_ms, g.cx, g.cy, g.r, g.hold_ms);
     else
-        logline("switcher startet (pid %d): gestus = CORNER-fallback 3×long-press "
-                "≥%d ms i x<%d,y<%d inden for %d s", (int)getpid(), g.hold_ms,
+        logline("switcher started (pid %d): gesture = CORNER fallback 3×long-press "
+                "≥%d ms at x<%d,y<%d within %d s", (int)getpid(), g.hold_ms,
                 CORNER_X, CORNER_Y, WINDOW_MS / 1000);
 
     Node nodes[MAX_NODES];
@@ -746,24 +746,24 @@ int main(void)
                 if ((e = getenv("SWITCHER_RAW_MAX")) && *e) rmax = atoi(e);
                 gesture_init(&g, 0, rmax, 0, rmax);
                 gesture_config_env(&g);
-                logline("input: FIL-mode %s (raw 0..%d)", getenv("SWITCHER_INPUT_FILE"), rmax);
+                logline("input: FILE mode %s (raw 0..%d)", getenv("SWITCHER_INPUT_FILE"), rmax);
                 source = SRC_EV;
             }
         } else if (nnodes == 0 && fd < 0) {
             nnodes = open_nodes(nodes, &g);
-            if (nnodes > 0) gesture_config_env(&g);   /* range fra node + env-gestus */
+            if (nnodes > 0) gesture_config_env(&g);   /* range from node + env gesture */
             if (!sys.ok) sysfs_probe(&sys, &g);
             if (nnodes == 0 && !sys.ok) {
-                /* åbn-fejl (node væk/permissions) → idle-loop, ingen crash */
+                /* open error (node gone/permissions) → idle loop, no crash */
                 usleep(500000);
                 continue;
             }
             if (force_src == SRC_SYS && sys.ok) source = SRC_SYS;
             else if (force_src == SRC_EV) source = SRC_EV;
             else if (nnodes > 0) source = SRC_EV;
-            else source = SRC_SYS;   /* ingen evdev-noder, men sysfs fundet */
-            logline("input-kilder: %d evdev-noder, sysfs=%s → kilde=%s", nnodes,
-                    sys.ok ? sys.dir : "ingen",
+            else source = SRC_SYS;   /* no evdev nodes, but sysfs found */
+            logline("input sources: %d evdev nodes, sysfs=%s → source=%s", nnodes,
+                    sys.ok ? sys.dir : "none",
                     source == SRC_SYS ? "sysfs" : "evdev");
         }
         if (!filemode && !sys.ok && mono_ms() - last_sysfs_probe > 5000) {
@@ -794,16 +794,16 @@ int main(void)
             continue;
         }
         int64_t now = mono_ms();
-        /* --- evdev: læs ALLE noder (bypass a); feed kun hvis kilde=evdev --- */
+        /* --- evdev: read ALL nodes (bypass a); feed only if source=evdev --- */
         for (int i = 0; i < npfd; i++) {
             if (pfds[i].revents & (POLLERR | POLLHUP | POLLNVAL)) {
                 if (filemode) {
-                    logline("input: POLLERR/HUP — genåbner");
+                    logline("input: POLLERR/HUP — reopening");
                     close(fd); fd = -1; usleep(500000);
                 } else {
-                    logline("input: %s POLLERR/HUP — lukker node", nodes[i].path);
+                    logline("input: %s POLLERR/HUP — closing node", nodes[i].path);
                     close(nodes[i].fd);
-                    nodes[i].fd = -1;   /* komprimeres efter loopet (pfds-index bevares) */
+                    nodes[i].fd = -1;   /* compacted after the loop (pfds index is preserved) */
                 }
                 continue;
             }
@@ -811,15 +811,15 @@ int main(void)
             ssize_t n = read(pfds[i].fd, evs, sizeof evs);
             if (n < 0) {
                 if (errno == EAGAIN || errno == EINTR) continue;
-                logline("input: read-fejl %s — genåbner node", strerror(errno));
+                logline("input: read error %s — reopening node", strerror(errno));
                 if (filemode) { close(fd); fd = -1; }
                 else { close(nodes[i].fd); nodes[i].fd = -1; }
                 usleep(500000);
                 continue;
             }
             if (n == 0) {
-                if (filemode) { logline("input: EOF (fil-mode) — exit"); goto done; }
-                logline("input: EOF — genåbner node");
+                if (filemode) { logline("input: EOF (file mode) — exit"); goto done; }
+                logline("input: EOF — reopening node");
                 close(nodes[i].fd);
                 nodes[i].fd = -1;
                 usleep(500000);
@@ -829,7 +829,7 @@ int main(void)
             ev_total += (long)cnt;
             if (!filemode && !nodes[i].logged_first) {
                 nodes[i].logged_first = 1;
-                logline("input: %s leverer events (%d stk) — read-only bypass (a) aktiv",
+                logline("input: %s is delivering events (%d) — read-only bypass (a) active",
                         nodes[i].path, (int)cnt);
             }
             if (source != SRC_EV) continue;
@@ -838,23 +838,23 @@ int main(void)
                 int before = g.count;
                 if (gesture_feed(&g, evs[k].type, evs[k].code, evs[k].value, ev_ms)) {
                     if (now - last_trigger < COOLDOWN_MS) {
-                        logline("gestus udløst men cooldown aktiv — ignoreret");
+                        logline("gesture triggered but cooldown active — ignored");
                     } else {
                         last_trigger = now;
                         handle_trigger();
                     }
                 } else if (g.mode == GEST_CORNER && g.count > before) {
-                    logline("gestus: gyldig long-press i hjørne talt (%d/3)", g.count);
+                    logline("gesture: valid corner long-press counted (%d/3)", g.count);
                 }
             }
         }
-        if (!filemode) {   /* komprimér node-listen (lukkede fd'er markeret -1) */
+        if (!filemode) {   /* compact the node list (closed fds marked -1) */
             int w = 0;
             for (int i = 0; i < nnodes; i++)
                 if (nodes[i].fd >= 0) nodes[w++] = nodes[i];
             nnodes = w;
         }
-        /* --- sysfs (bypass b): poll + kilde-arbitrering --- */
+        /* --- sysfs (bypass b): poll + source arbitration --- */
         if (sys.ok) {
             int sx = 0, sy = 0, pn = 0;
             if (sysfs_sample(&sys, &sx, &sy, &pn)) {
@@ -864,7 +864,7 @@ int main(void)
                 if (source == SRC_SYS) {
                     if (gesture_sysfs_sample(&g, sx, sy, pn, now)) {
                         if (now - last_trigger < COOLDOWN_MS) {
-                            logline("gestus udløst men cooldown aktiv — ignoreret");
+                            logline("gesture triggered but cooldown active — ignored");
                         } else {
                             last_trigger = now;
                             handle_trigger();
@@ -872,31 +872,31 @@ int main(void)
                     }
                 }
             } else if (source == SRC_SYS) {
-                logline("input: sysfs læs-fejl — tilbage til evdev");
+                logline("input: sysfs read error — falling back to evdev");
                 source = SRC_EV;
                 gesture_init(&g, g.raw_min_x, g.raw_max_x, g.raw_min_y, g.raw_max_y);
                 gesture_config_env(&g);
             }
             if (source == SRC_EV && force_src == SRC_NONE && ev_total == 0 &&
                 now - start_ms > 3000 && now - sys.touch_ms < 2000) {
-                logline("input: evdev BLIND (0 events mens sysfs ser touch) — "
-                        "stock grabber sandsynligvis event0 → skifter til sysfs (bypass b)");
+                logline("input: evdev BLIND (0 events while sysfs sees touches) — "
+                        "stock is probably grabbing event0 → switching to sysfs (bypass b)");
                 source = SRC_SYS;
                 ev_at_switch = ev_total;
                 gesture_init(&g, g.raw_min_x, g.raw_max_x, g.raw_min_y, g.raw_max_y);
                 gesture_config_env(&g);
             }
             if (source == SRC_SYS && force_src == SRC_NONE && ev_total > ev_at_switch) {
-                logline("input: evdev leverer igen events (shim/duplikat?) — tilbage til evdev");
+                logline("input: evdev is delivering events again (shim/duplicate?) — back to evdev");
                 source = SRC_EV;
                 gesture_init(&g, g.raw_min_x, g.raw_max_x, g.raw_min_y, g.raw_max_y);
                 gesture_config_env(&g);
             }
         }
-        waitpid(-1, NULL, WNOHANG);      /* reap evt. B-barn */
+        waitpid(-1, NULL, WNOHANG);      /* reap a possible B child */
     }
 done:
-    logline("switcher stopper (signal/EOF)");
+    logline("switcher stopping (signal/EOF)");
     for (int i = 0; i < nnodes; i++) close(nodes[i].fd);
     if (fd >= 0) close(fd);
     sysfs_close(&sys);
@@ -910,17 +910,17 @@ static int tests_run = 0, tests_fail = 0;
 #define CHECK(cond, name) do { \
     tests_run++; \
     if (cond) { printf("  OK   %s\n", name); } \
-    else { tests_fail++; printf("  FEJL %s\n", name); } \
+    else { tests_fail++; printf("  FAIL %s\n", name); } \
 } while (0)
 
-static int64_t T; /* syntetisk tidsakse (ms) */
+static int64_t T; /* synthetic time axis (ms) */
 static void ev(Gesture *g, uint16_t type, uint16_t code, int32_t v, int *trig)
 {
     if (gesture_feed(g, type, code, v, T)) *trig = 1;
 }
 static void raw_xy(Gesture *g, int x, int y, int *trig)
 {
-    /* screen→raw som tinj.c: raw = px*(max-min+1)/480 */
+    /* screen→raw like tinj.c: raw = px*(max-min+1)/480 */
     int rx = x * (g->raw_max_x - g->raw_min_x + 1) / SCREEN_W;
     int ry = y * (g->raw_max_y - g->raw_min_y + 1) / SCREEN_H;
     ev(g, EV_ABS_, ABS_MT_POSITION_X_, rx, trig);
@@ -946,7 +946,7 @@ static void up(Gesture *g, int *trig)
     ev(g, EV_KEY_, BTN_TOUCH_, 0, trig);
     ev(g, EV_SYN_, SYN_REPORT_, 0, trig);
 }
-/* hold i ms; returnerer 1 hvis gestus udløstes undervejs */
+/* hold for ms; returns 1 if the gesture triggered along the way */
 static int hold(Gesture *g, int x, int y, int ms, int gap_after)
 {
     int trig = 0;
@@ -962,104 +962,104 @@ int main(void)
     Gesture g;
     int trig;
 
-    printf("switcher self-test (center-hold + corner-fallback + skalering + mode-logik)\n");
+    printf("switcher self-test (center hold + corner fallback + scaling + mode logic)\n");
 
-    /* 1: center happy path — ét hold 5200 ms i (240,240), raw 0..480 (device) */
+    /* 1: center happy path — one hold 5200 ms at (240,240), raw 0..480 (device) */
     gesture_init(&g, 0, 480, 0, 480); T = 100000; trig = 0;
     trig |= hold(&g, 240, 240, 5200, 0);
-    CHECK(trig == 1, "center: ét hold 5,2 s i (240,240) → trigger ved release");
+    CHECK(trig == 1, "center: one hold 5.2 s at (240,240) → trigger on release");
 
-    /* 2: center for kort (3000 ms < 5000) */
+    /* 2: center too short (3000 ms < 5000) */
     gesture_init(&g, 0, 480, 0, 480); T = 200000; trig = 0;
     trig |= hold(&g, 240, 240, 3000, 0);
-    CHECK(trig == 0, "center: hold 3,0 s (<5 s) → ingen trigger");
+    CHECK(trig == 0, "center: hold 3.0 s (<5 s) → no trigger");
 
-    /* 3: center præcis 5000 ms → trigger (grænse) */
+    /* 3: center exactly 5000 ms → trigger (boundary) */
     gesture_init(&g, 0, 480, 0, 480); T = 250000; trig = 0;
     trig |= hold(&g, 240, 240, 5000, 0);
-    CHECK(trig == 1, "center: hold præcis 5000 ms → trigger");
+    CHECK(trig == 1, "center: hold exactly 5000 ms → trigger");
 
-    /* 4: off-center (300,240): afstand 60 > radius 40 */
+    /* 4: off-center (300,240): distance 60 > radius 40 */
     gesture_init(&g, 0, 480, 0, 480); T = 300000; trig = 0;
     trig |= hold(&g, 300, 240, 5200, 0);
-    CHECK(trig == 0, "center: hold i (300,240) uden for radius → ingen trigger");
+    CHECK(trig == 0, "center: hold at (300,240) outside radius → no trigger");
 
-    /* 5: radius-grænse (raw 480: screen 279 = radius 39 gyldig; 281 = 41 ugyldig) */
+    /* 5: radius boundary (raw 480: screen 279 = radius 39 valid; 281 = 41 invalid) */
     gesture_init(&g, 0, 480, 0, 480); T = 350000; trig = 0;
     trig |= hold(&g, 280, 240, 5200, 0);
     CHECK(trig == 1, "center: (280,240) → screen 279, radius 39 ≤ 40 → trigger");
     gesture_init(&g, 0, 480, 0, 480); T = 360000; trig = 0;
     trig |= hold(&g, 282, 240, 5200, 0);
-    CHECK(trig == 0, "center: (282,240) → screen 281, radius 41 > 40 → ingen trigger");
+    CHECK(trig == 0, "center: (282,240) → screen 281, radius 41 > 40 → no trigger");
 
-    /* 6: finger driver ud af zonen under hold → ugyldig */
+    /* 6: finger drifts out of the zone during the hold → invalid */
     gesture_init(&g, 0, 480, 0, 480); T = 400000; trig = 0;
     down(&g, 240, 240, &trig); T += 2000;
     move(&g, 350, 350, &trig); T += 2000;
     move(&g, 240, 240, &trig); T += 1500;
     up(&g, &trig);
-    CHECK(trig == 0, "center: hold der forlader zonen undervejs → ingen trigger");
+    CHECK(trig == 0, "center: hold that leaves the zone midway → no trigger");
 
-    /* 7: center med raw 0..4095 (sim-deklareret range) — samme formel */
+    /* 7: center with raw 0..4095 (sim-declared range) — same formula */
     gesture_init(&g, 0, 4095, 0, 4095); T = 500000; trig = 0;
     trig |= hold(&g, 240, 240, 5200, 0);
-    CHECK(trig == 1, "center: raw 0..4095 stream → trigger (skalering konsistent)");
+    CHECK(trig == 1, "center: raw 0..4095 stream → trigger (scaling consistent)");
 
-    /* 8: multi-press ødelægger ikke center (kun ét gyldigt hold tæller) */
+    /* 8: multi-press does not break center (only one valid hold counts) */
     gesture_init(&g, 0, 480, 0, 480); T = 600000; trig = 0;
     trig |= hold(&g, 240, 240, 80, 200);     /* tap */
     trig |= hold(&g, 240, 240, 80, 200);     /* tap */
-    CHECK(trig == 0, "center: to korte taps → ingen trigger");
+    CHECK(trig == 0, "center: two short taps → no trigger");
     trig |= hold(&g, 240, 240, 5200, 0);
-    CHECK(trig == 1, "center: taps efterfulgt af ét 5,2 s hold → trigger");
+    CHECK(trig == 1, "center: taps followed by one 5.2 s hold → trigger");
 
-    /* 9: corner-fallback — 3×1600 ms i (45,45), 300 ms gap → span 5400 ≤6000 */
+    /* 9: corner fallback — 3×1600 ms at (45,45), 300 ms gap → span 5400 ≤6000 */
     gesture_init(&g, 0, 4095, 0, 4095); gesture_set_corner(&g, 0); T = 700000; trig = 0;
     trig |= hold(&g, 45, 45, 1600, 300);
     trig |= hold(&g, 45, 45, 1600, 300);
     trig |= hold(&g, 45, 45, 1600, 0);
-    CHECK(trig == 1, "corner: 3×1,6 s hjørne-hold inden for 6 s → trigger");
-    CHECK(g.count == 0, "corner: tælling nulstillet efter trigger");
+    CHECK(trig == 1, "corner: 3×1.6 s corner hold within 6 s → trigger");
+    CHECK(g.count == 0, "corner: count reset after trigger");
 
-    /* 10: corner kun 2 holds → ingen trigger */
+    /* 10: corner only 2 holds → no trigger */
     gesture_init(&g, 0, 4095, 0, 4095); gesture_set_corner(&g, 0); T = 800000; trig = 0;
     trig |= hold(&g, 45, 45, 1600, 300);
     trig |= hold(&g, 45, 45, 1600, 0);
-    CHECK(trig == 0 && g.count == 2, "corner: 2 holds → ingen trigger (2/3)");
+    CHECK(trig == 0 && g.count == 2, "corner: 2 holds → no trigger (2/3)");
 
-    /* 11: corner for korte presses (1000 ms < 1500) */
+    /* 11: corner presses too short (1000 ms < 1500) */
     gesture_init(&g, 0, 4095, 0, 4095); gesture_set_corner(&g, 0); T = 900000; trig = 0;
     trig |= hold(&g, 45, 45, 1000, 200);
     trig |= hold(&g, 45, 45, 1000, 200);
     trig |= hold(&g, 45, 45, 1000, 0);
-    CHECK(trig == 0 && g.count == 0, "corner: 3×1,0 s (for kort) → ingen trigger");
+    CHECK(trig == 0 && g.count == 0, "corner: 3×1.0 s (too short) → no trigger");
 
-    /* 12: center-hold tæller IKKE i corner-mode (og omvendt) */
+    /* 12: a center hold does NOT count in corner mode (and vice versa) */
     gesture_init(&g, 0, 480, 0, 480); gesture_set_corner(&g, 0); T = 1000000; trig = 0;
     trig |= hold(&g, 240, 240, 5200, 0);
-    CHECK(trig == 0 && g.count == 0, "corner: center-hold tæller ikke");
+    CHECK(trig == 0 && g.count == 0, "corner: center hold does not count");
     gesture_init(&g, 0, 4095, 0, 4095); T = 1050000; trig = 0;
     trig |= hold(&g, 45, 45, 1600, 300);
     trig |= hold(&g, 45, 45, 1600, 300);
     trig |= hold(&g, 45, 45, 1600, 0);
-    CHECK(trig == 0, "center: 3×1,6 s hjørne-hold → ingen trigger (kun ét hold tæller)");
+    CHECK(trig == 0, "center: 3×1.6 s corner hold → no trigger (only one hold counts)");
 
-    /* 13: skalering raw→screen (tinj.c-formlen, begge ranges) */
+    /* 13: scaling raw→screen (the tinj.c formula, both ranges) */
     CHECK(scale_axis(0, 0, 4095, 480) == 0,        "raw 0 → screen 0 (4095-range)");
     CHECK(scale_axis(4095, 0, 4095, 480) == 479,   "raw 4095 → screen 479");
     CHECK(scale_axis(2048, 0, 4095, 480) == 240,   "raw 2048 → screen 240 (center)");
     CHECK(scale_axis(0, 0, 480, 480) == 0,         "raw 0 → screen 0 (480-range)");
     CHECK(scale_axis(480, 0, 480, 480) == 479,     "raw 480 → screen 479 (device-max)");
-    CHECK(scale_axis(240, 0, 480, 480) == 239,     "raw 240 → screen 239 (±1 px, tinj-formel)");
-    CHECK(scale_axis(767, 0, 4095, 480) == 89,     "raw 767 → screen 89 (hjørne)");
-    CHECK(scale_axis(768, 0, 4095, 480) == 90,     "raw 768 → screen 90 (uden for)");
+    CHECK(scale_axis(240, 0, 480, 480) == 239,     "raw 240 → screen 239 (±1 px, tinj formula)");
+    CHECK(scale_axis(767, 0, 4095, 480) == 89,     "raw 767 → screen 89 (corner)");
+    CHECK(scale_axis(768, 0, 4095, 480) == 90,     "raw 768 → screen 90 (outside)");
 
-    /* 14: raw-range auto-valg (pick_ranges): fallback = device-konstant 480 */
+    /* 14: raw range auto choice (pick_ranges): fallback = device constant 480 */
     AbsProbe p;
     int a, b, c, d;
     memset(&p, 0, sizeof p);
     pick_ranges(&p, &a, &b, &c, &d);
-    CHECK(a == 0 && b == 480 && c == 0 && d == 480, "pick_ranges: ingen ioctl-svar → 0..480");
+    CHECK(a == 0 && b == 480 && c == 0 && d == 480, "pick_ranges: no ioctl answer → 0..480");
     p.have_mx = 1; p.mx.minimum = 0; p.mx.maximum = 480;
     p.have_my = 1; p.my.minimum = 0; p.my.maximum = 480;
     pick_ranges(&p, &a, &b, &c, &d);
@@ -1069,34 +1069,34 @@ int main(void)
     CHECK(b == 4095 && d == 4095, "pick_ranges: EVIOCGABS 0..4095 → 0..4095 (auto)");
     p.have_x = 1; p.x.minimum = 5; p.x.maximum = 4000;
     pick_ranges(&p, &a, &b, &c, &d);
-    CHECK(b == 4095, "pick_ranges: MT-akser har forrang over ST-akser");
+    CHECK(b == 4095, "pick_ranges: MT axes take precedence over ST axes");
     memset(&p, 0, sizeof p);
     p.have_x = 1; p.x.minimum = 5; p.x.maximum = 4000;
     p.have_y = 1; p.y.minimum = 6; p.y.maximum = 4001;
     pick_ranges(&p, &a, &b, &c, &d);
-    CHECK(a == 5 && b == 4000 && c == 6 && d == 4001, "pick_ranges: ST-only probe bruges");
+    CHECK(a == 5 && b == 4000 && c == 6 && d == 4001, "pick_ranges: ST-only probe is used");
 
-    /* 15: sysfs-sample (bypass b): center-hold via polling */
+    /* 15: sysfs sample (bypass b): center hold via polling */
     gesture_init(&g, 0, 480, 0, 480); T = 1100000; trig = 0;
     trig |= gesture_sysfs_sample(&g, 240, 240, 1, T);
     T += 2600; trig |= gesture_sysfs_sample(&g, 240, 240, 1, T);
     T += 2600; trig |= gesture_sysfs_sample(&g, 240, 240, 0, T);
-    CHECK(trig == 1, "sysfs: center-hold 5,2 s via point_num → trigger");
+    CHECK(trig == 1, "sysfs: center hold 5.2 s via point_num → trigger");
     gesture_init(&g, 0, 480, 0, 480); T = 1200000; trig = 0;
     trig |= gesture_sysfs_sample(&g, 240, 240, 1, T);
     T += 3000; trig |= gesture_sysfs_sample(&g, 240, 240, 0, T);
-    CHECK(trig == 0, "sysfs: hold 3,0 s → ingen trigger");
+    CHECK(trig == 0, "sysfs: hold 3.0 s → no trigger");
     gesture_init(&g, 0, 480, 0, 480); T = 1300000; trig = 0;
     trig |= gesture_sysfs_sample(&g, 320, 240, 1, T);
     T += 5200; trig |= gesture_sysfs_sample(&g, 320, 240, 0, T);
-    CHECK(trig == 0, "sysfs: off-center (320,240) → ingen trigger");
+    CHECK(trig == 0, "sysfs: off-center (320,240) → no trigger");
     gesture_init(&g, 0, 480, 0, 480); T = 1400000; trig = 0;
     trig |= gesture_sysfs_sample(&g, 240, 240, 1, T);
     T += 2000; trig |= gesture_sysfs_sample(&g, 350, 350, 1, T);
     T += 3200; trig |= gesture_sysfs_sample(&g, 240, 240, 0, T);
-    CHECK(trig == 0, "sysfs: drift ud af zonen → ingen trigger");
+    CHECK(trig == 0, "sysfs: drift out of the zone → no trigger");
 
-    /* 16: env-konfiguration */
+    /* 16: env configuration */
     setenv("SWITCHER_GESTURE", "corner", 1);
     setenv("SWITCHER_HOLD_MS", "1700", 1);
     gesture_init(&g, 0, 480, 0, 480); gesture_config_env(&g);
@@ -1115,32 +1115,32 @@ int main(void)
     CHECK(g.mode == GEST_CENTER && g.cx == 240 && g.cy == 240 &&
           g.r2 == 40 * 40 && g.hold_ms == 5000, "env: defaults = center (240,240) r40 5000 ms");
 
-    /* 17: mode-klassifikation */
+    /* 17: mode classification */
     CHECK(classify_exe("/customer/demo_v9") == MODE_A,     "exe /customer/demo_v9 → A");
     CHECK(classify_exe("/new_customer/demo_v9") == MODE_B, "exe /new_customer/demo_v9 → B");
-    CHECK(classify_exe("/tmp/andet") == MODE_NONE,         "ukendt exe → NONE");
+    CHECK(classify_exe("/tmp/andet") == MODE_NONE,         "unknown exe → NONE");
     CHECK(classify_exe(NULL) == MODE_NONE,                 "NULL exe → NONE");
 
-    /* 18: beslutningslogik */
+    /* 18: decision logic */
     Mode mA[1] = { MODE_A };
     Mode mB[1] = { MODE_B };
     Mode mAB[2] = { MODE_A, MODE_B };
     Mode mAA[2] = { MODE_A, MODE_A };
     CHECK(decide_action(mA, 1) == ACT_SWITCH_A,    "[A] → SWITCH_A");
-    CHECK(decide_action(mB, 1) == ACT_IDLE_B,      "[B] → IDLE_B (ourui har selv knap)");
-    CHECK(decide_action(mAB, 2) == ACT_IDLE_MIXED, "[A,B] → IDLE_MIXED (sikrest)");
+    CHECK(decide_action(mB, 1) == ACT_IDLE_B,      "[B] → IDLE_B (ourui has its own button)");
+    CHECK(decide_action(mAB, 2) == ACT_IDLE_MIXED, "[A,B] → IDLE_MIXED (safest)");
     CHECK(decide_action(mAA, 2) == ACT_IDLE_NONE,  "[A,A] (transient fork) → IDLE_NONE");
     CHECK(decide_action(NULL, 0) == ACT_IDLE_NONE, "[] → IDLE_NONE");
 
-    /* 19: ny sekvens efter trigger virker igen (center) */
+    /* 19: a new sequence after a trigger works again (center) */
     gesture_init(&g, 0, 480, 0, 480); T = 1500000; trig = 0;
     trig |= hold(&g, 240, 240, 5200, 0);
-    CHECK(trig == 1, "center: første trigger");
+    CHECK(trig == 1, "center: first trigger");
     T += 20000; trig = 0;
     trig |= hold(&g, 240, 240, 5200, 0);
-    CHECK(trig == 1, "center: andet hold efter trigger → trigger igen");
+    CHECK(trig == 1, "center: second hold after trigger → trigger again");
 
-    /* 20: MT-only stream (tracking-id uden BTN_TOUCH) driver center-detektion */
+    /* 20: MT-only stream (tracking-id without BTN_TOUCH) drives center detection */
     gesture_init(&g, 0, 480, 0, 480); T = 1600000; trig = 0;
     ev(&g, EV_ABS_, ABS_MT_TRACKING_ID_, 7, &trig);
     raw_xy(&g, 240, 240, &trig);
@@ -1150,22 +1150,22 @@ int main(void)
     ev(&g, EV_SYN_, SYN_REPORT_, 0, &trig);
     CHECK(trig == 1, "center: MT-only stream (tracking-id) → trigger");
 
-    /* 21: corner vindues-udløb + taps mellem holds (legacy bevaret) */
+    /* 21: corner window expiry + taps between holds (legacy kept) */
     gesture_init(&g, 0, 4095, 0, 4095); gesture_set_corner(&g, 0); T = 1700000; trig = 0;
     trig |= hold(&g, 45, 45, 1600, 300);
     trig |= hold(&g, 45, 45, 1600, 0);
-    T += 7000; /* >6 s siden første down */
+    T += 7000; /* >6 s since the first down */
     trig |= hold(&g, 45, 45, 1600, 0);
-    CHECK(trig == 0 && g.count == 1, "corner: udløbet vindue → tælling forfra (1/3)");
+    CHECK(trig == 0 && g.count == 1, "corner: expired window → count restarts (1/3)");
     gesture_init(&g, 0, 4095, 0, 4095); gesture_set_corner(&g, 0); T = 1800000; trig = 0;
     trig |= hold(&g, 45, 45, 1600, 100);
     trig |= hold(&g, 45, 45, 80, 100);
     trig |= hold(&g, 45, 45, 1600, 100);
     trig |= hold(&g, 45, 45, 80, 100);
     trig |= hold(&g, 45, 45, 1600, 0);
-    CHECK(trig == 1, "corner: taps mellem gyldige holds → trigger (span 5,16 s)");
+    CHECK(trig == 1, "corner: taps between valid holds → trigger (span 5.16 s)");
 
-    printf("\n%d tests, %d fejl\n", tests_run, tests_fail);
+    printf("\n%d tests, %d failed\n", tests_run, tests_fail);
     return tests_fail ? 1 : 0;
 }
 #endif

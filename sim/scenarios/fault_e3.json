@@ -1,6 +1,6 @@
 {
   "name": "fault_e3",
-  "description": "E3 bit4 (brygkedel >120°): fejl-UI i idle",
+  "description": "E3 bit4 (brew boiler >120°): error UI in idle",
   "duration_s": 12,
   "events": [
     {

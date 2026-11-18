@@ -1,6 +1,6 @@
 {
   "name": "gesture_switcher",
-  "description": "Gestus-switcher: ÆGTE switcher_host i fil-mode (3×1,6 s hjørne-hold → trigger; 2 hold → ingen) + UI ignorerer hjørnet",
+  "description": "Gesture switcher: REAL switcher_host in file mode (3×1.6 s corner hold → trigger; 2 holds → none) + UI ignores the corner",
   "duration_s": 12,
   "events": [
     {

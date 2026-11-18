@@ -1,5 +1,5 @@
-/* fbpage.c — read-only helper: print aktiv fb-page (yoffset/480) som "0"/"1".
- * Bruges af round_capture.py til at vælge den aktive halvdel af 480×960-fb.
+/* fbpage.c — read-only helper: print the active fb page (yoffset/480) as "0"/"1".
+ * Used by round_capture.py to pick the active half of the 480×960 fb.
  * Build: zig cc -target arm-linux-musleabihf -mcpu=cortex_a7 -static -O2 -o fbpage fbpage.c
  */
 #include <stdio.h>

@@ -1,6 +1,6 @@
 {
   "name": "fault_e1",
-  "description": "E1 (gruppe >110°): fejl-UI + bryg-start SPÆRRET (act_guard-toast)",
+  "description": "E1 (group >110°): error UI + brew start BLOCKED (act_guard toast)",
   "duration_s": 12,
   "events": [
     {

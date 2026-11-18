@@ -1,6 +1,6 @@
 {
   "name": "crc_garbage",
-  "description": "CRC-korruption + garbage-stream: UI skal resynke og bevare link",
+  "description": "CRC corruption + garbage stream: UI must resync and keep the link",
   "duration_s": 12,
   "events": [
     {

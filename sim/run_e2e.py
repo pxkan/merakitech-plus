@@ -1,25 +1,25 @@
 #!/usr/bin/env python3
-"""run_e2e.py — E2E-runner for ourui's SIMULEREREDE testmiljø.
+"""run_e2e.py — E2E runner for ourui's SIMULATED test environment.
 
-Orkestrering pr. scenarie (sim/scenarios/*.json):
-  (a) sandbox-rod: config-kopi, flag-fil, /proc-mocks, fb-buffer, touch-FIFO
-  (b) mcu_sim på pty (+ ctrl-socket + assertions-log)
-  (c) ourui SIM-build hvis det findes (CONTRACT.md), ellers reference-klienten
-      (sim/ref_client.py) som beviser sim'en
-  (d) injicerer touch/scenarie-hændelser (evdev-FIFO / ctrl-sockets)
-  (e) sampler UI-state (JSONL) + fb-frames (BGRA → PNG)
-  (f) assertions: scenarie-forventninger + circle-tjek + farve/region-tjek
-      + sim-log-assertions (keep-awake, trigger-politik, bånd, grænser)
-  (g) rapport: JSON + MD + PNG-snapshots/contact-sheet pr. scenarie
+Orchestration per scenario (sim/scenarios/*.json):
+  (a) sandbox root: config copy, flag file, /proc mocks, fb buffer, touch FIFO
+  (b) mcu_sim on a pty (+ ctrl socket + assertions log)
+  (c) ourui SIM build if present (CONTRACT.md), otherwise the reference client
+      (sim/ref_client.py), which proves the sim
+  (d) injects touch/scenario events (evdev FIFO / ctrl sockets)
+  (e) samples UI state (JSONL) + fb frames (BGRA → PNG)
+  (f) assertions: scenario expectations + circle check + colour/region checks
+      + sim-log assertions (keep-awake, trigger policy, band, limits)
+  (g) report: JSON + MD + PNG snapshots/contact sheet per scenario
 
-Kun Python stdlib. Ingen enhedskontakt. Brug:
+Python stdlib only. No device contact. Usage:
   python3 sim/run_e2e.py --list
   python3 sim/run_e2e.py --scenario brew
   python3 sim/run_e2e.py --all
-  python3 sim/run_e2e.py --scenario brew --ui-bin /sti/til/ourui_v6_sim
-  python3 sim/run_e2e.py --all --no-ui-profile   # råt — scenarierne asserter ourui's
-                                                 # vogtede adfærd (v6.5-scenarios)
-  python3 sim/run_e2e.py --all --ref-client      # reference-oracle med REF-profil
+  python3 sim/run_e2e.py --scenario brew --ui-bin /path/to/ourui_v6_sim
+  python3 sim/run_e2e.py --all --no-ui-profile   # raw — the scenarios assert ourui's
+                                                 # guarded behaviour (v6.5-scenarios)
+  python3 sim/run_e2e.py --all --ref-client      # reference oracle with REF profile
 """
 import argparse
 import json
@@ -47,18 +47,18 @@ SIM_BUILD_CANDIDATES = [ROOT / "build" / "ourui_sim",
                         ROOT / "bin" / ("ourui_sim-%s-%s" % ({"darwin": "macos"}.get(sys.platform, sys.platform),
                                                               {"aarch64": "arm64", "amd64": "x86_64"}.get(
                                                                   os.uname().machine.lower(), os.uname().machine.lower())))]
-# v6.4 (CONTRACT.md "TILLÆG v6.4"): UI-profil = overrides mellem reference-klientens
-# syntetiske layout/adfærd og det rigtige ourui. Slås fra med --no-ui-profile.
-# v6.5-scenarios (RECONCILE.md): scenarierne asserter nu DIREKTE den vogtede ourui-
-# adfærd. UI-profilen er derfor TOM (mekanismen er bagudkompatibel), og reference-
-# klienten får sin egen REF-profil med de omvendte overrides (oracle-adfærden).
-# Den historiske v6.4-profil kan stadig gives eksplicit med --ui-profile.
+# v6.4 (CONTRACT.md "ADDENDUM v6.4"): UI profile = overrides between the reference client's
+# synthetic layout/behaviour and the real ourui. Disabled with --no-ui-profile.
+# v6.5-scenarios (RECONCILE.md): the scenarios now assert ourui's guarded behaviour
+# DIRECTLY. The UI profile is therefore EMPTY (the mechanism is backward compatible), and the
+# reference client gets its own REF profile with the inverse overrides (the oracle behaviour).
+# The historical v6.4 profile can still be given explicitly with --ui-profile.
 UI_PROFILE_DEFAULT = HERE / "sim_ui_profile-ui.json"
 REF_PROFILE_DEFAULT = HERE / "sim_ui_profile-ref.json"
 
 
 def _pmatch(item, pat):
-    """Alle nøgler i pat skal findes i item med samme værdi (tal: ±0.02)."""
+    """All keys in pat must exist in item with the same value (numbers: ±0.02)."""
     for k, v in pat.items():
         if k not in item:
             return False
@@ -73,10 +73,10 @@ def _pmatch(item, pat):
 
 
 def apply_ui_profile(scen, profile):
-    """Returnér (ny scenarie-dict, anvendte overrides, fejl). Scenarie-filen røres
-    ikke. Hver override skal ramme PRÆCIS det antal forventninger/hændelser den
-    angiver (default 1) — ellers meldes fejl, så en forældet profil ikke kan skjule
-    noget. Forventninger erstattes 1:1 (antal checks er uændret)."""
+    """Return (new scenario dict, applied overrides, errors). The scenario file is not
+    touched. Each override must hit EXACTLY the number of expectations/events it
+    specifies (default 1) — otherwise an error is reported, so a stale profile cannot hide
+    anything. Expectations are replaced 1:1 (the number of checks is unchanged)."""
     out = json.loads(json.dumps(scen))
     applied, errors = [], []
     for ov in (profile.get("scenarios", {}) or {}).get(scen.get("name"), []):
@@ -84,7 +84,7 @@ def apply_ui_profile(scen, profile):
         if "match_event" in ov:
             hits = [e for e in out.get("events", []) if _pmatch(e, ov["match_event"])]
             if len(hits) != ov.get("count", 1):
-                errors.append(f"event-match {ov['match_event']} ramte {len(hits)}")
+                errors.append(f"event-match {ov['match_event']} hit {len(hits)}")
                 continue
             for e in hits:
                 e.update(ov.get("set", {}))
@@ -95,11 +95,11 @@ def apply_ui_profile(scen, profile):
             idx = [i for i, e in enumerate(exp) if _pmatch(e, ov["match"])]
             repl = ov.get("replace")
             if len(idx) != ov.get("count", 1) or not isinstance(repl, dict):
-                errors.append(f"expect-match {ov['match']} ramte {len(idx)}")
+                errors.append(f"expect-match {ov['match']} hit {len(idx)}")
                 continue
             for i in idx:
                 new = dict(repl)
-                for k in ov.get("keep", []):          # fx tidsvinduet fra originalen
+                for k in ov.get("keep", []):          # e.g. the time window from the original
                     if k in exp[i]:
                         new.setdefault(k, exp[i][k])
                 new["_ui_profile"] = why
@@ -108,14 +108,14 @@ def apply_ui_profile(scen, profile):
                             "replace": repl, "n": len(idx), "why": why})
     return out, applied, errors
 
-# circle-tjek portet fra artifacts/ourui/check_circle.py (samme kriterier)
+# circle check ported from artifacts/ourui/check_circle.py (same criteria)
 CX = CY = 240.0
 R_PHYS, R_SAFE = 240.0, 234.0
 
 
 def circle_check(raw):
     if len(raw) < FB_BYTES:
-        return False, {"error": f"for kort: {len(raw)}"}
+        return False, {"error": f"too short: {len(raw)}"}
     viol = 0
     maxr = 0.0
     worst = None
@@ -145,13 +145,14 @@ def circle_check(raw):
                 "corners_black": corner_ok, "worst": worst}
 
 
-# Serve replays start this many seconds "ahead" of the UI clock (scenario key replay.lead_s);
-# override with E2E_REPLAY_LEAD_S for experiments.
+# Serve replays run this many seconds ahead of the UI clock (scenario key replay.lead_s).
+# 0.2 s is the centre of the measured passing band (0.1-0.3 s) of all replay scenarios;
+# E2E_REPLAY_LEAD_S overrides it for experiments.
 REPLAY_LEAD_S = float(os.environ.get("E2E_REPLAY_LEAD_S", "0.2"))
 
 
 class Ctrl:
-    """JSONL-klient til sim/ui ctrl-unix-sockets."""
+    """JSONL client for the sim/ui ctrl unix sockets."""
     def __init__(self, path):
         self.path = str(path)
         self.seq = 0
@@ -167,7 +168,7 @@ class Ctrl:
         line = f.readline()
         s.close()
         if not line:
-            raise RuntimeError(f"ctrl uden svar: {req}")
+            raise RuntimeError(f"ctrl got no reply: {req}")
         return json.loads(line)
 
 
@@ -189,7 +190,7 @@ class ScenarioRun:
                  ui_lang=None, ui_profile=None):
         self.ui_lang = ui_lang
         self.profile_applied, self.profile_errors = [], []
-        if ui_profile:                      # v6.5-scenarios: også REF-profilen (reference-klient)
+        if ui_profile:                      # v6.5-scenarios: also the REF profile (reference client)
             scen, self.profile_applied, self.profile_errors = \
                 apply_ui_profile(scen, ui_profile)
         self.scen = scen
@@ -202,7 +203,7 @@ class ScenarioRun:
         self.ui_bin = ui_bin
         self.keep_sandbox = keep_sandbox
         self.samples = []          # (t, state)
-        self.cfg_samples = []      # (t, cfg-dict)
+        self.cfg_samples = []      # (t, cfg dict)
         self.flag_samples = []     # (t, bool)
         self.snapshots = []        # {t, label, bin, png, raw}
         self.checks = []
@@ -218,8 +219,8 @@ class ScenarioRun:
         self.ui_exit = None
         self.client_kind = "reference"
         self.t0 = None
-        # AF_UNIX-stier må være ≤104 bytes (macOS) — scratch-stien er for lang,
-        # så ctrl-sockets lægges i en kort /tmp-mappe pr. kørsel.
+        # AF_UNIX paths must be ≤104 bytes (macOS) — the scratch path is too long,
+        # so ctrl sockets are placed in a short /tmp directory per run.
         import tempfile
         self.sock_dir = Path(tempfile.mkdtemp(prefix=f"ourui_e2e_{os.getpid()}_",
                                               dir="/tmp"))
@@ -235,28 +236,28 @@ class ScenarioRun:
         (sb / "proc").mkdir(exist_ok=True)
         (sb / "dev" / "input").mkdir(parents=True, exist_ok=True)
         (sb / "sys" / "class" / "pwm" / "pwmchip0" / "pwm2").mkdir(parents=True, exist_ok=True)
-        # config-kopi + scenarie-overrides
+        # config copy + scenario overrides
         cfg = load_baseline_config()
         cfg.update(self.scen.get("config", {}))
         self.cfg_path = sb / "customer" / "config.json"
         self.cfg_path.write_text(json.dumps(cfg, indent="\t", ensure_ascii=False) + "\n")
-        # boot-flag (scenarie kan starte med B-boot)
+        # boot flag (scenario may start with B boot)
         self.flag_path = sb / "customer" / "new"
         if self.scen.get("boot_flag_initial"):
             self.flag_path.touch()
-        # /proc-mocks (nok til ourui's slot-/exe-checks)
+        # /proc mocks (enough for ourui's slot/exe checks)
         (sb / "proc" / "uptime").write_text("12345.67 8901.23\n")
         (sb / "proc" / "meminfo").write_text("MemTotal: 128000 kB\nMemFree: 41000 kB\n")
         (sb / "proc" / "version").write_text("Linux version 4.9.84 (mock) #1 SMP\n")
         (sb / "sys" / "class" / "pwm" / "pwmchip0" / "pwm2" / "duty_cycle").write_text("37\n")
-        # v6.3/v6.4: ourui's UI-sprog ligger i sin egen fil; i sandkassen (ingen fil = engelsk)
+        # v6.3/v6.4: ourui's UI language lives in its own file; in the sandbox (no file = English)
         self.lang_path = sb / "new_customer" / "ourui" / "lang"
         if self.ui_lang:
             self.lang_path.write_text(self.ui_lang)
-        # fb-buffer + touch-FIFO oprettes af klient/sim; placeholder:
+        # fb buffer + touch FIFO are created by client/sim; placeholder:
         self.fb_path.write_bytes(bytes(FB_BYTES))
         self.touch_path = sb / "dev" / "input" / "event0.fifo"
-        # state-fil frisk
+        # fresh state file
         self.state_path.write_text("")
         self.assert_path.write_text("")
 
@@ -283,21 +284,21 @@ class ScenarioRun:
             if rp.get("mode", "serve") == "serve":
                 cmd.append("--replay-hold")       # started by anchor_replay() once the UI runs
         pf = self.dir / "pty_path"
-        pf.unlink(missing_ok=True)      # gammel fil fra tidligere kørsel i samme mappe
+        pf.unlink(missing_ok=True)      # old file from a previous run in the same directory
         self.sim_proc = subprocess.Popen(cmd, stdout=subprocess.DEVNULL,
                                          stderr=subprocess.PIPE, text=True)
         for _ in range(200):
             if pf.exists() and pf.read_text().strip():
                 break
             if self.sim_proc.poll() is not None:
-                raise RuntimeError("mcu_sim døde ved opstart: "
+                raise RuntimeError("mcu_sim died at startup: "
                                    + (self.sim_proc.stderr.read() or ""))
             time.sleep(0.05)
         self.pty_path = pf.read_text().strip()
         self.sim_ctrl = Ctrl(self.sim_ctrl_path)
         self.sim_ctrl.call({"cmd": "ping"})
 
-    # ------------------------------------------------------------ (c) UI-klient
+    # ------------------------------------------------------------ (c) UI client
     def start_ui(self):
         env = dict(os.environ)
         env.update({
@@ -312,8 +313,8 @@ class ScenarioRun:
             "OURUI_CONFIG": str(self.cfg_path),
             "OURUI_BAKDIR": str(self.sandbox / "customer" / "bak"),
             "OURUI_LANGFILE": str(self.lang_path),
-            # v6.3+: UI-sprogfil ("en"/"da") uden for /new_customer-default;
-            # manglende fil = fallback EN (uændret adfærd for ældre builds)
+            # v6.3+: UI language file ("en"/"da") outside the /new_customer default;
+            # missing file = fallback EN (unchanged behaviour for older builds)
             "OURUI_LANGFILE": str(self.sandbox / "new_customer" / "ourui" / "lang"),
             "OURUI_NOGRAB": "1",
             "OURUI_NOBL": "1",
@@ -329,12 +330,12 @@ class ScenarioRun:
         self.ui_proc = subprocess.Popen(cmd, env=env, stdout=subprocess.DEVNULL,
                                         stderr=subprocess.PIPE, text=True)
         self.ui_ctrl = Ctrl(self.ui_ctrl_path)
-        # vent på første state-linje (kontrakt: state pr. frame)
+        # wait for the first state line (contract: state per frame)
         for _ in range(200):
             if self.state_path.exists() and self.state_path.stat().st_size > 0:
                 break
             if self.ui_proc.poll() is not None:
-                raise RuntimeError("UI-klient døde ved opstart: "
+                raise RuntimeError("UI client died at startup: "
                                    + (self.ui_proc.stderr.read() or ""))
             time.sleep(0.05)
         m_a = time.monotonic()
@@ -350,8 +351,8 @@ class ScenarioRun:
     def anchor_replay(self, ui_origin, lead_s):
         """Serve replays: start the capture clock relative to the UI's clock origin instead of
         the sim's process start. Assertion times are UI timestamps, and the gap between sim
-        start and UI start varies with machine load (≈0.2 s idle, ≈0.5 s on a busy CI runner,
-        i.e. 2-4 s of capture time at 8x), which made tight replay windows flaky."""
+        start and UI start varies with machine load (~0.2 s idle, ~0.5 s on a busy CI runner,
+        i.e. 2-4 s of capture time at 8x), which made the tight replay windows flaky."""
         elapsed = time.monotonic() - ui_origin + lead_s
         self.replay_anchor = self.sim_ctrl.call({"cmd": "replay_anchor", "elapsed": elapsed})
 
@@ -367,16 +368,16 @@ class ScenarioRun:
         elif target == "ui":
             req = {k: v for k, v in ev.items() if k not in ("t", "target")}
             if req.get("cmd") == "touch" and "layout" in req:
-                # v6.5-scenarios: tryk-målet slås op i klientens layout-krog
-                # (CONTRACT TILLÆG v6.4 B) i stedet for syntetiske koordinater.
-                # SIM-build'et returnerer ourui's rigtige geometri; reference-
-                # klienten returnerer sit eget reference-layout.
+                # v6.5-scenarios: the tap target is looked up in the client's layout hook
+                # (CONTRACT ADDENDUM v6.4 B) instead of synthetic coordinates.
+                # The SIM build returns ourui's real geometry; the reference
+                # client returns its own reference layout.
                 name = req.pop("layout")
                 resp = self.ui_ctrl.call({"cmd": "layout"})
                 tgt = next((t for t in resp.get("targets", [])
                             if t.get("name") == name), None)
                 if tgt is None:
-                    raise RuntimeError(f"layout-mål '{name}' findes ikke "
+                    raise RuntimeError(f"layout target '{name}' does not exist "
                                        f"(page={resp.get('page')})")
                 req["x"], req["y"] = int(tgt["x"]), int(tgt["y"])
             self.ui_ctrl.call(req)
@@ -411,8 +412,8 @@ class ScenarioRun:
                 f.write(stream)
 
     def run_gesture(self, ev):
-        """Kør den ÆGTE switcher-daemon (host-build) i fil-mode mod en
-        syntetisk evdev-stream (samme format som tinj_hold)."""
+        """Run the REAL switcher daemon (host build) in file mode against a
+        synthetic evdev stream (same format as tinj_hold)."""
         name = ev.get("name", "gesture")
         presses = ev.get("presses", 3)
         stream = touch_stream(presses, ev.get("x", 75), ev.get("y", 75),
@@ -436,7 +437,7 @@ class ScenarioRun:
                                    capture_output=True, text=True, timeout=30)
                 log = lf.read_text() if lf.exists() else ""
                 result = {"ran": True, "rc": r.returncode,
-                          "trigger": "GESTUS UDLØST" in log, "log": log}
+                          "trigger": "GESTURE TRIGGERED" in log, "log": log}
             except subprocess.TimeoutExpired:
                 result = {"ran": True, "trigger": False, "log": "TIMEOUT"}
         self.gesture_results[name] = result
@@ -507,7 +508,7 @@ class ScenarioRun:
                 last_snap = now
                 self.take_snapshot(f"auto{now:.0f}s")
             time.sleep(0.02)
-        # sidste sampling + exit
+        # final sampling + exit
         self.read_states()
         self.take_snapshot("final", force=True)
         try:
@@ -520,7 +521,7 @@ class ScenarioRun:
             self.ui_proc.terminate()
             self.ui_proc.wait(timeout=3)
         self.ui_exit = self.ui_proc.returncode
-        # prefetch replay-sandhedsvinduer MENS sim'en stadig kører
+        # prefetch replay ground-truth windows WHILE the sim is still running
         for ex in self.scen.get("expect", []):
             if ex.get("kind") == "replay_truth":
                 key = (ex["word"], ex["t0"], ex["t1"], ex.get("signed", False))
@@ -568,7 +569,7 @@ class ScenarioRun:
             sts = self.states_in(ex["t"] - win, ex["t"] + win)
             ok = any(s.get("phase") == ex["value"] for s in sts)
             self.add(f"phase={ex['value']}@{ex['t']}", ok,
-                     f"set={[s.get('phase') for s in sts][:8]}")
+                     f"seen={[s.get('phase') for s in sts][:8]}")
         elif kind == "phase_hold":
             sts = self.states_in(ex["t0"], ex["t1"])
             hits = sum(1 for s in sts if s.get("phase") == ex["value"])
@@ -588,7 +589,7 @@ class ScenarioRun:
             for p in seq:
                 if i < len(want) and p == want[i]:
                     i += 1
-            self.add(f"phase_seq={want}", i == len(want), f"set={seq}")
+            self.add(f"phase_seq={want}", i == len(want), f"seen={seq}")
         elif kind == "word":
             sts = self.states_in(ex["t"] - win, ex["t"] + win)
             mask = int(ex.get("mask", 0xFFFF), 0) if isinstance(ex.get("mask"), str) \
@@ -598,7 +599,7 @@ class ScenarioRun:
             ok = any((int(s.get("regs", {}).get(w, 0)) & mask) == (val & mask)
                      for s in sts)
             self.add(f"word{w}={val:#x}@{ex['t']}", ok,
-                     f"set={[s.get('regs', {}).get(w) for s in sts][:8]}")
+                     f"seen={[s.get('regs', {}).get(w) for s in sts][:8]}")
         elif kind == "word_hold":
             sts = self.states_in(ex["t0"], ex["t1"])
             w = str(ex["word"])
@@ -619,32 +620,32 @@ class ScenarioRun:
             vals = [s16(int(s["regs"][w])) if ex.get("signed") else int(s["regs"][w])
                     for s in sts if w in s.get("regs", {})]
             ok = bool(vals) and max(vals) >= ex["min"]
-            self.add(f"word{w}≥{ex['min']} set i [{ex.get('t0', 0)},{ex.get('t1', 1e9)}]",
+            self.add(f"word{w}≥{ex['min']} seen in [{ex.get('t0', 0)},{ex.get('t1', 1e9)}]",
                      ok, f"max={max(vals) if vals else '-'}")
         elif kind == "work_sta_seen":
             sts = self.states_in(ex.get("t0", 0), ex.get("t1", 1e9))
             mask = int(ex.get("mask", "0x2C00"), 0)
             val = int(ex["value"], 0)
             ok = any((int(s.get("work_sta", 0)) & ~mask) == val for s in sts)
-            self.add(f"work_sta={val:#x} set i [{ex.get('t0', 0)},{ex.get('t1', 1e9)}]",
-                     ok, f"set={sorted({hex(int(s.get('work_sta', 0)) & ~mask) for s in sts})}")
+            self.add(f"work_sta={val:#x} seen in [{ex.get('t0', 0)},{ex.get('t1', 1e9)}]",
+                     ok, f"seen={sorted({hex(int(s.get('work_sta', 0)) & ~mask) for s in sts})}")
         elif kind == "stop_ok":
-            # v6.13: state.stop.ok (ourui + reference-klient) — stop-bekræftelse
-            # når MCU'en har ryddet aktivitetens bits (ikke blot ACK).
+            # v6.13: state.stop.ok (ourui + reference client) — stop confirmation
+            # once the MCU has cleared the activity's bits (not just ACK).
             sts = self.states_in(ex.get("t0", 0), ex.get("t1", 1e9))
             oks = [int((s.get("stop") or {}).get("ok", 0)) for s in sts]
             fails = [int((s.get("stop") or {}).get("fail", 0)) for s in sts]
             ok = bool(oks) and max(oks) >= ex.get("min", 1)
             if "max_fail" in ex:
                 ok = ok and max(fails) <= ex["max_fail"]
-            self.add(f"stop.ok≥{ex.get('min', 1)} i [{ex.get('t0', 0)},{ex.get('t1', 1e9)}]",
+            self.add(f"stop.ok≥{ex.get('min', 1)} in [{ex.get('t0', 0)},{ex.get('t1', 1e9)}]",
                      ok, f"ok={max(oks) if oks else '-'} fail={max(fails) if fails else '-'}")
         elif kind == "power":
             # v6.14: state.power.state (on|turning_off|off|turning_on)
             sts = self.states_in(ex["t"] - win, ex["t"] + win)
             ok = any((s.get("power") or {}).get("state") == ex["value"] for s in sts)
             self.add(f"power={ex['value']}@{ex['t']}", ok,
-                     f"set={[(s.get('power') or {}).get('state') for s in sts][:8]}")
+                     f"seen={[(s.get('power') or {}).get('state') for s in sts][:8]}")
         elif kind == "power_hold":
             sts = self.states_in(ex["t0"], ex["t1"])
             hits = sum(1 for s in sts
@@ -654,7 +655,7 @@ class ScenarioRun:
             self.add(f"power_hold={ex['value']}[{ex['t0']},{ex['t1']}]", ok,
                      f"ratio={ratio:.2f} n={len(sts)}")
         elif kind == "power_counter":
-            # v6.14: state.power-tæller (offs/ons/blocked/fails/ack8/auto_on/…)
+            # v6.14: state.power counter (offs/ons/blocked/fails/ack8/auto_on/…)
             sts = self.states_in(ex.get("t0", 0), ex.get("t1", 1e9))
             vals = [int((s.get("power") or {}).get(ex["field"], 0)) for s in sts]
             ok = bool(vals) and max(vals) >= ex.get("min", 1)
@@ -678,15 +679,15 @@ class ScenarioRun:
             ok = any(s.get("lang") == ex["value"] for s in sts)
             self.add(f"lang={ex['value']}@{ex['t']}", ok)
         elif kind == "config":
-            # sidste sample PÅ ELLER FØR forventningstidspunktet (undgå at
-            # næste saves ACK når at overskrive værdien i en nærmere sample)
+            # last sample AT OR BEFORE the expectation time (avoid the next
+            # save's ACK overwriting the value in a closer sample)
             best = None
             for (t, cfg) in self.cfg_samples:
                 if t <= ex["t"] + 0.05:
                     best = cfg
             ok = best is not None and best.get(ex["field"]) == ex["value"]
             self.add(f"config.{ex['field']}={ex['value']}@{ex['t']}", ok,
-                     f"fundet={best.get(ex['field']) if best else None}")
+                     f"found={best.get(ex['field']) if best else None}")
         elif kind == "flag":
             best = None
             for (t, fl) in self.flag_samples:
@@ -705,19 +706,19 @@ class ScenarioRun:
             sts = self.states_in(ex["t"] - win, ex["t"] + win)
             ok = any(("AFVIST" in (s.get("toast") or {}).get("text", "") or
                       "LÅST" in (s.get("toast") or {}).get("text", "")) for s in sts)
-            self.add(f"save afvist ({ex.get('param', '')})@{ex['t']}", ok)
+            self.add(f"save rejected ({ex.get('param', '')})@{ex['t']}", ok)
         elif kind == "exit_code":
             self.add(f"exit_code={ex['value']}", self.ui_exit == ex["value"],
-                     f"faktisk={self.ui_exit}")
+                     f"actual={self.ui_exit}")
         elif kind == "crc_bad_min":
             last = self.samples[-1][1] if self.samples else {}
             ok = last.get("crc_bad", 0) >= ex["value"]
-            self.add(f"crc_bad≥{ex['value']}", ok, f"faktisk={last.get('crc_bad')}")
+            self.add(f"crc_bad≥{ex['value']}", ok, f"actual={last.get('crc_bad')}")
         elif kind == "offline_seen":
             sts = self.states_in(ex.get("t0", 0), ex.get("t1", 1e9))
             ok = any(s.get("phase") == "OFFLINE" or not s.get("link_up", True)
                      for s in sts)
-            self.add("offline set", ok)
+            self.add("offline seen", ok)
         elif kind == "link_up_at":
             st = self.nearest_state(ex["t"])
             ok = st is not None and st.get("link_up", False)
@@ -732,7 +733,7 @@ class ScenarioRun:
             field, op, val = ex["field"], ex.get("op", ">="), ex["value"]
             have = c6.get(field, 0)
             ok = {">=": have >= val, "==": have == val, "<=": have <= val}[op]
-            self.add(f"cmd6.{field}{op}{val}", ok, f"faktisk={have}")
+            self.add(f"cmd6.{field}{op}{val}", ok, f"actual={have}")
         elif kind == "sim_log":
             self.eval_sim_log(ex)
         elif kind == "circle":
@@ -741,12 +742,12 @@ class ScenarioRun:
                 ok, det = circle_check(sn["raw"])
                 if not ok:
                     bad.append({"label": sn["label"], **det})
-            self.add(f"circle-tjek ({len(self.snapshots)} snapshots)",
+            self.add(f"circle check ({len(self.snapshots)} snapshots)",
                      not bad and bool(self.snapshots), json.dumps(bad[:3]))
         elif kind == "region":
             sn = self.nearest_snapshot(ex["t"])
             if sn is None:
-                self.add(f"region@{ex['t']}", False, "ingen snapshot")
+                self.add(f"region@{ex['t']}", False, "no snapshot")
                 return
             x, y, rw, rh = ex["rect"]
             raw = sn["raw"]
@@ -763,7 +764,7 @@ class ScenarioRun:
         elif kind == "point":
             sn = self.nearest_snapshot(ex["t"])
             if sn is None:
-                self.add(f"point@{ex['t']}", False, "ingen snapshot")
+                self.add(f"point@{ex['t']}", False, "no snapshot")
                 return
             x, y = ex["point"]
             o = (y * W + x) * 4
@@ -773,10 +774,10 @@ class ScenarioRun:
             ok = all(abs(got[i] - ex["color"][i]) <= tol for i in range(3))
             self.add(f"point({x},{y})~{ex['color']}@{ex['t']}", ok, f"got={got}")
         elif kind == "replay_truth":
-            # sandheden i optagelsen (aliasing-sikker ved høj replay-hastighed);
-            # prefetchet i sample_loop mens sim'en stadig kører
+            # the ground truth in the capture (aliasing-safe at high replay speed);
+            # prefetched in sample_loop while the sim is still running
             key = (ex["word"], ex["t0"], ex["t1"], ex.get("signed", False))
-            resp = self.replay_truth_cache.get(key, {"ok": False, "error": "ikke prefetchet"})
+            resp = self.replay_truth_cache.get(key, {"ok": False, "error": "not prefetched"})
             ok = resp.get("ok") and resp.get("n", 0) > 0
             if ok and "peak_min" in ex:
                 ok = resp["max"] is not None and resp["max"] >= ex["peak_min"]
@@ -797,12 +798,12 @@ class ScenarioRun:
             last = self.samples[-1][1] if self.samples else {}
             missing = need - set(last.keys())
             fb_ok = self.fb_path.exists() and self.fb_path.stat().st_size >= FB_BYTES
-            self.add("SIM-kontrakt: state-felter + fb-buffer", not missing and fb_ok,
-                     f"mangler={sorted(missing)} fb_ok={fb_ok}")
+            self.add("SIM contract: state fields + fb buffer", not missing and fb_ok,
+                     f"missing={sorted(missing)} fb_ok={fb_ok}")
         else:
-            self.add(f"ukendt expect-kind: {kind}", False)
+            self.add(f"unknown expect kind: {kind}", False)
         if ex.get("_ui_profile") and self.checks:
-            self.checks[-1]["name"] = "[ui-profil] " + self.checks[-1]["name"]
+            self.checks[-1]["name"] = "[ui-profile] " + self.checks[-1]["name"]
             self.checks[-1]["ui_profile"] = ex["_ui_profile"]
 
     def nearest_snapshot(self, t, max_dist=2.0):
@@ -819,53 +820,53 @@ class ScenarioRun:
         live = [e for e in log if e.get("source", "live") == "live"]
         t0, t1 = ex.get("t0", 0), ex.get("t1", 1e9)
         if a == "boot_push":
-            bt0 = ex.get("t0", 0)     # v6.14: t0 = kun push efter tidspunkt (re-push)
+            bt0 = ex.get("t0", 0)     # v6.14: t0 = only pushes after this time (re-push)
             blocks = {e.get("block") for e in log
                       if e["kind"] == "boot_push" and e["t"] >= bt0}
             ok = {"sub1_len30", "sub112_len3"} <= blocks
             self.add(f"sim: boot-push (sub1 len30 + sub112 len3)"
-                     + (f" efter t={bt0}" if bt0 else ""), ok, str(blocks))
+                     + (f" after t={bt0}" if bt0 else ""), ok, str(blocks))
         elif a == "version":
             ok = any(e["kind"] == "version_handshake" for e in log)
-            self.add("sim: versions-håndtryk (0x89→cmd9)", ok)
+            self.add("sim: version handshake (0x89→cmd9)", ok)
         elif a == "keepalive_ok":
             gaps = [e for e in log if e["kind"] == "keepalive_gap"]
             self.add("sim: keep-awake word1=0 ≤30 s", not gaps, json.dumps(gaps[:3]))
         elif a == "no_reboot":
             bad = [e for e in log if e["kind"] == "reboot_trigger"]
-            self.add("sim: ingen ord30=1 (reboot)", not bad, json.dumps(bad[:3]))
+            self.add("sim: no word30=1 (reboot)", not bad, json.dumps(bad[:3]))
         elif a == "no_calib":
             bad = [e for e in log if e["kind"] == "calib_trigger"]
-            self.add("sim: ingen ord26/27≠0 (kalibrering)", not bad, json.dumps(bad[:3]))
+            self.add("sim: no word26/27≠0 (calibration)", not bad, json.dumps(bad[:3]))
         elif a == "no_band_rejects":
             bad = [e for e in log if e["kind"] == "write_rejected"
                    and e.get("verdict") == "band"]
-            self.add("sim: ingen bånd-overskridelser", not bad, json.dumps(bad[:3]))
+            self.add("sim: no band violations", not bad, json.dumps(bad[:3]))
         elif a == "range_max":
             bad = [e for e in log if e["kind"] == "range_violation"]
             ok = len(bad) <= ex.get("max", 0)
-            self.add(f"sim: range-overtrædelser ≤{ex.get('max', 0)}", ok,
+            self.add(f"sim: range violations ≤{ex.get('max', 0)}", ok,
                      f"n={len(bad)} {[e.get('reason') for e in bad[:5]]}")
         elif a == "range_min":
             bad = [e for e in log if e["kind"] == "range_violation"]
             ok = len(bad) >= ex.get("min", 1)
-            self.add(f"sim: range-overtrædelser ≥{ex.get('min', 1)} (logget)", ok,
+            self.add(f"sim: range violations ≥{ex.get('min', 1)} (logged)", ok,
                      f"n={len(bad)}")
         elif a == "write_words":
             words = ex["words"]
             hits = [e for e in live if e["kind"] == "write"
                     and e.get("sub") == ex["sub"] and e.get("words") == words
                     and t0 <= e["t"] <= t1]
-            self.add(f"sim: write sub{ex['sub']}={words} i [{t0},{t1}]",
+            self.add(f"sim: write sub{ex['sub']}={words} in [{t0},{t1}]",
                      bool(hits), f"n={len(hits)}")
         elif a == "ack_words":
-            # v6.13: ACK-echo (0x86) for en bestemt write — sub+words er
-            # eksakt echo (mcu_sim logger ved planlægning, efter loss-profil).
+            # v6.13: ACK echo (0x86) for a specific write — sub+words are an
+            # exact echo (mcu_sim logs at scheduling time, after the loss profile).
             words = ex["words"]
             hits = [e for e in log if e["kind"] == "ack"
                     and e.get("sub") == ex["sub"] and e.get("words") == words
                     and t0 <= e["t"] <= t1]
-            self.add(f"sim: ACK sub{ex['sub']}={words} i [{t0},{t1}]",
+            self.add(f"sim: ACK sub{ex['sub']}={words} in [{t0},{t1}]",
                      bool(hits), f"n={len(hits)}")
         elif a == "no_write_word":
             w = ex["word"]
@@ -876,13 +877,13 @@ class ScenarioRun:
                 sub, words = e.get("sub", 0), e.get("words", [])
                 if sub <= w < sub + len(words) and words[w - sub] != 0:
                     bad.append(e)
-            self.add(f"sim: ingen writes til ord{w}≠0 i [{t0},{t1}]", not bad,
+            self.add(f"sim: no writes to word{w}≠0 in [{t0},{t1}]", not bad,
                      json.dumps(bad[:2]))
         elif a == "no_writes_between":
             exc = set(ex.get("except_subs", [0, 1, 112]))
             bad = [e for e in live if e["kind"] == "write"
                    and t0 <= e["t"] <= t1 and e.get("sub") not in exc]
-            self.add(f"sim: ingen writes i [{t0},{t1}] (undt. {sorted(exc)})",
+            self.add(f"sim: no writes in [{t0},{t1}] (except {sorted(exc)})",
                      not bad, json.dumps([{k: e.get(k) for k in ('t', 'sub', 'words')}
                                           for e in bad[:3]]))
         elif a == "activity_stop":
@@ -890,65 +891,65 @@ class ScenarioRun:
                     and e.get("activity") == ex["activity"]
                     and t0 <= e["t"] <= t1
                     and ex.get("reason_contains", "") in e.get("reason", "")]
-            self.add(f"sim: {ex['activity']} stoppet ({ex.get('reason_contains', '')})",
+            self.add(f"sim: {ex['activity']} stopped ({ex.get('reason_contains', '')})",
                      bool(hits), json.dumps(hits[:2]))
         elif a == "activity_start":
             hits = [e for e in log if e["kind"] == "activity_start"
                     and e.get("activity") == ex["activity"] and t0 <= e["t"] <= t1]
-            self.add(f"sim: {ex['activity']} startet i [{t0},{t1}]", bool(hits))
+            self.add(f"sim: {ex['activity']} started in [{t0},{t1}]", bool(hits))
         elif a == "sleep_write_seen":
             ok = any(e["kind"] == "sleep_write" for e in log)
-            self.add("sim: sleep-write (ord1=1) set", ok)
+            self.add("sim: sleep write (word1=1) seen", ok)
         elif a == "awake_write_seen":
             ok = any(e["kind"] == "write" and e.get("sub") == 1
                      and e.get("words") == [0] for e in live)
-            self.add("sim: awake-write (ord1=0) set", ok)
+            self.add("sim: awake write (word1=0) seen", ok)
         elif a == "acks_dropped_min":
             n = sum(1 for e in log if e["kind"] == "ack_dropped")
-            self.add(f"sim: ACK-tab ≥{ex['value']}", n >= ex["value"], f"n={n}")
+            self.add(f"sim: ACK loss ≥{ex['value']}", n >= ex["value"], f"n={n}")
         elif a == "writes_min":
             n = sum(1 for e in live if e["kind"] == "write"
                     and e.get("sub") == ex["sub"] and t0 <= e["t"] <= t1)
-            self.add(f"sim: writes sub{ex['sub']} ≥{ex['value']} i [{t0},{t1}]",
+            self.add(f"sim: writes sub{ex['sub']} ≥{ex['value']} in [{t0},{t1}]",
                      n >= ex["value"], f"n={n}")
-        # ---- v6.14: dvale/wake (SIM_HANDOFF, UI_v6 §19) ----
+        # ---- v6.14: deep sleep/wake (SIM_HANDOFF, UI_v6 §19) ----
         elif a == "dvale_seen":
             hits = [e for e in log if e["kind"] == "dvale_enter"
                     and t0 <= e["t"] <= t1]
-            self.add(f"sim: dvale (ord0=0 → tavs) i [{t0},{t1}]", bool(hits),
+            self.add(f"sim: deep sleep (word0=0 → silent) in [{t0},{t1}]", bool(hits),
                      json.dumps(hits[:2]))
         elif a == "no_acks_between":
             bad = [e for e in log if e["kind"] == "ack" and t0 <= e["t"] <= t1]
-            self.add(f"sim: ingen ACK i [{t0},{t1}] (tavs UART)", not bad,
+            self.add(f"sim: no ACK in [{t0},{t1}] (silent UART)", not bad,
                      json.dumps(bad[:3]))
         elif a == "time_sync_seen":
             hits = [e for e in log if e["kind"] == "time_sync"
                     and t0 <= e["t"] <= t1
                     and (not ex.get("alarm0") or e.get("alarm") == [0, 0, 0])]
-            self.add(f"sim: cmd8 tid/alarm" + (" (0/0/0)" if ex.get("alarm0") else "")
-                     + f" i [{t0},{t1}]", bool(hits), f"n={len(hits)}")
+            self.add(f"sim: cmd8 time/alarm" + (" (0/0/0)" if ex.get("alarm0") else "")
+                     + f" in [{t0},{t1}]", bool(hits), f"n={len(hits)}")
         elif a == "power_wake_seen":
             hits = [e for e in log if e["kind"] == "power_wake"
                     and t0 <= e["t"] <= t1
                     and ex.get("cause_contains", "") in e.get("cause", "")]
-            self.add(f"sim: power-wake ({ex.get('cause_contains', '')}) i [{t0},{t1}]",
+            self.add(f"sim: power wake ({ex.get('cause_contains', '')}) in [{t0},{t1}]",
                      bool(hits), json.dumps(hits[:2]))
         elif a == "reboot_seen":
             hits = [e for e in log if e["kind"] == "reboot"
                     and t0 <= e["t"] <= t1
                     and (not ex.get("factory") or e.get("factory"))]
-            self.add("sim: reboot" + (" (fabriks-startværdier)" if ex.get("factory") else "")
-                     + f" i [{t0},{t1}]", bool(hits), json.dumps(hits[:2]))
+            self.add("sim: reboot" + (" (factory start values)" if ex.get("factory") else "")
+                     + f" in [{t0},{t1}]", bool(hits), json.dumps(hits[:2]))
         elif a == "factory_defaults":
             hits = [e for e in log if e["kind"] == "reboot" and e.get("factory")
                     and t0 <= e["t"] <= t1]
             want = {"0": 1, "11": 920, "114": 50}   # REGISTERMAP §2 (init 0x9966)
             ok = any(all((e.get("defaults") or {}).get(k) == v
                          for k, v in want.items()) for e in hits)
-            self.add(f"sim: fabriks-defaults (ord0=1, ord11=920, ord114=50) i [{t0},{t1}]",
+            self.add(f"sim: factory defaults (word0=1, word11=920, word114=50) in [{t0},{t1}]",
                      ok, json.dumps([e.get("defaults") for e in hits][:2]))
         else:
-            self.add(f"ukendt sim_log-assert: {a}", False)
+            self.add(f"unknown sim_log assert: {a}", False)
 
     def eval_universal(self):
         uni = self.scen.get("universal", {})
@@ -974,19 +975,19 @@ class ScenarioRun:
         if uni.get("no_cmd6_fail", True):
             self.eval_expect({"kind": "cmd6", "field": "fail", "op": "==", "value": 0})
 
-    # ------------------------------------------------------------ (g) rapport
+    # ------------------------------------------------------------ (g) report
     def finish(self):
         for ex in self.scen.get("expect", []):
             try:
                 self.eval_expect(ex)
             except Exception as e:
-                self.add(f"expect-fejl {ex.get('kind')}", False, str(e))
+                self.add(f"expect error {ex.get('kind')}", False, str(e))
         self.eval_universal()
         for err in self.profile_errors:
-            self.add(f"ui-profil: {err}", False, "override matcher ikke scenariet")
+            self.add(f"ui profile: {err}", False, "override does not match the scenario")
         passed = all(c["ok"] for c in self.checks)
-        # PNG + contact-sheet (auto-snapshots beholder kun PNG — .bin er 921 KB
-        # og slettes efter konvertering; eksplicitte/final-snapshots beholdes)
+        # PNG + contact sheet (auto snapshots keep only the PNG — .bin is 921 KB
+        # and is deleted after conversion; explicit/final snapshots are kept)
         sheet_items = []
         for sn in self.snapshots:
             pngp = Path(sn["bin"]).with_suffix(".png")
@@ -1006,7 +1007,7 @@ class ScenarioRun:
         if sheet_items:
             png.contact_sheet(sheet_items, sheet,
                               title=f"{self.name} {'PASS' if passed else 'FAIL'}")
-        # final state-opsummering
+        # final state summary
         last = self.samples[-1][1] if self.samples else {}
         report = {
             "name": self.name,
@@ -1047,31 +1048,31 @@ def load_scenarios(scen_dir=None):
             s.setdefault("name", p.stem)
             out[s["name"]] = s
         except json.JSONDecodeError as e:
-            print(f"ADVARSEL: {p} kan ikke parses: {e}", file=sys.stderr)
+            print(f"WARNING: {p} cannot be parsed: {e}", file=sys.stderr)
     return out
 
 
 def write_summary(reports, run_dir):
-    lines = ["# E2E-rapport — ourui SIM-miljø", ""]
-    lines.append(f"**Kørsel:** {run_dir.name} · "
+    lines = ["# E2E report — ourui SIM environment", ""]
+    lines.append(f"**Run:** {run_dir.name} · "
                  f"{time.strftime('%Y-%m-%d %H:%M:%S')} · "
-                 f"klient: {reports[0]['client'] if reports else '-'}"
-                 + (f" · UI-sprog: {reports[0].get('ui_lang')}"
+                 f"client: {reports[0]['client'] if reports else '-'}"
+                 + (f" · UI language: {reports[0].get('ui_lang')}"
                     if reports and reports[0].get("ui_lang") else ""))
     nov = sum(len(r.get("ui_profile") or []) for r in reports)
     if nov:
         lines.append("")
-        lines.append(f"**UI-profil:** {nov} dokumenterede overrides anvendt "
-                     "(reference-layout/-adfærd → rigtigt ourui; se nederst og "
-                     "CONTRACT.md TILLÆG v6.4). Checks mærket `[ui-profil]`.")
+        lines.append(f"**UI profile:** {nov} documented overrides applied "
+                     "(reference layout/behaviour → real ourui; see the bottom and "
+                     "CONTRACT.md ADDENDUM v6.4). Checks marked `[ui-profile]`.")
     lines.append("")
     npass = sum(1 for r in reports if r["pass"])
     ntot = sum(len(r["checks"]) for r in reports)
     nokt = sum(1 for r in reports for c in r["checks"] if c["ok"])
-    lines.append(f"**Resultat: {npass}/{len(reports)} scenarier PASS** · "
+    lines.append(f"**Result: {npass}/{len(reports)} scenarios PASS** · "
                  f"checks: {nokt}/{ntot}")
     lines.append("")
-    lines.append("| Scenarie | Resultat | Checks | Klient | Beskrivelse |")
+    lines.append("| Scenario | Result | Checks | Client | Description |")
     lines.append("|---|---|---|---|---|")
     for r in reports:
         nok = sum(1 for c in r["checks"] if c["ok"])
@@ -1087,20 +1088,20 @@ def write_summary(reports, run_dir):
             lines.append("")
         fails = [c for c in r["checks"] if not c["ok"]]
         if fails:
-            lines.append("**Fejlede checks:**")
+            lines.append("**Failed checks:**")
             for c in fails:
                 lines.append(f"- `{c['name']}`: {c['detail'][:300]}")
             lines.append("")
-        lines.append(f"Slut-tilstand: `{json.dumps(r['final_state'], ensure_ascii=False)}`")
+        lines.append(f"Final state: `{json.dumps(r['final_state'], ensure_ascii=False)}`")
         lines.append("")
-        lines.append(f"Detaljer: [report.json]({r['name']}/report.json) · "
+        lines.append(f"Details: [report.json]({r['name']}/report.json) · "
                      f"[sim-assertions]({r['name']}/sim_assertions.jsonl) · "
                      f"[state]({r['name']}/state.jsonl)")
         lines.append("")
     if nov:
-        lines.append("## UI-profil: anvendte overrides")
+        lines.append("## UI profile: applied overrides")
         lines.append("")
-        lines.append("| Scenarie | Type | Original | Erstattet med | Begrundelse |")
+        lines.append("| Scenario | Type | Original | Replaced with | Reason |")
         lines.append("|---|---|---|---|---|")
         for r in reports:
             for ov in r.get("ui_profile") or []:
@@ -1111,9 +1112,9 @@ def write_summary(reports, run_dir):
         lines.append("")
     fts = [r["frame_ms"] for r in reports if (r.get("frame_ms") or {}).get("frames")]
     if fts:
-        lines.append("## Frame-tid (SIM-build på VÆRTEN — ikke enheden)")
+        lines.append("## Frame time (SIM build on the HOST — not the device)")
         lines.append("")
-        lines.append("| Scenarie | Frames | Snit ms | Max ms |")
+        lines.append("| Scenario | Frames | Avg ms | Max ms |")
         lines.append("|---|---|---|---|")
         for r in reports:
             ft = r.get("frame_ms") or {}
@@ -1128,29 +1129,29 @@ def write_summary(reports, run_dir):
 
 
 def main():
-    ap = argparse.ArgumentParser(description="E2E-runner for ourui SIM-miljø")
-    ap.add_argument("--scenario", help="kør ét scenarie (navn)")
-    ap.add_argument("--all", action="store_true", help="kør alle scenarier")
-    ap.add_argument("--list", action="store_true", help="list scenarier")
-    ap.add_argument("--ui-bin", help="ourui SIM-build (ellers reference-klient)")
+    ap = argparse.ArgumentParser(description="E2E runner for the ourui SIM environment")
+    ap.add_argument("--scenario", help="run one scenario (name)")
+    ap.add_argument("--all", action="store_true", help="run all scenarios")
+    ap.add_argument("--list", action="store_true", help="list scenarios")
+    ap.add_argument("--ui-bin", help="ourui SIM build (otherwise the reference client)")
     ap.add_argument("--ref-client", action="store_true",
-                    help="brug reference-klienten (sim/ref_client.py) selv hvis et SIM-build "
-                         "findes — oracle-kørsel med REF-profilen")
+                    help="use the reference client (sim/ref_client.py) even if a SIM build "
+                         "exists — oracle run with the REF profile")
     ap.add_argument("--reports-dir", default=str(REPORTS))
     ap.add_argument("--keep-sandbox", action="store_true")
     ap.add_argument("--ui-lang", choices=["en", "da"],
-                    help="ourui's UI-sprog (skrives i sandkassens sprog-fil; default: ingen fil = engelsk)")
-    ap.add_argument("--ui-profile", help="profil m. overrides (default: sim/sim_ui_profile-ui.json "
-                                         "[tom] for SIM-build, sim/sim_ui_profile-ref.json for reference-klienten)")
+                    help="ourui's UI language (written to the sandbox's language file; default: no file = English)")
+    ap.add_argument("--ui-profile", help="profile w/ overrides (default: sim/sim_ui_profile-ui.json "
+                                         "[empty] for the SIM build, sim/sim_ui_profile-ref.json for the reference client)")
     ap.add_argument("--no-ui-profile", action="store_true",
-                    help="kør scenarierne RÅ, uden nogen profil-overrides")
-    ap.add_argument("--run-name", help="navn på kørsels-mappen (default: run-<tidsstempel>)")
-    ap.add_argument("--scen-dir", help="alternativ scenarie-mappe (default: sim/scenarios)")
+                    help="run the scenarios RAW, without any profile overrides")
+    ap.add_argument("--run-name", help="name of the run directory (default: run-<timestamp>)")
+    ap.add_argument("--scen-dir", help="alternative scenario directory (default: sim/scenarios)")
     ap.add_argument("--quick", action="store_true",
-                    help="HURTIG dev-iteration: lille kerne-subset, ét sprog (en), ingen REF/steam30/replay. "
-                         "Fuld suite køres kun ved CI/CD eller endeligt milestone.")
+                    help="QUICK dev iteration: small core subset, one language (en), no REF/steam30/replay. "
+                         "The full suite runs only in CI/CD or at a final milestone.")
     ap.add_argument("--parallel", type=int, default=1, metavar="N",
-                    help="kør op til N scenarier samtidigt (uafhængige sandkasser/pty'er)")
+                    help="run up to N scenarios concurrently (independent sandboxes/ptys)")
     args = ap.parse_args()
 
     scens = load_scenarios(args.scen_dir)
@@ -1168,25 +1169,25 @@ def main():
         names = [n for n in quick if n in scens] if args.all or not args.scenario else names
         if not args.ui_lang:
             args.ui_lang = "en"
-        print(f"[e2e] QUICK dev-mode: {len(names)} kerne-scenarier, ét sprog (en). "
-              f"Fuld suite = CI/CD / endeligt milestone.")
+        print(f"[e2e] QUICK dev mode: {len(names)} core scenarios, one language (en). "
+              f"Full suite = CI/CD / final milestone.")
     if args.scenario and args.scenario not in scens:
-        print(f"ukendt scenarie: {args.scenario} (brug --list)", file=sys.stderr)
+        print(f"unknown scenario: {args.scenario} (use --list)", file=sys.stderr)
         return 2
     ui_bin = find_ui_bin(args.ui_bin)
     if ui_bin and ui_bin.resolve() == (HERE / "ref_client.py").resolve():
-        ui_bin = None                     # --ui-bin sim/ref_client.py = reference-klienten
+        ui_bin = None                     # --ui-bin sim/ref_client.py = the reference client
     if args.ref_client:
-        ui_bin = None                     # --ref-client: tving oracle-kørsel
+        ui_bin = None                     # --ref-client: force an oracle run
     if ui_bin:
         print(f"[e2e] ourui SIM-build: {ui_bin}")
     else:
-        print("[e2e] intet ourui SIM-build fundet — kører REFERENCE-klient "
-              "(sim/ref_client.py). Se CONTRACT.md for SIM-build-krav.")
-    # v6.5-scenarios: scenarierne asserter ourui's vogtede adfærd. SIM-build'et
-    # køres med den TOMME UI-profil; reference-klienten med REF-profilen (de
-    # omvendte overrides, så oracle-kørsler stadig er grønne). --no-ui-profile
-    # kører helt råt; --ui-profile <fil> vælger eksplicit (bagudkompatibelt).
+        print("[e2e] no ourui SIM build found — running the REFERENCE client "
+              "(sim/ref_client.py). See CONTRACT.md for SIM build requirements.")
+    # v6.5-scenarios: the scenarios assert ourui's guarded behaviour. The SIM build
+    # runs with the EMPTY UI profile; the reference client with the REF profile (the
+    # inverse overrides, so oracle runs are still green). --no-ui-profile
+    # runs fully raw; --ui-profile <file> selects explicitly (backward compatible).
     profile = None
     if not args.no_ui_profile:
         default_pp = UI_PROFILE_DEFAULT if ui_bin else REF_PROFILE_DEFAULT
@@ -1194,9 +1195,9 @@ def main():
         if pp.exists():
             profile = json.loads(pp.read_text())
             nov = sum(len(v) for v in (profile.get("scenarios") or {}).values())
-            print(f"[e2e] {'UI' if ui_bin else 'REF'}-profil: {pp} ({nov} overrides)")
+            print(f"[e2e] {'UI' if ui_bin else 'REF'} profile: {pp} ({nov} overrides)")
         elif args.ui_profile:
-            print(f"UI-profil findes ikke: {pp}", file=sys.stderr)
+            print(f"UI profile does not exist: {pp}", file=sys.stderr)
             return 2
     run_dir = Path(args.reports_dir) / (args.run_name or
                                         "run-" + time.strftime("%Y%m%d-%H%M%S"))
@@ -1220,7 +1221,7 @@ def main():
             traceback.print_exc()
             rep = {"name": name, "pass": False, "client": sr.client_kind,
                    "description": scen.get("description", ""),
-                   "checks": [{"name": "runner-fejl", "ok": False, "detail": str(e)}],
+                   "checks": [{"name": "runner error", "ok": False, "detail": str(e)}],
                    "final_state": {}, "snapshots": [], "samples": 0,
                    "contact_sheet": None, "sim_stats": None, "gesture_results": {},
                    "duration_s": scen.get("duration_s"), "ui_bin": str(ui_bin) if ui_bin else None,
@@ -1246,7 +1247,7 @@ def main():
         reports = [run_one(n) for n in names]
     write_summary(reports, run_dir)
     npass = sum(1 for r in reports if r["pass"])
-    print(f"\n[e2e] SAMLET: {npass}/{len(reports)} PASS · rapport: {run_dir}/report.md")
+    print(f"\n[e2e] TOTAL: {npass}/{len(reports)} PASS · report: {run_dir}/report.md")
     return 0 if npass == len(reports) else 1
 
 

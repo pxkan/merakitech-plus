@@ -2,47 +2,47 @@
 """boot_install.py — DEVELOPER REFERENCE (the original step-by-step installer used during
 development). End users: use ./install.sh and ./revert.sh instead.
 
-boot-persistens + on-device UI-skift til MerakiTech Gen 1.
+boot persistence + on-device UI switching for MerakiTech Gen 1.
 
-FORBEREDELSESSCRIPT: enheden er offline nu; device-trinene køres KUN senere når
-brugeren er ved maskinen (ét kald pr. trin, klare gates, emergency ved enhver fejl).
-Lokal dry-run køres mod en mock-rod (--mock-root) der efterligner /customer,
-/new_customer, /tmp og /proc — beviser backup/linje-tilføjelse/revert-md5'er uden enhed.
+PREPARATION SCRIPT: the device is offline now; the device steps are run ONLY later when
+the user is at the machine (one call per step, clear gates, emergency on any error).
+A local dry run runs against a mock root (--mock-root) that mimics /customer,
+/new_customer, /tmp and /proc — proves the backup/line-insertion/revert md5s without a device.
 
-TRIN (rækkefølge):
-  mock-setup   byg lokal mock-rod fra artifacts/ (kun med --mock-root)
-  backup       md5+kopi: demo.sh → boot/demo.sh.bak, B's demo_v9 → demo_v9.vendor,
-               flag-tilstand noteres, config-md5 baseline-gate
-  install      upload switcher + ourui (artifacts/ourui/ourui_v6, md5 læses VED
-               KØRSEL så v6.1 altid er fersk) som /new_customer/demo_v9 + helpers;
-               TILFØJ ÉN guard-linje i /customer/demo.sh før slot-branch (atomisk)
-  boot-test    flag+reboot → B verificeres (exe-link+fb); rm flag+reboot → A;
-               gestus via tinj_hold → runtime-skift til B UDEN reboot; skift tilbage
-  revert-test  genskab demo.sh fra .bak (md5-match), kill switcher, rm flag, reboot
-               → stock A urørt; genskab B's vendor-demo_v9 (md5-match); /tmp ren;
-               config-md5 uændret
-  persist      --default-boot A|B: sæt/fjern /customer/new (brugerens valg, gælder
-               næste boot; ingen reboot). Kan også gives som afslutning på ethvert trin.
-  emergency    genskab demo.sh.bak + kill switcher + lad maskinen stå i A (køres
-               automatisk ved enhver fejl i device-trin; kan også kaldes manuelt)
-  status       read-only overblik (flag, PIDs/exe, md5'er, state)
+STEPS (in order):
+  mock-setup   build a local mock root from artifacts/ (only with --mock-root)
+  backup       md5+copy: demo.sh → boot/demo.sh.bak, B's demo_v9 → demo_v9.vendor,
+               flag state recorded, config-md5 baseline gate
+  install      upload switcher + ourui (artifacts/ourui/ourui_v6, md5 read AT
+               RUN TIME so v6.1 is always fresh) as /new_customer/demo_v9 + helpers;
+               ADD ONE guard line in /customer/demo.sh before the slot branch (atomic)
+  boot-test    flag+reboot → B verified (exe link+fb); rm flag+reboot → A;
+               gesture via tinj_hold → runtime switch to B WITHOUT reboot; switch back
+  revert-test  restore demo.sh from .bak (md5 match), kill switcher, rm flag, reboot
+               → stock A untouched; restore B's vendor demo_v9 (md5 match); /tmp clean;
+               config md5 unchanged
+  persist      --default-boot A|B: set/remove /customer/new (the user's choice, applies
+               to the next boot; no reboot). Can also be given as the finish of any step.
+  emergency    restore demo.sh.bak + kill switcher + leave the machine in A (runs
+               automatically on any error in a device step; can also be called manually)
+  status       read-only overview (flag, PIDs/exe, md5s, state)
 
-BRUG:
+USAGE:
   python3 boot_install.py mock-setup --mock-root mock_root
   python3 boot_install.py backup     --mock-root mock_root
   python3 boot_install.py install    --mock-root mock_root
   python3 boot_install.py boot-test  --mock-root mock_root
   python3 boot_install.py revert-test --mock-root mock_root
   python3 boot_install.py persist --mock-root mock_root --default-boot A
-  # senere, ved maskinen (uden --mock-root = rigtig enhed via telnet/push_nc):
+  # later, at the machine (without --mock-root = real device via telnet/push_nc):
   python3 boot_install.py backup
   python3 boot_install.py install
   python3 boot_install.py boot-test
-  python3 boot_install.py persist --default-boot B   # eller A
+  python3 boot_install.py persist --default-boot B   # or A
 
-Politik: ingen kontakt med enheden uden eksplicit device-kald; slot A's binary,
-libs, pinit og test.sh røres ALDRIG; config.json røres ikke; ingen writes til
-UART/fb; reboot kun i boot-test/revert-test (eksplicitte trin). Al dokumentation: BOOT.md.
+Policy: no contact with the device without an explicit device call; slot A's binary,
+libs, pinit and test.sh are NEVER touched; config.json is not touched; no writes to
+UART/fb; reboot only in boot-test/revert-test (explicit steps). All documentation: BOOT.md.
 """
 import argparse
 import base64
@@ -78,11 +78,11 @@ BOOTDIR = "/new_customer/ourui/boot"
 STATE_PATH = BOOTDIR + "/state.json"
 DEMO_SH = "/customer/demo.sh"
 FLAG = "/customer/new"
-# v6.12 (GESTUS-FIX): guard-linjen exporterer LD_PRELOAD=grab_shim.so FØR ./demo_v9
-# (bypass c: stock's EVIOCGRAB no-op'es → read-only switcher ser events). Shim'en
-# scopes selv til /customer/demo_v9 (exe-check) — ourui's grab i B-mode bevares.
-# Stadig PRÆCIS ÉN linje; -f-test gør manglende .so harmløs. LD_PRELOAD arves af
-# test.sh-watchdog'en → også watchdog-genstartet stock får shim'en.
+# v6.12 (GESTUS-FIX): the guard line exports LD_PRELOAD=grab_shim.so BEFORE ./demo_v9
+# (bypass c: stock's EVIOCGRAB is made a no-op → the read-only switcher sees events). The shim
+# scopes itself to /customer/demo_v9 (exe check) — ourui's grab in B mode is preserved.
+# Still EXACTLY ONE line; the -f test makes a missing .so harmless. LD_PRELOAD is inherited by
+# the test.sh watchdog → a watchdog-restarted stock also gets the shim.
 GUARD_LINE = ("[ -x /new_customer/ourui/boot/switcher ] && { [ -f /new_customer/ourui/boot/grab_shim.so ] "
               "&& export LD_PRELOAD=/new_customer/ourui/boot/grab_shim.so${LD_PRELOAD:+:$LD_PRELOAD}; "
               "/new_customer/ourui/boot/switcher & }")
@@ -122,7 +122,7 @@ def gate(cond, msg):
 
 
 def elf_arm_static(path):
-    """Sanity: 32-bit ARM ELF uden PT_INTERP (statisk)."""
+    """Sanity: 32-bit ARM ELF without PT_INTERP (static)."""
     b = path.read_bytes()
     gate(b[:4] == b"\x7fELF" and b[4] == 1, f"{path.name}: 32-bit ELF")
     gate(int.from_bytes(b[18:20], "little") == 40, f"{path.name}: e_machine=ARM(40)")
@@ -131,13 +131,13 @@ def elf_arm_static(path):
     phnum = int.from_bytes(b[44:46], "little")
     for i in range(phnum):
         ptype = int.from_bytes(b[phoff + i * phentsize:phoff + i * phentsize + 4], "little")
-        gate(ptype != 3, f"{path.name}: ingen PT_INTERP (statisk)")
+        gate(ptype != 3, f"{path.name}: no PT_INTERP (static)")
 
 
 # ================================ BACKENDS ================================
 
 class DeviceBackend:
-    """Rigtig enhed via etableret telnet_run.py + push_nc.py (root@$TELNET_HOST)."""
+    """Real device via the established telnet_run.py + push_nc.py (root@$TELNET_HOST)."""
     name = "device"
 
     def __init__(self):
@@ -163,7 +163,7 @@ class DeviceBackend:
                            capture_output=True, text=True, timeout=300)
         sys.stderr.write(r.stderr)
         if r.returncode != 0:
-            raise RuntimeError(f"push fejlede: {local} → {dest}\n{r.stdout}\n{r.stderr}")
+            raise RuntimeError(f"push failed: {local} → {dest}\n{r.stdout}\n{r.stderr}")
         return md5b(local.read_bytes())
 
     def md5(self, path):
@@ -172,9 +172,9 @@ class DeviceBackend:
         return m.group(1) if m else None
 
     def read(self, path):
-        # Byte-eksakt download: `cat` via telnet-pty'en tabs-ekspanderer og
-        # taber trailing newline (målt on-device 2026-11-17: demo.sh 5511 B
-        # blev til 5642 B via cat). gzip+base64 er immun over for pty'en.
+        # Byte-exact download: `cat` via the telnet pty expands tabs and
+        # drops the trailing newline (measured on-device 2026-11-17: demo.sh 5511 B
+        # became 5642 B via cat). gzip+base64 is immune to the pty.
         out = self.telnet(f"gzip -c {path} | base64", timeout=120)
         b64 = "".join(l.strip() for l in out.splitlines()
                       if l.strip() and re.fullmatch(r"[A-Za-z0-9+/=]+", l.strip()))
@@ -185,7 +185,7 @@ class DeviceBackend:
 
     def cp(self, src, dst):
         self.telnet(f"cp -p {src} {dst}")
-        gate(self.md5(src) == self.md5(dst), f"cp md5-match: {src} → {dst}")
+        gate(self.md5(src) == self.md5(dst), f"cp md5 match: {src} → {dst}")
 
     def rm(self, path):
         self.telnet(f"rm -f {path}")
@@ -206,16 +206,16 @@ class DeviceBackend:
         return self.telnet(f"readlink {path}", allow_fail=True).strip()
 
     def install_verified(self, src_on_device, dest, expected_md5, mode=0o755):
-        """Atomisk cross-fs-install: cp→tmp I DEST'S FS, md5-gate, mv (atomisk), chmod."""
+        """Atomic cross-fs install: cp→tmp IN DEST'S FS, md5 gate, mv (atomic), chmod."""
         d = pathlib.PurePosixPath(dest)
         tmp = str(d.parent / ("." + d.name + ".tmp"))
         self.telnet(f"cp {src_on_device} {tmp}")
-        gate(self.md5(tmp) == expected_md5, f"tmp-md5 == forventet ({expected_md5[:8]}…): {tmp}")
+        gate(self.md5(tmp) == expected_md5, f"tmp md5 == expected ({expected_md5[:8]}…): {tmp}")
         self.telnet(f"mv {tmp} {dest} && chmod {mode:o} {dest} && sync && md5sum {dest}")
-        gate(self.md5(dest) == expected_md5, f"installeret md5-match: {dest}")
+        gate(self.md5(dest) == expected_md5, f"installed md5 match: {dest}")
 
     def write_small(self, path, data, mode=0o644):
-        """Lille tekstfil via base64-heredoc → tmp+mv (WRITETEST-mønsteret)."""
+        """Small text file via base64 heredoc → tmp+mv (the WRITETEST pattern)."""
         d = pathlib.PurePosixPath(path)
         tmp = str(d.parent / ("." + d.name + ".tmp"))
         b64 = base64.b64encode(data).decode()
@@ -225,7 +225,7 @@ class DeviceBackend:
         self.telnet(f"mv {tmp} {path} && chmod {mode:o} {path} && sync")
 
     def demo_state(self):
-        """[(pid, exe)] for alle demo_v9-PIDs."""
+        """[(pid, exe)] for all demo_v9 PIDs."""
         out = self.telnet("pidof demo_v9", allow_fail=True)
         res = []
         for pid in out.split():
@@ -242,26 +242,26 @@ class DeviceBackend:
                     allow_fail=True)
 
     def reboot(self):
-        log("[reboot] sync; reboot (forbindelsen forventes afbrudt)")
+        log("[reboot] sync; reboot (connection expected to drop)")
         self.telnet("sync; reboot", timeout=15, allow_fail=True)
 
     def wait_up(self, budget=240):
-        log(f"[reboot] venter på enhed (op til {budget} s) …")
+        log(f"[reboot] waiting for device (up to {budget} s) …")
         time.sleep(20)
         deadline = time.time() + budget
         while time.time() < deadline:
             try:
                 st = self.demo_state()
                 if st and st[0][1]:
-                    log(f"[reboot] enhed oppe: demo_v9 {st}")
+                    log(f"[reboot] device up: demo_v9 {st}")
                     return st
             except Exception as e:
-                log(f"[reboot] endnu ikke klar: {e}")
+                log(f"[reboot] not ready yet: {e}")
             time.sleep(5)
-        raise RuntimeError("enhed kom ikke op efter reboot")
+        raise RuntimeError("device did not come up after reboot")
 
     def launch_a_stopfirst(self):
-        """Runtime-skift B→A uden reboot (SIGSTOP-først, jf. switcher.c/BOOT.md)."""
+        """Runtime switch B→A without reboot (SIGSTOP first, cf. switcher.c/BOOT.md)."""
         cmd = (
             'B=""; for p in $(pidof demo_v9); do '
             '[ "$(readlink /proc/$p/exe)" = /new_customer/demo_v9 ] && B=$p; done; '
@@ -281,7 +281,7 @@ class DeviceBackend:
                     "echo NY=$(pidof demo_v9)", timeout=30)
 
     def capture(self, name):
-        """fb-capture (round_capture-mønsteret) → test-logs/<name>.bin/.png."""
+        """fb capture (the round_capture pattern) → test-logs/<name>.bin/.png."""
         if self.md5("/tmp/fbpage") != md5b((OURUI / "fbpage").read_bytes()):
             self.push(OURUI / "fbpage", "/tmp/fbpage")
         out = self.telnet("dd if=/dev/fb0 of=/tmp/fb_boot.bin bs=1920 count=960 2>/dev/null; "
@@ -295,17 +295,17 @@ class DeviceBackend:
                 continue
             if re.fullmatch(r"[A-Za-z0-9+/=]+", s) and len(s) >= 4:
                 b64.append(s)
-        gate(page is not None and b64, f"fb-capture parsebar: {name}")
+        gate(page is not None and b64, f"fb capture parseable: {name}")
         raw = gzip_decompress(base64.b64decode("".join(b64)))
         W = H = 480
         half = raw[page * W * H * 4:(page + 1) * W * H * 4]
         TESTLOGS.mkdir(exist_ok=True)
         (TESTLOGS / f"{name}.bin").write_bytes(half)
         half2png(half, TESTLOGS / f"{name}.png")
-        log(f"[capture] {name}: aktiv page={page} → {TESTLOGS / (name + '.png')}")
+        log(f"[capture] {name}: active page={page} → {TESTLOGS / (name + '.png')}")
 
     def gesture(self):
-        """Injektér gestus i A-mode via tinj_hold (v6.12: center-hold 5,2 s i (240,240))."""
+        """Inject the gesture in A mode via tinj_hold (v6.12: center hold 5.2 s at (240,240))."""
         self.push(HERE / "tinj_hold", "/tmp/tinj_hold")
         self.telnet("/tmp/tinj_hold gesture", timeout=30)
 
@@ -343,9 +343,9 @@ def half2png(raw, path):
 
 
 class MockBackend:
-    """Lokal mock-rod: /customer,/new_customer,/tmp,/proc,/dev mappes under root.
-    Boot/reboot/gestus SIMULERES (markeret i log) — men al fil-logik (backup,
-    linje-tilføjelse, md5-gates, revert) er ÆGTE kode mod ÆGTE filer."""
+    """Local mock root: /customer,/new_customer,/tmp,/proc,/dev are mapped under root.
+    Boot/reboot/gesture are SIMULATED (marked in the log) — but all file logic (backup,
+    line insertion, md5 gates, revert) is REAL code against REAL files."""
     name = "mock"
 
     def __init__(self, root):
@@ -355,7 +355,7 @@ class MockBackend:
         for pre in ("/customer", "/new_customer", "/tmp", "/proc", "/dev"):
             if path == pre or path.startswith(pre + "/"):
                 return self.root / path.lstrip("/")
-        raise GateError(f"mock: sti uden for mock-rod: {path}")
+        raise GateError(f"mock: path outside mock root: {path}")
 
     def md5(self, path):
         f = self.p(path)
@@ -371,7 +371,7 @@ class MockBackend:
         s, d = self.p(src), self.p(dst)
         d.parent.mkdir(parents=True, exist_ok=True)
         shutil.copy2(s, d)
-        gate(self.md5(src) == self.md5(dst), f"cp md5-match: {src} → {dst}")
+        gate(self.md5(src) == self.md5(dst), f"cp md5 match: {src} → {dst}")
 
     def rm(self, path):
         self.p(path).unlink(missing_ok=True)
@@ -403,7 +403,7 @@ class MockBackend:
         shutil.copy2(local, d)
         d.chmod(0o755)
         gate(self.md5(dest) == md5b(local.read_bytes()),
-             f"push md5-match: {local.name} → {dest}")
+             f"push md5 match: {local.name} → {dest}")
         return md5b(local.read_bytes())
 
     def install_verified(self, src_on_device, dest, expected_md5, mode=0o755):
@@ -411,10 +411,10 @@ class MockBackend:
         tmp = d.parent / ("." + d.name + ".tmp")
         shutil.copy2(self.p(src_on_device), tmp)
         gate(self.md5("/" + str(tmp.relative_to(self.root))) == expected_md5,
-             f"tmp-md5 == forventet ({expected_md5[:8]}…)")
+             f"tmp md5 == expected ({expected_md5[:8]}…)")
         os.replace(tmp, d)
         d.chmod(mode)
-        gate(self.md5(dest) == expected_md5, f"installeret md5-match: {dest}")
+        gate(self.md5(dest) == expected_md5, f"installed md5 match: {dest}")
 
     def write_small(self, path, data, mode=0o644):
         d = self.p(path)
@@ -423,9 +423,9 @@ class MockBackend:
         tmp.write_bytes(data)
         os.replace(tmp, d)
         d.chmod(mode)
-        gate(self.md5(path) == md5b(data), f"write md5-match: {path}")
+        gate(self.md5(path) == md5b(data), f"write md5 match: {path}")
 
-    # --- simuleret proc-tilstand ---
+    # --- simulated proc state ---
     def _procfile(self):
         return self.root / "proc" / "demo_state.json"
 
@@ -455,10 +455,10 @@ class MockBackend:
 
     def kill_switcher(self):
         (self.root / "proc" / "switcher.json").unlink(missing_ok=True)
-        log("[mock] switcher dræbt")
+        log("[mock] switcher killed")
 
     def reboot(self):
-        """SIMULERET boot: vendor demo.sh-logikken (flag → slot) efterprøves."""
+        """SIMULATED boot: the vendor demo.sh logic (flag → slot) is replayed."""
         pr = self.root / "proc"
         pr.mkdir(parents=True, exist_ok=True)
         bc = int((pr / "boot_count").read_text()) if (pr / "boot_count").exists() else 0
@@ -469,7 +469,7 @@ class MockBackend:
         slot = "B" if (flag and b_ok) else "A"
         exe = B_EXE if slot == "B" else A_EXE
         self._set_demo(exe)
-        # guard-linjen starter switcher hvis binary findes (vendor-boot-simulering)
+        # the guard line starts the switcher if the binary exists (vendor boot simulation)
         sh = self.read(DEMO_SH).decode()
         if (GUARD_LINE in sh or LEGACY_GUARD_LINE in sh) and self.exists(BOOTDIR + "/switcher"):
             (pr / "switcher.json").write_text(json.dumps({"pid": 9000 + bc}))
@@ -478,36 +478,36 @@ class MockBackend:
         hist = json.loads((pr / "boot_history.json").read_text()) if (pr / "boot_history.json").exists() else []
         hist.append({"boot": bc, "flag": flag, "slot": slot, "exe": exe})
         (pr / "boot_history.json").write_text(json.dumps(hist, indent=1))
-        log(f"[mock] SIMULERET reboot #{bc}: flag={flag} → boot {slot} ({exe})")
+        log(f"[mock] SIMULATED reboot #{bc}: flag={flag} → boot {slot} ({exe})")
 
     def wait_up(self, budget=240):
         return self.demo_state()
 
     def launch_a_stopfirst(self):
         self._set_demo(A_EXE)
-        log("[mock] SIMULERET runtime-skift B→A (SIGSTOP-først-mønsteret)")
+        log("[mock] SIMULATED runtime switch B→A (the SIGSTOP-first pattern)")
 
     def launch_a_direct(self):
         self._set_demo(A_EXE)
-        log("[mock] SIMULERET manuel A-launch")
+        log("[mock] SIMULATED manual A launch")
 
     def capture(self, name):
         TESTLOGS.mkdir(exist_ok=True)
         st = self.demo_state()
         (TESTLOGS / f"mock_{name}.json").write_text(json.dumps(
             {"simuleret": True, "demo_state": st,
-             "note": "ingen rigtig fb på mock — exe-link er beviset her"}, indent=1))
-        log(f"[mock] SIMULERET fb-capture: {name} (demo_state={st})")
+             "note": "no real fb on mock — the exe link is the proof here"}, indent=1))
+        log(f"[mock] SIMULATED fb capture: {name} (demo_state={st})")
 
     def gesture(self):
-        """ÆGTE gestus-kode køres: switcher_host i fil-mode med syntetisk stream."""
+        """REAL gesture code is run: switcher_host in file mode with a synthetic stream."""
         sys.path.insert(0, str(HERE))
         from test_switcher import make_stream, run_host_daemon
-        log("[mock] gestus: kører switcher_host (ægte C-kode) med syntetisk center-hold 5,2 s-stream")
+        log("[mock] gesture: running switcher_host (real C code) with a synthetic center-hold 5.2 s stream")
         txt = run_host_daemon(make_stream(1), "mock_gestus")
-        gate("GESTUS UDLØST" in txt, "gestus detekteret af switcher-koden (fil-mode)")
+        gate("GESTURE TRIGGERED" in txt, "gesture detected by the switcher code (file mode)")
         self._set_demo(B_EXE)
-        log("[mock] SIMULERET runtime-skift A→B som følge af gestus (exe → B)")
+        log("[mock] SIMULATED runtime switch A→B as a result of the gesture (exe → B)")
 
     def switcher_log(self):
         f = TESTLOGS / "mock_gestus.switcher.log"
@@ -519,7 +519,7 @@ class MockBackend:
             for f in t.iterdir():
                 if f.is_file():
                     f.unlink()
-        log(f"[mock] /tmp ren: {[f.name for f in t.iterdir()] if t.exists() else []}")
+        log(f"[mock] /tmp clean: {[f.name for f in t.iterdir()] if t.exists() else []}")
 
 
 # ================================ STATE ================================
@@ -529,7 +529,7 @@ def load_state(be):
         try:
             return json.loads(be.read(STATE_PATH).decode())
         except Exception as e:
-            log(f"[state] kunne ikke parses ({e}) — tom state")
+            log(f"[state] could not be parsed ({e}) — empty state")
     return {}
 
 
@@ -544,10 +544,10 @@ def now():
     return datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%d %H:%M:%S UTC")
 
 
-# ================================ TRIN ================================
+# ================================ STEPS ================================
 
 def step_mock_setup(be, args):
-    gate(isinstance(be, MockBackend), "mock-setup kræver --mock-root")
+    gate(isinstance(be, MockBackend), "mock-setup requires --mock-root")
     r = be.root
     for d in ("customer/libs", "customer/pinit", "new_customer/libs", "tmp", "proc", "dev/input"):
         (r / d).mkdir(parents=True, exist_ok=True)
@@ -558,17 +558,17 @@ def step_mock_setup(be, args):
     shutil.copy2(ART / "test.sh", r / "customer/test.sh")
     shutil.copy2(ART / "config.json", r / "customer/config.json")
     be._set_demo(A_EXE)
-    log(f"[mock-setup] rod={r} demo.sh md5={be.md5(DEMO_SH)} "
+    log(f"[mock-setup] root={r} demo.sh md5={be.md5(DEMO_SH)} "
         f"vendor demo_v9 md5={be.md5('/customer/demo_v9')} config md5={be.md5('/customer/config.json')}")
 
 
 def step_backup(be, args):
-    gate(be.exists(DEMO_SH), "demo.sh findes på enheden")
-    gate(be.exists("/new_customer/demo_v9"), "/new_customer mountet + B-slot befolket")
+    gate(be.exists(DEMO_SH), "demo.sh exists on the device")
+    gate(be.exists("/new_customer/demo_v9"), "/new_customer mounted + B slot populated")
     cfg = be.md5("/customer/config.json")
     if cfg != BASELINE_CONFIG_MD5:
         gate(args.force, f"config-md5 {cfg} ≠ baseline {BASELINE_CONFIG_MD5} "
-             "(kør REVERT.md's config-restore først, eller --force)")
+             "(run REVERT.md's config restore first, or --force)")
     flag = be.exists(FLAG)
     be.mkdir_p(BOOTDIR)
     sh_md5 = be.md5(DEMO_SH)
@@ -584,34 +584,34 @@ def step_backup(be, args):
     BACKUPS.mkdir(parents=True, exist_ok=True)
     (BACKUPS / "demo.sh.orig").write_bytes(be.read(DEMO_SH))
     (BACKUPS / "md5_history.json").write_text(json.dumps(state["backup"], indent=1))
-    log(f"[backup] FÆRDIG: demo.sh={sh_md5} vendor-B={b_md5} config={cfg} flag={flag}")
+    log(f"[backup] DONE: demo.sh={sh_md5} vendor-B={b_md5} config={cfg} flag={flag}")
 
 
 def step_install(be, args):
     state = load_state(be)
-    gate("backup" in state, "backup-trin kørt først")
+    gate("backup" in state, "backup step run first")
     cur_sh = be.md5(DEMO_SH)
     known = {state["backup"]["demo_sh_md5"]}
     if "install" in state:
         known.add(state["install"]["demo_sh_installed_md5"])
     gate(cur_sh in known,
-         "demo.sh == backup eller == tidligere install (ingen OTA-drift; idempotent)")
+         "demo.sh == backup or == earlier install (no OTA drift; idempotent)")
     cfg = be.md5("/customer/config.json")
     if cfg != BASELINE_CONFIG_MD5:
-        gate(args.force, f"config-md5 {cfg} ≠ baseline (se REVERT.md; eller --force)")
+        gate(args.force, f"config-md5 {cfg} ≠ baseline (see REVERT.md; or --force)")
     st = be.demo_state()
     gate(st and all(e == A_EXE for _, e in st),
-         f"install kræver A-mode (stock kører, B-binary er ikke i brug): {st}")
-    # md5 læses VED KØRSEL — fanger Fables v6.1 hvis filen er ændret undervejs
+         f"install requires A mode (stock running, the B binary is not in use): {st}")
+    # md5 is read AT RUN TIME — catches Fable's v6.1 if the file changed in the meantime
     ourui_src = OURUI / "ourui"
-    gate(ourui_src.is_file(), f"ourui-kilde findes: {ourui_src}")
+    gate(ourui_src.is_file(), f"ourui source exists: {ourui_src}")
     elf_arm_static(ourui_src)
     elf_arm_static(HERE / "switcher")
     elf_arm_static(HERE / "tinj_hold")
     ourui_md5 = md5b(ourui_src.read_bytes())
-    log(f"[install] ourui-kilde: {ourui_src} md5={ourui_md5} "
+    log(f"[install] ourui source: {ourui_src} md5={ourui_md5} "
         f"mtime={datetime.datetime.fromtimestamp(ourui_src.stat().st_mtime).isoformat()} "
-        "(md5 læst ved kørsel → v6.1 fanges automatisk)")
+        "(md5 read at run time → v6.1 is caught automatically)")
     be.mkdir_p(BOOTDIR)
     be.mkdir_p("/new_customer/ourui")
     be.push(HERE / "switcher", BOOTDIR + "/switcher")
@@ -619,41 +619,41 @@ def step_install(be, args):
     be.push(HERE / "grab_shim.so", BOOTDIR + "/grab_shim.so")
     be.push(OURUI / "fbpage", BOOTDIR + "/fbpage")
     be.push(ourui_src, "/new_customer/demo_v9")
-    gate(be.md5("/new_customer/demo_v9") == ourui_md5, "ourui installeret som B's demo_v9 (md5)")
-    # --- demo.sh: TILFØJ ÉN LINJE før slot-branch, efter mounts/insmod ---
+    gate(be.md5("/new_customer/demo_v9") == ourui_md5, "ourui installed as B's demo_v9 (md5)")
+    # --- demo.sh: ADD ONE LINE before the slot branch, after mounts/insmod ---
     content = be.read(DEMO_SH).decode()
     if GUARD_LINE in content:
-        log("[install] guard-linjen findes allerede (idempotent) — verificerer placering")
+        log("[install] guard line already present (idempotent) — verifying placement")
         new_content = content
     elif LEGACY_GUARD_LINE in content:
-        # v6.11-installation → opgradér guard-linjen (shim-export), stadig ÉN linje
-        gate(content.count(LEGACY_GUARD_LINE) == 1, "præcis ÉN legacy guard-linje")
+        # v6.11 installation → upgrade the guard line (shim export), still ONE line
+        gate(content.count(LEGACY_GUARD_LINE) == 1, "exactly ONE legacy guard line")
         new_content = content.replace(LEGACY_GUARD_LINE, GUARD_LINE)
         gate(sum(1 for l in new_content.splitlines() if "/ourui/boot/switcher" in l) == 1,
-             "præcis ÉN guard-linje efter opgradering")
+             "exactly ONE guard line after upgrade")
         gate(new_content.index(GUARD_LINE) < new_content.rindex(ANCHOR),
-             "guard-linjen står før boot-branchen")
+             "guard line is before the boot branch")
         gate(new_content.index(GUARD_LINE) > new_content.rindex(INSMOD_MARKER),
-             "guard-linjen står efter mounts/insmod")
-        log("[install] legacy guard-linje opgraderet til v6.12 (LD_PRELOAD=grab_shim.so)")
+             "guard line is after mounts/insmod")
+        log("[install] legacy guard line upgraded to v6.12 (LD_PRELOAD=grab_shim.so)")
     else:
         lines = content.splitlines(keepends=True)
         anchor_idx = max(i for i, l in enumerate(lines) if ANCHOR in l)
         insmod_idx = max(i for i, l in enumerate(lines) if INSMOD_MARKER in l)
-        gate(anchor_idx > insmod_idx, "slot-branch-anchor ligger efter insmod/mounts")
+        gate(anchor_idx > insmod_idx, "slot-branch anchor is after insmod/mounts")
         gate("starting from B" in "".join(lines[anchor_idx:anchor_idx + 6]),
-             "anchor er BOOT-branchen (ikke insmod-branchen)")
+             "anchor is the BOOT branch (not the insmod branch)")
         lines.insert(anchor_idx, GUARD_LINE + "\n")
         new_content = "".join(lines)
-        log(f"[install] guard-linje indsat før linje {anchor_idx + 1} (slot-branch): {GUARD_LINE}")
+        log(f"[install] guard line inserted before line {anchor_idx + 1} (slot branch): {GUARD_LINE}")
     expected = md5b(new_content.encode())
-    # skriv modificeret demo.sh til boot/demo.sh.new, så atomisk cross-fs-install
+    # write the modified demo.sh to boot/demo.sh.new, then an atomic cross-fs install
     local_new = HERE / "demo.sh.new"
     local_new.write_text(new_content)
     be.push(local_new, BOOTDIR + "/demo.sh.new")
     be.install_verified(BOOTDIR + "/demo.sh.new", DEMO_SH, expected, 0o755)
     readback = be.read(DEMO_SH).decode()
-    gate(GUARD_LINE in readback and readback == new_content, "demo.sh readback == forventet indhold")
+    gate(GUARD_LINE in readback and readback == new_content, "demo.sh readback == expected content")
     log(f"[install] {REVERT_LINE}")
     state["install"] = {"ts": now(), "ourui_md5": ourui_md5, "ourui_src": str(ourui_src),
                         "switcher_md5": md5b((HERE / "switcher").read_bytes()),
@@ -665,117 +665,117 @@ def step_install(be, args):
                         "revert_line": REVERT_LINE}
     save_state(be, state)
     (BACKUPS / "demo.sh.installed").write_text(new_content)
-    log(f"[install] FÆRDIG: demo.sh={expected} ourui(B)={ourui_md5}")
+    log(f"[install] DONE: demo.sh={expected} ourui(B)={ourui_md5}")
 
 
 def step_boot_test(be, args):
     state = load_state(be)
-    gate("install" in state, "install-trin kørt først")
+    gate("install" in state, "install step run first")
     gate(be.md5(DEMO_SH) == state["install"]["demo_sh_installed_md5"],
-         "demo.sh matcher install-state")
-    gate(GUARD_LINE in be.read(DEMO_SH).decode(), "guard-linje til stede")
+         "demo.sh matches install state")
+    gate(GUARD_LINE in be.read(DEMO_SH).decode(), "guard line present")
     results = {}
 
-    # 1. B-boot: flag + reboot → ourui
+    # 1. B boot: flag + reboot → ourui
     be.touch(FLAG)
     be.sync()
     be.reboot()
     st = be.wait_up()
-    gate(st and all(e == B_EXE for _, e in st), f"B booter ourui (exe-link): {st}")
-    gate(be.switcher_pids(), "switcher startet af guard-linjen (pidof switcher)")
+    gate(st and all(e == B_EXE for _, e in st), f"B boots ourui (exe link): {st}")
+    gate(be.switcher_pids(), "switcher started by the guard line (pidof switcher)")
     be.capture("boot_B_ourui")
     results["b_boot"] = "OK"
 
-    # 2. A-boot: rm flag + reboot → stock
+    # 2. A boot: rm flag + reboot → stock
     be.rm(FLAG)
     be.sync()
     be.reboot()
     st = be.wait_up()
-    gate(st and all(e == A_EXE for _, e in st), f"A booter stock (exe-link): {st}")
+    gate(st and all(e == A_EXE for _, e in st), f"A boots stock (exe link): {st}")
     be.capture("boot_A_stock")
     results["a_boot"] = "OK"
 
-    # 3. gestus i A-mode → runtime-skift til B UDEN reboot
+    # 3. gesture in A mode → runtime switch to B WITHOUT reboot
     be.gesture()
     time.sleep(5 if be.name == "device" else 0)
     st = be.demo_state()
     gate(st and all(e == B_EXE for _, e in st),
-         f"runtime-skift A→B uden reboot (exe-link, ingen A-PID): {st}")
+         f"runtime switch A→B without reboot (exe link, no A PID): {st}")
     sl = be.switcher_log()
     if sl:
         TESTLOGS.mkdir(exist_ok=True)
         (TESTLOGS / f"{be.name}_switcher.log").write_text(sl)
-        log("[boot-test] switcher.log gemt i test-logs/")
+        log("[boot-test] switcher.log saved in test-logs/")
     be.capture("runtime_B_ourui")
     results["gesture_runtime_switch"] = "OK"
 
-    # 4. skift tilbage til A (kill+launch A, SIGSTOP-først; ourui's knap kan også bruges)
+    # 4. switch back to A (kill+launch A, SIGSTOP first; ourui's button can also be used)
     be.launch_a_stopfirst()
     st = be.demo_state()
     gate(len(st) >= 1 and all(e == A_EXE for _, e in st),
-         f"tilbage i A uden reboot: {st}")
+         f"back in A without reboot: {st}")
     be.capture("runtime_A_stock")
     results["switch_back"] = "OK"
 
     state["boot_test"] = {"ts": now(), "backend": be.name, "results": results,
-                          "note": "mock = simuleret boot/gestus-switch; device = ægte"}
+                          "note": "mock = simulated boot/gesture switch; device = real"}
     save_state(be, state)
-    log(f"[boot-test] FÆRDIG ({be.name}): {results} — maskinen står i A, flag fjernet")
+    log(f"[boot-test] DONE ({be.name}): {results} — the machine is in A, flag removed")
 
 
 def step_revert_test(be, args):
     state = load_state(be)
-    gate("backup" in state, "backup-trin kørt (findes .bak)")
+    gate("backup" in state, "backup step run (.bak exists)")
     orig = state["backup"]["demo_sh_md5"]
-    gate(be.md5(BOOTDIR + "/demo.sh.bak") == orig, "demo.sh.bak md5 == oprindelig")
-    # 1. genskab demo.sh (atomisk) + md5-match
+    gate(be.md5(BOOTDIR + "/demo.sh.bak") == orig, "demo.sh.bak md5 == original")
+    # 1. restore demo.sh (atomic) + md5 match
     be.install_verified(BOOTDIR + "/demo.sh.bak", DEMO_SH, orig, 0o755)
-    gate(GUARD_LINE not in be.read(DEMO_SH).decode(), "guard-linje væk fra demo.sh")
-    # 2. kill switcher + rm flag + reboot → stock A urørt
+    gate(GUARD_LINE not in be.read(DEMO_SH).decode(), "guard line gone from demo.sh")
+    # 2. kill switcher + rm flag + reboot → stock A untouched
     be.kill_switcher()
     be.rm(FLAG)
     be.sync()
     be.reboot()
     st = be.wait_up()
-    gate(st and all(e == A_EXE for _, e in st), f"stock A booter urørt: {st}")
-    gate(not be.switcher_pids(), "switcher kører ikke (linjen fjernet)")
-    gate(be.md5(DEMO_SH) == orig, "demo.sh md5 == oprindelig efter revert")
-    # 3. genskab B's vendor-demo_v9
+    gate(st and all(e == A_EXE for _, e in st), f"stock A boots untouched: {st}")
+    gate(not be.switcher_pids(), "switcher not running (line removed)")
+    gate(be.md5(DEMO_SH) == orig, "demo.sh md5 == original after revert")
+    # 3. restore B's vendor demo_v9
     vendor = state["backup"]["vendor_b_md5"]
-    gate(be.md5(BOOTDIR + "/demo_v9.vendor") == vendor, "demo_v9.vendor md5 == oprindelig B")
+    gate(be.md5(BOOTDIR + "/demo_v9.vendor") == vendor, "demo_v9.vendor md5 == original B")
     be.install_verified(BOOTDIR + "/demo_v9.vendor", "/new_customer/demo_v9", vendor, 0o755)
-    # 4. /tmp ren + config uændret
+    # 4. /tmp clean + config unchanged
     be.clean_tmp()
     cfg = be.md5("/customer/config.json")
     gate(cfg == state["backup"]["config_md5"],
-         f"config-md5 uændret ({cfg}) — hvis v6 har GEM'et: restore via REVERT.md først")
+         f"config md5 unchanged ({cfg}) — if v6 has SAVEd: restore via REVERT.md first")
     state["revert_test"] = {"ts": now(), "backend": be.name,
                             "demo_sh_md5": orig, "vendor_b_md5": vendor, "config_md5": cfg}
     save_state(be, state)
-    log(f"[revert-test] FÆRDIG: stock A urørt, demo.sh={orig}, vendor-B={vendor}, "
-        f"config={cfg}, /tmp ren. Backups ligger stadig i {BOOTDIR}.")
+    log(f"[revert-test] DONE: stock A untouched, demo.sh={orig}, vendor-B={vendor}, "
+        f"config={cfg}, /tmp clean. Backups are still in {BOOTDIR}.")
 
 
 def step_persist(be, args):
     choice = args.default_boot
-    gate(choice in ("A", "B"), "--default-boot A|B påkrævet")
+    gate(choice in ("A", "B"), "--default-boot A|B required")
     if choice == "B":
         be.touch(FLAG)
     else:
         be.rm(FLAG)
     be.sync()
-    gate(be.exists(FLAG) == (choice == "B"), f"flag-tilstand verificeret: {choice}")
+    gate(be.exists(FLAG) == (choice == "B"), f"flag state verified: {choice}")
     state = load_state(be)
     state["persist"] = {"ts": now(), "default_boot": choice}
     save_state(be, state)
-    log(f"[persist] default-boot = {choice} (gælder NÆSTE boot; ingen reboot nu)")
+    log(f"[persist] default-boot = {choice} (applies to the NEXT boot; no reboot now)")
     if choice == "B" and state.get("revert_test"):
-        log("[persist] ADVARSEL: revert-test er kørt → B's demo_v9 er nu VENDOR-binary, "
-            "ikke ourui. Kør install igen før B vælges som default.")
+        log("[persist] WARNING: revert-test has run → B's demo_v9 is now the VENDOR binary, "
+            "not ourui. Run install again before choosing B as default.")
 
 
 def step_emergency(be, args):
-    log("[EMERGENCY] start — genskaber demo.sh, dræber switcher, efterlader maskinen i A")
+    log("[EMERGENCY] start — restoring demo.sh, killing switcher, leaving the machine in A")
     errs = []
 
     def try_(desc, fn):
@@ -784,19 +784,19 @@ def step_emergency(be, args):
             log(f"[EMERGENCY] {desc}: OK")
         except Exception as e:
             errs.append(f"{desc}: {e}")
-            log(f"[EMERGENCY] {desc}: FEJL {e}")
+            log(f"[EMERGENCY] {desc}: ERROR {e}")
 
     state = load_state(be)
     orig = state.get("backup", {}).get("demo_sh_md5")
     if orig and be.exists(BOOTDIR + "/demo.sh.bak"):
         if be.md5(DEMO_SH) != orig:
-            try_("genskab demo.sh fra .bak",
+            try_("restore demo.sh from .bak",
                  lambda: be.install_verified(BOOTDIR + "/demo.sh.bak", DEMO_SH, orig, 0o755))
         else:
-            log("[EMERGENCY] demo.sh allerede == .bak")
+            log("[EMERGENCY] demo.sh already == .bak")
     else:
-        log("[EMERGENCY] ingen backup-state — demo.sh kan ikke genskabes automatisk; "
-            "brug BOOT.md §5 manuel procedure")
+        log("[EMERGENCY] no backup state — demo.sh cannot be restored automatically; "
+            "use the BOOT.md §5 manual procedure")
     try_("kill switcher", be.kill_switcher)
 
     def ensure_a():
@@ -804,7 +804,7 @@ def step_emergency(be, args):
         has_a = any(e == A_EXE for _, e in st)
         has_b = any(e == B_EXE for _, e in st)
         if has_a and has_b:
-            # blandet tilstand (må ikke ske): dræb B, behold A
+            # mixed state (must not happen): kill B, keep A
             if be.name == "device":
                 for pid, e in st:
                     if e == B_EXE:
@@ -812,26 +812,26 @@ def step_emergency(be, args):
                                   allow_fail=True)
             else:
                 be._set_demo(A_EXE)
-            log("[EMERGENCY] blandet A+B: B dræbt, A beholdt")
+            log("[EMERGENCY] mixed A+B: B killed, A kept")
         elif has_b:
             be.launch_a_stopfirst()
         elif not st:
             be.launch_a_direct()
         else:
-            # A kører evt. SIGSTOP'et (switcher kan være dræbt midt i skift) → SIGCONT
+            # A may be running SIGSTOPped (switcher may have been killed mid-switch) → SIGCONT
             if be.name == "device":
                 for pid, e in st:
                     if e == A_EXE:
                         be.telnet(f"kill -CONT {pid} 2>/dev/null; echo cont_{pid}",
                                   allow_fail=True)
-            log("[EMERGENCY] A kører allerede (SIGCONT sendt for en sikkerheds skyld)")
-    try_("sikr A-mode", ensure_a)
+            log("[EMERGENCY] A already running (SIGCONT sent to be safe)")
+    try_("ensure A mode", ensure_a)
     try_("rm flag", lambda: be.rm(FLAG))
     try_("sync", be.sync)
     if errs:
-        log(f"[EMERGENCY] UAFKLAREDE FEJL: {errs} — KØR MANUELT efter BOOT.md §5")
+        log(f"[EMERGENCY] UNRESOLVED ERRORS: {errs} — RUN MANUALLY per BOOT.md §5")
     else:
-        log("[EMERGENCY] FÆRDIG: maskinen står i A, demo.sh genskabt, switcher dræbt, flag væk")
+        log("[EMERGENCY] DONE: the machine is in A, demo.sh restored, switcher killed, flag gone")
     return errs
 
 
@@ -843,7 +843,7 @@ def step_status(be, args):
               BOOTDIR + "/demo_v9.vendor", BOOTDIR + "/switcher"):
         log(f"[status] md5 {p}: {be.md5(p)}")
     state = load_state(be)
-    log(f"[status] state-trin: {[k for k in state if k != 'ts']}")
+    log(f"[status] state steps: {[k for k in state if k != 'ts']}")
 
 
 STEPS = {"mock-setup": step_mock_setup, "backup": step_backup, "install": step_install,
@@ -852,39 +852,39 @@ STEPS = {"mock-setup": step_mock_setup, "backup": step_backup, "install": step_i
 
 
 def main():
-    ap = argparse.ArgumentParser(description="boot-persistens til MerakiTech Gen 1 (se BOOT.md)")
+    ap = argparse.ArgumentParser(description="boot persistence for MerakiTech Gen 1 (see BOOT.md)")
     ap.add_argument("step", choices=sorted(STEPS))
-    ap.add_argument("--mock-root", help="lokal mock-rod (dry-run uden enhed)")
+    ap.add_argument("--mock-root", help="local mock root (dry run without a device)")
     ap.add_argument("--default-boot", choices=["A", "B"],
-                    help="persistens-valg: sæt/fjern flag til sidst (påkrævet for persist)")
+                    help="persistence choice: set/remove the flag at the end (required for persist)")
     ap.add_argument("--force", action="store_true",
-                    help="overstyr config-md5-baseline-gate (logges!)")
+                    help="override the config-md5 baseline gate (logged!)")
     args = ap.parse_args()
     BACKUPS.mkdir(parents=True, exist_ok=True)
     TESTLOGS.mkdir(exist_ok=True)
-    log(f"===== trin: {args.step} "
+    log(f"===== step: {args.step} "
         f"({'mock: ' + args.mock_root if args.mock_root else 'DEVICE ' + os.environ.get('TELNET_HOST', '<display-ip>')}) =====")
     if args.mock_root:
         be = MockBackend(args.mock_root)
         if args.step != "mock-setup":
-            gate(be.root.is_dir(), f"mock-rod findes: {be.root} (kør mock-setup først)")
+            gate(be.root.is_dir(), f"mock root exists: {be.root} (run mock-setup first)")
     else:
         if args.step == "mock-setup":
-            ap.error("mock-setup kræver --mock-root")
+            ap.error("mock-setup requires --mock-root")
         be = DeviceBackend()
     if args.step == "persist" and not args.default_boot:
-        ap.error("persist kræver --default-boot A|B")
+        ap.error("persist requires --default-boot A|B")
     try:
         STEPS[args.step](be, args)
         if args.default_boot and args.step != "persist":
             step_persist(be, args)
     except Exception as e:
-        log(f"[FEJL] {args.step}: {e}")
+        log(f"[ERROR] {args.step}: {e}")
         if args.step not in ("emergency", "status", "mock-setup"):
-            log("[FEJL] → automatisk emergency (genskab demo.sh + kill switcher + A)")
+            log("[ERROR] → automatic emergency (restore demo.sh + kill switcher + A)")
             step_emergency(be, args)
         sys.exit(1)
-    log(f"===== trin {args.step} FÆRDIG =====")
+    log(f"===== step {args.step} DONE =====")
 
 
 if __name__ == "__main__":

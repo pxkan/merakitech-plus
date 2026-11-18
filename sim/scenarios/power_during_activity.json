@@ -1,6 +1,6 @@
 {
   "name": "power_during_activity",
-  "description": "v6.14: stock-semantik — power-knap HOLD under bryg spærres (toast STOP AKTIVITETEN FØRST, ingen frames, brygen kører uforstyrret til auto-stop); et NYT fuldt hold efter brygen slukker normalt (cmd8 + sub0 len2 [0,0] → dvale)",
+  "description": "v6.14: stock semantics — power-button HOLD during brew is blocked (toast STOP AKTIVITETEN FØRST, no frames, the brew runs undisturbed to auto-stop); a NEW full hold after the brew powers off normally (cmd8 + sub0 len2 [0,0] → deep sleep)",
   "duration_s": 42,
   "events": [
     {
@@ -102,7 +102,7 @@
       "kind": "sim_log",
       "assert": "activity_stop",
       "activity": "brew",
-      "reason_contains": "vægt",
+      "reason_contains": "weight",
       "t0": 29,
       "t1": 34
     },

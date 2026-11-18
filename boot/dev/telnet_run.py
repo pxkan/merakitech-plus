@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
-"""Kør ÉN kommando på kaffemaskinens root-telnet (<display-ip>:23, from $TELNET_HOST).
-Logger kommando + råt svar til telnet_session.log. Ingen writes uden eksplicit kommando.
-Brug: python3 telnet_run.py "<shell-kommando>" [timeout_sek]
+"""Run ONE command on the coffee machine's root telnet (<display-ip>:23, from $TELNET_HOST).
+Logs the command + raw reply to telnet_session.log. No writes without an explicit command.
+Usage: python3 telnet_run.py "<shell-command>" [timeout_sec]
 """
 import socket, sys, time, pathlib, datetime, re, os
 
@@ -11,7 +11,7 @@ LOG = HERE / "telnet_session.log"
 IAC, DONT, DO, WONT, WILL, SB, SE = 255, 254, 253, 252, 251, 250, 240
 
 def strip_iac(sock, chunk):
-    """Fjern telnet-IAC-sekvenser; svar WONT/DONT på forhandlinger."""
+    """Strip telnet IAC sequences; answer negotiations with WONT/DONT."""
     clean = bytearray()
     i = 0
     while i < len(chunk):
@@ -51,7 +51,7 @@ def main():
 
     sock = socket.create_connection((HOST, PORT), timeout=10)
     sock.settimeout(0.5)
-    # dræn indledende forhandling + prompt
+    # drain the initial negotiation + prompt
     t0 = time.time()
     while time.time() - t0 < 1.0:
         try:
@@ -61,8 +61,8 @@ def main():
     sock.sendall(wire)
     data = b""
     deadline = time.time() + timeout
-    # Slut-markøren skal stå ALENE på en linje med numerisk exit-kode.
-    # (Input-ekkoet indeholder markøren som del af en længere linje med '$rc' — må ikke matche.)
+    # The end marker must stand ALONE on a line with a numeric exit code.
+    # (The input echo contains the marker as part of a longer line with '$rc' — must not match.)
     end_re = re.compile(rb"(?:^|\n)" + endm.encode() + rb":[0-9]+\r?\n")
     while time.time() < deadline:
         try:
@@ -97,7 +97,7 @@ def main():
     print(body)
     print(f"[exit={exitcode}]", file=sys.stderr)
     if exitcode is None:
-        print("[ADVARSEL: slut-markør ikke set — svar kan være ufuldstændigt]", file=sys.stderr)
+        print("[WARNING: end marker not seen — reply may be incomplete]", file=sys.stderr)
         sys.exit(2)
 
 if __name__ == "__main__":

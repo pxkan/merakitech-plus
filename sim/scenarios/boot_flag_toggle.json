@@ -1,6 +1,6 @@
 {
   "name": "boot_flag_toggle",
-  "description": "BOOT-UI toggle: /customer/new touch/rm i sandbox (kun flag, ingen MCU-writes, ingen reboot)",
+  "description": "BOOT-UI toggle: /customer/new touch/rm in sandbox (flag only, no MCU writes, no reboot)",
   "duration_s": 10,
   "events": [
     {

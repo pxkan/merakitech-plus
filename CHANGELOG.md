@@ -3,6 +3,17 @@
 All notable changes to Meraki+. Details (with evidence, frames and test figures) are in
 [docs/dev/UI_v6.md](docs/dev/UI_v6.md) under *CHANGES-v6.x*. All dates are 2026.
 
+## Unreleased — 2026-11-19
+### Changed
+- Source comments, developer console/log output, simulator tooling and scenario descriptions are now
+  English (the bilingual EN/DA UI string table is unchanged). Switcher log lines are English
+  (`GESTURE TRIGGERED`, `switch A→B DONE`); ourui's DIAGNOSTICS still recognises the old Danish lines.
+- `bin/`: `ourui`, `ourui_sim_arm`, `switcher`, `tinj_hold`, `keyinj` and the host SIM builds rebuilt
+  from the translated sources (new md5s in `bin/MD5SUMS`, see `bin/README.md`); `grab_shim.so` unchanged.
+### Fixed
+- Full E2E gate: the replay scenarios now start the recording relative to the UI's clock instead of
+  the simulator's process start, so they no longer drift on a busy CI runner.
+
 ## [6.14] — 2026-11-18 — first public release
 ### Added
 - **The physical power button**: the button node (k62091, `event1`) is read read-only; hold 1.5 s →

@@ -47,8 +47,8 @@ RAW_BASE = "https://raw.githubusercontent.com/" + REPO + "/{ref}/bin/{name}"
 
 # md5 of the shipped device binaries in bin/ (kept in sync with bin/MD5SUMS by CI).
 BIN_MD5 = {
-    "ourui": "8d084f10094305e4be3701bc10fce5de",
-    "switcher": "1337ae883cf5a6aaa803505eb54e4855",
+    "ourui": "eb4d9360756e391df4cc95f92b875c90",
+    "switcher": "de0d4920e4e80be32e3a70798886a3c0",
     "grab_shim.so": "c42076c807c54d477a5868977404186d",
 }
 OURUI_MARK = "@(#)ourui "                 # embedded in every Meraki+ binary (src/ourui_v6.c OURUI_MARK)

@@ -1,13 +1,13 @@
-/* tinj.c — touch-injektor til TEST af ourui's touch-zoner (evdev write-injection).
+/* tinj.c — touch injector for TESTING ourui's touch zones (evdev write injection).
  *
- * Linux evdev understøtter write() af struct input_event → input_inject_event,
- * så events leveres til alle læsere af /dev/input/event0 (herunder ourui).
- * Bruges KUN til sideskift-tap/swipe + REVERT-tap under verifikations-runden.
- * Koordinater er valgt så de også er baggrund på original-UI'et (mellem de fire
- * runde knapper / under dem) → ingen aktuator-tryk hvis demo_v9 læser rest-events
- * efter SIGCONT. GRIND/BREW-koordinater injiceres ALDRIG.
+ * Linux evdev supports write() of struct input_event → input_inject_event,
+ * so events are delivered to all readers of /dev/input/event0 (including ourui).
+ * Used ONLY for page-switch tap/swipe + REVERT tap during the verification round.
+ * Coordinates are chosen so they are also background on the original UI (between the four
+ * round buttons / below them) → no actuator press if demo_v9 reads leftover events
+ * after SIGCONT. GRIND/BREW coordinates are NEVER injected.
  *
- * Brug: tinj tap <x> <y>
+ * Usage: tinj tap <x> <y>
  *       tinj swipe <x1> <y1> <x2> <y2>
  * Build: zig cc -target arm-linux-musleabihf -mcpu=cortex_a7 -static -O2 -o tinj tinj.c
  */
@@ -21,8 +21,8 @@
 #include <linux/input.h>
 
 static int fd=-1;
-/* raw-range auto via EVIOCGABS; fallback = enhedens konstant 0..480 (FINDINGS
- * 'Gestus-debug' — ikke 4095). Samme formel som switcher/ourui/tinj_hold. */
+/* raw range auto via EVIOCGABS; fallback = the device's constant 0..480 (FINDINGS
+ * 'Gestus-debug' — not 4095). Same formula as switcher/ourui/tinj_hold. */
 static int xmin=0,xmax=480,ymin=0,ymax=480;
 static void send(__u16 type,__u16 code,__s32 val){
     struct input_event ev; memset(&ev,0,sizeof ev);
@@ -54,7 +54,7 @@ static void up(void){
     syn();
 }
 int main(int argc,char**argv){
-    if(argc<4){ fprintf(stderr,"brug: tinj tap x y | tinj swipe x1 y1 x2 y2\n"); return 2; }
+    if(argc<4){ fprintf(stderr,"usage: tinj tap x y | tinj swipe x1 y1 x2 y2\n"); return 2; }
     fd=open("/dev/input/event0",O_WRONLY);
     if(fd<0){ perror("open event0"); return 1; }
     struct input_absinfo ai;
@@ -75,7 +75,7 @@ int main(int argc,char**argv){
         }
         usleep(50000); up();
         printf("swipe %d %d -> %d %d\n",x1,y1,x2,y2);
-    } else { fprintf(stderr,"ukendt mode\n"); return 2; }
+    } else { fprintf(stderr,"unknown mode\n"); return 2; }
     close(fd);
     return 0;
 }

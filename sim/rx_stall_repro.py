@@ -1,39 +1,39 @@
 #!/usr/bin/env python3
-"""rx_stall_repro.py — reproducerer rx_feed-stallet ved bit-fejl i længde-byten.
+"""rx_stall_repro.py — reproduces the rx_feed stall on a bit error in the length byte.
 
-Fund (UI_v6.md v6.4, kode-læsning): ourui's rx_feed ser `AA 55` + et længde-felt
-L > REGN (129) i en ikke-special-frame og bryder ud UDEN at rykke frem
-(`if(L>REGN||i+tot>rxlen) break;`). Parseren står stille, til 8 kB-bufferen
-løber over (~3,5 s ved normal poll-trafik) — UI'et viser OFFLINE undervejs og
-kommer sig selv bagefter. Kræver en bit-fejl i netop længde-byten; crc_garbage-
-scenariet rammer det ikke.
+Finding (UI_v6.md v6.4, code reading): ourui's rx_feed sees `AA 55` + a length field
+L > REGN (129) in a non-special frame and breaks out WITHOUT advancing
+(`if(L>REGN||i+tot>rxlen) break;`). The parser stalls until the 8 kB buffer
+overflows (~3.5 s at normal poll traffic) — the UI shows OFFLINE meanwhile and
+recovers on its own afterwards. Requires a bit error in exactly the length byte;
+the crc_garbage scenario does not hit it.
 
-Repro: mcu_sim injicerer én 0x83-frame med længde-byten korrumperet (bit7 sat,
-L: 7 → 135 > 129; CRC'en er stadig gyldig for den oprindelige længde).
-Injektionen er en ny sim-side inject-type: {"type": "bad_len", "sub": 33, "len": 7}.
+Repro: mcu_sim injects one 0x83 frame with the length byte corrupted (bit7 set,
+L: 7 → 135 > 129; the CRC is still valid for the original length).
+The injection is a new sim-side inject type: {"type": "bad_len", "sub": 33, "len": 7}.
 
-Måling (pr. klient):
-  * t_inj      : injektionstidspunktet (sim_assertions.jsonl)
-  * t_offline  : første state-linje med link_up=false / phase=OFFLINE efter t_inj
-  * t_recover  : første state-linje hvor crc_ok igen stiger (første parsede frame)
+Measurement (per client):
+  * t_inj      : injection time (sim_assertions.jsonl)
+  * t_offline  : first state line with link_up=false / phase=OFFLINE after t_inj
+  * t_recover  : first state line where crc_ok rises again (first parsed frame)
   * stall      : t_recover - t_inj
 
 Status:
-  * V6.4-binær (watchdog ikke landet): stallet forventes reproduceret (~3,5 s,
-    dokumenteret bound = 8 kB-buffer-overflow) → checket markeres PENDING-V6.5.
-  * V6.5+ med resync-watchdog: recovery inden for den dokumenterede bound
-    (ourui_v6.c: umulig længde forkastes STRAKS; ufuldstændige kandidater
-    efter RX_RESYNC_MS = 400 ms < ACK-budget 450 ms < OFFLINE 1500 ms)
-    → VERIFIED. Checket bruger 1,0 s som konservativ øvre grænse (400 ms
-    watchdog + poll-kadence ~100 ms + måle-usikkerhed).
+  * V6.4 binary (watchdog not landed): the stall is expected to reproduce (~3.5 s,
+    documented bound = 8 kB buffer overflow) → the check is marked PENDING-V6.5.
+  * V6.5+ with resync watchdog: recovery within the documented bound
+    (ourui_v6.c: an impossible length is discarded IMMEDIATELY; incomplete candidates
+    after RX_RESYNC_MS = 400 ms < ACK budget 450 ms < OFFLINE 1500 ms)
+    → VERIFIED. The check uses 1.0 s as a conservative upper limit (400 ms
+    watchdog + poll cadence ~100 ms + measurement uncertainty).
 
-Bemærk: stall_s er en ØVRE grænse for recovery-tiden: målingen venter på
-crc_ok-stigning efter et 0,6 s plateau-vindue (in-flight frames kan fuldendes
-lige efter injektionen). Hurtig recovery (<0,6 s) rapporteres derfor som ~0,6-0,7 s.
+Note: stall_s is an UPPER bound on the recovery time: the measurement waits for
+a crc_ok rise after a 0.6 s plateau window (in-flight frames may complete
+right after the injection). Fast recovery (<0.6 s) is therefore reported as ~0.6-0.7 s.
 
-Kun lokal kørsel (ingen enhedskontakt). Brug:
-  python3 sim/rx_stall_repro.py                     # ourui SIM-build + reference
-  python3 sim/rx_stall_repro.py --only ui           # kun ourui
+Local run only (no device contact). Usage:
+  python3 sim/rx_stall_repro.py                     # ourui SIM build + reference
+  python3 sim/rx_stall_repro.py --only ui           # ourui only
   python3 sim/rx_stall_repro.py --run-name rx_stall_final
 """
 import argparse
@@ -48,14 +48,14 @@ from run_e2e import ScenarioRun, find_ui_bin
 
 HERE = Path(__file__).resolve().parent
 ROOT = HERE.parent
-V64_BOUND_S = 6.0        # øvre tolerance for 8 kB-overflow-stallet (~3,5 s målt i v6.4)
-V65_WATCHDOG_BOUND_S = 1.0   # konservativ check-grænse; dokumenteret bound i kilden:
-                             # umulig længde forkastes straks, RX_RESYNC_MS = 400 ms
+V64_BOUND_S = 6.0        # upper tolerance for the 8 kB overflow stall (~3.5 s measured in v6.4)
+V65_WATCHDOG_BOUND_S = 1.0   # conservative check limit; documented bound in the source:
+                             # impossible length discarded immediately, RX_RESYNC_MS = 400 ms
 LINK_TIMEOUT_S = 1.5
 
 SCEN = {
     "name": "rx_stall",
-    "description": "Bit-fejl i længde-byte (L>REGN): rx_feed-stall → OFFLINE → recovery",
+    "description": "Bit error in length byte (L>REGN): rx_feed stall → OFFLINE → recovery",
     "duration_s": 16,
     "events": [
         {"t": 4, "target": "sim", "event": {"type": "bad_len", "sub": 33, "len": 7}},
@@ -71,15 +71,15 @@ SCEN = {
 
 
 def analyze(sr):
-    """Find injektion, OFFLINE og recovery i state-strømmen.
+    """Find injection, OFFLINE and recovery in the state stream.
 
-    NB: crc_ok kan stige én gang lige efter injektionen (en frame der allerede
-    var delvist modtaget, fuldendes før parseren når den korrupte header).
-    Recovery måles derfor som første crc_ok-stigning EFTER plateau-vinduet
-    (0,6 s) — ikke den første stigning overhovedet."""
+    NB: crc_ok may rise once right after the injection (a frame that was already
+    partially received completes before the parser reaches the corrupt header).
+    Recovery is therefore measured as the first crc_ok rise AFTER the plateau window
+    (0.6 s) — not the first rise at all."""
     inj = next((e for e in sr.sim_log if e["kind"] == "bad_len_inject"), None)
     if inj is None:
-        return {"error": "ingen bad_len_inject i sim-loggen"}
+        return {"error": "no bad_len_inject in the sim log"}
     t_inj = inj["t"]
     c0 = None
     t_offline = t_recover = t_link_back = None
@@ -94,7 +94,7 @@ def analyze(sr):
             t_offline = t
         if t_offline is not None and t_link_back is None and st.get("link_up", False):
             t_link_back = t
-    # plateau = højeste crc_ok i [t_inj, t_inj+0,6] (in-flight frames fuldendes)
+    # plateau = highest crc_ok in [t_inj, t_inj+0.6] (in-flight frames complete)
     plateau = max((st.get("crc_ok", 0) for (t, st) in sr.samples
                    if t_inj <= t <= t_inj + 0.6), default=c0 or 0)
     for (t, st) in sr.samples:
@@ -126,7 +126,7 @@ def analyze(sr):
 
 
 def verdict(a, client_kind):
-    """(status, checks[]) — pending-v6.5 indtil resync-watchdog'en er landet."""
+    """(status, checks[]) — pending-v6.5 until the resync watchdog has landed."""
     checks = []
 
     def chk(name, ok, detail=""):
@@ -137,42 +137,42 @@ def verdict(a, client_kind):
         return "error", checks
     ver = a.get("version") or ("V6.4" if client_kind == "sim-build" else "reference")
     is_v65 = ver not in ("V6.4", "reference", None) and ver >= "V6.5"
-    chk("bad_len injiceret (L>REGN)", a.get("len_byte", 0) > 129,
+    chk("bad_len injected (L>REGN)", a.get("len_byte", 0) > 129,
         f"len_byte={a.get('len_byte')}")
-    chk("link recoverer før kørselens slutning",
+    chk("link recovers before end of run",
         a.get("t_recover") is not None and a.get("link_up_final") is True,
         f"t_recover={a.get('t_recover')} link_up_final={a.get('link_up_final')}")
     if client_kind == "reference":
-        # Python-parseren (proto.FrameParser) venter på 2*L+7 bytes og CRC-fejler
-        # derefter → kort stall (~0,2 s), ikke 8 kB-overflow. Kun til sammenligning.
-        chk("reference-parser: kort stall (<1 s)",
+        # The Python parser (proto.FrameParser) waits for 2*L+7 bytes and then fails
+        # CRC → short stall (~0.2 s), not 8 kB overflow. For comparison only.
+        chk("reference parser: short stall (<1 s)",
             a.get("stall_s") is not None and a["stall_s"] < 1.0,
             f"stall={a.get('stall_s')} s")
         return "reference", checks
     if not is_v65:
-        chk("v6.4: stall reproduceret (>1,5 s = OFFLINE nået)",
+        chk("v6.4: stall reproduced (>1.5 s = OFFLINE reached)",
             a.get("stall_s") is not None and a["stall_s"] > LINK_TIMEOUT_S,
             f"stall={a.get('stall_s')} s")
-        chk("v6.4: OFFLINE vist under stallet",
+        chk("v6.4: OFFLINE shown during the stall",
             a.get("t_offline") is not None,
-            f"offline efter {a.get('offline_after_inject_s')} s (link-timeout 1,5 s)")
-        chk("v6.4: recovery inden for dokumenteret bound (8 kB-overflow, ~3,5 s)",
+            f"offline after {a.get('offline_after_inject_s')} s (link timeout 1.5 s)")
+        chk("v6.4: recovery within documented bound (8 kB overflow, ~3.5 s)",
             a.get("stall_s") is not None and a["stall_s"] <= V64_BOUND_S,
             f"stall={a.get('stall_s')} s ≤ {V64_BOUND_S} s")
-        chk("v6.5 resync-watchdog: recovery < 1,0 s (dokumenteret bound: "
-            "straks-forkast + RX_RESYNC_MS 400 ms)",
-            False, "PENDING-V6.5: watchdog ikke landet i binæren "
-                   f"(version={ver}); kør igen når Fable's v6.5 er bygget")
+        chk("v6.5 resync watchdog: recovery < 1.0 s (documented bound: "
+            "immediate discard + RX_RESYNC_MS 400 ms)",
+            False, "PENDING-V6.5: watchdog not landed in the binary "
+                   f"(version={ver}); rerun once Fable's v6.5 is built")
         return "pending-v6.5", checks
-    chk("v6.5: recovery inden for dokumenteret bound (straks-forkast af L>REGN; "
-        "watchdog 400 ms; check-grænse 1,0 s)",
+    chk("v6.5: recovery within documented bound (immediate discard of L>REGN; "
+        "watchdog 400 ms; check limit 1.0 s)",
         a.get("stall_s") is not None and a["stall_s"] <= V65_WATCHDOG_BOUND_S,
-        f"stall≤{a.get('stall_s')} s (øvre grænse; plateau-vindue 0,6 s)")
-    chk("v6.5: OFFLINE aldrig vist (recovery < link-timeout 1,5 s)",
+        f"stall≤{a.get('stall_s')} s (upper bound; plateau window 0.6 s)")
+    chk("v6.5: OFFLINE never shown (recovery < link timeout 1.5 s)",
         a.get("t_offline") is None,
         f"t_offline={a.get('t_offline')}")
     if a.get("rx_resync_final") is not None:
-        chk("v6.5: rx_resync tæller forkastet kandidat (≥1 efter injektion)",
+        chk("v6.5: rx_resync counts discarded candidate (≥1 after injection)",
             a["rx_resync_final"] >= a.get("rx_resync_at_inject", 0) + 1,
             f"rx_resync {a.get('rx_resync_at_inject')} → {a['rx_resync_final']}")
     ok = all(c["ok"] for c in checks)
@@ -201,9 +201,9 @@ def run_one(ui_bin, run_dir, label):
 
 
 def main():
-    ap = argparse.ArgumentParser(description="rx_feed-stall repro (bit-fejl i længde-byte)")
-    ap.add_argument("--only", choices=["ui", "ref"], help="kun én klient")
-    ap.add_argument("--ui-bin", help="ourui SIM-build (default: auto-detekt)")
+    ap = argparse.ArgumentParser(description="rx_feed stall repro (bit error in length byte)")
+    ap.add_argument("--only", choices=["ui", "ref"], help="only one client")
+    ap.add_argument("--ui-bin", help="ourui SIM build (default: auto-detect)")
     ap.add_argument("--reports-dir", default=str(HERE / "reports" / "v6.5-scenarios"))
     ap.add_argument("--run-name", default="rx_stall-" + time.strftime("%Y%m%d-%H%M%S"))
     args = ap.parse_args()
@@ -213,56 +213,56 @@ def main():
     if args.only != "ref":
         ui_bin = find_ui_bin(args.ui_bin)
         if ui_bin is None:
-            print("intet ourui SIM-build fundet — springer ui-delen over", file=sys.stderr)
+            print("no ourui SIM build found — skipping the ui part", file=sys.stderr)
         else:
             print(f"[rx_stall] ourui: {ui_bin}", flush=True)
             results.append(run_one(ui_bin, run_dir / "ui", "ourui"))
     if args.only != "ui":
         print("[rx_stall] reference: sim/ref_client.py", flush=True)
         results.append(run_one(None, run_dir / "ref", "reference"))
-    lines = ["# rx_feed-stall — bit-fejl i længde-byten (repro)", "",
-             f"Genereret {time.strftime('%Y-%m-%d %H:%M:%S')} af sim/rx_stall_repro.py. "
-             "Kun lokal kørsel; ingen enhedskontakt.", "",
-             "Fund: UI_v6.md v6.4 (kode-læsning) — `rx_feed` står stille ved L>REGN "
-             "til 8 kB-bufferen løber over (~3,5 s). Repro: mcu_sim inject "
-             "`{\"type\":\"bad_len\",\"sub\":33,\"len\":7}` (LEN-bit 7 sat: 7→135).", ""]
+    lines = ["# rx_feed stall — bit error in the length byte (repro)", "",
+             f"Generated {time.strftime('%Y-%m-%d %H:%M:%S')} by sim/rx_stall_repro.py. "
+             "Local run only; no device contact.", "",
+             "Finding: UI_v6.md v6.4 (code reading) — `rx_feed` stalls on L>REGN "
+             "until the 8 kB buffer overflows (~3.5 s). Repro: mcu_sim inject "
+             "`{\"type\":\"bad_len\",\"sub\":33,\"len\":7}` (LEN bit 7 set: 7→135).", ""]
     overall_ok = True
     for r in results:
         a = r["analysis"]
         lines += [f"## {r['label']} ({r['client']}) — status: **{r['status']}**", "",
-                  f"- version: {a.get('version')} · injektion t={a.get('t_inject')} s "
+                  f"- version: {a.get('version')} · injection t={a.get('t_inject')} s "
                   f"(len_byte={a.get('len_byte')})",
-                  f"- stall: **{a.get('stall_s')} s** · OFFLINE efter "
-                  f"{a.get('offline_after_inject_s')} s · link tilbage t={a.get('t_link_back')}",
-                  f"- crc_ok ved injektion: {a.get('crc_ok_at_inject')} → "
+                  f"- stall: **{a.get('stall_s')} s** · OFFLINE after "
+                  f"{a.get('offline_after_inject_s')} s · link back t={a.get('t_link_back')}",
+                  f"- crc_ok at injection: {a.get('crc_ok_at_inject')} → "
                   f"{a.get('crc_ok_final')} · crc_bad: {a.get('crc_bad_final')} · "
                   f"rx_resync: {a.get('rx_resync_at_inject')} → {a.get('rx_resync_final')} · "
-                  f"slut-fase: {a.get('phase_final')}", "",
-                  "| Check | Resultat | Detalje |", "|---|---|---|"]
+                  f"final phase: {a.get('phase_final')}", "",
+                  "| Check | Result | Detail |", "|---|---|---|"]
         for c in r["checks"]:
             lines.append(f"| {c['name']} | {'✅' if c['ok'] else '❌'} | {c['detail']} |")
             if not c["ok"] and "PENDING" not in c["detail"]:
                 overall_ok = False
-        lines += ["", f"Detaljer: [{r['label']}/report.json]({r['label']}/report.json) · "
+        lines += ["", f"Details: [{r['label']}/report.json]({r['label']}/report.json) · "
                   f"[state]({r['label']}/rx_stall/state.jsonl)", ""]
-    lines += ["## Dokumenteret bound (UI_v6.md CHANGES-v6.5 pkt. 3)", "",
-              f"- **v6.4 (baseline):** stall til 8 kB-overflow, dokumenteret ~3,5 s "
-              f"(tolerance ≤{V64_BOUND_S} s på vært). OFFLINE vises efter 1,5 s. "
-              "Målt baseline i denne repro: se rx_stall_v64_baseline.md "
-              "(Fable's uafhængige baseline mod v6.4-binæren: 3,98 s).",
-              f"- **v6.5 (landet):** resync-watchdog (ourui_v6.c rx_feed): "
-              f"(1) umulig længde (L>REGN) forkastes STRAKS (0 ms — samme kald); "
-              f"(2) ufuldstændig kandidat forkastes efter RX_RESYNC_MS = 400 ms "
-              f"(< ACK-budget 450 ms < OFFLINE 1500 ms — 'en resync kan aldrig "
-              f"vise OFFLINE'). Check-grænse: {V65_WATCHDOG_BOUND_S} s "
-              "(konservativ; stall_s er en øvre grænse pga. 0,6 s plateau-vindue "
-              "i målingen). rx_resync-tælleren (DIAGNOSE 'RX CRC / RESYNC') "
-              "skal tælle den forkastede kandidat.", ""]
+    lines += ["## Documented bound (UI_v6.md CHANGES-v6.5 item 3)", "",
+              f"- **v6.4 (baseline):** stall until 8 kB overflow, documented ~3.5 s "
+              f"(tolerance ≤{V64_BOUND_S} s on host). OFFLINE is shown after 1.5 s. "
+              "Measured baseline in this repro: see rx_stall_v64_baseline.md "
+              "(Fable's independent baseline against the v6.4 binary: 3.98 s).",
+              f"- **v6.5 (landed):** resync watchdog (ourui_v6.c rx_feed): "
+              f"(1) impossible length (L>REGN) discarded IMMEDIATELY (0 ms — same call); "
+              f"(2) incomplete candidate discarded after RX_RESYNC_MS = 400 ms "
+              f"(< ACK budget 450 ms < OFFLINE 1500 ms — 'a resync can never "
+              f"show OFFLINE'). Check limit: {V65_WATCHDOG_BOUND_S} s "
+              "(conservative; stall_s is an upper bound due to the 0.6 s plateau window "
+              "in the measurement). The rx_resync counter (DIAGNOSE 'RX CRC / RESYNC') "
+              "must count the discarded candidate.", ""]
     (run_dir / "rx_stall_report.md").write_text("\n".join(lines))
     (run_dir / "rx_stall_report.json").write_text(json.dumps(
         {"run": run_dir.name, "results": results}, indent=2, ensure_ascii=False))
     print("\n".join(lines))
-    print(f"[rx_stall] rapport: {run_dir}/rx_stall_report.md")
+    print(f"[rx_stall] report: {run_dir}/rx_stall_report.md")
     return 0 if overall_ok else 1
 
 

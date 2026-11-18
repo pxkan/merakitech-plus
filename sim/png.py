@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
-"""png.py — PNG-skrivning + contact-sheet UDEN dependencies (kun stdlib zlib).
+"""png.py — PNG writing + contact sheet WITHOUT dependencies (stdlib zlib only).
 
-Pillow findes ikke i .venv (politik: ingen nye deps). Samme metode som
-artifacts/write_test/fb2png.py: rå BGRA → RGB scanlines m. filter-byte 0 →
-zlib-komprimeret IDAT. Contact-sheet: thumbnails i gitter m. 5×7 bitmap-font
-labels (scenario-navne + indeks).
+Pillow is not in .venv (policy: no new deps). Same method as
+artifacts/write_test/fb2png.py: raw BGRA → RGB scanlines w/ filter byte 0 →
+zlib-compressed IDAT. Contact sheet: thumbnails in a grid w/ 5×7 bitmap-font
+labels (scenario names + index).
 """
 import struct
 import zlib
@@ -31,10 +31,10 @@ def rgb_to_png_bytes(w, h, rgb: bytes) -> bytes:
 
 
 def fb2png(raw_bgra: bytes, path, w=W, h=H):
-    """480×480 BGRA (fb-format) → PNG. Ingen dependencies."""
+    """480×480 BGRA (fb format) → PNG. No dependencies."""
     need = w * h * 4
     if len(raw_bgra) < need:
-        raise ValueError(f"for kort fb-buffer: {len(raw_bgra)} < {need}")
+        raise ValueError(f"fb buffer too short: {len(raw_bgra)} < {need}")
     rgb = bytearray(w * h * 3)
     for i in range(w * h):
         b, g, r = raw_bgra[i * 4], raw_bgra[i * 4 + 1], raw_bgra[i * 4 + 2]
@@ -52,7 +52,7 @@ def bgra_to_rgb(raw_bgra: bytes, w=W, h=H) -> bytes:
 
 
 def scale_rgb(rgb: bytes, w, h, nw, nh) -> bytes:
-    """Nearest-neighbor skalering (thumbnails)."""
+    """Nearest-neighbor scaling (thumbnails)."""
     out = bytearray(nw * nh * 3)
     for y in range(nh):
         sy = y * h // nh
@@ -116,7 +116,7 @@ _FONT = {
 
 
 def draw_text(rgb: bytearray, w, h, x, y, text, color, scale=1):
-    """Tegn tekst (uppercase ASCII) i rgb-buffer. Bogstaver er 5×7 px."""
+    """Draw text (uppercase ASCII) into an rgb buffer. Glyphs are 5×7 px."""
     cr, cg, cb = color
     cx = x
     for ch in text.upper():
@@ -135,9 +135,9 @@ def draw_text(rgb: bytearray, w, h, x, y, text, color, scale=1):
 
 def contact_sheet(items, path, cols=4, thumb=160, label_h=22, pad=6,
                   title=None, bg=(24, 26, 30), fg=(220, 220, 225)):
-    """items = [(label, raw_bgra_480x480_or_None, ok_bool)] → PNG-gitter.
+    """items = [(label, raw_bgra_480x480_or_None, ok_bool)] → PNG grid.
 
-    ok_bool styrer label-farven (grøn/rød). Manglende fb = mørk placeholder.
+    ok_bool sets the label color (green/red). Missing fb = dark placeholder.
     """
     n = len(items)
     rows = (n + cols - 1) // cols

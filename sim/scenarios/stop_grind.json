@@ -1,6 +1,6 @@
 {
   "name": "stop_grind",
-  "description": "v6.13: KVÆRN startes; MANUEL STOP midt i rampen (cmd6 sub6 len1 ord6=0) → ACK, bit6 ryddet ≤0,5 s, vægten HOLDER (ingen ramp mod mål+2), cur2-decay som auto-stop, stop.ok=1",
+  "description": "v6.13: GRIND started; MANUAL STOP mid-ramp (cmd6 sub6 len1 word6=0) → ACK, bit6 cleared ≤0.5 s, the weight HOLDS (no ramp towards target+2), cur2 decay as with auto-stop, stop.ok=1",
   "duration_s": 14,
   "events": [
     {
@@ -108,7 +108,7 @@
       "kind": "sim_log",
       "assert": "activity_stop",
       "activity": "grind",
-      "reason_contains": "manuel",
+      "reason_contains": "manual",
       "t0": 6.8,
       "t1": 7.8
     },

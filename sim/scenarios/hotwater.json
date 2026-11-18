@@ -1,6 +1,6 @@
 {
   "name": "hotwater",
-  "description": "Varmt vand: sub9 len11 → vægt-dosering → auto-stop ved ord39≥ord17",
+  "description": "Hot water: sub9 len11 → weight dosing → auto-stop at word39≥word17",
   "duration_s": 15,
   "events": [
     {
@@ -78,7 +78,7 @@
       "kind": "sim_log",
       "assert": "activity_stop",
       "activity": "water",
-      "reason_contains": "vægt",
+      "reason_contains": "weight",
       "t0": 7,
       "t1": 10
     },

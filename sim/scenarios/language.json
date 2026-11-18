@@ -1,6 +1,6 @@
 {
   "name": "language",
-  "description": "Sprog-setting (config-only): stock index 0=EN..10; ourui's labels er fast dansk (DA findes ikke i stock's 11 sprog — dokumenteret)",
+  "description": "Language setting (config-only): stock index 0=EN..10; ourui's labels are fixed Danish (DA is not among stock's 11 languages — documented)",
   "duration_s": 10,
   "events": [
     {

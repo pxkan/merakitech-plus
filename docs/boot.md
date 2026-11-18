@@ -142,7 +142,7 @@ On a trigger:
 3. `fork` + `setsid` + `chdir /new_customer` + `LD_LIBRARY_PATH=/new_customer/libs:/config/wifi` +
    `execl /new_customer/demo_v9` (argv0 `./demo_v9` so the watchdog grep matches).
 4. Verify B: `/proc/<child>/exe == /new_customer/demo_v9` within 2 s.
-5. **SIGKILL A** + wait for exit (≤ 2 s). Log "skift A→B FÆRDIG" (switch A→B done).
+5. **SIGKILL A** + wait for exit (≤ 2 s). Log "switch A→B DONE" ("skift A→B FÆRDIG" in builds before the English log text).
 6. **Fallback if B did not come up:** SIGCONT A + kill the B fork → original UI back, no harm. (A held
    the fb/UART fds while stopped; B could therefore not own them alone until A was gone — but B
    initializes fb/UART while A is stopped, exactly like the phase 2 pattern, and the MCU resyncs on the
