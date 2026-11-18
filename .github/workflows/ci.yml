@@ -75,9 +75,14 @@ jobs:
       - name: Full E2E, English
         run: python3 sim/run_e2e.py --all --parallel 4 --run-name full-en
       - name: Full E2E, Danish
+        # run even when the English pass failed, so one run reports both languages
+        if: success() || failure()
         run: python3 sim/run_e2e.py --all --parallel 4 --ui-lang da --run-name full-da
       - uses: actions/upload-artifact@v4
         if: always()
         with:
           name: full-e2e-reports
-          path: sim/reports/
+          # sandboxes hold FIFOs/sockets and ~170 MB of framebuffers; reports + state logs suffice
+          path: |
+            sim/reports/
+            !sim/reports/**/sandbox/**

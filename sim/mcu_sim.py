@@ -199,6 +199,7 @@ class McuSim:
         self.rp_t = 0.0
         self.rp_idx = 0
         self.rp_verify = None
+        self.rp_hold = False          # serve: replay clock frozen until 'replay_anchor'
         # ---- link/io ----
         self.pty = pty
         self.master = self.slave = None
@@ -1440,6 +1441,8 @@ class McuSim:
         if not self.replay:
             return
         if self.rp_mode == "serve":
+            if self.rp_hold:
+                return
             self.rp_t += dt * self.rp_speed
             frames = self.replay["frames"]
             while self.rp_idx < len(frames) and frames[self.rp_idx]["t"] <= self.rp_t:
@@ -1796,6 +1799,16 @@ class McuSim:
             return {"ok": True, "n": len(vals),
                     "min": min(vals) if vals else None,
                     "max": max(vals) if vals else None}
+        if cmd == "replay_anchor":
+            # Start the serve replay on the E2E runner's clock: 'elapsed' is the wall time
+            # since the UI client's clock origin (t_ms=0), so capture time = elapsed * speed
+            # stays aligned with the UI's timestamps no matter how long startup took.
+            if not self.replay or self.rp_mode != "serve":
+                return {"ok": False, "error": "no serve replay loaded"}
+            self.rp_t = max(0.0, float(req.get("elapsed", 0.0))) * self.rp_speed
+            self.rp_hold = False
+            self.alog.log(self.t, "replay_anchor", rp_t=round(self.rp_t, 3))
+            return {"ok": True, "rp_t": self.rp_t}
         if cmd == "inject":
             return {"ok": self.inject(req.get("event", {}))}
         if cmd == "expect_keepawake":
@@ -2099,6 +2112,8 @@ def main():
     ap.add_argument("--replay", help="frames.csv til REPLAY-mode")
     ap.add_argument("--replay-mode", choices=["serve", "verify"], default="serve")
     ap.add_argument("--speed", type=float, default=1.0, help="replay-afspilningshastighed")
+    ap.add_argument("--replay-hold", action="store_true",
+                    help="serve replay: hold the replay clock at 0 until a 'replay_anchor' ctrl command")
     ap.add_argument("--verify-report", help="JSON-rapport for replay-verify")
     ap.add_argument("--quiet", action="store_true")
     args = ap.parse_args()
@@ -2136,6 +2151,7 @@ def main():
                  pty_file=args.pty_file, quiet=args.quiet)
     if args.replay:
         sim.load_replay(args.replay, mode="serve", speed=args.speed)
+        sim.rp_hold = args.replay_hold
     try:
         sim.run()
     except KeyboardInterrupt:

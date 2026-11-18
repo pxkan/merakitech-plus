@@ -145,6 +145,11 @@ def circle_check(raw):
                 "corners_black": corner_ok, "worst": worst}
 
 
+# Serve replays start this many seconds "ahead" of the UI clock (scenario key replay.lead_s);
+# override with E2E_REPLAY_LEAD_S for experiments.
+REPLAY_LEAD_S = float(os.environ.get("E2E_REPLAY_LEAD_S", "0.2"))
+
+
 class Ctrl:
     """JSONL-klient til sim/ui ctrl-unix-sockets."""
     def __init__(self, path):
@@ -275,6 +280,8 @@ class ScenarioRun:
             cmd += ["--replay", str(ROOT / rp["csv"]),
                     "--replay-mode", rp.get("mode", "serve"),
                     "--speed", str(rp.get("speed", 1.0))]
+            if rp.get("mode", "serve") == "serve":
+                cmd.append("--replay-hold")       # started by anchor_replay() once the UI runs
         pf = self.dir / "pty_path"
         pf.unlink(missing_ok=True)      # gammel fil fra tidligere kørsel i samme mappe
         self.sim_proc = subprocess.Popen(cmd, stdout=subprocess.DEVNULL,
@@ -318,6 +325,7 @@ class ScenarioRun:
         else:
             self.client_kind = "reference"
             cmd = [sys.executable, str(HERE / "ref_client.py")]
+        m_spawn = time.monotonic()
         self.ui_proc = subprocess.Popen(cmd, env=env, stdout=subprocess.DEVNULL,
                                         stderr=subprocess.PIPE, text=True)
         self.ui_ctrl = Ctrl(self.ui_ctrl_path)
@@ -329,7 +337,23 @@ class ScenarioRun:
                 raise RuntimeError("UI-klient døde ved opstart: "
                                    + (self.ui_proc.stderr.read() or ""))
             time.sleep(0.05)
-        self.ui_ctrl.call({"cmd": "ping"})
+        m_a = time.monotonic()
+        resp = self.ui_ctrl.call({"cmd": "ping"})
+        m_b = time.monotonic()
+        rp = self.scen.get("replay")
+        if rp and rp.get("mode", "serve") == "serve":
+            # UI clock origin (its t_ms=0) on our monotonic clock; fall back to the spawn time
+            ui_t = resp.get("t") if isinstance(resp, dict) else None
+            origin = (m_a + m_b) / 2 - float(ui_t) if isinstance(ui_t, (int, float)) else m_spawn
+            self.anchor_replay(origin, float(rp.get("lead_s", REPLAY_LEAD_S)))
+
+    def anchor_replay(self, ui_origin, lead_s):
+        """Serve replays: start the capture clock relative to the UI's clock origin instead of
+        the sim's process start. Assertion times are UI timestamps, and the gap between sim
+        start and UI start varies with machine load (≈0.2 s idle, ≈0.5 s on a busy CI runner,
+        i.e. 2-4 s of capture time at 8x), which made tight replay windows flaky."""
+        elapsed = time.monotonic() - ui_origin + lead_s
+        self.replay_anchor = self.sim_ctrl.call({"cmd": "replay_anchor", "elapsed": elapsed})
 
     # ------------------------------------------------------------ (d) events
     def fire_event(self, ev):
