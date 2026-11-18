@@ -1,0 +1,58 @@
+{
+  "name": "offline",
+  "description": "Offline (link silent i 5 s): UI viser OFFLINE → recovery ved link up",
+  "duration_s": 14,
+  "events": [
+    {
+      "t": 3,
+      "target": "sim",
+      "event": {
+        "type": "link",
+        "state": "silent"
+      }
+    },
+    {
+      "t": 8,
+      "target": "sim",
+      "event": {
+        "type": "link",
+        "state": "up"
+      }
+    },
+    {
+      "t": 6,
+      "target": "runner",
+      "op": "snapshot",
+      "label": "offline"
+    },
+    {
+      "t": 11,
+      "target": "runner",
+      "op": "snapshot",
+      "label": "recovered"
+    }
+  ],
+  "expect": [
+    {
+      "kind": "offline_seen",
+      "t0": 4.5,
+      "t1": 8
+    },
+    {
+      "kind": "phase",
+      "t": 6,
+      "window": 1.5,
+      "value": "OFFLINE"
+    },
+    {
+      "kind": "link_up_at",
+      "t": 9.5
+    },
+    {
+      "kind": "phase",
+      "t": 11,
+      "window": 1.5,
+      "value": "READY"
+    }
+  ]
+}

@@ -1,0 +1,51 @@
+{
+  "name": "crc_garbage",
+  "description": "CRC-korruption + garbage-stream: UI skal resynke og bevare link",
+  "duration_s": 12,
+  "events": [
+    {
+      "t": 3,
+      "target": "sim",
+      "event": {
+        "type": "garbage",
+        "dur": 2.5,
+        "crc_too": true
+      }
+    },
+    {
+      "t": 4,
+      "target": "runner",
+      "op": "snapshot",
+      "label": "garbage"
+    },
+    {
+      "t": 9,
+      "target": "runner",
+      "op": "snapshot",
+      "label": "recovered"
+    }
+  ],
+  "expect": [
+    {
+      "kind": "crc_bad_min",
+      "value": 1
+    },
+    {
+      "kind": "phase_hold",
+      "t0": 2,
+      "t1": 11,
+      "value": "READY",
+      "min_ratio": 0.9
+    },
+    {
+      "kind": "link_up_at",
+      "t": 8
+    },
+    {
+      "kind": "cmd6",
+      "field": "fail",
+      "op": "==",
+      "value": 0
+    }
+  ]
+}

@@ -1,0 +1,83 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+    inputs:
+      full_e2e:
+        description: "Also run the full E2E suite (EN + DA, > 30 min)"
+        type: boolean
+        default: false
+  schedule:
+    - cron: "17 3 * * 1"   # weekly full E2E gate (Mondays)
+
+permissions:
+  contents: read
+
+jobs:
+  quick:
+    name: build + quick tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - uses: mlugg/setup-zig@v2
+        with:
+          version: 0.17.1
+      - name: Repository hygiene (checksums, no vendor files, no personal data)
+        run: python3 tests/hygiene.py
+      - name: Build (host SIM, switcher, self-tests)
+        run: ./build.sh host
+      - name: Cross-build device binaries (ARMv7, 0 errors)
+        run: ./build.sh
+      - name: UI self-test (preview build, 440+ checks)
+        run: |
+          zig cc -DOURUI_PREVIEW -O2 -o build/ourui_preview src/ourui_v6.c -lm
+          ./build/ourui_preview --selftest sim/fixtures/config.json > build/ui_selftest.txt 2>&1 || { tail -50 build/ui_selftest.txt; exit 1; }
+          tail -n 1 build/ui_selftest.txt
+      - name: Simulator self-test
+        run: python3 sim/selftest.py
+      - name: E2E quick (5 core scenarios against the real UI SIM build)
+        run: python3 sim/run_e2e.py --all --quick --parallel 4
+      - name: Gesture switcher end-to-end (file mode)
+        run: python3 boot/test_switcher.py
+      - name: Installer / revert against the mock display
+        run: python3 tests/test_installer.py
+      - name: Upload reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: quick-reports
+          path: |
+            sim/reports/
+            build/ui_selftest.txt
+          if-no-files-found: ignore
+
+  full-e2e:
+    name: full E2E gate (EN + DA)
+    if: github.event_name == 'schedule' || (github.event_name == 'workflow_dispatch' && inputs.full_e2e)
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - uses: mlugg/setup-zig@v2
+        with:
+          version: 0.17.1
+      - run: ./build.sh host
+      - name: Full E2E, English
+        run: python3 sim/run_e2e.py --all --parallel 4 --run-name full-en
+      - name: Full E2E, Danish
+        run: python3 sim/run_e2e.py --all --parallel 4 --ui-lang da --run-name full-da
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: full-e2e-reports
+          path: sim/reports/

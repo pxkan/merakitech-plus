@@ -1,0 +1,71 @@
+{
+  "name": "fault_e2",
+  "description": "E2 bit4 (mælk-NTC): damp sikkerhedsstoppes",
+  "duration_s": 16,
+  "events": [
+    {
+      "t": 1,
+      "target": "sim",
+      "event": {
+        "type": "wand",
+        "on": true
+      }
+    },
+    {
+      "t": 2,
+      "target": "ui",
+      "cmd": "action",
+      "name": "steam"
+    },
+    {
+      "t": 5,
+      "target": "sim",
+      "event": {
+        "type": "fault",
+        "e2": 16,
+        "dur": 4
+      }
+    },
+    {
+      "t": 6.5,
+      "target": "runner",
+      "op": "snapshot",
+      "label": "error"
+    }
+  ],
+  "expect": [
+    {
+      "kind": "phase",
+      "t": 3.5,
+      "window": 1,
+      "value": "STEAM"
+    },
+    {
+      "kind": "phase",
+      "t": 6.5,
+      "window": 1.5,
+      "value": "ERROR"
+    },
+    {
+      "kind": "word",
+      "word": 35,
+      "t": 6.5,
+      "window": 1.5,
+      "value": 16
+    },
+    {
+      "kind": "sim_log",
+      "assert": "activity_stop",
+      "activity": "steam",
+      "reason_contains": "fejl",
+      "t0": 4.5,
+      "t1": 7
+    },
+    {
+      "kind": "phase",
+      "t": 11,
+      "window": 1.5,
+      "value": "READY"
+    }
+  ]
+}

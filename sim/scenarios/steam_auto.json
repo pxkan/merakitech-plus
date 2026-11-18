@@ -1,0 +1,98 @@
+{
+  "name": "steam_auto",
+  "description": "Damp m. wand: mælk-ramp → AUTO-stop ved ord48≥ord25 (ingen stop-write)",
+  "duration_s": 40,
+  "events": [
+    {
+      "t": 2,
+      "target": "ui",
+      "cmd": "action",
+      "name": "steam"
+    },
+    {
+      "t": 3,
+      "target": "sim",
+      "event": {
+        "type": "wand",
+        "on": true
+      }
+    },
+    {
+      "t": 10,
+      "target": "runner",
+      "op": "snapshot",
+      "label": "steaming"
+    },
+    {
+      "t": 34,
+      "target": "runner",
+      "op": "snapshot",
+      "label": "auto-stop"
+    }
+  ],
+  "expect": [
+    {
+      "kind": "phase",
+      "t": 5,
+      "window": 2,
+      "value": "STEAM"
+    },
+    {
+      "kind": "work_sta_seen",
+      "t0": 3,
+      "t1": 32,
+      "value": "0x4121"
+    },
+    {
+      "kind": "word_hold",
+      "word": 48,
+      "t0": 4,
+      "t1": 31,
+      "min": 230,
+      "max": 660
+    },
+    {
+      "kind": "word_min_seen",
+      "word": 48,
+      "t0": 30,
+      "t1": 35.5,
+      "min": 650
+    },
+    {
+      "kind": "word_hold",
+      "word": 48,
+      "t0": 33,
+      "t1": 34.5,
+      "min": 640,
+      "max": 680
+    },
+    {
+      "kind": "word",
+      "word": 24,
+      "t": 34,
+      "window": 1.5,
+      "value": 0
+    },
+    {
+      "kind": "sim_log",
+      "assert": "activity_stop",
+      "activity": "steam",
+      "reason_contains": "mælk",
+      "t0": 30,
+      "t1": 35
+    },
+    {
+      "kind": "sim_log",
+      "assert": "no_write_word",
+      "word": 24,
+      "t0": 3,
+      "t1": 31
+    },
+    {
+      "kind": "phase",
+      "t": 36,
+      "window": 2,
+      "value": "READY"
+    }
+  ]
+}

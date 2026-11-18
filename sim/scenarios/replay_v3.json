@@ -1,0 +1,116 @@
+{
+  "name": "replay_v3",
+  "description": "REPLAY serve: v3 grind+bryg-trace som sandhed (8× hastighed)",
+  "duration_s": 42,
+  "events": [
+    {
+      "t": 7,
+      "target": "runner",
+      "op": "snapshot",
+      "label": "grind"
+    },
+    {
+      "t": 14.8,
+      "target": "runner",
+      "op": "snapshot",
+      "label": "pre"
+    },
+    {
+      "t": 16.5,
+      "target": "runner",
+      "op": "snapshot",
+      "label": "ext"
+    },
+    {
+      "t": 19,
+      "target": "runner",
+      "op": "snapshot",
+      "label": "stop"
+    }
+  ],
+  "expect": [
+    {
+      "kind": "phase",
+      "t": 7,
+      "window": 0.8,
+      "value": "GRIND"
+    },
+    {
+      "kind": "work_sta_seen",
+      "t0": 6.3,
+      "t1": 7.8,
+      "value": "0x0141"
+    },
+    {
+      "kind": "phase",
+      "t": 14.7,
+      "window": 0.6,
+      "value": "PRE"
+    },
+    {
+      "kind": "phase",
+      "t": 16.5,
+      "window": 1,
+      "value": "EXT"
+    },
+    {
+      "kind": "word_hold",
+      "word": 51,
+      "t0": 14.5,
+      "t1": 14.9,
+      "min": 300,
+      "max": 420
+    },
+    {
+      "kind": "word_hold",
+      "word": 51,
+      "t0": 15.6,
+      "t1": 17.5,
+      "min": 1200,
+      "max": 1500
+    },
+    {
+      "kind": "work_sta_seen",
+      "t0": 15,
+      "t1": 18,
+      "value": "0x1307"
+    },
+    {
+      "kind": "word_hold",
+      "word": 39,
+      "t0": 17.75,
+      "t1": 18.1,
+      "min": 330,
+      "max": 380,
+      "signed": true
+    },
+    {
+      "kind": "replay_truth",
+      "word": 39,
+      "t0": 17.7,
+      "t1": 18.05,
+      "val_min": 320,
+      "val_max": 370,
+      "signed": true
+    },
+    {
+      "kind": "replay_truth",
+      "word": 51,
+      "t0": 14.4,
+      "t1": 14.95,
+      "val_min": 300,
+      "val_max": 420
+    },
+    {
+      "kind": "phase",
+      "t": 20,
+      "window": 2,
+      "value": "READY"
+    }
+  ],
+  "replay": {
+    "csv": "sim/fixtures/captures/uart_live_v3.csv.gz",
+    "mode": "serve",
+    "speed": 8
+  }
+}

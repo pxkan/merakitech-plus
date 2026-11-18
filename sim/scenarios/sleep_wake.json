@@ -1,0 +1,114 @@
+{
+  "name": "sleep_wake",
+  "description": "Sleep/drain (ord1=1) → wake (ord1=0) → opvarmning → klar",
+  "duration_s": 28,
+  "events": [
+    {
+      "t": 1.5,
+      "target": "sim",
+      "cmd": "expect_keepawake",
+      "value": false
+    },
+    {
+      "t": 2,
+      "target": "ui",
+      "cmd": "raw_write",
+      "sub": 1,
+      "words": [
+        1
+      ]
+    },
+    {
+      "t": 2.5,
+      "target": "sim",
+      "event": {
+        "type": "set_reg",
+        "word": 40,
+        "value": 800
+      }
+    },
+    {
+      "t": 5,
+      "target": "runner",
+      "op": "snapshot",
+      "label": "sleep"
+    },
+    {
+      "t": 12,
+      "target": "ui",
+      "cmd": "raw_write",
+      "sub": 1,
+      "words": [
+        0
+      ]
+    },
+    {
+      "t": 12,
+      "target": "sim",
+      "cmd": "expect_keepawake",
+      "value": true
+    },
+    {
+      "t": 15,
+      "target": "runner",
+      "op": "snapshot",
+      "label": "heating"
+    },
+    {
+      "t": 25,
+      "target": "runner",
+      "op": "snapshot",
+      "label": "ready"
+    }
+  ],
+  "expect": [
+    {
+      "kind": "phase_hold",
+      "t0": 3,
+      "t1": 11,
+      "value": "SLEEP",
+      "min_ratio": 0.9
+    },
+    {
+      "kind": "word",
+      "word": 1,
+      "t": 5,
+      "window": 2,
+      "value": 1
+    },
+    {
+      "kind": "work_sta_seen",
+      "t0": 3,
+      "t1": 11,
+      "value": "0x0001"
+    },
+    {
+      "kind": "word",
+      "word": 1,
+      "t": 13.5,
+      "window": 1,
+      "value": 0
+    },
+    {
+      "kind": "phase_hold",
+      "t0": 13.5,
+      "t1": 20,
+      "value": "HEAT",
+      "min_ratio": 0.8
+    },
+    {
+      "kind": "phase",
+      "t": 24.5,
+      "window": 2,
+      "value": "READY"
+    },
+    {
+      "kind": "sim_log",
+      "assert": "sleep_write_seen"
+    },
+    {
+      "kind": "sim_log",
+      "assert": "awake_write_seen"
+    }
+  ]
+}

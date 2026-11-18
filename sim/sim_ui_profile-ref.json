@@ -1,0 +1,310 @@
+{
+  "version": "v6.5-scenarios",
+  "description": "REF-profil for reference-klienten (sim/ref_client.py): scenarierne asserter ourui's vogtede adfærd (v6.5-scenarios-reconcilingen, sim/reports/v6.5-scenarios/RECONCILE.md). Reference-klienten er det UVogtede ORACLE (parity_spec ord-for-ord, syntetisk layout, ingen act_guard/frame-politik) og beviser sim+runner-pipelinen. Denne profil erstatter 1:1 de 20 reconcilerede forventninger med reference-klientens oracle-adfærd, så --ui-bin ref_client (eller ingen --ui-bin) stadig kører grønt. Hver override rammer præcis én forventning (ellers fejler scenariet). De to øvrige v6.4-overrides er ikke her: grind-koordinaten er erstattet af layout-krogen (begge klienter implementerer den), og replay_v3-timingvinduet er rettet i selve scenariet. --no-ui-profile kører råt (mod reference-klienten forventes de 20 checks da at fejle).",
+  "scenarios": {
+    "idle": [
+      {
+        "match": {
+          "kind": "point",
+          "point": [240, 20]
+        },
+        "replace": {
+          "kind": "point",
+          "t": 6,
+          "point": [240, 20],
+          "color": [40, 44, 52],
+          "tol": 30
+        },
+        "why": "REF-oracle: reference-klientens syntetiske layout har et side-farvet bånd øverst (y<44, PAGE_RGB home = (40,44,52)). ourui's gauge-bue-farve (61,163,130) er scenarie-standarden."
+      },
+      {
+        "match": {
+          "kind": "region",
+          "rect": [200, 200, 80, 80]
+        },
+        "replace": {
+          "kind": "region",
+          "t": 6,
+          "rect": [200, 200, 80, 80],
+          "color": [24, 104, 92],
+          "tol": 30
+        },
+        "why": "REF-oracle: reference-klienten fylder cirklens indre med fasens baggrundsfarve (PHASE_BG READY = (24,104,92)). ourui's mørke vignette-baggrund (32,36,42) er scenarie-standarden."
+      }
+    ],
+    "fault_e1": [
+      {
+        "match": {
+          "kind": "toast",
+          "contains": "FEJL AKTIV"
+        },
+        "replace": {
+          "kind": "sim_log",
+          "assert": "activity_stop",
+          "activity": "brew",
+          "reason_contains": "fejl",
+          "t0": 4,
+          "t1": 6
+        },
+        "why": "REF-oracle: reference-klienten har ingen act_guard — den sender bryg-start under aktiv E1, og MCU'en sikkerheds-stopper ('fejl E1/E2/E3'). ourui spærrer start med toasten 'FEJL AKTIV · START SPÆRRET' (scenarie-standarden)."
+      }
+    ],
+    "out_of_spec": [
+      {
+        "match": {
+          "kind": "cmd6",
+          "field": "block",
+          "op": ">=",
+          "value": 1
+        },
+        "replace": {
+          "kind": "sim_log",
+          "assert": "range_min",
+          "min": 1
+        },
+        "why": "REF-oracle: reference-klienten boot-pusher config-værdier uden for spec direkte på UART'en (ingen frame-politik), og sim'en logger range_violation. ourui afviser hele blokken før send (BLOK≥1, scenarie-standarden)."
+      }
+    ],
+    "settings_save_matrix": [
+      {
+        "match": {
+          "kind": "sim_log",
+          "assert": "write_words",
+          "sub": 113,
+          "words": [1285]
+        },
+        "replace": {
+          "kind": "sim_log",
+          "assert": "write_words",
+          "sub": 112,
+          "words": [260, 1285]
+        },
+        "keep": ["t0", "t1"],
+        "why": "REF-oracle: PRE-INF. TID = 5 skrives parity_spec ord-for-ord som sub112 len2 [0x0104, 0x0505]. ourui skriver sub113 len1 (stock usart_send(6,113,1), UI_v6.md §4.1) — scenarie-standarden."
+      },
+      {
+        "match": {
+          "kind": "sim_log",
+          "assert": "write_words",
+          "sub": 113,
+          "words": [1541]
+        },
+        "replace": {
+          "kind": "sim_log",
+          "assert": "write_words",
+          "sub": 112,
+          "words": [260, 1541]
+        },
+        "keep": ["t0", "t1"],
+        "why": "REF-oracle: PRE-INF. TID = 6 som sub112 len2 [0x0104, 0x0605] (parity word-for-word). ourui: sub113 len1 — scenarie-standarden."
+      },
+      {
+        "match": {
+          "kind": "sim_log",
+          "assert": "no_writes_between",
+          "t0": 31.65
+        },
+        "replace": {
+          "kind": "sim_log",
+          "assert": "write_words",
+          "sub": 112,
+          "words": [260, 1536]
+        },
+        "keep": ["t0", "t1"],
+        "why": "REF-oracle: PAUSE-TID = 0 er en redigerbar parameter i reference-klienten (sub112 len2 [0x0104, 0x0600]). I ourui er PAUSE-TID LÅST (UI_v6.md §4.5) — scenarie-standarden kræver ingen write."
+      },
+      {
+        "match": {
+          "kind": "config",
+          "field": "breakTime",
+          "value": 5,
+          "t": 32.5
+        },
+        "replace": {
+          "kind": "config",
+          "field": "breakTime",
+          "value": 0
+        },
+        "keep": ["t"],
+        "why": "REF-oracle: reference-klienten persisterer breakTime=0. ourui: låst, config uændret (5) — scenarie-standarden."
+      },
+      {
+        "match": {
+          "kind": "save_rejected",
+          "param": "break_time",
+          "t": 32.2
+        },
+        "replace": {
+          "kind": "save",
+          "state": "ok",
+          "param": "break_time"
+        },
+        "keep": ["t", "window"],
+        "why": "REF-oracle: GEM af break_time=0 lykkes (write+ACK+config). ourui: krogen afviser 'LÅST' — scenarie-standarden."
+      },
+      {
+        "match": {
+          "kind": "sim_log",
+          "assert": "no_writes_between",
+          "t0": 32.55
+        },
+        "replace": {
+          "kind": "sim_log",
+          "assert": "write_words",
+          "sub": 112,
+          "words": [260, 1537]
+        },
+        "keep": ["t0", "t1"],
+        "why": "REF-oracle: PAUSE-TID = 1 som sub112 len2 [0x0104, 0x0601]. ourui: låst, ingen write — scenarie-standarden."
+      },
+      {
+        "match": {
+          "kind": "config",
+          "field": "breakTime",
+          "value": 5,
+          "t": 33.4
+        },
+        "replace": {
+          "kind": "config",
+          "field": "breakTime",
+          "value": 1
+        },
+        "keep": ["t"],
+        "why": "REF-oracle: reference-klienten persisterer breakTime=1. ourui: låst, config uændret (5) — scenarie-standarden."
+      },
+      {
+        "match": {
+          "kind": "save_rejected",
+          "param": "break_time",
+          "t": 33.1
+        },
+        "replace": {
+          "kind": "save",
+          "state": "ok",
+          "param": "break_time"
+        },
+        "keep": ["t", "window"],
+        "why": "REF-oracle: GEM af break_time=1 lykkes. ourui: 'LÅST' — scenarie-standarden."
+      },
+      {
+        "match": {
+          "kind": "sim_log",
+          "assert": "no_writes_between",
+          "t0": 33.45
+        },
+        "replace": {
+          "kind": "sim_log",
+          "assert": "write_words",
+          "sub": 112,
+          "words": [260, 1541]
+        },
+        "keep": ["t0", "t1"],
+        "why": "REF-oracle: PAUSE-TID = 5 (originalværdien) som sub112 len2 [0x0104, 0x0605]. ourui: låst, ingen write — scenarie-standarden."
+      },
+      {
+        "match": {
+          "kind": "save_rejected",
+          "param": "break_time",
+          "t": 34.0
+        },
+        "replace": {
+          "kind": "save",
+          "state": "ok",
+          "param": "break_time"
+        },
+        "keep": ["t", "window"],
+        "why": "REF-oracle: GEM af break_time=5 lykkes (reference-klienten skelner ikke uændret-værdi). ourui: 'LÅST' — scenarie-standarden."
+      },
+      {
+        "match": {
+          "kind": "sim_log",
+          "assert": "no_writes_between",
+          "t0": 34.35
+        },
+        "replace": {
+          "kind": "sim_log",
+          "assert": "write_words",
+          "sub": 2,
+          "words": [1, 0]
+        },
+        "keep": ["t0", "t1"],
+        "why": "REF-oracle: KVÆRN-TILSTAND = 1 skrives parity word-for-ord som sub2 len2 [1, 0] — også når værdien allerede er gemt. ourui: GEM uden ændring skriver intet ('unchanged') — scenarie-standarden."
+      },
+      {
+        "match": {
+          "kind": "save",
+          "state": "unchanged",
+          "param": "grind_mode"
+        },
+        "replace": {
+          "kind": "save",
+          "state": "ok",
+          "param": "grind_mode"
+        },
+        "keep": ["t", "window"],
+        "why": "REF-oracle: reference-klienten kender ikke 'unchanged' (tillæg til kontraktens pending|ok|fail) og melder ok. ourui: 'unchanged' — scenarie-standarden."
+      },
+      {
+        "match": {
+          "kind": "sim_log",
+          "assert": "write_words",
+          "sub": 2,
+          "words": [2]
+        },
+        "replace": {
+          "kind": "sim_log",
+          "assert": "write_words",
+          "sub": 2,
+          "words": [2, 0]
+        },
+        "keep": ["t0", "t1"],
+        "why": "REF-oracle: KVÆRN-TILSTAND = 2 som parity_spec's sub2 len2 [2, 0] (medsender start-ordet 3=0). ourui skriver bevidst sub2 len1 (UI_v6.md §4.1) — scenarie-standarden."
+      },
+      {
+        "match": {
+          "kind": "config",
+          "field": "backlight",
+          "value": 9,
+          "t": 37.0
+        },
+        "replace": {
+          "kind": "config",
+          "field": "backlight",
+          "value": 0
+        },
+        "keep": ["t"],
+        "why": "REF-oracle: reference-klienten tillader backlight=0 (spec 0..10) og persisterer den. ourui udelader bevidst 0 (min 1, UI_v6.md §4.3) — scenarie-standarden kræver uændret 9."
+      },
+      {
+        "match": {
+          "kind": "config",
+          "field": "init",
+          "value": 1,
+          "t": 57.7
+        },
+        "replace": {
+          "kind": "config",
+          "field": "init",
+          "value": 0
+        },
+        "keep": ["t"],
+        "why": "REF-oracle: reference-klienten eksponerer init_state (spec-parameter) og persisterer 0. ourui: ikke en brugerindstilling, krogen afviser 'LÅST' (UI_v6.md §4.5) — scenarie-standarden kræver uændret 1."
+      },
+      {
+        "match": {
+          "kind": "config",
+          "field": "patch",
+          "value": 1,
+          "t": 59.5
+        },
+        "replace": {
+          "kind": "config",
+          "field": "patch",
+          "value": 0
+        },
+        "keep": ["t"],
+        "why": "REF-oracle: reference-klienten eksponerer lang_patch og persisterer 0. ourui: ikke eksponeret, 'LÅST' (UI_v6.md §4.5) — scenarie-standarden kræver uændret 1."
+      }
+    ]
+  }
+}

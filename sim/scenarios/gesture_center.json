@@ -1,0 +1,16 @@
+{
+  "name": "gesture_center",
+  "description": "v6.12 center-gestus: ÉT hold >=5000 ms i center (240,240, radius 40) -> trigger; kort hold (2 s) -> ingen; off-center (150,240) hold 5,2 s -> ingen. ÆGTE switcher_host i fil-mode, SWITCHER_GESTURE=center.",
+  "duration_s": 22,
+  "events": [
+    { "t": 1, "target": "runner", "op": "gesture", "name": "center_positiv", "gesture": "center", "presses": 1, "x": 240, "y": 240, "hold_ms": 5200, "inject_ui": true },
+    { "t": 8, "target": "runner", "op": "gesture", "name": "center_kort", "gesture": "center", "presses": 1, "x": 240, "y": 240, "hold_ms": 2000 },
+    { "t": 12, "target": "runner", "op": "gesture", "name": "center_off", "gesture": "center", "presses": 1, "x": 150, "y": 240, "hold_ms": 5200 },
+    { "t": 19, "target": "runner", "op": "snapshot", "label": "home" }
+  ],
+  "expect": [
+    { "kind": "gesture", "name": "center_positiv", "expect_trigger": true },
+    { "kind": "gesture", "name": "center_kort", "expect_trigger": false },
+    { "kind": "gesture", "name": "center_off", "expect_trigger": false }
+  ]
+}

@@ -1,0 +1,1292 @@
+{
+  "meta": {
+    "title": "ourui feature-parity spec — MerakiTech Gen 1 (demo_v9 original UI)",
+    "date": "2026-11-17",
+    "method": "static-only (binaries+docs), device offline",
+    "source_binary": "artifacts/demo_v9 (MD5 d44c2414…)",
+    "mcu_binary": "artifacts/MEM03_V514_260923.bin",
+    "frame": "AA 55 06 SUB LEN <LEN words 16-bit LE> CRC16/MODBUS lo hi",
+    "mirror_base": "machine_struct+0xFE8 (word n = +2n)",
+    "writable_bands": "words 0..31 (sub+len<33) and 112..114 (sub+len in {113,114,115})",
+    "mcu_range_checks": "NONE — UI limits are the only guard",
+    "config_path": "/customer/config.json",
+    "persistence": "setNumber writes config.json immediately (configFileClose fsync); boot-push syncs mirror->MCU on restart",
+    "companion_doc": "PARITY.md",
+    "raw_units_note": "min/max/step/default are in RAW word units unless unit says otherwise (e.g. grind_weight 0.1g: min=10 means 1.0g). head_temp is whole C (scale 1)."
+  },
+  "parameters": [
+    {
+      "id": "grind_weight",
+      "label": "Grind weight / Dose",
+      "page": "page_grinder_weight",
+      "config_field": "autoGrindWeight",
+      "config_value": 185,
+      "unit": "0.1g",
+      "scale": 0.1,
+      "words": [
+        4
+      ],
+      "write": {
+        "sub": 4,
+        "len": 1,
+        "offset": 0,
+        "template_words": [
+          185
+        ]
+      },
+      "min": 10,
+      "max": 309,
+      "step": 1,
+      "default": 180,
+      "tier": 1,
+      "persist": "config+mcu",
+      "confidence": "H",
+      "handler_addr": "0xf4938",
+      "notes": "word4=(roller1+1)*10+roller2; roller1=01..30, roller2=0..9 -> 1.0-30.9g. Ogsaa i grind-start sub3 len4 og opskrift sub4."
+    },
+    {
+      "id": "brew_weight",
+      "label": "Brew weight / Yield",
+      "page": "page_brew_temper",
+      "config_field": "autobrewWeight",
+      "config_value": 360,
+      "unit": "0.1g",
+      "scale": 0.1,
+      "words": [
+        23
+      ],
+      "write": {
+        "sub": 23,
+        "len": 1,
+        "offset": 0,
+        "template_words": [
+          360
+        ]
+      },
+      "min": 100,
+      "max": 990,
+      "step": 10,
+      "default": 360,
+      "tier": 1,
+      "persist": "config+mcu",
+      "confidence": "H",
+      "handler_addr": "0x12bc5c",
+      "notes": "atoi*10; roller 10..99g. Ogsaa i bryg-start sub5 len18 (word23 medsendt) og opskrift sub4."
+    },
+    {
+      "id": "hotwater_weight",
+      "label": "Hot water weight",
+      "page": "page_water_weight",
+      "config_field": "autoHotWaterTarget",
+      "config_value": 400,
+      "unit": "0.1g",
+      "scale": 0.1,
+      "words": [
+        17
+      ],
+      "write": {
+        "sub": 17,
+        "len": 1,
+        "offset": 0,
+        "template_words": [
+          400
+        ]
+      },
+      "min": 300,
+      "max": 5000,
+      "step": 100,
+      "default": 3600,
+      "tier": 1,
+      "persist": "config+mcu",
+      "confidence": "H",
+      "handler_addr": "0xfbeb4",
+      "notes": "roller_step_create(30,500,10)*10 -> 30..500g step10. Ogsaa i hotwater-start sub9 len11 (word17)."
+    },
+    {
+      "id": "brew_temp",
+      "label": "Brew temperature",
+      "page": "page_brew_temper",
+      "config_field": "brewTemper",
+      "config_value": 870,
+      "unit": "0.1C",
+      "scale": 0.1,
+      "words": [
+        11
+      ],
+      "write": {
+        "sub": 11,
+        "len": 1,
+        "offset": 0,
+        "template_words": [
+          870
+        ]
+      },
+      "min": 850,
+      "max": 960,
+      "step": 10,
+      "default": 870,
+      "tier": 1,
+      "persist": "config+mcu",
+      "confidence": "H",
+      "handler_addr": "0x12bc5c",
+      "notes": "atoi*10 (GetCelsius hvis F-visning); roller 85..96C / 185..205F. word11 altid 0.1C. Ogsaa i sub5 len18."
+    },
+    {
+      "id": "head_temp",
+      "label": "Temperature of Group Head",
+      "page": "page_time_zone (mode4)",
+      "config_field": "headTemper",
+      "config_value": 70,
+      "unit": "1C",
+      "scale": 1,
+      "words": [
+        114
+      ],
+      "write": {
+        "sub": 114,
+        "len": 1,
+        "offset": 0,
+        "template_words": [
+          70
+        ]
+      },
+      "min": 30,
+      "max": 80,
+      "step": 10,
+      "default": 50,
+      "tier": 1,
+      "persist": "config+mcu",
+      "confidence": "H",
+      "handler_addr": "0xeb1ac",
+      "notes": "word114=idx*10+30 (hele C); MCU head_heat ganger med 10 -> 0.1C. max=80 skaansomt skaet (picker-antal ej kortlagt). Sendes i sub112 len3."
+    },
+    {
+      "id": "steam_milk_target",
+      "label": "Steam / milk target temperature",
+      "page": "page_brew_temper (mode2)",
+      "config_field": "AtuoSteamTarge",
+      "config_value": 650,
+      "unit": "0.1C",
+      "scale": 0.1,
+      "words": [
+        25
+      ],
+      "write": {
+        "sub": 25,
+        "len": 1,
+        "offset": 0,
+        "template_words": [
+          650
+        ]
+      },
+      "min": 450,
+      "max": 700,
+      "step": 10,
+      "default": 550,
+      "tier": 1,
+      "persist": "config+mcu",
+      "confidence": "H",
+      "handler_addr": "0x12bc5c",
+      "notes": "atoi*10; roller 45..70C / 110..160F. word25=milk_set_temp. Ogsaa i steam sub24 len8 + sub18 len14. MCU auto-stop ved ord48>=ord25."
+    },
+    {
+      "id": "steam_gear",
+      "label": "Steam level (Gentle/Mild/Medium/Strong)",
+      "page": "page_steam_select",
+      "config_field": "steamGears",
+      "config_value": 3,
+      "unit": "gear",
+      "scale": 1,
+      "words": [
+        14
+      ],
+      "write": {
+        "sub": 14,
+        "len": 1,
+        "offset": 0,
+        "template_words": [
+          3
+        ]
+      },
+      "min": 1,
+      "max": 4,
+      "step": 1,
+      "default": 4,
+      "tier": 1,
+      "persist": "config+mcu",
+      "confidence": "H",
+      "handler_addr": "0xdcfe0",
+      "notes": "sel0..3 -> word14=1..4. Multiplexet med pre-inf-tryk i opskrift-blok. MCU boiler_heat laeser word14."
+    },
+    {
+      "id": "preinfusion_pressure",
+      "label": "Pre-infusion pressure",
+      "page": "page_time_zone(mode1)/switch_ctr/tip_dec",
+      "config_field": "preInfusionPressure",
+      "config_value": 4,
+      "unit": "bar",
+      "scale": 1,
+      "words": [
+        112
+      ],
+      "write": {
+        "sub": 112,
+        "len": 2,
+        "offset": 0,
+        "template_words": null
+      },
+      "min": 3,
+      "max": 4,
+      "step": 1,
+      "default": 4,
+      "tier": 1,
+      "persist": "config+mcu",
+      "confidence": "M",
+      "handler_addr": "0xeb1ac",
+      "packing": {
+        "word": 112,
+        "byte": "lo",
+        "formula": "(preInfusionSwitch<<8)|preInfusionPressure"
+      },
+      "notes": "model+0x5c=idx+3 -> word112 lo-byte. MCU opskrift 0x1E10 haandterer kun tryk 3/4. Sendes samlet sub112 len2 (word112+113)."
+    },
+    {
+      "id": "preinfusion_time",
+      "label": "Pre-infusion time",
+      "page": "page_time_zone (mode2)",
+      "config_field": "preInfusionTime",
+      "config_value": 6,
+      "unit": "s",
+      "scale": 1,
+      "words": [
+        113
+      ],
+      "write": {
+        "sub": 112,
+        "len": 2,
+        "offset": 0,
+        "template_words": null
+      },
+      "min": 5,
+      "max": null,
+      "step": 1,
+      "default": 15,
+      "tier": 1,
+      "persist": "config+mcu",
+      "confidence": "M",
+      "handler_addr": "0xeb1ac",
+      "packing": {
+        "word": 113,
+        "byte": "hi",
+        "formula": "(preInfusionTime<<8)|breakTime"
+      },
+      "notes": "model+0x60=idx+5 -> word113 hi-byte. MCU kopierer til word113 lo og bruger word13+word113_lo til timing. max ej kortlagt (picker)."
+    },
+    {
+      "id": "preinfusion_switch",
+      "label": "Pre-infusion on/off",
+      "page": "page_switch_ctr / page_tip_dec",
+      "config_field": "preInfusionSwitch",
+      "config_value": 1,
+      "unit": "bool",
+      "scale": 1,
+      "words": [
+        112
+      ],
+      "write": {
+        "sub": 112,
+        "len": 2,
+        "offset": 0,
+        "template_words": null
+      },
+      "min": 0,
+      "max": 1,
+      "step": 1,
+      "default": 0,
+      "tier": 1,
+      "persist": "config+mcu",
+      "confidence": "H",
+      "handler_addr": "0x103858",
+      "packing": {
+        "word": 112,
+        "byte": "hi(bit8)",
+        "formula": "(preInfusionSwitch<<8)|preInfusionPressure"
+      },
+      "notes": "word112 hi-byte bit8 (0x100). Gater pre-infusion i MCU 0x1E10. Sendes sub112 len2."
+    },
+    {
+      "id": "break_time",
+      "label": "Pre-infusion break/pause time",
+      "page": "page_time_zone (mode3)",
+      "config_field": "breakTime",
+      "config_value": 5,
+      "unit": "s",
+      "scale": 1,
+      "words": [
+        113
+      ],
+      "write": {
+        "sub": 112,
+        "len": 2,
+        "offset": 0,
+        "template_words": null
+      },
+      "min": 0,
+      "max": null,
+      "step": 1,
+      "default": 5,
+      "tier": 1,
+      "persist": "config+mcu",
+      "confidence": "M",
+      "handler_addr": "0xeb1ac",
+      "packing": {
+        "word": 113,
+        "byte": "lo",
+        "formula": "(preInfusionTime<<8)|breakTime"
+      },
+      "notes": "model+0x64=idx -> word113 lo-byte. QUIRK: MCU overskriver word113 lo med preInfusionTime -> separat breakTime har ingen effekt i standard-bryg."
+    },
+    {
+      "id": "grind_mode",
+      "label": "Grind mode (weight/time)",
+      "page": "home/grinder (move_deale)",
+      "config_field": "grindMode",
+      "config_value": 1,
+      "unit": "mode",
+      "scale": 1,
+      "words": [
+        2
+      ],
+      "write": {
+        "sub": 2,
+        "len": 2,
+        "offset": 0,
+        "template_words": [
+          1
+        ]
+      },
+      "min": 1,
+      "max": 2,
+      "step": 1,
+      "default": 1,
+      "tier": 1,
+      "persist": "config+mcu",
+      "confidence": "H",
+      "handler_addr": "0x122180",
+      "notes": "word2=1(vaegt-auto)/2(tid). sub2 len2 = word2+3."
+    },
+    {
+      "id": "hotwater_mode",
+      "label": "Hot water mode (auto/manual)",
+      "page": "hotWaterSetMode / page_water",
+      "config_field": "hotWaterMode",
+      "config_value": 1,
+      "unit": "mode",
+      "scale": 1,
+      "words": [
+        16,
+        19
+      ],
+      "write": {
+        "sub": 9,
+        "len": 11,
+        "offset": 0,
+        "template_words": null
+      },
+      "min": 1,
+      "max": 2,
+      "step": 1,
+      "default": 1,
+      "tier": 1,
+      "persist": "config+mcu",
+      "confidence": "H",
+      "handler_addr": "0x11344c",
+      "notes": "1=auto(word16=1,word19=0), 2=manuel(word16=0,word19=1) i hotwater-start sub9 len11. setHotWaterModeValue persisterer config."
+    },
+    {
+      "id": "hotwater_temp",
+      "label": "Hot water temperature (DISPLAY ONLY)",
+      "page": "hotWaterTemperUpdate",
+      "config_field": null,
+      "config_value": null,
+      "unit": "0.1C",
+      "scale": 0.1,
+      "words": [
+        40
+      ],
+      "write": {
+        "sub": null,
+        "len": null,
+        "offset": null,
+        "template_words": null
+      },
+      "min": null,
+      "max": null,
+      "step": null,
+      "default": null,
+      "tier": 1,
+      "persist": "readonly",
+      "confidence": "H",
+      "handler_addr": "0x112c9c",
+      "notes": "INGEN setpoint/config/write. Vist temperatur = e-boiler sensor ord40 (read-only). Hot water-temp er fixed = boiler-temp."
+    },
+    {
+      "id": "backlight",
+      "label": "Brightness",
+      "page": "page_brightness",
+      "config_field": "backlight",
+      "config_value": 9,
+      "unit": "level",
+      "scale": 1,
+      "words": [],
+      "write": {
+        "sub": null,
+        "len": null,
+        "offset": null,
+        "template_words": null
+      },
+      "min": 0,
+      "max": 10,
+      "step": 1,
+      "default": 8,
+      "tier": 2,
+      "persist": "config",
+      "confidence": "H",
+      "handler_addr": "0xe4bcc",
+      "notes": "slider 0..100 /10 -> backlight 0..10. PWM duty=100-7*v. Ingen MCU-write."
+    },
+    {
+      "id": "volume",
+      "label": "Sound Volume",
+      "page": "page_brightness slider / page_setting_com",
+      "config_field": "volume",
+      "config_value": 31,
+      "unit": "level",
+      "scale": 1,
+      "words": [],
+      "write": {
+        "sub": null,
+        "len": null,
+        "offset": null,
+        "template_words": null
+      },
+      "min": 0,
+      "max": 100,
+      "step": 1,
+      "default": 40,
+      "tier": 2,
+      "persist": "config",
+      "confidence": "M",
+      "handler_addr": "0xe4bcc",
+      "notes": "slider 0..100 (vaerdi direkte) + diskret High/Medium/Low/Mute i setting_com. Ingen MCU-write (mmplayer)."
+    },
+    {
+      "id": "temp_unit",
+      "label": "Temperature Unit (C/F)",
+      "page": "page_setting_com",
+      "config_field": "Temperature",
+      "config_value": 1,
+      "unit": "flag",
+      "scale": 1,
+      "words": [],
+      "write": {
+        "sub": null,
+        "len": null,
+        "offset": null,
+        "template_words": null
+      },
+      "min": 0,
+      "max": 1,
+      "step": 1,
+      "default": 0,
+      "tier": 2,
+      "persist": "config",
+      "confidence": "H",
+      "handler_addr": "0xe1938",
+      "notes": "0/1 = F/C (paavirker kun VISNING af tier-1 temperaturer; word11/25 altid 0.1C)."
+    },
+    {
+      "id": "theme",
+      "label": "Customization (Light/Dark)",
+      "page": "page_setting_com",
+      "config_field": "theme",
+      "config_value": null,
+      "unit": "flag",
+      "scale": 1,
+      "words": [],
+      "write": {
+        "sub": null,
+        "len": null,
+        "offset": null,
+        "template_words": null
+      },
+      "min": 0,
+      "max": 1,
+      "step": 1,
+      "default": 1,
+      "tier": 2,
+      "persist": "config",
+      "confidence": "H",
+      "handler_addr": "0xe1938",
+      "notes": "theme findes ikke i nuvaerende config.json (default 1)."
+    },
+    {
+      "id": "language",
+      "label": "Language",
+      "page": "page_setting_com",
+      "config_field": "language",
+      "config_value": 0,
+      "unit": "index",
+      "scale": 1,
+      "words": [],
+      "write": {
+        "sub": null,
+        "len": null,
+        "offset": null,
+        "template_words": null
+      },
+      "min": 0,
+      "max": 10,
+      "step": 1,
+      "default": 0,
+      "tier": 2,
+      "persist": "config",
+      "confidence": "H",
+      "handler_addr": "0xe1938",
+      "notes": "0..10: English,Deutsch,French,Italian,Espanol,Polish,Arabic,简中,繁中,Korean,Japanese."
+    },
+    {
+      "id": "hotwater_shortcut",
+      "label": "Hot water shortcut",
+      "page": "page_switch_ctr",
+      "config_field": "hotWaterShortcut",
+      "config_value": 1,
+      "unit": "bool",
+      "scale": 1,
+      "words": [],
+      "write": {
+        "sub": null,
+        "len": null,
+        "offset": null,
+        "template_words": null
+      },
+      "min": 0,
+      "max": 1,
+      "step": 1,
+      "default": 0,
+      "tier": 2,
+      "persist": "config",
+      "confidence": "H",
+      "handler_addr": "0x103858",
+      "notes": "model+0x6d, display-lokal."
+    },
+    {
+      "id": "sumtime",
+      "label": "Sommertid (DST)",
+      "page": "page_switch_ctr",
+      "config_field": "sumtime",
+      "config_value": 0,
+      "unit": "bool",
+      "scale": 1,
+      "words": [],
+      "write": {
+        "sub": null,
+        "len": null,
+        "offset": null,
+        "template_words": null
+      },
+      "min": 0,
+      "max": 1,
+      "step": 1,
+      "default": 0,
+      "tier": 2,
+      "persist": "config",
+      "confidence": "H",
+      "handler_addr": "0x103858",
+      "notes": "model+0x6c, display-lokal. KORREKTION v6.1: accessor getSumerTimeSwitchValue = sommertid, ikke timer-visning."
+    },
+    {
+      "id": "cleartip",
+      "label": "Clear tip",
+      "page": "page_clear",
+      "config_field": "clearTip",
+      "config_value": 0,
+      "unit": "bool",
+      "scale": 1,
+      "words": [],
+      "write": {
+        "sub": null,
+        "len": null,
+        "offset": null,
+        "template_words": null
+      },
+      "min": 0,
+      "max": 1,
+      "step": 1,
+      "default": 0,
+      "tier": 2,
+      "persist": "config",
+      "confidence": "H",
+      "handler_addr": "0xfe060",
+      "notes": "display-lokal tip-flag."
+    },
+    {
+      "id": "sleep_mode",
+      "label": "Sleep mode (NO UI EDITOR)",
+      "page": "(ingen editor)",
+      "config_field": "sleepMode",
+      "config_value": 1,
+      "unit": "bool",
+      "scale": 1,
+      "words": [],
+      "write": {
+        "sub": null,
+        "len": null,
+        "offset": null,
+        "template_words": null
+      },
+      "min": 0,
+      "max": 1,
+      "step": 1,
+      "default": 1,
+      "tier": 3,
+      "persist": "config-readonly",
+      "confidence": "H",
+      "handler_addr": null,
+      "notes": "setSleepModeState har 0 kaldere. Kun laest ved boot. Sleep-timing hardcodet (1800/600)."
+    },
+    {
+      "id": "sleep_setting",
+      "label": "Sleep minutes (NO UI EDITOR)",
+      "page": "(ingen editor, vises %dmin)",
+      "config_field": "sleepModeSetting",
+      "config_value": 0,
+      "unit": "min",
+      "scale": 1,
+      "words": [],
+      "write": {
+        "sub": null,
+        "len": null,
+        "offset": null,
+        "template_words": null
+      },
+      "min": null,
+      "max": null,
+      "step": null,
+      "default": 0,
+      "tier": 3,
+      "persist": "config-readonly",
+      "confidence": "H",
+      "handler_addr": null,
+      "notes": "setSleepModeValue har 0 kaldere. Vises kun som '%dmin' i settings-menu."
+    },
+    {
+      "id": "timezone",
+      "label": "Time zone",
+      "page": "page_time_zone(mode0)/time_sync_thread",
+      "config_field": "timeZone",
+      "config_value": 48,
+      "unit": "index",
+      "scale": 1,
+      "words": [],
+      "write": {
+        "sub": null,
+        "len": null,
+        "offset": null,
+        "template_words": null
+      },
+      "min": null,
+      "max": null,
+      "step": null,
+      "default": 44,
+      "tier": 3,
+      "persist": "config",
+      "confidence": "H",
+      "handler_addr": "0xeb1ac",
+      "notes": "UTC-offset-index; tid sync via cmd8 + DST-logik."
+    },
+    {
+      "id": "timemode",
+      "label": "12/24h",
+      "page": "page_dateAndtime",
+      "config_field": "timemode",
+      "config_value": 1,
+      "unit": "flag",
+      "scale": 1,
+      "words": [],
+      "write": {
+        "sub": null,
+        "len": null,
+        "offset": null,
+        "template_words": null
+      },
+      "min": 0,
+      "max": 1,
+      "step": 1,
+      "default": 1,
+      "tier": 3,
+      "persist": "config",
+      "confidence": "H",
+      "handler_addr": "0xfcb58",
+      "notes": "display-lokal. KORREKTION v6.1: update_time 0xd5978: 0=24t, 1=12t."
+    },
+    {
+      "id": "automatically",
+      "label": "Auto time sync",
+      "page": "page_dateAndtime",
+      "config_field": "Automatically",
+      "config_value": 1,
+      "unit": "bool",
+      "scale": 1,
+      "words": [],
+      "write": {
+        "sub": null,
+        "len": null,
+        "offset": null,
+        "template_words": null
+      },
+      "min": 0,
+      "max": 1,
+      "step": 1,
+      "default": 1,
+      "tier": 3,
+      "persist": "config",
+      "confidence": "H",
+      "handler_addr": "0xfcb58",
+      "notes": "display-lokal."
+    },
+    {
+      "id": "brew_mode",
+      "label": "Brew mode (VESTIGIAL)",
+      "page": "(0 kaldere)",
+      "config_field": "brewMode",
+      "config_value": 0,
+      "unit": "mode",
+      "scale": 1,
+      "words": [],
+      "write": {
+        "sub": null,
+        "len": null,
+        "offset": null,
+        "template_words": null
+      },
+      "min": null,
+      "max": null,
+      "step": null,
+      "default": 0,
+      "tier": 3,
+      "persist": "config-unused",
+      "confidence": "H",
+      "handler_addr": null,
+      "notes": "get/setExtractModeValue har 0 kaldere. Feltet bruges ikke af UI."
+    },
+    {
+      "id": "wifi_onoff",
+      "label": "Wi-Fi on/off (DO NOT TOUCH)",
+      "page": "app_wifi_setOn",
+      "config_field": "wifionoff",
+      "config_value": 1,
+      "unit": "bool",
+      "scale": 1,
+      "words": [],
+      "write": {
+        "sub": null,
+        "len": null,
+        "offset": null,
+        "template_words": null
+      },
+      "min": 0,
+      "max": 1,
+      "step": 1,
+      "default": 1,
+      "tier": 3,
+      "persist": "config-excluded",
+      "confidence": "H",
+      "handler_addr": "0x13a538",
+      "notes": "ourui maa IKKE roere wifi/ssid/password (opgave-krav)."
+    },
+    {
+      "id": "wifi_ssid",
+      "label": "Wi-Fi SSID (DO NOT TOUCH)",
+      "page": "page_wifi",
+      "config_field": "ssid",
+      "config_value": "ExampleAP",
+      "unit": "str",
+      "scale": null,
+      "words": [],
+      "write": {
+        "sub": null,
+        "len": null,
+        "offset": null,
+        "template_words": null
+      },
+      "min": null,
+      "max": null,
+      "step": null,
+      "default": 1462864,
+      "tier": 3,
+      "persist": "config-excluded",
+      "confidence": "H",
+      "handler_addr": "0xef0ac",
+      "notes": "ourui maa IKKE roere."
+    },
+    {
+      "id": "wifi_password",
+      "label": "Wi-Fi password (DO NOT TOUCH)",
+      "page": "page_wifi",
+      "config_field": "password",
+      "config_value": "notarealpw",
+      "unit": "str",
+      "scale": null,
+      "words": [],
+      "write": {
+        "sub": null,
+        "len": null,
+        "offset": null,
+        "template_words": null
+      },
+      "min": null,
+      "max": null,
+      "step": null,
+      "default": 1462864,
+      "tier": 3,
+      "persist": "config-excluded",
+      "confidence": "H",
+      "handler_addr": "0xef0ac",
+      "notes": "ourui maa IKKE roere."
+    },
+    {
+      "id": "preset_store",
+      "label": "Preset / NFC recipe",
+      "page": "page_preset* / app_nfc_thread",
+      "config_field": "presetStore",
+      "config_value": {},
+      "unit": "recipe",
+      "scale": null,
+      "words": [
+        4,
+        11,
+        23,
+        14,
+        25
+      ],
+      "write": {
+        "sub": 4,
+        "len": 22,
+        "offset": 0,
+        "template_words": null
+      },
+      "min": null,
+      "max": null,
+      "step": null,
+      "default": null,
+      "tier": 3,
+      "persist": "config+mcu",
+      "confidence": "H",
+      "handler_addr": "0x127c84",
+      "notes": "preset-apply sub4 len22 (word4..25); NFC sub4 len21 (word4..24). presetStore JSON: items[{name,iconId,grind,dose,brewTemp,yield,steamLevel,milkTemp}], currentIndex; presetAppliedIndex (255=ingen)."
+    },
+    {
+      "id": "init_state",
+      "label": "Init / first-config flag",
+      "page": "page_first_config / tutorials",
+      "config_field": "init",
+      "config_value": 1,
+      "unit": "bool",
+      "scale": 1,
+      "words": [],
+      "write": {
+        "sub": null,
+        "len": null,
+        "offset": null,
+        "template_words": null
+      },
+      "min": 0,
+      "max": 1,
+      "step": 1,
+      "default": 0,
+      "tier": 3,
+      "persist": "config",
+      "confidence": "H",
+      "handler_addr": "0xdbf0c",
+      "notes": "setup-flag; saettes til 1 efter foerste konfiguration/tutorial."
+    },
+    {
+      "id": "lang_patch",
+      "label": "Language patch flag",
+      "page": "lage_patch",
+      "config_field": "patch",
+      "config_value": 1,
+      "unit": "bool",
+      "scale": 1,
+      "words": [],
+      "write": {
+        "sub": null,
+        "len": null,
+        "offset": null,
+        "template_words": null
+      },
+      "min": 0,
+      "max": 1,
+      "step": 1,
+      "default": 0,
+      "tier": 3,
+      "persist": "config",
+      "confidence": "H",
+      "handler_addr": "0xd8fbc",
+      "notes": "sprog-patch flag (display-lokal)."
+    },
+    {
+      "id": "versions",
+      "label": "Version fields (img/font/lib/audio/video/soft)",
+      "page": "page_about / OTA",
+      "config_field": "softversion",
+      "config_value": "1.1.1-69",
+      "unit": "str",
+      "scale": null,
+      "words": [],
+      "write": {
+        "sub": null,
+        "len": null,
+        "offset": null,
+        "template_words": null
+      },
+      "min": null,
+      "max": null,
+      "step": null,
+      "default": "\"1.1.1-69\"",
+      "tier": 3,
+      "persist": "config-readonly",
+      "confidence": "H",
+      "handler_addr": "0xe89f4",
+      "notes": "imgversion/fontversion/libversion/audioversion/videoversion/softversion; read-only visning + OTA. softversion=1.1.1-69."
+    },
+    {
+      "id": "backflush_clean",
+      "label": "Back-flush clean",
+      "page": "page_clear / page_clear_run",
+      "config_field": null,
+      "config_value": null,
+      "unit": "trigger",
+      "scale": 1,
+      "words": [
+        20
+      ],
+      "write": {
+        "sub": 20,
+        "len": 1,
+        "offset": 0,
+        "template_words": [
+          1
+        ]
+      },
+      "min": 0,
+      "max": 1,
+      "step": 1,
+      "default": null,
+      "tier": 3,
+      "persist": "mcu",
+      "confidence": "M",
+      "handler_addr": "0xfe060",
+      "notes": "word20=1 start back-flush (~30s), 0 stop. Multiplexet med water_target i opskrift-context."
+    },
+    {
+      "id": "drain_valve",
+      "label": "Drain Mode / Drain Valve",
+      "page": "page_drain_value",
+      "config_field": null,
+      "config_value": null,
+      "unit": "trigger",
+      "scale": 1,
+      "words": [
+        28,
+        29
+      ],
+      "write": {
+        "sub": 28,
+        "len": 1,
+        "offset": 0,
+        "template_words": [
+          1
+        ]
+      },
+      "min": 0,
+      "max": 1,
+      "step": 1,
+      "default": null,
+      "tier": 3,
+      "persist": "mcu",
+      "confidence": "M",
+      "handler_addr": "0x1264ac",
+      "notes": "word28=1 / word29=1 (drain-param). sub28 len1 + sub29 len1. Service-only."
+    },
+    {
+      "id": "calib_grind",
+      "label": "Grind scale calibration",
+      "page": "page_test_scale",
+      "config_field": null,
+      "config_value": null,
+      "unit": "calib",
+      "scale": 1,
+      "words": [
+        26
+      ],
+      "write": {
+        "sub": 26,
+        "len": 1,
+        "offset": 0,
+        "template_words": null
+      },
+      "min": null,
+      "max": null,
+      "step": null,
+      "default": null,
+      "tier": 3,
+      "persist": "mcu",
+      "confidence": "H",
+      "handler_addr": "0xe0aa0",
+      "notes": "word26=100/200/500 (vaegt-kalib) eller 1..6 (gear-set). Skriver MCU-flash (grind_k). FARLIG — kun service."
+    },
+    {
+      "id": "calib_extract",
+      "label": "Extract scale calibration",
+      "page": "page_test_scale",
+      "config_field": null,
+      "config_value": null,
+      "unit": "calib",
+      "scale": 1,
+      "words": [
+        27
+      ],
+      "write": {
+        "sub": 27,
+        "len": 1,
+        "offset": 0,
+        "template_words": null
+      },
+      "min": null,
+      "max": null,
+      "step": null,
+      "default": null,
+      "tier": 3,
+      "persist": "mcu",
+      "confidence": "H",
+      "handler_addr": "0xe0aa0",
+      "notes": "word27=100/200/500 (extract_k kalib). Skriver MCU-flash. FARLIG — kun service."
+    },
+    {
+      "id": "mcu_reboot",
+      "label": "MCU reboot (factory reset)",
+      "page": "page_reset",
+      "config_field": null,
+      "config_value": null,
+      "unit": "trigger",
+      "scale": 1,
+      "words": [
+        30
+      ],
+      "write": {
+        "sub": 30,
+        "len": 1,
+        "offset": 0,
+        "template_words": [
+          1
+        ]
+      },
+      "min": 0,
+      "max": 1,
+      "step": 1,
+      "default": null,
+      "tier": 3,
+      "persist": "mcu",
+      "confidence": "H",
+      "handler_addr": "0xe2e5c",
+      "notes": "word30=1 -> MCU AIRCR reset. KUN i factory-reset. Aldrig i normale blokke."
+    },
+    {
+      "id": "self_test",
+      "label": "Self test / factory test",
+      "page": "page_self_test / page_factoryTest",
+      "config_field": null,
+      "config_value": null,
+      "unit": "mode",
+      "scale": 1,
+      "words": [
+        8
+      ],
+      "write": {
+        "sub": 8,
+        "len": 1,
+        "offset": 0,
+        "template_words": [
+          1
+        ]
+      },
+      "min": 0,
+      "max": 1,
+      "step": 1,
+      "default": null,
+      "tier": 3,
+      "persist": "mcu",
+      "confidence": "H",
+      "handler_addr": "0xf5480",
+      "notes": "word8=1 start / 0 stop self-test mode. Service-only."
+    }
+  ],
+  "write_blocks": {
+    "grind_start": {
+      "sub": 3,
+      "len": 4,
+      "words": "3..6",
+      "layout": {
+        "3": "grind_start_trigger=1",
+        "4": "grind_auto_weight",
+        "5": "grind_over_time=60",
+        "6": "grind_tare_trigger=1"
+      },
+      "observed": "ord3=1,ord4=185,ord5=60,ord6=1",
+      "call": "0x109278",
+      "evidence": "BREW W1 (live)"
+    },
+    "brew_start": {
+      "sub": 5,
+      "len": 18,
+      "words": "5..22",
+      "layout": {
+        "5": "grind_over_time=60",
+        "6": "0",
+        "7": "0",
+        "8": "0",
+        "9": "brew_start_trigger=1",
+        "10": "0",
+        "11": "brew_set_temp",
+        "12": "0",
+        "13": "preinf_param=60",
+        "14": "steam_gear",
+        "15": "steam_param=60",
+        "16": "hotwater_auto=0",
+        "17": "hotwater_weight",
+        "18": "0",
+        "19": "0",
+        "20": "water_target=0",
+        "21": "0",
+        "22": "brew_active=1"
+      },
+      "observed": "60,0,0,0,1,0,870,0,60,3,60,0,400,0,0,0,0,1",
+      "call": "0x109700",
+      "evidence": "BREW W3 (live)"
+    },
+    "hotwater_start": {
+      "sub": 9,
+      "len": 11,
+      "words": "9..19",
+      "layout": {
+        "9": "start_trigger=1",
+        "10": "0",
+        "11": "brew_set_temp",
+        "12": "0",
+        "13": "preinf_param=60",
+        "14": "steam_gear",
+        "15": "steam_param=60",
+        "16": "hotwater_auto=1(auto)/0(manual)",
+        "17": "hotwater_weight",
+        "18": "0",
+        "19": "hotwater_sw=0(auto)/1(manual)"
+      },
+      "observed_frame": "aa 55 06 09 0b 01 00 00 00 66 03 00 00 3c 00 03 00 3c 00 01 00 90 01 00 00 00 00 08 3e",
+      "call": "0x113d88/0x113e0c",
+      "evidence": "HOTWATER W1 (live)"
+    },
+    "steam_start_stop": {
+      "sub": 24,
+      "len": 8,
+      "words": "24..31",
+      "layout": {
+        "24": "steam_switch=1(start)/0(stop)",
+        "25": "milk_set_temp",
+        "26": "grind_calib=0 (MUST)",
+        "27": "extract_calib=0 (MUST)",
+        "28": "drain=0",
+        "29": "drain=0",
+        "30": "reboot=0 (MUST)",
+        "31": "0"
+      },
+      "observed_frame": "aa 55 06 18 08 01 00 8a 02 00 00 00 00 00 00 00 00 00 00 00 00 cd 67",
+      "call": "0x109548/0x109900",
+      "evidence": "SESSION §10.2 (statisk+live-mirror)"
+    },
+    "steam_mirror_sync": {
+      "sub": 18,
+      "len": 14,
+      "words": "18..31",
+      "layout": {
+        "18": "steam_switch=0",
+        "19": "0",
+        "20": "0",
+        "21": "0",
+        "22": "0",
+        "23": "brew_weight",
+        "24": "0",
+        "25": "milk_set_temp",
+        "26": "0",
+        "27": "0",
+        "28": "0",
+        "29": "0",
+        "30": "0",
+        "31": "0"
+      },
+      "call": "0x109848",
+      "evidence": "SESSION §10.2 (ikke trigger)"
+    },
+    "recipe_nfc": {
+      "sub": 4,
+      "len": 21,
+      "words": "4..24",
+      "call": "0x1437e8",
+      "note": "NFC saetter word4/11/23; oevrige fra mirror. Inkluderer IKKE word25.",
+      "evidence": "app_nfc_thread"
+    },
+    "recipe_preset": {
+      "sub": 4,
+      "len": 22,
+      "words": "4..25",
+      "call": "0x127e18",
+      "note": "preset saetter word4/11/23/14/25. Inkluderer word25 (milk).",
+      "evidence": "pagePresetStoreApply"
+    },
+    "preinfusion_head": {
+      "sub": 112,
+      "len": 2,
+      "words": "112..113 (len3=+114)",
+      "layout": {
+        "112": "(preInfusionSwitch<<8)|preInfusionPressure",
+        "113": "(preInfusionTime<<8)|breakTime",
+        "114": "headTemper (C, MCU x10)"
+      },
+      "call": "0xeb570/0x103bc8/0x133334; boot 0x146b0c(len3)",
+      "evidence": "onClick + model_data_init + MCU 0x1E10"
+    },
+    "boot_push_setup": {
+      "sub": 1,
+      "len": 30,
+      "words": "1..30",
+      "call": "0x14685c",
+      "note": "fuart_thread boot-push af alle setup-ord fra mirror (config->model_data_init). Korrigerer WRITETEST.",
+      "evidence": "fuart_thread"
+    }
+  },
+  "quirks": [
+    "hotwater_temp has NO setpoint — displayed value is e-boiler sensor word40 (read-only).",
+    "brewMode config field is vestigial (get/setExtractModeValue have 0 callers).",
+    "sleepMode/sleepModeSetting have NO UI editor (setters 0 callers); sleep timing hardcoded 1800/600 ticks.",
+    "word112=(preInfusionSwitch<<8)|preInfusionPressure; word113=(preInfusionTime<<8)|breakTime; word114=headTemper(C).",
+    "word14 multiplexed steam_gear / preinfusion-pressure role; MCU recipe 0x1E10 reads word112 lo-byte (pressure) and handles only 3/4.",
+    "word13 hardcoded 60 at boot but overwritten by MCU recipe 0x1E10 during brew setup; preinfusion duration = word13 + word113_lo.",
+    "breakTime (word113 lo) is overwritten by MCU with preInfusionTime -> separate breakTime has no effect in standard brew.",
+    "Boot DOES push params to MCU (fuart_thread sub1 len30 + sub112 len3) — corrects WRITETEST 'no boot push'.",
+    "Trigger words 3/6/9/26/27/30 MUST be 0 in normal blocks (else tare/calibration/reboot). word30=1 reboots MCU.",
+    "Steam requires physical wand contact (PE.2, word44 bit0); a write alone won't start steam.",
+    "preinfusion picker navigation is anomalous (rows push nav+0x6c = wifi page); value formulas confirmed but picker option-count (max) not resolved — verify online.",
+    "volume has slider 0..100 (authoritative) + discrete High/Medium/Low/Mute selector; discrete mapping not fully resolved."
+  ]
+}

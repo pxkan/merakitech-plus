@@ -1,0 +1,92 @@
+{
+  "name": "hotwater",
+  "description": "Varmt vand: sub9 len11 → vægt-dosering → auto-stop ved ord39≥ord17",
+  "duration_s": 15,
+  "events": [
+    {
+      "t": 2,
+      "target": "ui",
+      "cmd": "action",
+      "name": "water"
+    },
+    {
+      "t": 5,
+      "target": "runner",
+      "op": "snapshot",
+      "label": "dispensing"
+    },
+    {
+      "t": 12,
+      "target": "runner",
+      "op": "snapshot",
+      "label": "done"
+    }
+  ],
+  "expect": [
+    {
+      "kind": "phase",
+      "t": 4,
+      "window": 1.5,
+      "value": "WATER"
+    },
+    {
+      "kind": "work_sta_seen",
+      "t0": 2.5,
+      "t1": 9,
+      "value": "0x030B"
+    },
+    {
+      "kind": "word_hold",
+      "word": 39,
+      "t0": 2.5,
+      "t1": 8.4,
+      "min": 0,
+      "max": 412
+    },
+    {
+      "kind": "word_hold",
+      "word": 39,
+      "t0": 8.8,
+      "t1": 9.1,
+      "min": 394,
+      "max": 415
+    },
+    {
+      "kind": "word",
+      "word": 16,
+      "t": 10,
+      "window": 1,
+      "value": 0
+    },
+    {
+      "kind": "word_hold",
+      "word": 39,
+      "t0": 11,
+      "t1": 13.5,
+      "min": 380,
+      "max": 405
+    },
+    {
+      "kind": "word_hold",
+      "word": 52,
+      "t0": 3.5,
+      "t1": 8,
+      "min": 450,
+      "max": 700
+    },
+    {
+      "kind": "sim_log",
+      "assert": "activity_stop",
+      "activity": "water",
+      "reason_contains": "vægt",
+      "t0": 7,
+      "t1": 10
+    },
+    {
+      "kind": "phase",
+      "t": 12,
+      "window": 1.5,
+      "value": "READY"
+    }
+  ]
+}

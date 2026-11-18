@@ -1,0 +1,244 @@
+{
+  "name": "power_off_wake",
+  "description": "v6.14: HOLD 1,6 s → cmd8 (alarm 0/0/0) + cmd6 sub0 len2 [0,0] ACK → MCU i dvale (tavs UART, regs bevaret, keep-awake pause) → knap-hold 1,6 s på sim → MCU REBOOT til fabriks-defaults (ord11=920, ord114=50) → 0x89 → re-push genskaber config (ord11=870) → PowerOn + HJEM",
+  "duration_s": 55,
+  "events": [
+    {
+      "t": 2,
+      "target": "ui",
+      "cmd": "key",
+      "value": 1
+    },
+    {
+      "t": 3.6,
+      "target": "ui",
+      "cmd": "key",
+      "value": 0
+    },
+    {
+      "t": 5,
+      "target": "runner",
+      "op": "snapshot",
+      "label": "slukket"
+    },
+    {
+      "t": 40,
+      "target": "sim",
+      "event": {
+        "type": "power_key",
+        "value": 1
+      }
+    },
+    {
+      "t": 40,
+      "target": "ui",
+      "cmd": "key",
+      "value": 1
+    },
+    {
+      "t": 41.6,
+      "target": "sim",
+      "event": {
+        "type": "power_key",
+        "value": 0
+      }
+    },
+    {
+      "t": 41.6,
+      "target": "ui",
+      "cmd": "key",
+      "value": 0
+    },
+    {
+      "t": 44,
+      "target": "runner",
+      "op": "snapshot",
+      "label": "vaagnet"
+    },
+    {
+      "t": 50,
+      "target": "runner",
+      "op": "snapshot",
+      "label": "taendt"
+    }
+  ],
+  "expect": [
+    {
+      "kind": "phase",
+      "t": 1.5,
+      "window": 1,
+      "value": "READY"
+    },
+    {
+      "kind": "sim_log",
+      "assert": "time_sync_seen",
+      "alarm0": true,
+      "t0": 3.5,
+      "t1": 4.5
+    },
+    {
+      "kind": "sim_log",
+      "assert": "write_words",
+      "sub": 0,
+      "words": [0, 0],
+      "t0": 3.5,
+      "t1": 4.5
+    },
+    {
+      "kind": "sim_log",
+      "assert": "ack_words",
+      "sub": 0,
+      "words": [0, 0],
+      "t0": 3.5,
+      "t1": 4.6
+    },
+    {
+      "kind": "sim_log",
+      "assert": "dvale_seen",
+      "t0": 3.5,
+      "t1": 4.5
+    },
+    {
+      "kind": "power",
+      "t": 3.7,
+      "window": 0.5,
+      "value": "turning_off"
+    },
+    {
+      "kind": "power_counter",
+      "field": "ack8",
+      "min": 1,
+      "t0": 3,
+      "t1": 5
+    },
+    {
+      "kind": "power_hold",
+      "t0": 6,
+      "t1": 39,
+      "value": "off",
+      "min_ratio": 0.95
+    },
+    {
+      "kind": "page",
+      "t": 10,
+      "window": 5,
+      "value": "off"
+    },
+    {
+      "kind": "phase_hold",
+      "t0": 6,
+      "t1": 39,
+      "value": "OFFLINE",
+      "min_ratio": 0.9
+    },
+    {
+      "kind": "sim_log",
+      "assert": "no_acks_between",
+      "t0": 5,
+      "t1": 39
+    },
+    {
+      "kind": "sim_log",
+      "assert": "no_writes_between",
+      "t0": 5,
+      "t1": 39,
+      "except_subs": []
+    },
+    {
+      "kind": "sim_log",
+      "assert": "power_wake_seen",
+      "cause_contains": "power_key",
+      "t0": 41,
+      "t1": 43
+    },
+    {
+      "kind": "sim_log",
+      "assert": "reboot_seen",
+      "factory": true,
+      "t0": 41,
+      "t1": 43
+    },
+    {
+      "kind": "sim_log",
+      "assert": "factory_defaults",
+      "t0": 41,
+      "t1": 43
+    },
+    {
+      "kind": "sim_log",
+      "assert": "boot_push",
+      "t0": 41.5
+    },
+    {
+      "kind": "sim_log",
+      "assert": "write_words",
+      "sub": 0,
+      "words": [1],
+      "t0": 41.5,
+      "t1": 47
+    },
+    {
+      "kind": "sim_log",
+      "assert": "awake_write_seen"
+    },
+    {
+      "kind": "word",
+      "word": 0,
+      "t": 48,
+      "window": 3,
+      "value": 1
+    },
+    {
+      "kind": "word",
+      "word": 11,
+      "t": 48,
+      "window": 3,
+      "value": 870
+    },
+    {
+      "kind": "word",
+      "word": 114,
+      "t": 48,
+      "window": 3,
+      "value": 70
+    },
+    {
+      "kind": "power",
+      "t": 47,
+      "window": 3,
+      "value": "on"
+    },
+    {
+      "kind": "page",
+      "t": 47,
+      "window": 3,
+      "value": "home"
+    },
+    {
+      "kind": "toast",
+      "t": 44,
+      "window": 2.5,
+      "contains": "TÆNDT"
+    },
+    {
+      "kind": "phase",
+      "t": 50,
+      "window": 2,
+      "value": "READY"
+    },
+    {
+      "kind": "power_counter",
+      "field": "offs",
+      "min": 1,
+      "t0": 3,
+      "t1": 55
+    },
+    {
+      "kind": "power_counter",
+      "field": "ons",
+      "min": 1,
+      "t0": 41,
+      "t1": 55
+    }
+  ]
+}

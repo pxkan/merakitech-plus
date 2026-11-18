@@ -1,0 +1,141 @@
+{
+  "name": "stop_grind",
+  "description": "v6.13: KVÆRN startes; MANUEL STOP midt i rampen (cmd6 sub6 len1 ord6=0) → ACK, bit6 ryddet ≤0,5 s, vægten HOLDER (ingen ramp mod mål+2), cur2-decay som auto-stop, stop.ok=1",
+  "duration_s": 14,
+  "events": [
+    {
+      "t": 2,
+      "target": "ui",
+      "cmd": "action",
+      "name": "grind"
+    },
+    {
+      "t": 5,
+      "target": "runner",
+      "op": "snapshot",
+      "label": "grinding"
+    },
+    {
+      "t": 7,
+      "target": "ui",
+      "cmd": "action",
+      "name": "grind_stop"
+    },
+    {
+      "t": 10,
+      "target": "runner",
+      "op": "snapshot",
+      "label": "stopped"
+    }
+  ],
+  "expect": [
+    {
+      "kind": "sim_log",
+      "assert": "activity_start",
+      "activity": "grind",
+      "t0": 2,
+      "t1": 3.8
+    },
+    {
+      "kind": "phase",
+      "t": 4.5,
+      "window": 1.5,
+      "value": "GRIND"
+    },
+    {
+      "kind": "work_sta_seen",
+      "t0": 3,
+      "t1": 6.8,
+      "value": "0x0141"
+    },
+    {
+      "kind": "word_min_seen",
+      "word": 38,
+      "min": 50,
+      "signed": true,
+      "t0": 5,
+      "t1": 6.9
+    },
+    {
+      "kind": "sim_log",
+      "assert": "write_words",
+      "sub": 6,
+      "words": [0],
+      "t0": 6.8,
+      "t1": 7.6
+    },
+    {
+      "kind": "sim_log",
+      "assert": "ack_words",
+      "sub": 6,
+      "words": [0],
+      "t0": 6.8,
+      "t1": 7.8
+    },
+    {
+      "kind": "word",
+      "word": 33,
+      "mask": "0x0040",
+      "value": 0,
+      "t": 7.3,
+      "window": 0.3
+    },
+    {
+      "kind": "word",
+      "word": 6,
+      "t": 8,
+      "window": 1,
+      "value": 0
+    },
+    {
+      "kind": "word_hold",
+      "word": 38,
+      "t0": 8,
+      "t1": 11,
+      "min": 80,
+      "max": 100,
+      "signed": true
+    },
+    {
+      "kind": "word_hold",
+      "word": 58,
+      "t0": 8.5,
+      "t1": 10.5,
+      "min": 0,
+      "max": 60
+    },
+    {
+      "kind": "sim_log",
+      "assert": "activity_stop",
+      "activity": "grind",
+      "reason_contains": "manuel",
+      "t0": 6.8,
+      "t1": 7.8
+    },
+    {
+      "kind": "stop_ok",
+      "min": 1,
+      "max_fail": 0,
+      "t0": 7,
+      "t1": 11
+    },
+    {
+      "kind": "toast",
+      "t": 7.2,
+      "window": 0.4,
+      "contains": "STOP"
+    },
+    {
+      "kind": "toast",
+      "t": 8,
+      "window": 1.2,
+      "contains": "STOPP"
+    },
+    {
+      "kind": "phase",
+      "t": 10.5,
+      "window": 1.5,
+      "value": "READY"
+    }
+  ]
+}

@@ -1,0 +1,66 @@
+{
+  "name": "replay_v2",
+  "description": "REPLAY serve: v2 hot water-trace (2 dispenseringer, 8× hastighed)",
+  "duration_s": 20,
+  "events": [
+    {
+      "t": 6.3,
+      "target": "runner",
+      "op": "snapshot",
+      "label": "water1"
+    },
+    {
+      "t": 11.8,
+      "target": "runner",
+      "op": "snapshot",
+      "label": "water2"
+    }
+  ],
+  "expect": [
+    {
+      "kind": "phase",
+      "t": 6.3,
+      "window": 0.6,
+      "value": "WATER"
+    },
+    {
+      "kind": "phase",
+      "t": 11.8,
+      "window": 0.6,
+      "value": "WATER"
+    },
+    {
+      "kind": "replay_truth",
+      "word": 39,
+      "t0": 6.4,
+      "t1": 6.9,
+      "peak_min": 400
+    },
+    {
+      "kind": "word_hold",
+      "word": 39,
+      "t0": 7.2,
+      "t1": 7.7,
+      "min": 385,
+      "max": 402
+    },
+    {
+      "kind": "word",
+      "word": 16,
+      "t": 7.5,
+      "window": 1,
+      "value": 0
+    },
+    {
+      "kind": "phase",
+      "t": 14,
+      "window": 2,
+      "value": "READY"
+    }
+  ],
+  "replay": {
+    "csv": "sim/fixtures/captures/uart_live_v2.csv.gz",
+    "mode": "serve",
+    "speed": 8
+  }
+}

@@ -1,0 +1,140 @@
+{
+  "name": "stop_water",
+  "description": "v6.13: VAND (auto) startes; MANUEL STOP midt i doseringen (cmd6 sub16 len1 ord16=0) → ACK, bits 1+3+9 ryddet ≤0,5 s, vægt-ramp standser ved aktuel vægt (ingen snap til mål), post/drip + flow-decay som auto-stop, stop.ok=1",
+  "duration_s": 14,
+  "events": [
+    {
+      "t": 2,
+      "target": "ui",
+      "cmd": "action",
+      "name": "water"
+    },
+    {
+      "t": 5,
+      "target": "runner",
+      "op": "snapshot",
+      "label": "dispensing"
+    },
+    {
+      "t": 6,
+      "target": "ui",
+      "cmd": "action",
+      "name": "water_stop"
+    },
+    {
+      "t": 9,
+      "target": "runner",
+      "op": "snapshot",
+      "label": "stopped"
+    }
+  ],
+  "expect": [
+    {
+      "kind": "sim_log",
+      "assert": "activity_start",
+      "activity": "water",
+      "t0": 2,
+      "t1": 3.5
+    },
+    {
+      "kind": "phase",
+      "t": 4,
+      "window": 1.5,
+      "value": "WATER"
+    },
+    {
+      "kind": "work_sta_seen",
+      "t0": 2.5,
+      "t1": 5.8,
+      "value": "0x030B"
+    },
+    {
+      "kind": "word_min_seen",
+      "word": 39,
+      "min": 150,
+      "t0": 4.5,
+      "t1": 5.9
+    },
+    {
+      "kind": "sim_log",
+      "assert": "write_words",
+      "sub": 16,
+      "words": [0],
+      "t0": 5.8,
+      "t1": 6.6
+    },
+    {
+      "kind": "sim_log",
+      "assert": "ack_words",
+      "sub": 16,
+      "words": [0],
+      "t0": 5.8,
+      "t1": 6.8
+    },
+    {
+      "kind": "word",
+      "word": 33,
+      "mask": "0x020A",
+      "value": 0,
+      "t": 6.3,
+      "window": 0.3
+    },
+    {
+      "kind": "word",
+      "word": 16,
+      "t": 7,
+      "window": 1,
+      "value": 0
+    },
+    {
+      "kind": "word_hold",
+      "word": 39,
+      "t0": 7,
+      "t1": 9,
+      "min": 215,
+      "max": 262,
+      "signed": true
+    },
+    {
+      "kind": "word_hold",
+      "word": 52,
+      "t0": 8,
+      "t1": 9.5,
+      "min": 0,
+      "max": 5
+    },
+    {
+      "kind": "sim_log",
+      "assert": "activity_stop",
+      "activity": "water",
+      "reason_contains": "manuel",
+      "t0": 5.8,
+      "t1": 6.8
+    },
+    {
+      "kind": "stop_ok",
+      "min": 1,
+      "max_fail": 0,
+      "t0": 6,
+      "t1": 10
+    },
+    {
+      "kind": "toast",
+      "t": 6.2,
+      "window": 0.4,
+      "contains": "STOP"
+    },
+    {
+      "kind": "toast",
+      "t": 7,
+      "window": 1.2,
+      "contains": "STOPP"
+    },
+    {
+      "kind": "phase",
+      "t": 10,
+      "window": 1.5,
+      "value": "READY"
+    }
+  ]
+}

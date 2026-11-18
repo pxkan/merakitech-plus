@@ -1,0 +1,58 @@
+{
+  "name": "gesture_switcher",
+  "description": "Gestus-switcher: ÆGTE switcher_host i fil-mode (3×1,6 s hjørne-hold → trigger; 2 hold → ingen) + UI ignorerer hjørnet",
+  "duration_s": 12,
+  "events": [
+    {
+      "t": 1,
+      "target": "runner",
+      "op": "gesture",
+      "name": "positiv",
+      "presses": 3,
+      "inject_ui": true
+    },
+    {
+      "t": 5,
+      "target": "runner",
+      "op": "gesture",
+      "name": "negativ_2holds",
+      "presses": 2
+    },
+    {
+      "t": 8,
+      "target": "runner",
+      "op": "snapshot",
+      "label": "home"
+    }
+  ],
+  "expect": [
+    {
+      "kind": "gesture",
+      "name": "positiv",
+      "expect_trigger": true
+    },
+    {
+      "kind": "gesture",
+      "name": "negativ_2holds",
+      "expect_trigger": false
+    },
+    {
+      "kind": "phase_hold",
+      "t0": 2,
+      "t1": 11,
+      "value": "READY",
+      "min_ratio": 0.9
+    },
+    {
+      "kind": "sim_log",
+      "assert": "no_writes_between",
+      "t0": 1,
+      "t1": 11,
+      "except_subs": [
+        0,
+        1,
+        112
+      ]
+    }
+  ]
+}

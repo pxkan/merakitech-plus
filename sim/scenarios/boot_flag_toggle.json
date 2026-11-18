@@ -1,0 +1,61 @@
+{
+  "name": "boot_flag_toggle",
+  "description": "BOOT-UI toggle: /customer/new touch/rm i sandbox (kun flag, ingen MCU-writes, ingen reboot)",
+  "duration_s": 10,
+  "events": [
+    {
+      "t": 2,
+      "target": "ui",
+      "cmd": "boot_flag",
+      "value": true
+    },
+    {
+      "t": 6,
+      "target": "ui",
+      "cmd": "boot_flag",
+      "value": false
+    },
+    {
+      "t": 3.5,
+      "target": "runner",
+      "op": "snapshot",
+      "label": "flag-B"
+    },
+    {
+      "t": 7.5,
+      "target": "runner",
+      "op": "snapshot",
+      "label": "flag-A"
+    }
+  ],
+  "expect": [
+    {
+      "kind": "flag",
+      "t": 3,
+      "exists": true
+    },
+    {
+      "kind": "word",
+      "word": 0,
+      "t": 3.5,
+      "window": 1,
+      "value": 1
+    },
+    {
+      "kind": "flag",
+      "t": 7,
+      "exists": false
+    },
+    {
+      "kind": "sim_log",
+      "assert": "no_writes_between",
+      "t0": 1,
+      "t1": 9,
+      "except_subs": [
+        0,
+        1,
+        112
+      ]
+    }
+  ]
+}

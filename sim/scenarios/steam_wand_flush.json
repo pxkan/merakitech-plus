@@ -1,0 +1,194 @@
+{
+  "name": "steam_wand_flush",
+  "description": "Wand-flush UNDER bryg: 0x5327, ord24=0, ingen auto-stop >650, release-stop, bryg fortsætter (ingen flush-writes)",
+  "duration_s": 34,
+  "events": [
+    {
+      "t": 1,
+      "target": "ui",
+      "cmd": "action",
+      "name": "brew"
+    },
+    {
+      "t": 9.5,
+      "target": "sim",
+      "event": {
+        "type": "milk_jump",
+        "value": 600
+      }
+    },
+    {
+      "t": 10,
+      "target": "sim",
+      "event": {
+        "type": "wand_down"
+      }
+    },
+    {
+      "t": 16,
+      "target": "sim",
+      "event": {
+        "type": "wand_up"
+      }
+    },
+    {
+      "t": 12,
+      "target": "runner",
+      "op": "snapshot",
+      "label": "flush-under-brew"
+    },
+    {
+      "t": 20,
+      "target": "runner",
+      "op": "snapshot",
+      "label": "brew-continues"
+    },
+    {
+      "t": 31,
+      "target": "runner",
+      "op": "snapshot",
+      "label": "ready"
+    }
+  ],
+  "expect": [
+    {
+      "kind": "phase",
+      "t": 4,
+      "window": 1,
+      "value": "PRE"
+    },
+    {
+      "kind": "phase",
+      "t": 9,
+      "window": 0.7,
+      "value": "EXT"
+    },
+    {
+      "kind": "work_sta_seen",
+      "t0": 8,
+      "t1": 9.8,
+      "value": "0x1307"
+    },
+    {
+      "kind": "sim_log",
+      "assert": "activity_start",
+      "activity": "steam",
+      "t0": 9.8,
+      "t1": 10.5
+    },
+    {
+      "kind": "work_sta_seen",
+      "t0": 10.2,
+      "t1": 15.8,
+      "value": "0x5327"
+    },
+    {
+      "kind": "phase",
+      "t": 13,
+      "window": 1,
+      "value": "STEAM"
+    },
+    {
+      "kind": "word",
+      "word": 24,
+      "t": 13,
+      "window": 1,
+      "value": 0
+    },
+    {
+      "kind": "word",
+      "word": 46,
+      "t": 13,
+      "window": 1,
+      "value": 1
+    },
+    {
+      "kind": "word",
+      "word": 44,
+      "t": 13,
+      "window": 1,
+      "value": 1,
+      "mask": "0x0001"
+    },
+    {
+      "kind": "word_hold",
+      "word": 48,
+      "t0": 14.6,
+      "t1": 15.8,
+      "min": 650,
+      "max": 720
+    },
+    {
+      "kind": "word_min_seen",
+      "word": 48,
+      "t0": 14.5,
+      "t1": 16,
+      "min": 660
+    },
+    {
+      "kind": "sim_log",
+      "assert": "no_write_word",
+      "word": 24,
+      "t0": 9,
+      "t1": 17
+    },
+    {
+      "kind": "sim_log",
+      "assert": "activity_stop",
+      "activity": "steam",
+      "reason_contains": "wand",
+      "t0": 15.5,
+      "t1": 16.5
+    },
+    {
+      "kind": "work_sta_seen",
+      "t0": 16.5,
+      "t1": 20,
+      "value": "0x1307"
+    },
+    {
+      "kind": "phase",
+      "t": 18,
+      "window": 1,
+      "value": "EXT"
+    },
+    {
+      "kind": "word_hold",
+      "word": 39,
+      "t0": 12.5,
+      "t1": 15.5,
+      "min": 40,
+      "max": 120,
+      "signed": true
+    },
+    {
+      "kind": "word_min_seen",
+      "word": 39,
+      "t0": 15.2,
+      "t1": 16.2,
+      "min": 100,
+      "signed": true
+    },
+    {
+      "kind": "sim_log",
+      "assert": "activity_stop",
+      "activity": "brew",
+      "reason_contains": "vægt",
+      "t0": 27.5,
+      "t1": 30
+    },
+    {
+      "kind": "word",
+      "word": 22,
+      "t": 30,
+      "window": 1,
+      "value": 0
+    },
+    {
+      "kind": "phase",
+      "t": 32,
+      "window": 1.5,
+      "value": "READY"
+    }
+  ]
+}

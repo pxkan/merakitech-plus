@@ -1,0 +1,5 @@
+{
+  "version": "v6.5-scenarios",
+  "description": "UI-profil for ourui's SIM-build: TOM efter scenarie-reconcilingen (sim/reports/v6.5-scenarios/RECONCILE.md). Scenarie-filerne asserter nu direkte ourui's vogtede adfærd (Meraki+ v6.4+: act_guard, frame-politik, låste rækker, lysstyrke min 1, layout-krog, korrigeret replay-vindue), så den rå UI-suite er grøn uden overrides. Override-mekanismen i run_e2e.py er uændret og bagudkompatibel (--ui-profile <fil> kan stadig pege på fx den historiske artifacts/ourui/sim_ui_profile.json fra v6.4 — den matcher dog ikke de reconcilerede scenarier og vil fejle pr. override). Reference-klientens oracle-adfærd ligger i sim/sim_ui_profile-ref.json.",
+  "scenarios": {}
+}

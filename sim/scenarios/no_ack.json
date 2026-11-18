@@ -1,0 +1,104 @@
+{
+  "name": "no_ack",
+  "description": "ACK-udeblivelse: GEM skal blokere (retransmit→FAIL, config uændret), derefter recovery med normal profil",
+  "duration_s": 12,
+  "events": [
+    {
+      "t": 3,
+      "target": "ui",
+      "cmd": "save",
+      "param": "brew_temp",
+      "value": 880
+    },
+    {
+      "t": 6,
+      "target": "sim",
+      "cmd": "ack_profile",
+      "profile": "normal"
+    },
+    {
+      "t": 7,
+      "target": "ui",
+      "cmd": "save",
+      "param": "brew_temp",
+      "value": 880
+    },
+    {
+      "t": 4,
+      "target": "runner",
+      "op": "snapshot",
+      "label": "save-blocked"
+    },
+    {
+      "t": 9,
+      "target": "runner",
+      "op": "snapshot",
+      "label": "save-ok"
+    }
+  ],
+  "expect": [
+    {
+      "kind": "save",
+      "t": 3.6,
+      "window": 0.9,
+      "state": "fail",
+      "param": "brew_temp"
+    },
+    {
+      "kind": "toast",
+      "t": 3.6,
+      "window": 1.2,
+      "contains": "GEM FEJLET"
+    },
+    {
+      "kind": "config",
+      "field": "brewTemper",
+      "t": 5,
+      "value": 870
+    },
+    {
+      "kind": "sim_log",
+      "assert": "acks_dropped_min",
+      "value": 2
+    },
+    {
+      "kind": "sim_log",
+      "assert": "writes_min",
+      "sub": 11,
+      "value": 2,
+      "t0": 2.8,
+      "t1": 4.2
+    },
+    {
+      "kind": "cmd6",
+      "field": "fail",
+      "op": ">=",
+      "value": 1
+    },
+    {
+      "kind": "cmd6",
+      "field": "retx",
+      "op": ">=",
+      "value": 1
+    },
+    {
+      "kind": "save",
+      "t": 8,
+      "window": 1,
+      "state": "ok",
+      "param": "brew_temp"
+    },
+    {
+      "kind": "config",
+      "field": "brewTemper",
+      "t": 9,
+      "value": 880
+    }
+  ],
+  "sim": {
+    "profile": "no_ack"
+  },
+  "universal": {
+    "no_cmd6_fail": false
+  }
+}

@@ -1,0 +1,62 @@
+{
+  "name": "fault_e1",
+  "description": "E1 (gruppe >110°): fejl-UI + bryg-start SPÆRRET (act_guard-toast)",
+  "duration_s": 12,
+  "events": [
+    {
+      "t": 3,
+      "target": "sim",
+      "event": {
+        "type": "fault",
+        "e1": 32,
+        "dur": 5
+      }
+    },
+    {
+      "t": 4,
+      "target": "ui",
+      "cmd": "action",
+      "name": "brew"
+    },
+    {
+      "t": 5,
+      "target": "runner",
+      "op": "snapshot",
+      "label": "error"
+    }
+  ],
+  "expect": [
+    {
+      "kind": "phase",
+      "t": 5,
+      "window": 1.5,
+      "value": "ERROR"
+    },
+    {
+      "kind": "word",
+      "word": 34,
+      "t": 5,
+      "window": 1.5,
+      "value": 32
+    },
+    {
+      "kind": "toast",
+      "t": 4.5,
+      "window": 1.0,
+      "contains": "FEJL AKTIV"
+    },
+    {
+      "kind": "word",
+      "word": 22,
+      "t": 6.5,
+      "window": 1,
+      "value": 0
+    },
+    {
+      "kind": "phase",
+      "t": 9.5,
+      "window": 1.5,
+      "value": "READY"
+    }
+  ]
+}

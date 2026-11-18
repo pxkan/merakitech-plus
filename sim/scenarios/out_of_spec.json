@@ -1,0 +1,98 @@
+{
+  "name": "out_of_spec",
+  "description": "Out-of-spec config: UI spærrer start + frame-politikken blokerer boot-push (BLOK≥1); rettelse → start virker",
+  "duration_s": 14,
+  "events": [
+    {
+      "t": 3,
+      "target": "ui",
+      "cmd": "action",
+      "name": "brew"
+    },
+    {
+      "t": 6,
+      "target": "runner",
+      "op": "config_set",
+      "field": "brewTemper",
+      "value": 870
+    },
+    {
+      "t": 6.2,
+      "target": "runner",
+      "op": "config_set",
+      "field": "autoGrindWeight",
+      "value": 185
+    },
+    {
+      "t": 6.4,
+      "target": "runner",
+      "op": "config_set",
+      "field": "AtuoSteamTarge",
+      "value": 650,
+      "reload": true
+    },
+    {
+      "t": 8,
+      "target": "ui",
+      "cmd": "action",
+      "name": "brew"
+    },
+    {
+      "t": 3.5,
+      "target": "runner",
+      "op": "snapshot",
+      "label": "oor-blocked"
+    },
+    {
+      "t": 10,
+      "target": "runner",
+      "op": "snapshot",
+      "label": "brew-after-fix"
+    }
+  ],
+  "expect": [
+    {
+      "kind": "config_oor_min",
+      "t0": 1,
+      "t1": 5,
+      "min": 3
+    },
+    {
+      "kind": "toast",
+      "t": 3.5,
+      "window": 1,
+      "contains": "UDEN FOR SPEC"
+    },
+    {
+      "kind": "sim_log",
+      "assert": "no_writes_between",
+      "t0": 1,
+      "t1": 5.5,
+      "except_subs": [
+        0,
+        1,
+        112
+      ]
+    },
+    {
+      "kind": "cmd6",
+      "field": "block",
+      "op": ">=",
+      "value": 1
+    },
+    {
+      "kind": "phase",
+      "t": 10,
+      "window": 2,
+      "value": "PRE"
+    }
+  ],
+  "config": {
+    "brewTemper": 1200,
+    "autoGrindWeight": 999,
+    "AtuoSteamTarge": 710
+  },
+  "universal": {
+    "ranges": false
+  }
+}

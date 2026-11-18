@@ -1,0 +1,54 @@
+# build output (./build.sh) and local logs
+/build/
+/logs/
+sim/reports/
+*.o
+a.o
+
+# python
+__pycache__/
+*.pyc
+.venv/
+venv/
+
+# NEVER commit vendor firmware / binaries / scripts pulled from a machine
+/vendor-local/
+demo_v9
+demo_v9*.bin
+demo_v9_release*
+demo_v9.dis
+*.dis
+MEM03_*.bin
+config.bin
+fb0_raw.bin
+temp.tar.gz
+ota_manifest*.json
+/demo.sh
+/test.sh
+/upgrade.sh
+libs/
+
+# NEVER commit device configuration or credentials
+config.json
+!sim/fixtures/config.json
+wpa_supplicant.conf
+*.psk
+*.pem
+*.key
+.env
+secrets*
+
+# personal working notes / raw reports from a specific machine
+FINDINGS.md
+SESSION.md
+*-REPORT*.md
+INSTALL-*.md
+telnet_session.log
+last_raw.bin
+*.pkl
+
+# editors / OS
+.DS_Store
+.idea/
+.vscode/
+*.swp

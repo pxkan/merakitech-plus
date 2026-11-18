@@ -1,0 +1,90 @@
+{
+  "name": "stop_control_auto",
+  "description": "v6.13-kontrol: VAND (auto) UDEN stop-word — ingen writes til stop-ordene, ord16=1 hele doseringen, MCU auto-stopper ved ord39≥ord17 (ord16 MCU-ryddet), uændret auto-stop-adfærd",
+  "duration_s": 15,
+  "events": [
+    {
+      "t": 2,
+      "target": "ui",
+      "cmd": "action",
+      "name": "water"
+    },
+    {
+      "t": 5,
+      "target": "runner",
+      "op": "snapshot",
+      "label": "dispensing"
+    },
+    {
+      "t": 12,
+      "target": "runner",
+      "op": "snapshot",
+      "label": "auto-stopped"
+    }
+  ],
+  "expect": [
+    {
+      "kind": "sim_log",
+      "assert": "activity_start",
+      "activity": "water",
+      "t0": 2,
+      "t1": 3.5
+    },
+    {
+      "kind": "phase",
+      "t": 4,
+      "window": 1.5,
+      "value": "WATER"
+    },
+    {
+      "kind": "work_sta_seen",
+      "t0": 2.5,
+      "t1": 8,
+      "value": "0x030B"
+    },
+    {
+      "kind": "word",
+      "word": 16,
+      "t": 7,
+      "window": 0.5,
+      "value": 1
+    },
+    {
+      "kind": "sim_log",
+      "assert": "no_writes_between",
+      "t0": 2.6,
+      "t1": 8,
+      "except_subs": [0, 1, 112]
+    },
+    {
+      "kind": "sim_log",
+      "assert": "activity_stop",
+      "activity": "water",
+      "reason_contains": "vægt",
+      "t0": 7.5,
+      "t1": 10
+    },
+    {
+      "kind": "word",
+      "word": 16,
+      "t": 10,
+      "window": 1,
+      "value": 0
+    },
+    {
+      "kind": "word_hold",
+      "word": 39,
+      "t0": 10,
+      "t1": 12.5,
+      "min": 380,
+      "max": 405,
+      "signed": true
+    },
+    {
+      "kind": "phase",
+      "t": 12,
+      "window": 1.5,
+      "value": "READY"
+    }
+  ]
+}

@@ -1,0 +1,93 @@
+{
+  "name": "steam_manual_stop",
+  "description": "Damp m. wand → MANUEL stop (sub24 len8 ord24=0) før setpoint",
+  "duration_s": 12,
+  "events": [
+    {
+      "t": 2,
+      "target": "ui",
+      "cmd": "action",
+      "name": "steam"
+    },
+    {
+      "t": 3,
+      "target": "sim",
+      "event": {
+        "type": "wand",
+        "on": true
+      }
+    },
+    {
+      "t": 6,
+      "target": "ui",
+      "cmd": "action",
+      "name": "steam_stop"
+    },
+    {
+      "t": 4,
+      "target": "runner",
+      "op": "snapshot",
+      "label": "steaming"
+    },
+    {
+      "t": 9,
+      "target": "runner",
+      "op": "snapshot",
+      "label": "stopped"
+    }
+  ],
+  "expect": [
+    {
+      "kind": "phase",
+      "t": 4,
+      "window": 1.5,
+      "value": "STEAM"
+    },
+    {
+      "kind": "sim_log",
+      "assert": "write_words",
+      "sub": 24,
+      "words": [
+        0,
+        650,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "t0": 5.8,
+      "t1": 7
+    },
+    {
+      "kind": "word",
+      "word": 24,
+      "t": 7.5,
+      "window": 1,
+      "value": 0
+    },
+    {
+      "kind": "word_hold",
+      "word": 48,
+      "t0": 7,
+      "t1": 10,
+      "min": 240,
+      "max": 330
+    },
+    {
+      "kind": "sim_log",
+      "assert": "activity_stop",
+      "activity": "steam",
+      "reason_contains": "manuel",
+      "t0": 5.5,
+      "t1": 8
+    },
+    {
+      "kind": "phase",
+      "t": 9,
+      "window": 1.5,
+      "value": "READY"
+    }
+  ]
+}

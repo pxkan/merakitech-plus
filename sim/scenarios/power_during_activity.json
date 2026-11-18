@@ -1,0 +1,171 @@
+{
+  "name": "power_during_activity",
+  "description": "v6.14: stock-semantik — power-knap HOLD under bryg spærres (toast STOP AKTIVITETEN FØRST, ingen frames, brygen kører uforstyrret til auto-stop); et NYT fuldt hold efter brygen slukker normalt (cmd8 + sub0 len2 [0,0] → dvale)",
+  "duration_s": 42,
+  "events": [
+    {
+      "t": 2,
+      "target": "ui",
+      "cmd": "action",
+      "name": "brew"
+    },
+    {
+      "t": 5,
+      "target": "ui",
+      "cmd": "key",
+      "value": 1
+    },
+    {
+      "t": 8,
+      "target": "ui",
+      "cmd": "key",
+      "value": 0
+    },
+    {
+      "t": 12,
+      "target": "runner",
+      "op": "snapshot",
+      "label": "bryg-koerer"
+    },
+    {
+      "t": 35.5,
+      "target": "ui",
+      "cmd": "key",
+      "value": 1
+    },
+    {
+      "t": 37.1,
+      "target": "ui",
+      "cmd": "key",
+      "value": 0
+    },
+    {
+      "t": 39.5,
+      "target": "runner",
+      "op": "snapshot",
+      "label": "slukket"
+    }
+  ],
+  "expect": [
+    {
+      "kind": "sim_log",
+      "assert": "activity_start",
+      "activity": "brew",
+      "t0": 2,
+      "t1": 3.5
+    },
+    {
+      "kind": "phase",
+      "t": 4,
+      "window": 1.5,
+      "value": "PRE"
+    },
+    {
+      "kind": "phase",
+      "t": 12,
+      "window": 2,
+      "value": "EXT"
+    },
+    {
+      "kind": "toast",
+      "t": 7,
+      "window": 1.5,
+      "contains": "AKTIVITETEN"
+    },
+    {
+      "kind": "power_counter",
+      "field": "blocked",
+      "min": 1,
+      "t0": 5,
+      "t1": 10
+    },
+    {
+      "kind": "power",
+      "t": 7,
+      "window": 1.5,
+      "value": "on"
+    },
+    {
+      "kind": "sim_log",
+      "assert": "no_writes_between",
+      "t0": 5.5,
+      "t1": 8.5,
+      "except_subs": []
+    },
+    {
+      "kind": "work_sta_seen",
+      "t0": 10,
+      "t1": 28,
+      "value": "0x1307"
+    },
+    {
+      "kind": "sim_log",
+      "assert": "activity_stop",
+      "activity": "brew",
+      "reason_contains": "vægt",
+      "t0": 29,
+      "t1": 34
+    },
+    {
+      "kind": "word",
+      "word": 22,
+      "t": 34.5,
+      "window": 1,
+      "value": 0
+    },
+    {
+      "kind": "phase",
+      "t": 35,
+      "window": 1.5,
+      "value": "READY"
+    },
+    {
+      "kind": "sim_log",
+      "assert": "time_sync_seen",
+      "alarm0": true,
+      "t0": 36.9,
+      "t1": 38
+    },
+    {
+      "kind": "sim_log",
+      "assert": "write_words",
+      "sub": 0,
+      "words": [0, 0],
+      "t0": 36.9,
+      "t1": 38
+    },
+    {
+      "kind": "sim_log",
+      "assert": "ack_words",
+      "sub": 0,
+      "words": [0, 0],
+      "t0": 36.9,
+      "t1": 38.2
+    },
+    {
+      "kind": "sim_log",
+      "assert": "dvale_seen",
+      "t0": 36.9,
+      "t1": 38.2
+    },
+    {
+      "kind": "power",
+      "t": 39,
+      "window": 1.5,
+      "value": "off"
+    },
+    {
+      "kind": "page",
+      "t": 39,
+      "window": 1.5,
+      "value": "off"
+    },
+    {
+      "kind": "power_counter",
+      "field": "offs",
+      "min": 1,
+      "t0": 36,
+      "t1": 42
+    }
+  ]
+}

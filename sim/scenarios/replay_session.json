@@ -1,0 +1,55 @@
+{
+  "name": "replay_session",
+  "description": "REPLAY serve: session sleep/drain-trace (8×): SLEEP det meste af tiden (keep-awake writes giver kortvarige flickers — dokumenteret), kølende boilers",
+  "duration_s": 20,
+  "events": [
+    {
+      "t": 5,
+      "target": "runner",
+      "op": "snapshot",
+      "label": "sleep"
+    },
+    {
+      "t": 15,
+      "target": "runner",
+      "op": "snapshot",
+      "label": "cooling"
+    }
+  ],
+  "expect": [
+    {
+      "kind": "phase_hold",
+      "t0": 2,
+      "t1": 19,
+      "value": "SLEEP",
+      "min_ratio": 0.75
+    },
+    {
+      "kind": "work_sta_seen",
+      "t0": 2,
+      "t1": 19,
+      "value": "0x0001"
+    },
+    {
+      "kind": "word_hold",
+      "word": 47,
+      "t0": 2,
+      "t1": 19,
+      "min": 990,
+      "max": 1030
+    },
+    {
+      "kind": "word_hold",
+      "word": 40,
+      "t0": 2,
+      "t1": 19,
+      "min": 830,
+      "max": 860
+    }
+  ],
+  "replay": {
+    "csv": "sim/fixtures/captures/uart_session.csv.gz",
+    "mode": "serve",
+    "speed": 8
+  }
+}

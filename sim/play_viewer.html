@@ -1,0 +1,629 @@
+<!DOCTYPE html>
+<html lang="da">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Meraki+ SIM Play</title>
+<style>
+  :root {
+    --bg:#14161c; --panel:#1d2028; --panel2:#232733; --line:#323848;
+    --fg:#dfe3ec; --dim:#8b93a7; --acc:#62dea8; --warn:#ffba54; --err:#ff6060;
+    --blue:#5aa0ff;
+  }
+  * { box-sizing:border-box; }
+  body { margin:0; background:var(--bg); color:var(--fg);
+         font:14px/1.45 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif; }
+  header { display:flex; align-items:center; gap:14px; padding:10px 16px;
+           background:var(--panel); border-bottom:1px solid var(--line); flex-wrap:wrap; }
+  header h1 { font-size:17px; margin:0; letter-spacing:.5px; }
+  header h1 span { color:var(--acc); }
+  .pill { padding:2px 10px; border-radius:999px; font-size:12px;
+          background:var(--panel2); border:1px solid var(--line); color:var(--dim); }
+  .pill.ok { color:var(--acc); border-color:var(--acc); }
+  .pill.bad { color:var(--err); border-color:var(--err); }
+  .pill.warn { color:var(--warn); border-color:var(--warn); }
+  main { display:grid; grid-template-columns:500px 1fr; gap:14px; padding:14px 16px;
+         align-items:start; }
+  @media (max-width:1000px){ main { grid-template-columns:1fr; } }
+  .card { background:var(--panel); border:1px solid var(--line); border-radius:10px;
+          padding:12px; margin-bottom:14px; }
+  .card h2 { font-size:13px; text-transform:uppercase; letter-spacing:1px;
+             color:var(--dim); margin:0 0 8px; }
+  #fbwrap { position:relative; width:480px; height:480px; margin:0 auto;
+            border-radius:50%; overflow:hidden; background:#000; cursor:crosshair; }
+  #fb { width:480px; height:480px; display:block; user-select:none; -webkit-user-drag:none; }
+  #ov { position:absolute; inset:0; pointer-events:none; }
+  #coord { position:absolute; left:50%; transform:translateX(-50%); bottom:8px;
+           background:rgba(10,12,16,.8); color:var(--acc); font:12px monospace;
+           padding:2px 10px; border-radius:6px; pointer-events:none; white-space:nowrap; }
+  .hint { color:var(--dim); font-size:12px; margin-top:8px; text-align:center; }
+  #banner { display:none; margin:0 16px; padding:10px 14px; border-radius:8px;
+            background:#3a1d20; border:1px solid var(--err); color:#ffb4b4; }
+  #banner.ref { background:#1d2a3a; border-color:var(--blue); color:#b4d0ff; display:block; }
+  #banner button { margin-left:10px; }
+  table.state { width:100%; border-collapse:collapse; font-size:13px; }
+  table.state td { padding:2px 6px; border-bottom:1px solid var(--line); }
+  table.state td:first-child { color:var(--dim); width:44%; }
+  #phase { font-size:22px; font-weight:700; letter-spacing:1px; }
+  .row { display:flex; flex-wrap:wrap; gap:6px; margin-bottom:8px; align-items:center; }
+  .row .lbl { color:var(--dim); font-size:12px; min-width:86px; }
+  button, select, input[type=number] {
+    background:var(--panel2); color:var(--fg); border:1px solid var(--line);
+    border-radius:7px; padding:5px 10px; font-size:13px; cursor:pointer; }
+  button:hover { border-color:var(--acc); }
+  button:active { transform:translateY(1px); }
+  button.primary { border-color:var(--acc); color:var(--acc); }
+  button.danger { border-color:var(--err); color:var(--err); }
+  button.on { background:var(--acc); color:#10231b; border-color:var(--acc); font-weight:600; }
+  select, input[type=number] { cursor:auto; }
+  input[type=number] { width:80px; }
+  #log { height:220px; overflow-y:auto; background:#101218; border:1px solid var(--line);
+         border-radius:8px; padding:8px; font:11.5px/1.5 ui-monospace,Menlo,monospace;
+         white-space:pre-wrap; word-break:break-all; }
+  #log .w { color:var(--blue); } #log .e { color:var(--err); }
+  #log .a { color:var(--acc); } #log .m { color:var(--warn); }
+  #toasts { max-height:110px; overflow-y:auto; font-size:12.5px; }
+  #toasts div { padding:2px 4px; border-bottom:1px solid var(--line); }
+  #toasts .ok { color:var(--acc); } #toasts .err { color:var(--err); }
+  #toasts .warn { color:var(--warn); }
+  #snaps { font-size:12px; color:var(--dim); }
+  #snaps a { color:var(--blue); text-decoration:none; }
+  #help { display:none; position:fixed; inset:0; background:rgba(8,10,14,.85); z-index:50;
+          align-items:center; justify-content:center; }
+  #help .box { background:var(--panel); border:1px solid var(--line); border-radius:12px;
+               padding:22px 28px; max-width:560px; }
+  #help kbd { background:var(--panel2); border:1px solid var(--line); border-radius:5px;
+              padding:1px 7px; font:12px monospace; color:var(--acc); }
+  #help table td { padding:3px 10px 3px 0; }
+  .grid2 { display:grid; grid-template-columns:1fr 1fr; gap:14px; }
+  @media (max-width:1300px){ .grid2 { grid-template-columns:1fr; } }
+  footer { color:var(--dim); font-size:12px; padding:0 16px 16px; }
+</style>
+</head>
+<body>
+<header>
+  <h1>MERAKI<span>+</span> SIM PLAY</h1>
+  <span class="pill" id="p-client">…</span>
+  <span class="pill" id="p-ui">UI: …</span>
+  <span class="pill" id="p-sim">MCU: …</span>
+  <span class="pill" id="p-speed">1×</span>
+  <span class="pill" id="p-lang">sprog: …</span>
+  <span class="pill" id="p-flag">boot-flag: …</span>
+  <span style="flex:1"></span>
+  <button id="btn-help" title="Tastatur-genveje (?)">?</button>
+</header>
+<div id="banner"></div>
+<main>
+  <div>
+    <div class="card">
+      <h2>Framebuffer (live)</h2>
+      <div id="fbwrap">
+        <img id="fb" alt="framebuffer" src="/fb.png">
+        <canvas id="ov" width="480" height="480"></canvas>
+        <div id="coord">x=– y=–</div>
+      </div>
+      <div class="hint">
+        Klik = tap · <b>hold ≥650 ms</b> på aktivitets-knap = start ·
+        <b>swipe</b> = træk vandret ≥60 px (skifter side) ·
+        <b>scroll</b> = træk lodret i lister/DIAGNOSE (eller musehjul) ·
+        højreklik = gestus-test (3× hold i hjørnet)<br>
+        <label><input type="checkbox" id="zones"> vis tryk-mål (layout)</label>
+        <label style="margin-left:12px"><input type="checkbox" id="autoref" checked> auto-refresh</label>
+      </div>
+    </div>
+    <div class="card">
+      <h2>Seneste toasts</h2>
+      <div id="toasts"></div>
+    </div>
+    <div class="card">
+      <h2>Snapshot-eksport</h2>
+      <div class="row">
+        <button id="btn-snap" class="primary">Eksportér PNG + state</button>
+        <span id="snapmsg" style="color:var(--dim);font-size:12px"></span>
+      </div>
+      <div id="snaps"></div>
+    </div>
+  </div>
+  <div>
+    <div class="card">
+      <h2>State</h2>
+      <div class="row" style="justify-content:space-between">
+        <span id="phase">–</span>
+        <span class="pill" id="p-page">side: –</span>
+        <span class="pill" id="p-link">link: –</span>
+      </div>
+      <table class="state"><tbody id="statetab"></tbody></table>
+    </div>
+    <div class="grid2">
+      <div class="card">
+        <h2>Aktiviteter</h2>
+        <div class="row">
+          <button data-act="grind">Grind (g)</button>
+          <button data-act="brew">Bryg (b)</button>
+          <button data-act="water">Vand (h)</button>
+          <button data-act="steam">Damp (s)</button>
+          <button data-act="steam_stop" class="danger">Stop damp</button>
+        </div>
+        <div class="row">
+          <button id="btn-gesture">Gestus-test (3× hold)</button>
+          <button id="btn-calm">Glat graf: FRA</button>
+          <span id="gesturemsg" style="color:var(--dim);font-size:12px"></span>
+        </div>
+        <div class="row">
+          <span class="lbl">Side</span>
+          <select id="page">
+            <option>home</option><option>settings</option><option>detail</option>
+            <option>sys</option><option>diag</option>
+          </select>
+          <span class="lbl" style="min-width:auto">via ctrl</span>
+        </div>
+        <div class="row">
+          <span class="lbl">Settings-GEM</span>
+          <select id="saveparam">
+            <option value="brew_temp">brew_temp (850–960)</option>
+            <option value="grind_weight">grind_weight (10–309)</option>
+            <option value="brew_weight">brew_weight</option>
+            <option value="hotwater_weight">hotwater_weight</option>
+            <option value="steam_milk_target">steam_milk_target</option>
+            <option value="head_temp">head_temp</option>
+            <option value="preinfusion_time">preinfusion_time</option>
+            <option value="preinfusion_pressure">preinfusion_pressure</option>
+            <option value="break_time">break_time</option>
+          </select>
+          <input type="number" id="saveval" value="880">
+          <button id="btn-save" class="primary">GEM</button>
+          <span id="savemsg" style="color:var(--dim);font-size:12px"></span>
+        </div>
+      </div>
+      <div class="card">
+        <h2>Fejl &amp; link</h2>
+        <div class="row">
+          <button id="btn-fault" class="danger">Fejl-cycle (e)</button>
+          <span id="faultmsg" style="color:var(--dim);font-size:12px"></span>
+        </div>
+        <div class="row">
+          <button id="btn-garbage">CRC-garbage (2 s)</button>
+          <button id="btn-offline">Offline</button>
+          <button id="btn-online">Genonline</button>
+          <button id="btn-closed">Luk pty</button>
+        </div>
+        <div class="row">
+          <span class="lbl">ACK-profil</span>
+          <select id="ack">
+            <option>normal</option><option>observed_v3</option>
+            <option>slow</option><option>lossy</option><option>no_ack</option>
+          </select>
+        </div>
+        <div class="row">
+          <span class="lbl">Wand (PE.2)</span>
+          <button id="btn-wand">Wand til/fra</button>
+          <label style="font-size:12px;color:var(--dim)">
+            <input type="checkbox" id="reqwand"> kræv wand for damp
+          </label>
+        </div>
+      </div>
+      <div class="card">
+        <h2>System &amp; tid</h2>
+        <div class="row">
+          <span class="lbl">Hastighed</span>
+          <button data-speed="1">1×</button>
+          <button data-speed="2">2×</button>
+          <button data-speed="8">8×</button>
+          <button id="btn-pause">Pause (space)</button>
+        </div>
+        <div class="row">
+          <span class="lbl">UI-sprog (l)</span>
+          <button data-lang="da">Dansk</button>
+          <button data-lang="en">Engelsk</button>
+          <span class="lbl" style="min-width:auto">Stock-sprog</span>
+          <select id="stocklang"></select>
+        </div>
+        <div class="row">
+          <button id="btn-boot">Boot-flag toggle</button>
+          <button id="btn-switch">Runtime-skift (dry)</button>
+          <button id="btn-reboot">MCU-genstart</button>
+        </div>
+        <div class="row">
+          <button id="btn-restart">Genstart UI</button>
+          <button id="btn-reset" class="danger">Reset sandbox (r)</button>
+        </div>
+      </div>
+      <div class="card">
+        <h2>Protokol-log (writes/ACKs/hændelser)</h2>
+        <div id="log"></div>
+      </div>
+    </div>
+  </div>
+</main>
+<footer>
+  Kun lokal udvikling — ingen kontakt med den fysiske enhed.
+  Sandbox + exports: se <code>sim/reports/</code>. Dokumentation: <code>sim/PLAY.md</code>.
+</footer>
+<div id="help"><div class="box">
+  <h2 style="margin-top:0">Tastatur-genveje</h2>
+  <table>
+    <tr><td><kbd>g</kbd> <kbd>b</kbd> <kbd>h</kbd> <kbd>s</kbd></td><td>start grind / bryg / vand / damp (simuleret hold)</td></tr>
+    <tr><td><kbd>e</kbd></td><td>fejl-cycle: ingen → E1 → E2 → E3 → ingen</td></tr>
+    <tr><td><kbd>l</kbd></td><td>UI-sprog dansk ↔ engelsk</td></tr>
+    <tr><td><kbd>r</kbd></td><td>reset sandbox (frisk session)</td></tr>
+    <tr><td><kbd>space</kbd></td><td>pause / resume sim-tid</td></tr>
+    <tr><td><kbd>?</kbd> / <kbd>Esc</kbd></td><td>vis / luk denne hjælp</td></tr>
+  </table>
+  <p style="color:var(--dim)">Touch (1:1 som maskinen): tap = tryk, hold ≥650 ms = start,
+  vandret træk = swipe/sideskift, lodret træk = scroll i lister/DIAGNOSE.
+  Mus (desktop): samme via drag; højreklik = gestus-test.
+  <span id="touchmode" style="color:var(--dim)"></span></p>
+  <button onclick="document.getElementById('help').style.display='none'">Luk</button>
+</div></div>
+<script>
+"use strict";
+const $ = id => document.getElementById(id);
+const post = async (path, obj) => {
+  try {
+    const r = await fetch(path, {method:"POST", headers:{"Content-Type":"application/json"},
+                                 body: JSON.stringify(obj||{})});
+    return await r.json();
+  } catch(e){ return {ok:false, error:String(e)}; }
+};
+let SNAP = {}, mouse = null, touchMark = null, holdStart = null, serverGone = false;
+
+// ---- fb-refresh (~6 Hz) ----
+setInterval(() => {
+  if (!$("autoref").checked) return;
+  const img = $("fb");
+  const next = new Image();
+  next.onload = () => { img.src = next.src; };
+  next.src = "/fb.png?t=" + Date.now();
+}, 150);
+
+// ---- state-poll (2 Hz) ----
+async function poll(){
+  try {
+    const r = await fetch("/api/state");
+    SNAP = await r.json();
+    serverGone = false;
+    render();
+  } catch(e){
+    serverGone = true;
+    banner("Play-serveren svarer ikke — er den stoppet?", "bad");
+  }
+}
+setInterval(poll, 500); poll();
+
+function banner(msg, cls, btn){
+  const b = $("banner");
+  b.className = cls === "ref" ? "ref" : "";
+  b.style.display = "block";
+  b.innerHTML = msg;
+  if (btn){
+    const el = document.createElement("button");
+    el.textContent = btn.label;
+    el.onclick = btn.fn;
+    b.appendChild(el);
+  }
+}
+function pill(id, txt, cls){ const e=$(id); e.textContent=txt; e.className="pill"+(cls?" "+cls:""); }
+
+const PHCOL = {OFFLINE:"#8b93a7",SLEEP:"#7080c0",ERROR:"#ff6060",HEAT:"#ffba54",
+  READY:"#62dea8",GRIND:"#aee470",PRE:"#78beff",EXT:"#5aa0ff",WATER:"#6ec8e6",
+  STEAM:"#dcdcf0",DONE:"#8ce6b4"};
+
+function render(){
+  const s = SNAP.state||{}, ui = SNAP.ui||{}, sim = SNAP.sim||{}, ping = sim.ping||{};
+  const sess = SNAP.session||{};
+  const isRef = sess.client === "reference";
+  pill("p-client", isRef ? "REFERENCE-klient" : "ourui SIM-build", isRef?"warn":"ok");
+  pill("p-ui", "UI: "+ui.status, ui.status==="running"?"ok":"bad");
+  pill("p-sim", "MCU: "+(sim.status||"?")+(ping.link?" · link "+ping.link:""),
+       sim.status==="running"?"ok":"bad");
+  pill("p-speed", (SNAP.paused?"PAUSE · ":"")+(SNAP.speed||1)+"×", SNAP.paused?"warn":"");
+  pill("p-lang", "sprog: "+(SNAP.ui_lang||"?")+(SNAP.lang_file?" (fil: "+SNAP.lang_file+")":""), "");
+  pill("p-flag", "boot-flag: "+(s.boot_flag?"B (new)":"A"), s.boot_flag?"warn":"");
+  pill("p-page", "side: "+(s.page||"–"), "");
+  pill("p-link", "link: "+(s.link_up?"oppe":"NEDE"), s.link_up?"ok":"bad");
+  const ph = $("phase"); ph.textContent = s.phase||"–"; ph.style.color = PHCOL[s.phase]||"#fff";
+  // banners
+  const b = $("banner");
+  if (ui.status === "crashed"){
+    banner("UI-klienten crashede (exit "+ui.exit_code+").<br><code style='font-size:11px'>"+
+           (ui.stderr_tail||[]).slice(-4).join("<br>")+"</code>", "bad",
+           {label:"Genstart UI", fn:async()=>{ await post("/api/restart_ui"); poll(); }});
+  } else if (sim.status === "dead" || sim.status === "unreachable"){
+    banner("mcu_sim svarer ikke ("+sim.status+") — forventet offline-state i UI'en. Reset kan genskabe sessionen.",
+           "bad", {label:"Reset sandbox", fn:doReset});
+  } else if (isRef){
+    banner("REFERENCE-KLIENT: protokol/state-play med simpel fb-emulering (placeholder-grafik). "+
+           "Fuld visuel play kræver Fable's v6.4-binær <code>artifacts/ourui/ourui_v6_sim</code> — "+
+           "den auto-detekteres når den lander.", "ref");
+  } else if (!serverGone){ b.style.display="none"; }
+  // state-tabel
+  const c6 = s.cmd6||{};
+  const rows = [
+    ["work_sta", "0x"+(s.work_sta||0).toString(16).padStart(4,"0")],
+    ["fase / side", (s.phase||"–")+" / "+(s.page||"–")],
+    ["sprog (config-index)", s.lang],
+    ["CRC ok / bad", (s.crc_ok||0)+" / "+(s.crc_bad||0)],
+    ["cmd6 ok/retx/fail/blok", [c6.ok,c6.retx,c6.fail,c6.block].join(" / ")],
+    ["frame-time", (s.frame_ms!=null?s.frame_ms+" ms":"–")],
+    ["link_up", String(s.link_up)],
+    ["config_oor", (s.config_oor||[]).map(o=>o.param+"="+o.value).join(", ")||"ingen"],
+    ["save", s.save ? s.save.state+" ("+s.save.param+"="+s.save.value+")" : "–"],
+    ["activity_pending", s.activity_pending||"–"],
+    ["toast", s.toast ? s.toast.text : "–"],
+    ["config md5", SNAP.config_md5||"–"],
+    ["MCU mode / t", (ping.mode||"–")+" / "+(ping.t!=null?ping.t.toFixed(1)+" s":"–")],
+    ["ACK-profil", SNAP.ack_profile||"–"],
+    ["klient-t", s.t_ms!=null?(s.t_ms/1000).toFixed(1)+" s":"–"],
+  ];
+  $("statetab").innerHTML = rows.map(r=>"<tr><td>"+r[0]+"</td><td>"+r[1]+"</td></tr>").join("");
+  // toasts
+  $("toasts").innerHTML = (SNAP.toasts||[]).map(t=>
+    "<div class='"+(t.kind||"")+"'>"+((t.t_ms||0)/1000).toFixed(1)+" s · "+t.text+"</div>").join("")
+    || "<div style='color:var(--dim)'>ingen endnu</div>";
+  // protokol-log
+  const log = $("log");
+  const stick = log.scrollTop + log.clientHeight >= log.scrollHeight - 30;
+  log.innerHTML = (SNAP.log||[]).map(fmtLog).join("");
+  if (stick) log.scrollTop = log.scrollHeight;
+  // pills/knapper
+  $("faultmsg").textContent = SNAP.fault||"";
+  document.querySelectorAll("[data-speed]").forEach(btn=>
+    btn.classList.toggle("on", Number(btn.dataset.speed)===SNAP.speed && !SNAP.paused));
+  $("btn-pause").classList.toggle("on", !!SNAP.paused);
+  $("btn-pause").textContent = SNAP.paused ? "Resume (space)" : "Pause (space)";
+  document.querySelectorAll("[data-lang]").forEach(btn=>
+    btn.classList.toggle("on", btn.dataset.lang===SNAP.ui_lang));
+  $("reqwand").checked = !!SNAP.require_wand;
+  if (SNAP.ack_profile && $("ack").value !== SNAP.ack_profile &&
+      [...$("ack").options].some(o=>o.value===SNAP.ack_profile))
+    $("ack").value = SNAP.ack_profile;
+  // stock-sprog select (én gang)
+  if (!$("stocklang").options.length && SNAP.stock_langs){
+    SNAP.stock_langs.forEach((n,i)=>{
+      const o=document.createElement("option"); o.value=i; o.textContent=i+" · "+n;
+      $("stocklang").appendChild(o);
+    });
+    $("stocklang").onchange = async e=>{
+      const r = await post("/api/stock_lang",{value:Number(e.target.value)});
+      $("savemsg").textContent = r.ok?"stock-sprog gemt (config)":"fejl: "+r.error;
+    };
+  }
+  if (s.lang!=null && document.activeElement!==$("stocklang")) $("stocklang").value=s.lang;
+  // exports
+  $("snaps").innerHTML = (SNAP.exports||[]).map(e=>
+    "<div>"+e.label+" · <a href='"+e.url+"' target='_blank'>PNG</a> · md5 "+
+    (e.config_md5||"").slice(0,8)+" · <span style='font-size:11px'>"+e.dir+"</span></div>").join("");
+  drawOverlay();
+}
+
+function fmtLog(e){
+  const t = typeof e.t==="number" ? e.t.toFixed(2) : (e.t ?? "–");
+  let cls = "", txt = "";
+  switch(e.kind){
+    case "write": cls="w"; txt="WRITE sub"+e.sub+" len"+e.len+" ["+(e.words||[]).join(",")+"]"+
+      (e.verdict==="ok"?"":" · "+e.verdict); break;
+    case "write_rejected": cls="e"; txt="AFVIST sub"+e.sub+" ["+(e.words||[]).join(",")+"] "+
+      (e.reasons||[]).join(";"); break;
+    case "range_violation": cls="e"; txt="RANGE "+e.reason; break;
+    case "ack_dropped": cls="e"; txt="ACK TABT sub"+e.sub; break;
+    case "activity_start": cls="a"; txt="START "+e.activity+" (ws="+e.work_sta+")"; break;
+    case "activity_stop": cls="a"; txt="STOP "+e.activity+" · "+e.reason; break;
+    case "fault_set": cls="e"; txt="FEJL ord"+e.word+"="+e.value; break;
+    case "fault_clear": cls="a"; txt="FEJL ryddet (ord"+e.word+")"; break;
+    case "boot_push": cls="a"; txt="BOOT-PUSH "+e.block; break;
+    case "boot_push_missing": cls="e"; txt="BOOT-PUSH MANGLER "+e.block; break;
+    case "version_handshake": cls="a"; txt="VERSION "+e.version; break;
+    case "keepalive_gap": cls="e"; txt="KEEP-ALIVE GAP "+e.gap_s+" s"; break;
+    case "link_connect": cls="a"; txt="LINK connect"; break;
+    case "link_state": cls="m"; txt="LINK "+e.state; break;
+    case "link_closed": cls="e"; txt="LINK lukket (pty væk)"; break;
+    case "link_reopened": cls="a"; txt="LINK reopen "+e.pty; break;
+    case "garbage_start": cls="m"; txt="GARBAGE "+e.dur+" s"; break;
+    case "reboot": cls="m"; txt="MCU REBOOT"; break;
+    case "sleep_write": cls="m"; txt="SLEEP ord1="+e.value; break;
+    case "config_md5": cls="m"; txt="CONFIG md5 "+e.md5; break;
+    case "wand": cls="m"; txt="WAND "+(e.on?"til":"fra"); break;
+    case "set_reg": cls="m"; txt="SET ord"+e.word+"="+e.value; break;
+    case "touch_error": cls="e"; txt="TOUCH-FEJL "+e.error; break;
+    default: txt=e.kind+" "+JSON.stringify(e).slice(0,110);
+  }
+  return "<span class='"+cls+"'>t="+t+"  "+txt+"</span>";
+}
+
+// ---- touch-overlay + klik ----
+const ov = $("ov"), ctx = ov.getContext("2d");
+function drawOverlay(){
+  ctx.clearRect(0,0,480,480);
+  if ($("zones").checked){
+    ctx.lineWidth=1.5; ctx.font="11px monospace";
+    if (SNAP.targets && SNAP.targets.length){
+      // RIGTIGE tryk-mål (SIM-build ctrl layout) ell. reference-fallback
+      for (const t of SNAP.targets){
+        ctx.strokeStyle="rgba(255,255,255,.55)"; ctx.fillStyle="rgba(255,255,255,.85)";
+        if (t.r){ ctx.beginPath(); ctx.arc(t.x,t.y,t.r,0,7); ctx.stroke(); }
+        else { ctx.strokeRect(t.x-t.w/2, t.y-t.h/2, t.w, t.h); }
+        ctx.fillText(String(t.name).slice(0,12), t.x-16, t.y+4);
+      }
+    } else if (SNAP.buttons){
+      ctx.strokeStyle="rgba(255,255,255,.55)"; ctx.fillStyle="rgba(255,255,255,.8)";
+      ctx.font="12px monospace";
+      for (const [n,[x,y,r]] of Object.entries(SNAP.buttons)){
+        ctx.beginPath(); ctx.arc(x,y,r,0,7); ctx.stroke();
+        ctx.fillText(n.toUpperCase(), x-18, y+4);
+      }
+      const [sx,sy,sr] = SNAP.settings_btn||[240,430,26];
+      ctx.beginPath(); ctx.arc(sx,sy,sr,0,7); ctx.stroke();
+      ctx.fillText("SET", sx-12, sy+4);
+    }
+    ctx.strokeStyle="rgba(255,186,84,.6)";
+    ctx.strokeRect(40,40,70,70);
+    ctx.fillStyle="rgba(255,186,84,.9)"; ctx.fillText("gestus", 46, 36);
+  }
+  if (mouse){
+    ctx.strokeStyle="rgba(98,222,168,.8)"; ctx.lineWidth=1;
+    ctx.beginPath(); ctx.moveTo(mouse.x,0); ctx.lineTo(mouse.x,480);
+    ctx.moveTo(0,mouse.y); ctx.lineTo(480,mouse.y); ctx.stroke();
+    ctx.beginPath(); ctx.arc(mouse.x,mouse.y,6,0,7); ctx.stroke();
+  }
+  if (holdStart){
+    const el = (performance.now()-holdStart.t)/1000;
+    const frac = Math.min(1, el/0.65);
+    ctx.strokeStyle = frac>=1 ? "#62dea8" : "#ffba54"; ctx.lineWidth=3;
+    ctx.beginPath(); ctx.arc(holdStart.x,holdStart.y,14,-Math.PI/2,-Math.PI/2+frac*2*Math.PI);
+    ctx.stroke();
+  }
+  if (touchMark && performance.now()-touchMark.t < 1500){
+    ctx.strokeStyle="rgba(90,160,255,.9)"; ctx.lineWidth=2;
+    ctx.beginPath(); ctx.arc(touchMark.x,touchMark.y,10,0,7); ctx.stroke();
+  }
+}
+setInterval(drawOverlay, 50);
+function fbPos(e){
+  const r = $("fbwrap").getBoundingClientRect();
+  return {x: Math.max(0,Math.min(479, Math.round((e.clientX-r.left)*480/r.width))),
+          y: Math.max(0,Math.min(479, Math.round((e.clientY-r.top)*480/r.height)))};
+}
+$("fbwrap").addEventListener("mousemove", e=>{
+  mouse = fbPos(e);
+  const rx = Math.floor(mouse.x*4096/480), ry = Math.floor(mouse.y*4096/480);
+  $("coord").textContent = "x="+mouse.x+" y="+mouse.y+"  (raw "+rx+","+ry+")";
+});
+$("fbwrap").addEventListener("mouseleave", ()=>{ mouse=null; $("coord").textContent="x=– y=–"; });
+// ---- 1:1 touch: pointer-events forwardes LIVE (down/move/up) til evdev-FIFO'et.
+// ourui's egen inp_poll/ui_touch afgør tap/hold/swipe/scroll = præcis som enheden.
+// Ingen klient-side klassifikations-hacks. Touch detecteres; desktop uden touch
+// får et hint om Chrome device-mode, men mus-drag virker også (pointer-events).
+const IS_TOUCH = (matchMedia && matchMedia('(pointer:coarse)').matches) || navigator.maxTouchPoints > 0;
+(function(){
+  const el = $("touchmode");
+  if (el) el.textContent = IS_TOUCH
+    ? "Touch-tilstand: 1:1 som maskinen (tap/hold/swipe/scroll)."
+    : "Desktop uden touch: brug Chrome DevTools → device-mode (touch) for 1:1; mus-drag virker også.";
+})();
+const fbw = $("fbwrap");
+fbw.style.touchAction = "none";
+fbw.style.userSelect = "none";
+fbw.style.webkitUserSelect = "none";
+let pDown = false, lastMoveSend = 0;
+fbw.addEventListener("pointerdown", e=>{
+  e.preventDefault();
+  try { fbw.setPointerCapture(e.pointerId); } catch(_){}
+  const p = fbPos(e); pDown = true;
+  holdStart = {x:p.x, y:p.y, t:performance.now()};
+  post("/api/touch_down", {x:p.x, y:p.y});
+});
+fbw.addEventListener("pointermove", e=>{
+  const p = fbPos(e); mouse = p;
+  const rx = Math.floor(p.x*4096/480), ry = Math.floor(p.y*4096/480);
+  $("coord").textContent = "x="+p.x+" y="+p.y+"  (raw "+rx+","+ry+")";
+  if (!pDown) return;
+  const now = performance.now();
+  if (now - lastMoveSend < 30) return;   // ~33 Hz evdev-move
+  lastMoveSend = now;
+  post("/api/touch_move", {x:p.x, y:p.y});
+});
+function pointerEnd(e){
+  if (!pDown) return;
+  pDown = false;
+  const p = fbPos(e);
+  post("/api/touch_move", {x:p.x, y:p.y});
+  post("/api/touch_up", {});
+  touchMark = {x:p.x, y:p.y, t:performance.now()};
+  holdStart = null;
+}
+fbw.addEventListener("pointerup", pointerEnd);
+fbw.addEventListener("pointercancel", pointerEnd);
+let calmOn = false;
+$("btn-calm").onclick = async ()=>{
+  calmOn = !calmOn;
+  const r = await post("/api/calm", calmOn ? {factor:0.30, maint:false} : {factor:1.0, maint:true});
+  $("btn-calm").textContent = "Glat graf: " + (calmOn && r.ok ? "TIL" : "FRA");
+  if (!r.ok) $("coord").textContent = "calm-fejl: "+r.error;
+};
+$("fbwrap").addEventListener("contextmenu", async e=>{
+  e.preventDefault();
+  if (IS_TOUCH) return;   // mobil long-press = hold-for-start, IKKE gestus
+  $("gesturemsg").textContent = "gestus kører (3×1,6 s hold)…";
+  const r = await post("/api/gesture", {presses:3});
+  $("gesturemsg").textContent = r.ok
+    ? (r.ran ? (r.trigger?"GESTUS UDLØST ✓":"kørt — ingen trigger") : "switcher_host ikke bygget")
+    : "fejl: "+r.error;
+});
+
+// ---- knapper ----
+document.querySelectorAll("[data-act]").forEach(btn=>{
+  btn.onclick = async ()=>{
+    btn.classList.add("on");
+    const r = await post("/api/activity",{name:btn.dataset.act});
+    setTimeout(()=>btn.classList.remove("on"), 800);
+    if (!r.ok) alert("Aktivitet fejlede: "+(r.error||"ukendt"));
+  };
+});
+document.querySelectorAll("[data-speed]").forEach(btn=>{
+  btn.onclick = ()=>post("/api/speed",{factor:Number(btn.dataset.speed)});
+});
+document.querySelectorAll("[data-lang]").forEach(btn=>{
+  btn.onclick = async ()=>{
+    const r = await post("/api/lang",{value:btn.dataset.lang});
+    if (!r.ok) alert("Sprog-skift fejlede: "+r.error);
+  };
+});
+$("btn-pause").onclick = ()=>post("/api/pause",{});
+$("btn-fault").onclick = async ()=>{ const r=await post("/api/fault",{});
+  $("faultmsg").textContent = r.fault||r.error||""; };
+$("btn-garbage").onclick = ()=>post("/api/garbage",{dur:2});
+$("btn-offline").onclick = ()=>post("/api/link",{state:"silent"});
+$("btn-online").onclick = ()=>post("/api/link",{state:"up"});
+$("btn-closed").onclick = ()=>post("/api/link",{state:"closed"});
+$("ack").onchange = e=>post("/api/ack",{profile:e.target.value});
+$("btn-wand").onclick = async ()=>{
+  // toggler ud fra sidste kendte wand-tilstand i loggen
+  const last = (SNAP.log||[]).filter(e=>e.kind==="wand").pop();
+  await post("/api/wand",{on: last ? !last.on : true});
+};
+$("reqwand").onchange = e=>post("/api/require_wand",{value:e.target.checked});
+$("page").onchange = e=>post("/api/page",{name:e.target.value});
+$("btn-save").onclick = async ()=>{
+  $("savemsg").textContent = "gemmer…";
+  const r = await post("/api/save",{param:$("saveparam").value, value:Number($("saveval").value)});
+  $("savemsg").textContent = r.ok ? "sendt (se save-state + md5)" : "fejl: "+r.error;
+};
+$("btn-boot").onclick = ()=>post("/api/boot_flag",{});
+$("btn-switch").onclick = ()=>post("/api/runtime_switch",{});
+$("btn-reboot").onclick = ()=>post("/api/reboot",{});
+$("btn-restart").onclick = ()=>post("/api/restart_ui",{});
+async function doReset(){
+  if (!confirm("Reset sandbox? Alt kørende state nulstilles (exports bevares).")) return;
+  await post("/api/reset",{}); poll();
+}
+$("btn-reset").onclick = doReset;
+$("btn-snap").onclick = async ()=>{
+  $("snapmsg").textContent = "eksporterer…";
+  const r = await post("/api/snapshot",{label:"play"});
+  $("snapmsg").textContent = r.ok ? "gemt: "+r.dir : "fejl: "+r.error;
+  poll();
+};
+$("btn-help").onclick = ()=>$("help").style.display="flex";
+$("help").onclick = e=>{ if (e.target===$("help")) $("help").style.display="none"; };
+
+// ---- tastatur ----
+window.addEventListener("keydown", async e=>{
+  const tag = (document.activeElement||{}).tagName;
+  if (tag==="INPUT"||tag==="SELECT"||tag==="TEXTAREA") return;
+  if (e.metaKey||e.ctrlKey||e.altKey) return;
+  switch(e.key){
+    case "g": post("/api/activity",{name:"grind"}); break;
+    case "b": post("/api/activity",{name:"brew"}); break;
+    case "h": post("/api/activity",{name:"water"}); break;
+    case "s": post("/api/activity",{name:"steam"}); break;
+    case "e": { const r=await post("/api/fault",{}); $("faultmsg").textContent=r.fault||""; break; }
+    case "l": post("/api/lang",{value: SNAP.ui_lang==="da"?"en":"da"}); break;
+    case "r": doReset(); break;
+    case " ": e.preventDefault(); post("/api/pause",{}); break;
+    case "?": $("help").style.display="flex"; break;
+    case "Escape": $("help").style.display="none"; break;
+  }
+});
+</script>
+</body>
+</html>

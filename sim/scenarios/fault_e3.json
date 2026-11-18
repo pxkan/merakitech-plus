@@ -1,0 +1,43 @@
+{
+  "name": "fault_e3",
+  "description": "E3 bit4 (brygkedel >120°): fejl-UI i idle",
+  "duration_s": 12,
+  "events": [
+    {
+      "t": 3,
+      "target": "sim",
+      "event": {
+        "type": "fault",
+        "e3": 16,
+        "dur": 5
+      }
+    },
+    {
+      "t": 5,
+      "target": "runner",
+      "op": "snapshot",
+      "label": "error"
+    }
+  ],
+  "expect": [
+    {
+      "kind": "phase",
+      "t": 5,
+      "window": 1.5,
+      "value": "ERROR"
+    },
+    {
+      "kind": "word",
+      "word": 36,
+      "t": 5,
+      "window": 1.5,
+      "value": 16
+    },
+    {
+      "kind": "phase",
+      "t": 9.5,
+      "window": 1.5,
+      "value": "READY"
+    }
+  ]
+}

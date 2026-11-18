@@ -1,0 +1,48 @@
+name: Bug report / Fejlrapport
+description: Something does not work as expected / Noget virker ikke som forventet
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        **Remove IP addresses, Wi-Fi names/passwords and other personal data before posting.**
+        Security problems: do NOT report here — see SECURITY.md.
+        **Fjern IP-adresser, Wi-Fi-navne/-koder og andre personlige data, før du poster.**
+  - type: dropdown
+    id: model
+    attributes:
+      label: Machine / Maskine
+      options: [MerakiTech Gen 1, MerakiTech Gen 2, Other / andet]
+    validations: {required: true}
+  - type: input
+    id: version
+    attributes:
+      label: Meraki+ version (DIAGNOSE → VERSION)
+      placeholder: V6.14
+    validations: {required: true}
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area / Område
+      options: [install.sh, revert.sh, UI on the machine, gesture switcher, power button, simulator / tests, docs]
+    validations: {required: true}
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened? / Hvad skete der?
+      description: Steps, what you expected, what happened instead.
+    validations: {required: true}
+  - type: textarea
+    id: status
+    attributes:
+      label: "Output of `python3 tools/merakiplus.py status --ip ADDR` and/or the log from logs/ (redacted)"
+      render: text
+  - type: checkboxes
+    id: ack
+    attributes:
+      label: Checks
+      options:
+        - label: I removed IP addresses and other personal data / Jeg har fjernet IP-adresser og persondata
+          required: true
+        - label: I have read the disclaimer in the README / Jeg har læst ansvarsfraskrivelsen
+          required: true

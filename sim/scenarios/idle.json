@@ -1,0 +1,104 @@
+{
+  "name": "idle",
+  "description": "Idle/klar: poll-rotation, keep-awake, boot-push, ingen aktivitet",
+  "duration_s": 12,
+  "events": [
+    {
+      "t": 6,
+      "target": "runner",
+      "op": "snapshot",
+      "label": "idle"
+    }
+  ],
+  "expect": [
+    {
+      "kind": "phase_hold",
+      "t0": 2,
+      "t1": 11.5,
+      "value": "READY",
+      "min_ratio": 0.95
+    },
+    {
+      "kind": "work_sta_seen",
+      "t0": 1,
+      "t1": 12,
+      "value": "0x0101"
+    },
+    {
+      "kind": "word",
+      "word": 34,
+      "t": 6,
+      "window": 3,
+      "value": 0
+    },
+    {
+      "kind": "word",
+      "word": 35,
+      "t": 6,
+      "window": 3,
+      "value": 0
+    },
+    {
+      "kind": "word",
+      "word": 36,
+      "t": 6,
+      "window": 3,
+      "value": 0
+    },
+    {
+      "kind": "sim_log",
+      "assert": "no_writes_between",
+      "t0": 1,
+      "t1": 11.5,
+      "except_subs": [
+        0,
+        1,
+        112
+      ]
+    },
+    {
+      "kind": "point",
+      "t": 6,
+      "point": [
+        240,
+        8
+      ],
+      "color": [
+        98,
+        222,
+        168
+      ],
+      "tol": 30
+    },
+    {
+      "kind": "point",
+      "t": 6,
+      "point": [
+        240,
+        20
+      ],
+      "color": [
+        61,
+        163,
+        130
+      ],
+      "tol": 30
+    },
+    {
+      "kind": "region",
+      "t": 6,
+      "rect": [
+        200,
+        200,
+        80,
+        80
+      ],
+      "color": [
+        32,
+        36,
+        42
+      ],
+      "tol": 20
+    }
+  ]
+}

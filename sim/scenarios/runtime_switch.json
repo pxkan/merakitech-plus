@@ -1,0 +1,54 @@
+{
+  "name": "runtime_switch",
+  "description": "SKIFT TIL ORIGINAL NU (OURUI_SWITCH_DRY=1): bye-view → tilbage, flag uændret, proces bliver kørende",
+  "duration_s": 10,
+  "events": [
+    {
+      "t": 3,
+      "target": "ui",
+      "cmd": "runtime_switch"
+    },
+    {
+      "t": 3.6,
+      "target": "runner",
+      "op": "snapshot",
+      "label": "bye"
+    },
+    {
+      "t": 7,
+      "target": "runner",
+      "op": "snapshot",
+      "label": "back"
+    }
+  ],
+  "expect": [
+    {
+      "kind": "view",
+      "t": 3.6,
+      "window": 0.9,
+      "value": "bye"
+    },
+    {
+      "kind": "view",
+      "t": 5.5,
+      "window": 1,
+      "value": "main"
+    },
+    {
+      "kind": "flag",
+      "t": 8,
+      "exists": false
+    },
+    {
+      "kind": "sim_log",
+      "assert": "no_writes_between",
+      "t0": 1,
+      "t1": 9,
+      "except_subs": [
+        0,
+        1,
+        112
+      ]
+    }
+  ]
+}

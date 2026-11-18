@@ -1,0 +1,101 @@
+{
+  "name": "grind",
+  "description": "Grind via TOUCH hold-for-start (650 ms): vægt-ramp → auto-stop",
+  "duration_s": 17,
+  "events": [
+    {
+      "t": 2,
+      "target": "ui",
+      "cmd": "touch",
+      "layout": "grind",
+      "ms": 700
+    },
+    {
+      "t": 5,
+      "target": "runner",
+      "op": "snapshot",
+      "label": "grinding"
+    },
+    {
+      "t": 14,
+      "target": "runner",
+      "op": "snapshot",
+      "label": "done"
+    }
+  ],
+  "expect": [
+    {
+      "kind": "phase",
+      "t": 4,
+      "window": 1.2,
+      "value": "GRIND"
+    },
+    {
+      "kind": "work_sta_seen",
+      "t0": 3,
+      "t1": 13,
+      "value": "0x0141"
+    },
+    {
+      "kind": "word_hold",
+      "word": 38,
+      "t0": 3.5,
+      "t1": 12.4,
+      "min": 0,
+      "max": 190,
+      "signed": true
+    },
+    {
+      "kind": "word_hold",
+      "word": 38,
+      "t0": 13.8,
+      "t1": 15.5,
+      "min": 184,
+      "max": 188,
+      "signed": true
+    },
+    {
+      "kind": "word",
+      "word": 3,
+      "t": 13.5,
+      "window": 1,
+      "value": 0
+    },
+    {
+      "kind": "word",
+      "word": 6,
+      "t": 14.2,
+      "window": 1,
+      "value": 0
+    },
+    {
+      "kind": "word_hold",
+      "word": 58,
+      "t0": 4,
+      "t1": 11,
+      "min": 400,
+      "max": 1500
+    },
+    {
+      "kind": "sim_log",
+      "assert": "activity_start",
+      "activity": "grind",
+      "t0": 2.5,
+      "t1": 4
+    },
+    {
+      "kind": "sim_log",
+      "assert": "activity_stop",
+      "activity": "grind",
+      "reason_contains": "vægt",
+      "t0": 11,
+      "t1": 14
+    },
+    {
+      "kind": "phase",
+      "t": 15.5,
+      "window": 1.5,
+      "value": "READY"
+    }
+  ]
+}

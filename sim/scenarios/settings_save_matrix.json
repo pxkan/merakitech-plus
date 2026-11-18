@@ -1,0 +1,1921 @@
+{
+  "name": "settings_save_matrix",
+  "description": "Settings-GEM matrix: min/max/step/original pr. parity_spec-parameter (ourui's vogtede GEM-sti: writes + config-persist; config-only uden writes; låste/udeladte felter afvises; uændret værdi = 'unchanged')",
+  "duration_s": 67.3,
+  "events": [
+    {
+      "t": 2.0,
+      "target": "ui",
+      "cmd": "save",
+      "param": "grind_weight",
+      "value": 10
+    },
+    {
+      "t": 2.9,
+      "target": "ui",
+      "cmd": "save",
+      "param": "grind_weight",
+      "value": 309
+    },
+    {
+      "t": 3.8,
+      "target": "ui",
+      "cmd": "save",
+      "param": "grind_weight",
+      "value": 11
+    },
+    {
+      "t": 4.7,
+      "target": "ui",
+      "cmd": "save",
+      "param": "grind_weight",
+      "value": 185
+    },
+    {
+      "t": 5.6000000000000005,
+      "target": "ui",
+      "cmd": "save",
+      "param": "brew_weight",
+      "value": 100
+    },
+    {
+      "t": 6.500000000000001,
+      "target": "ui",
+      "cmd": "save",
+      "param": "brew_weight",
+      "value": 990
+    },
+    {
+      "t": 7.400000000000001,
+      "target": "ui",
+      "cmd": "save",
+      "param": "brew_weight",
+      "value": 110
+    },
+    {
+      "t": 8.3,
+      "target": "ui",
+      "cmd": "save",
+      "param": "brew_weight",
+      "value": 360
+    },
+    {
+      "t": 9.200000000000001,
+      "target": "ui",
+      "cmd": "save",
+      "param": "hotwater_weight",
+      "value": 300
+    },
+    {
+      "t": 10.100000000000001,
+      "target": "ui",
+      "cmd": "save",
+      "param": "hotwater_weight",
+      "value": 5000
+    },
+    {
+      "t": 11.000000000000002,
+      "target": "ui",
+      "cmd": "save",
+      "param": "hotwater_weight",
+      "value": 400
+    },
+    {
+      "t": 11.900000000000002,
+      "target": "ui",
+      "cmd": "save",
+      "param": "brew_temp",
+      "value": 850
+    },
+    {
+      "t": 12.800000000000002,
+      "target": "ui",
+      "cmd": "save",
+      "param": "brew_temp",
+      "value": 960
+    },
+    {
+      "t": 13.700000000000003,
+      "target": "ui",
+      "cmd": "save",
+      "param": "brew_temp",
+      "value": 860
+    },
+    {
+      "t": 14.600000000000003,
+      "target": "ui",
+      "cmd": "save",
+      "param": "brew_temp",
+      "value": 870
+    },
+    {
+      "t": 15.500000000000004,
+      "target": "ui",
+      "cmd": "save",
+      "param": "head_temp",
+      "value": 30
+    },
+    {
+      "t": 16.400000000000002,
+      "target": "ui",
+      "cmd": "save",
+      "param": "head_temp",
+      "value": 80
+    },
+    {
+      "t": 17.3,
+      "target": "ui",
+      "cmd": "save",
+      "param": "head_temp",
+      "value": 40
+    },
+    {
+      "t": 18.2,
+      "target": "ui",
+      "cmd": "save",
+      "param": "head_temp",
+      "value": 70
+    },
+    {
+      "t": 19.099999999999998,
+      "target": "ui",
+      "cmd": "save",
+      "param": "steam_milk_target",
+      "value": 450
+    },
+    {
+      "t": 19.999999999999996,
+      "target": "ui",
+      "cmd": "save",
+      "param": "steam_milk_target",
+      "value": 700
+    },
+    {
+      "t": 20.899999999999995,
+      "target": "ui",
+      "cmd": "save",
+      "param": "steam_milk_target",
+      "value": 460
+    },
+    {
+      "t": 21.799999999999994,
+      "target": "ui",
+      "cmd": "save",
+      "param": "steam_milk_target",
+      "value": 650
+    },
+    {
+      "t": 22.699999999999992,
+      "target": "ui",
+      "cmd": "save",
+      "param": "steam_gear",
+      "value": 1
+    },
+    {
+      "t": 23.59999999999999,
+      "target": "ui",
+      "cmd": "save",
+      "param": "steam_gear",
+      "value": 4
+    },
+    {
+      "t": 24.49999999999999,
+      "target": "ui",
+      "cmd": "save",
+      "param": "steam_gear",
+      "value": 2
+    },
+    {
+      "t": 25.399999999999988,
+      "target": "ui",
+      "cmd": "save",
+      "param": "steam_gear",
+      "value": 3
+    },
+    {
+      "t": 26.299999999999986,
+      "target": "ui",
+      "cmd": "save",
+      "param": "preinfusion_pressure",
+      "value": 3
+    },
+    {
+      "t": 27.199999999999985,
+      "target": "ui",
+      "cmd": "save",
+      "param": "preinfusion_pressure",
+      "value": 4
+    },
+    {
+      "t": 28.099999999999984,
+      "target": "ui",
+      "cmd": "save",
+      "param": "preinfusion_switch",
+      "value": 0
+    },
+    {
+      "t": 28.999999999999982,
+      "target": "ui",
+      "cmd": "save",
+      "param": "preinfusion_switch",
+      "value": 1
+    },
+    {
+      "t": 29.89999999999998,
+      "target": "ui",
+      "cmd": "save",
+      "param": "preinfusion_time",
+      "value": 5
+    },
+    {
+      "t": 30.79999999999998,
+      "target": "ui",
+      "cmd": "save",
+      "param": "preinfusion_time",
+      "value": 6
+    },
+    {
+      "t": 31.699999999999978,
+      "target": "ui",
+      "cmd": "save",
+      "param": "break_time",
+      "value": 0
+    },
+    {
+      "t": 32.59999999999998,
+      "target": "ui",
+      "cmd": "save",
+      "param": "break_time",
+      "value": 1
+    },
+    {
+      "t": 33.49999999999998,
+      "target": "ui",
+      "cmd": "save",
+      "param": "break_time",
+      "value": 5
+    },
+    {
+      "t": 34.39999999999998,
+      "target": "ui",
+      "cmd": "save",
+      "param": "grind_mode",
+      "value": 1
+    },
+    {
+      "t": 35.299999999999976,
+      "target": "ui",
+      "cmd": "save",
+      "param": "grind_mode",
+      "value": 2
+    },
+    {
+      "t": 36.199999999999974,
+      "target": "ui",
+      "cmd": "save",
+      "param": "backlight",
+      "value": 0
+    },
+    {
+      "t": 37.09999999999997,
+      "target": "ui",
+      "cmd": "save",
+      "param": "backlight",
+      "value": 10
+    },
+    {
+      "t": 37.99999999999997,
+      "target": "ui",
+      "cmd": "save",
+      "param": "backlight",
+      "value": 1
+    },
+    {
+      "t": 38.89999999999997,
+      "target": "ui",
+      "cmd": "save",
+      "param": "backlight",
+      "value": 9
+    },
+    {
+      "t": 39.79999999999997,
+      "target": "ui",
+      "cmd": "save",
+      "param": "volume",
+      "value": 0
+    },
+    {
+      "t": 40.69999999999997,
+      "target": "ui",
+      "cmd": "save",
+      "param": "volume",
+      "value": 100
+    },
+    {
+      "t": 41.599999999999966,
+      "target": "ui",
+      "cmd": "save",
+      "param": "volume",
+      "value": 1
+    },
+    {
+      "t": 42.499999999999964,
+      "target": "ui",
+      "cmd": "save",
+      "param": "volume",
+      "value": 31
+    },
+    {
+      "t": 43.39999999999996,
+      "target": "ui",
+      "cmd": "save",
+      "param": "temp_unit",
+      "value": 0
+    },
+    {
+      "t": 44.29999999999996,
+      "target": "ui",
+      "cmd": "save",
+      "param": "temp_unit",
+      "value": 1
+    },
+    {
+      "t": 45.19999999999996,
+      "target": "ui",
+      "cmd": "save",
+      "param": "language",
+      "value": 0
+    },
+    {
+      "t": 46.09999999999996,
+      "target": "ui",
+      "cmd": "save",
+      "param": "language",
+      "value": 10
+    },
+    {
+      "t": 46.99999999999996,
+      "target": "ui",
+      "cmd": "save",
+      "param": "language",
+      "value": 1
+    },
+    {
+      "t": 47.899999999999956,
+      "target": "ui",
+      "cmd": "save",
+      "param": "hotwater_shortcut",
+      "value": 0
+    },
+    {
+      "t": 48.799999999999955,
+      "target": "ui",
+      "cmd": "save",
+      "param": "hotwater_shortcut",
+      "value": 1
+    },
+    {
+      "t": 49.69999999999995,
+      "target": "ui",
+      "cmd": "save",
+      "param": "sumtime",
+      "value": 0
+    },
+    {
+      "t": 50.59999999999995,
+      "target": "ui",
+      "cmd": "save",
+      "param": "sumtime",
+      "value": 1
+    },
+    {
+      "t": 51.49999999999995,
+      "target": "ui",
+      "cmd": "save",
+      "param": "cleartip",
+      "value": 0
+    },
+    {
+      "t": 52.39999999999995,
+      "target": "ui",
+      "cmd": "save",
+      "param": "cleartip",
+      "value": 1
+    },
+    {
+      "t": 53.29999999999995,
+      "target": "ui",
+      "cmd": "save",
+      "param": "timemode",
+      "value": 0
+    },
+    {
+      "t": 54.199999999999946,
+      "target": "ui",
+      "cmd": "save",
+      "param": "timemode",
+      "value": 1
+    },
+    {
+      "t": 55.099999999999945,
+      "target": "ui",
+      "cmd": "save",
+      "param": "automatically",
+      "value": 0
+    },
+    {
+      "t": 55.99999999999994,
+      "target": "ui",
+      "cmd": "save",
+      "param": "automatically",
+      "value": 1
+    },
+    {
+      "t": 56.89999999999994,
+      "target": "ui",
+      "cmd": "save",
+      "param": "init_state",
+      "value": 0
+    },
+    {
+      "t": 57.79999999999994,
+      "target": "ui",
+      "cmd": "save",
+      "param": "init_state",
+      "value": 1
+    },
+    {
+      "t": 58.69999999999994,
+      "target": "ui",
+      "cmd": "save",
+      "param": "lang_patch",
+      "value": 0
+    },
+    {
+      "t": 59.59999999999994,
+      "target": "ui",
+      "cmd": "save",
+      "param": "lang_patch",
+      "value": 1
+    },
+    {
+      "t": 60.499999999999936,
+      "target": "ui",
+      "cmd": "save",
+      "param": "hotwater_mode",
+      "value": 1
+    },
+    {
+      "t": 61.399999999999935,
+      "target": "ui",
+      "cmd": "save",
+      "param": "hotwater_mode",
+      "value": 2
+    },
+    {
+      "t": 62.29999999999993,
+      "target": "ui",
+      "cmd": "save",
+      "param": "hotwater_temp",
+      "value": 1
+    },
+    {
+      "t": 62.899999999999935,
+      "target": "ui",
+      "cmd": "save",
+      "param": "sleep_mode",
+      "value": 1
+    },
+    {
+      "t": 63.499999999999936,
+      "target": "ui",
+      "cmd": "save",
+      "param": "sleep_setting",
+      "value": 1
+    },
+    {
+      "t": 64.09999999999994,
+      "target": "ui",
+      "cmd": "save",
+      "param": "brew_mode",
+      "value": 1
+    },
+    {
+      "t": 64.69999999999993,
+      "target": "ui",
+      "cmd": "save",
+      "param": "wifi_onoff",
+      "value": 1
+    },
+    {
+      "t": 65.8,
+      "target": "runner",
+      "op": "snapshot",
+      "label": "matrix-done"
+    }
+  ],
+  "expect": [
+    {
+      "kind": "sim_log",
+      "assert": "write_words",
+      "sub": 4,
+      "words": [
+        10
+      ],
+      "t0": 1.95,
+      "t1": 2.8
+    },
+    {
+      "kind": "config",
+      "field": "autoGrindWeight",
+      "t": 2.8,
+      "value": 10
+    },
+    {
+      "kind": "save",
+      "t": 2.5,
+      "window": 0.45,
+      "state": "ok",
+      "param": "grind_weight"
+    },
+    {
+      "kind": "sim_log",
+      "assert": "write_words",
+      "sub": 4,
+      "words": [
+        309
+      ],
+      "t0": 2.85,
+      "t1": 3.7
+    },
+    {
+      "kind": "config",
+      "field": "autoGrindWeight",
+      "t": 3.7,
+      "value": 309
+    },
+    {
+      "kind": "save",
+      "t": 3.4,
+      "window": 0.45,
+      "state": "ok",
+      "param": "grind_weight"
+    },
+    {
+      "kind": "sim_log",
+      "assert": "write_words",
+      "sub": 4,
+      "words": [
+        11
+      ],
+      "t0": 3.75,
+      "t1": 4.6
+    },
+    {
+      "kind": "config",
+      "field": "autoGrindWeight",
+      "t": 4.6,
+      "value": 11
+    },
+    {
+      "kind": "save",
+      "t": 4.3,
+      "window": 0.45,
+      "state": "ok",
+      "param": "grind_weight"
+    },
+    {
+      "kind": "sim_log",
+      "assert": "write_words",
+      "sub": 4,
+      "words": [
+        185
+      ],
+      "t0": 4.65,
+      "t1": 5.5
+    },
+    {
+      "kind": "config",
+      "field": "autoGrindWeight",
+      "t": 5.5,
+      "value": 185
+    },
+    {
+      "kind": "save",
+      "t": 5.2,
+      "window": 0.45,
+      "state": "ok",
+      "param": "grind_weight"
+    },
+    {
+      "kind": "sim_log",
+      "assert": "write_words",
+      "sub": 23,
+      "words": [
+        100
+      ],
+      "t0": 5.55,
+      "t1": 6.4
+    },
+    {
+      "kind": "config",
+      "field": "autobrewWeight",
+      "t": 6.4,
+      "value": 100
+    },
+    {
+      "kind": "save",
+      "t": 6.1,
+      "window": 0.45,
+      "state": "ok",
+      "param": "brew_weight"
+    },
+    {
+      "kind": "sim_log",
+      "assert": "write_words",
+      "sub": 23,
+      "words": [
+        990
+      ],
+      "t0": 6.45,
+      "t1": 7.3
+    },
+    {
+      "kind": "config",
+      "field": "autobrewWeight",
+      "t": 7.3,
+      "value": 990
+    },
+    {
+      "kind": "save",
+      "t": 7.0,
+      "window": 0.45,
+      "state": "ok",
+      "param": "brew_weight"
+    },
+    {
+      "kind": "sim_log",
+      "assert": "write_words",
+      "sub": 23,
+      "words": [
+        110
+      ],
+      "t0": 7.35,
+      "t1": 8.2
+    },
+    {
+      "kind": "config",
+      "field": "autobrewWeight",
+      "t": 8.2,
+      "value": 110
+    },
+    {
+      "kind": "save",
+      "t": 7.9,
+      "window": 0.45,
+      "state": "ok",
+      "param": "brew_weight"
+    },
+    {
+      "kind": "sim_log",
+      "assert": "write_words",
+      "sub": 23,
+      "words": [
+        360
+      ],
+      "t0": 8.25,
+      "t1": 9.1
+    },
+    {
+      "kind": "config",
+      "field": "autobrewWeight",
+      "t": 9.1,
+      "value": 360
+    },
+    {
+      "kind": "save",
+      "t": 8.8,
+      "window": 0.45,
+      "state": "ok",
+      "param": "brew_weight"
+    },
+    {
+      "kind": "sim_log",
+      "assert": "write_words",
+      "sub": 17,
+      "words": [
+        300
+      ],
+      "t0": 9.15,
+      "t1": 10.0
+    },
+    {
+      "kind": "config",
+      "field": "autoHotWaterTarget",
+      "t": 10.0,
+      "value": 300
+    },
+    {
+      "kind": "save",
+      "t": 9.7,
+      "window": 0.45,
+      "state": "ok",
+      "param": "hotwater_weight"
+    },
+    {
+      "kind": "sim_log",
+      "assert": "write_words",
+      "sub": 17,
+      "words": [
+        5000
+      ],
+      "t0": 10.05,
+      "t1": 10.9
+    },
+    {
+      "kind": "config",
+      "field": "autoHotWaterTarget",
+      "t": 10.9,
+      "value": 5000
+    },
+    {
+      "kind": "save",
+      "t": 10.6,
+      "window": 0.45,
+      "state": "ok",
+      "param": "hotwater_weight"
+    },
+    {
+      "kind": "sim_log",
+      "assert": "write_words",
+      "sub": 17,
+      "words": [
+        400
+      ],
+      "t0": 10.95,
+      "t1": 11.8
+    },
+    {
+      "kind": "config",
+      "field": "autoHotWaterTarget",
+      "t": 11.8,
+      "value": 400
+    },
+    {
+      "kind": "save",
+      "t": 11.5,
+      "window": 0.45,
+      "state": "ok",
+      "param": "hotwater_weight"
+    },
+    {
+      "kind": "sim_log",
+      "assert": "write_words",
+      "sub": 11,
+      "words": [
+        850
+      ],
+      "t0": 11.85,
+      "t1": 12.7
+    },
+    {
+      "kind": "config",
+      "field": "brewTemper",
+      "t": 12.7,
+      "value": 850
+    },
+    {
+      "kind": "save",
+      "t": 12.4,
+      "window": 0.45,
+      "state": "ok",
+      "param": "brew_temp"
+    },
+    {
+      "kind": "sim_log",
+      "assert": "write_words",
+      "sub": 11,
+      "words": [
+        960
+      ],
+      "t0": 12.75,
+      "t1": 13.6
+    },
+    {
+      "kind": "config",
+      "field": "brewTemper",
+      "t": 13.6,
+      "value": 960
+    },
+    {
+      "kind": "save",
+      "t": 13.3,
+      "window": 0.45,
+      "state": "ok",
+      "param": "brew_temp"
+    },
+    {
+      "kind": "sim_log",
+      "assert": "write_words",
+      "sub": 11,
+      "words": [
+        860
+      ],
+      "t0": 13.65,
+      "t1": 14.5
+    },
+    {
+      "kind": "config",
+      "field": "brewTemper",
+      "t": 14.5,
+      "value": 860
+    },
+    {
+      "kind": "save",
+      "t": 14.2,
+      "window": 0.45,
+      "state": "ok",
+      "param": "brew_temp"
+    },
+    {
+      "kind": "sim_log",
+      "assert": "write_words",
+      "sub": 11,
+      "words": [
+        870
+      ],
+      "t0": 14.55,
+      "t1": 15.4
+    },
+    {
+      "kind": "config",
+      "field": "brewTemper",
+      "t": 15.4,
+      "value": 870
+    },
+    {
+      "kind": "save",
+      "t": 15.1,
+      "window": 0.45,
+      "state": "ok",
+      "param": "brew_temp"
+    },
+    {
+      "kind": "sim_log",
+      "assert": "write_words",
+      "sub": 114,
+      "words": [
+        30
+      ],
+      "t0": 15.45,
+      "t1": 16.3
+    },
+    {
+      "kind": "config",
+      "field": "headTemper",
+      "t": 16.3,
+      "value": 30
+    },
+    {
+      "kind": "save",
+      "t": 16.0,
+      "window": 0.45,
+      "state": "ok",
+      "param": "head_temp"
+    },
+    {
+      "kind": "sim_log",
+      "assert": "write_words",
+      "sub": 114,
+      "words": [
+        80
+      ],
+      "t0": 16.35,
+      "t1": 17.2
+    },
+    {
+      "kind": "config",
+      "field": "headTemper",
+      "t": 17.2,
+      "value": 80
+    },
+    {
+      "kind": "save",
+      "t": 16.9,
+      "window": 0.45,
+      "state": "ok",
+      "param": "head_temp"
+    },
+    {
+      "kind": "sim_log",
+      "assert": "write_words",
+      "sub": 114,
+      "words": [
+        40
+      ],
+      "t0": 17.25,
+      "t1": 18.1
+    },
+    {
+      "kind": "config",
+      "field": "headTemper",
+      "t": 18.1,
+      "value": 40
+    },
+    {
+      "kind": "save",
+      "t": 17.8,
+      "window": 0.45,
+      "state": "ok",
+      "param": "head_temp"
+    },
+    {
+      "kind": "sim_log",
+      "assert": "write_words",
+      "sub": 114,
+      "words": [
+        70
+      ],
+      "t0": 18.15,
+      "t1": 19.0
+    },
+    {
+      "kind": "config",
+      "field": "headTemper",
+      "t": 19.0,
+      "value": 70
+    },
+    {
+      "kind": "save",
+      "t": 18.7,
+      "window": 0.45,
+      "state": "ok",
+      "param": "head_temp"
+    },
+    {
+      "kind": "sim_log",
+      "assert": "write_words",
+      "sub": 25,
+      "words": [
+        450
+      ],
+      "t0": 19.05,
+      "t1": 19.9
+    },
+    {
+      "kind": "config",
+      "field": "AtuoSteamTarge",
+      "t": 19.9,
+      "value": 450
+    },
+    {
+      "kind": "save",
+      "t": 19.6,
+      "window": 0.45,
+      "state": "ok",
+      "param": "steam_milk_target"
+    },
+    {
+      "kind": "sim_log",
+      "assert": "write_words",
+      "sub": 25,
+      "words": [
+        700
+      ],
+      "t0": 19.95,
+      "t1": 20.8
+    },
+    {
+      "kind": "config",
+      "field": "AtuoSteamTarge",
+      "t": 20.8,
+      "value": 700
+    },
+    {
+      "kind": "save",
+      "t": 20.5,
+      "window": 0.45,
+      "state": "ok",
+      "param": "steam_milk_target"
+    },
+    {
+      "kind": "sim_log",
+      "assert": "write_words",
+      "sub": 25,
+      "words": [
+        460
+      ],
+      "t0": 20.85,
+      "t1": 21.7
+    },
+    {
+      "kind": "config",
+      "field": "AtuoSteamTarge",
+      "t": 21.7,
+      "value": 460
+    },
+    {
+      "kind": "save",
+      "t": 21.4,
+      "window": 0.45,
+      "state": "ok",
+      "param": "steam_milk_target"
+    },
+    {
+      "kind": "sim_log",
+      "assert": "write_words",
+      "sub": 25,
+      "words": [
+        650
+      ],
+      "t0": 21.75,
+      "t1": 22.6
+    },
+    {
+      "kind": "config",
+      "field": "AtuoSteamTarge",
+      "t": 22.6,
+      "value": 650
+    },
+    {
+      "kind": "save",
+      "t": 22.3,
+      "window": 0.45,
+      "state": "ok",
+      "param": "steam_milk_target"
+    },
+    {
+      "kind": "sim_log",
+      "assert": "write_words",
+      "sub": 14,
+      "words": [
+        1
+      ],
+      "t0": 22.65,
+      "t1": 23.5
+    },
+    {
+      "kind": "config",
+      "field": "steamGears",
+      "t": 23.5,
+      "value": 1
+    },
+    {
+      "kind": "save",
+      "t": 23.2,
+      "window": 0.45,
+      "state": "ok",
+      "param": "steam_gear"
+    },
+    {
+      "kind": "sim_log",
+      "assert": "write_words",
+      "sub": 14,
+      "words": [
+        4
+      ],
+      "t0": 23.55,
+      "t1": 24.4
+    },
+    {
+      "kind": "config",
+      "field": "steamGears",
+      "t": 24.4,
+      "value": 4
+    },
+    {
+      "kind": "save",
+      "t": 24.1,
+      "window": 0.45,
+      "state": "ok",
+      "param": "steam_gear"
+    },
+    {
+      "kind": "sim_log",
+      "assert": "write_words",
+      "sub": 14,
+      "words": [
+        2
+      ],
+      "t0": 24.45,
+      "t1": 25.3
+    },
+    {
+      "kind": "config",
+      "field": "steamGears",
+      "t": 25.3,
+      "value": 2
+    },
+    {
+      "kind": "save",
+      "t": 25.0,
+      "window": 0.45,
+      "state": "ok",
+      "param": "steam_gear"
+    },
+    {
+      "kind": "sim_log",
+      "assert": "write_words",
+      "sub": 14,
+      "words": [
+        3
+      ],
+      "t0": 25.35,
+      "t1": 26.2
+    },
+    {
+      "kind": "config",
+      "field": "steamGears",
+      "t": 26.2,
+      "value": 3
+    },
+    {
+      "kind": "save",
+      "t": 25.9,
+      "window": 0.45,
+      "state": "ok",
+      "param": "steam_gear"
+    },
+    {
+      "kind": "sim_log",
+      "assert": "write_words",
+      "sub": 112,
+      "words": [
+        259,
+        1541
+      ],
+      "t0": 26.25,
+      "t1": 27.1
+    },
+    {
+      "kind": "config",
+      "field": "preInfusionPressure",
+      "t": 27.1,
+      "value": 3
+    },
+    {
+      "kind": "save",
+      "t": 26.8,
+      "window": 0.45,
+      "state": "ok",
+      "param": "preinfusion_pressure"
+    },
+    {
+      "kind": "sim_log",
+      "assert": "write_words",
+      "sub": 112,
+      "words": [
+        260,
+        1541
+      ],
+      "t0": 27.15,
+      "t1": 28.0
+    },
+    {
+      "kind": "config",
+      "field": "preInfusionPressure",
+      "t": 28.0,
+      "value": 4
+    },
+    {
+      "kind": "save",
+      "t": 27.7,
+      "window": 0.45,
+      "state": "ok",
+      "param": "preinfusion_pressure"
+    },
+    {
+      "kind": "sim_log",
+      "assert": "write_words",
+      "sub": 112,
+      "words": [
+        4,
+        1541
+      ],
+      "t0": 28.05,
+      "t1": 28.9
+    },
+    {
+      "kind": "config",
+      "field": "preInfusionSwitch",
+      "t": 28.9,
+      "value": 0
+    },
+    {
+      "kind": "save",
+      "t": 28.6,
+      "window": 0.45,
+      "state": "ok",
+      "param": "preinfusion_switch"
+    },
+    {
+      "kind": "sim_log",
+      "assert": "write_words",
+      "sub": 112,
+      "words": [
+        260,
+        1541
+      ],
+      "t0": 28.95,
+      "t1": 29.8
+    },
+    {
+      "kind": "config",
+      "field": "preInfusionSwitch",
+      "t": 29.8,
+      "value": 1
+    },
+    {
+      "kind": "save",
+      "t": 29.5,
+      "window": 0.45,
+      "state": "ok",
+      "param": "preinfusion_switch"
+    },
+    {
+      "kind": "sim_log",
+      "assert": "write_words",
+      "sub": 113,
+      "words": [
+        1285
+      ],
+      "t0": 29.85,
+      "t1": 30.7
+    },
+    {
+      "kind": "config",
+      "field": "preInfusionTime",
+      "t": 30.7,
+      "value": 5
+    },
+    {
+      "kind": "save",
+      "t": 30.4,
+      "window": 0.45,
+      "state": "ok",
+      "param": "preinfusion_time"
+    },
+    {
+      "kind": "sim_log",
+      "assert": "write_words",
+      "sub": 113,
+      "words": [
+        1541
+      ],
+      "t0": 30.75,
+      "t1": 31.6
+    },
+    {
+      "kind": "config",
+      "field": "preInfusionTime",
+      "t": 31.6,
+      "value": 6
+    },
+    {
+      "kind": "save",
+      "t": 31.3,
+      "window": 0.45,
+      "state": "ok",
+      "param": "preinfusion_time"
+    },
+    {
+      "kind": "sim_log",
+      "assert": "no_writes_between",
+      "t0": 31.65,
+      "t1": 32.5,
+      "except_subs": [
+        0,
+        1,
+        112
+      ]
+    },
+    {
+      "kind": "config",
+      "field": "breakTime",
+      "t": 32.5,
+      "value": 5
+    },
+    {
+      "kind": "save_rejected",
+      "param": "break_time",
+      "t": 32.2,
+      "window": 0.45
+    },
+    {
+      "kind": "sim_log",
+      "assert": "no_writes_between",
+      "t0": 32.55,
+      "t1": 33.4,
+      "except_subs": [
+        0,
+        1,
+        112
+      ]
+    },
+    {
+      "kind": "config",
+      "field": "breakTime",
+      "t": 33.4,
+      "value": 5
+    },
+    {
+      "kind": "save_rejected",
+      "param": "break_time",
+      "t": 33.1,
+      "window": 0.45
+    },
+    {
+      "kind": "sim_log",
+      "assert": "no_writes_between",
+      "t0": 33.45,
+      "t1": 34.3,
+      "except_subs": [
+        0,
+        1,
+        112
+      ]
+    },
+    {
+      "kind": "config",
+      "field": "breakTime",
+      "t": 34.3,
+      "value": 5
+    },
+    {
+      "kind": "save_rejected",
+      "param": "break_time",
+      "t": 34.0,
+      "window": 0.45
+    },
+    {
+      "kind": "sim_log",
+      "assert": "no_writes_between",
+      "t0": 34.35,
+      "t1": 35.2,
+      "except_subs": [
+        0,
+        1,
+        112
+      ]
+    },
+    {
+      "kind": "config",
+      "field": "grindMode",
+      "t": 35.2,
+      "value": 1
+    },
+    {
+      "kind": "save",
+      "t": 34.9,
+      "window": 0.45,
+      "state": "unchanged",
+      "param": "grind_mode"
+    },
+    {
+      "kind": "sim_log",
+      "assert": "write_words",
+      "sub": 2,
+      "words": [
+        2
+      ],
+      "t0": 35.25,
+      "t1": 36.1
+    },
+    {
+      "kind": "config",
+      "field": "grindMode",
+      "t": 36.1,
+      "value": 2
+    },
+    {
+      "kind": "save",
+      "t": 35.8,
+      "window": 0.45,
+      "state": "ok",
+      "param": "grind_mode"
+    },
+    {
+      "kind": "sim_log",
+      "assert": "no_writes_between",
+      "t0": 36.15,
+      "t1": 37.0,
+      "except_subs": [
+        0,
+        1,
+        112
+      ]
+    },
+    {
+      "kind": "config",
+      "field": "backlight",
+      "t": 37.0,
+      "value": 9
+    },
+    {
+      "kind": "sim_log",
+      "assert": "no_writes_between",
+      "t0": 37.05,
+      "t1": 37.9,
+      "except_subs": [
+        0,
+        1,
+        112
+      ]
+    },
+    {
+      "kind": "config",
+      "field": "backlight",
+      "t": 37.9,
+      "value": 10
+    },
+    {
+      "kind": "sim_log",
+      "assert": "no_writes_between",
+      "t0": 37.95,
+      "t1": 38.8,
+      "except_subs": [
+        0,
+        1,
+        112
+      ]
+    },
+    {
+      "kind": "config",
+      "field": "backlight",
+      "t": 38.8,
+      "value": 1
+    },
+    {
+      "kind": "sim_log",
+      "assert": "no_writes_between",
+      "t0": 38.85,
+      "t1": 39.7,
+      "except_subs": [
+        0,
+        1,
+        112
+      ]
+    },
+    {
+      "kind": "config",
+      "field": "backlight",
+      "t": 39.7,
+      "value": 9
+    },
+    {
+      "kind": "sim_log",
+      "assert": "no_writes_between",
+      "t0": 39.75,
+      "t1": 40.6,
+      "except_subs": [
+        0,
+        1,
+        112
+      ]
+    },
+    {
+      "kind": "config",
+      "field": "volume",
+      "t": 40.6,
+      "value": 0
+    },
+    {
+      "kind": "sim_log",
+      "assert": "no_writes_between",
+      "t0": 40.65,
+      "t1": 41.5,
+      "except_subs": [
+        0,
+        1,
+        112
+      ]
+    },
+    {
+      "kind": "config",
+      "field": "volume",
+      "t": 41.5,
+      "value": 100
+    },
+    {
+      "kind": "sim_log",
+      "assert": "no_writes_between",
+      "t0": 41.55,
+      "t1": 42.4,
+      "except_subs": [
+        0,
+        1,
+        112
+      ]
+    },
+    {
+      "kind": "config",
+      "field": "volume",
+      "t": 42.4,
+      "value": 1
+    },
+    {
+      "kind": "sim_log",
+      "assert": "no_writes_between",
+      "t0": 42.45,
+      "t1": 43.3,
+      "except_subs": [
+        0,
+        1,
+        112
+      ]
+    },
+    {
+      "kind": "config",
+      "field": "volume",
+      "t": 43.3,
+      "value": 31
+    },
+    {
+      "kind": "sim_log",
+      "assert": "no_writes_between",
+      "t0": 43.35,
+      "t1": 44.2,
+      "except_subs": [
+        0,
+        1,
+        112
+      ]
+    },
+    {
+      "kind": "config",
+      "field": "Temperature",
+      "t": 44.2,
+      "value": 0
+    },
+    {
+      "kind": "sim_log",
+      "assert": "no_writes_between",
+      "t0": 44.25,
+      "t1": 45.1,
+      "except_subs": [
+        0,
+        1,
+        112
+      ]
+    },
+    {
+      "kind": "config",
+      "field": "Temperature",
+      "t": 45.1,
+      "value": 1
+    },
+    {
+      "kind": "sim_log",
+      "assert": "no_writes_between",
+      "t0": 45.15,
+      "t1": 46.0,
+      "except_subs": [
+        0,
+        1,
+        112
+      ]
+    },
+    {
+      "kind": "config",
+      "field": "language",
+      "t": 46.0,
+      "value": 0
+    },
+    {
+      "kind": "sim_log",
+      "assert": "no_writes_between",
+      "t0": 46.05,
+      "t1": 46.9,
+      "except_subs": [
+        0,
+        1,
+        112
+      ]
+    },
+    {
+      "kind": "config",
+      "field": "language",
+      "t": 46.9,
+      "value": 10
+    },
+    {
+      "kind": "sim_log",
+      "assert": "no_writes_between",
+      "t0": 46.95,
+      "t1": 47.8,
+      "except_subs": [
+        0,
+        1,
+        112
+      ]
+    },
+    {
+      "kind": "config",
+      "field": "language",
+      "t": 47.8,
+      "value": 1
+    },
+    {
+      "kind": "sim_log",
+      "assert": "no_writes_between",
+      "t0": 47.85,
+      "t1": 48.7,
+      "except_subs": [
+        0,
+        1,
+        112
+      ]
+    },
+    {
+      "kind": "config",
+      "field": "hotWaterShortcut",
+      "t": 48.7,
+      "value": 0
+    },
+    {
+      "kind": "sim_log",
+      "assert": "no_writes_between",
+      "t0": 48.75,
+      "t1": 49.6,
+      "except_subs": [
+        0,
+        1,
+        112
+      ]
+    },
+    {
+      "kind": "config",
+      "field": "hotWaterShortcut",
+      "t": 49.6,
+      "value": 1
+    },
+    {
+      "kind": "sim_log",
+      "assert": "no_writes_between",
+      "t0": 49.65,
+      "t1": 50.5,
+      "except_subs": [
+        0,
+        1,
+        112
+      ]
+    },
+    {
+      "kind": "config",
+      "field": "sumtime",
+      "t": 50.5,
+      "value": 0
+    },
+    {
+      "kind": "sim_log",
+      "assert": "no_writes_between",
+      "t0": 50.55,
+      "t1": 51.4,
+      "except_subs": [
+        0,
+        1,
+        112
+      ]
+    },
+    {
+      "kind": "config",
+      "field": "sumtime",
+      "t": 51.4,
+      "value": 1
+    },
+    {
+      "kind": "sim_log",
+      "assert": "no_writes_between",
+      "t0": 51.45,
+      "t1": 52.3,
+      "except_subs": [
+        0,
+        1,
+        112
+      ]
+    },
+    {
+      "kind": "config",
+      "field": "clearTip",
+      "t": 52.3,
+      "value": 0
+    },
+    {
+      "kind": "sim_log",
+      "assert": "no_writes_between",
+      "t0": 52.35,
+      "t1": 53.2,
+      "except_subs": [
+        0,
+        1,
+        112
+      ]
+    },
+    {
+      "kind": "config",
+      "field": "clearTip",
+      "t": 53.2,
+      "value": 1
+    },
+    {
+      "kind": "sim_log",
+      "assert": "no_writes_between",
+      "t0": 53.25,
+      "t1": 54.1,
+      "except_subs": [
+        0,
+        1,
+        112
+      ]
+    },
+    {
+      "kind": "config",
+      "field": "timemode",
+      "t": 54.1,
+      "value": 0
+    },
+    {
+      "kind": "sim_log",
+      "assert": "no_writes_between",
+      "t0": 54.15,
+      "t1": 55.0,
+      "except_subs": [
+        0,
+        1,
+        112
+      ]
+    },
+    {
+      "kind": "config",
+      "field": "timemode",
+      "t": 55.0,
+      "value": 1
+    },
+    {
+      "kind": "sim_log",
+      "assert": "no_writes_between",
+      "t0": 55.05,
+      "t1": 55.9,
+      "except_subs": [
+        0,
+        1,
+        112
+      ]
+    },
+    {
+      "kind": "config",
+      "field": "Automatically",
+      "t": 55.9,
+      "value": 0
+    },
+    {
+      "kind": "sim_log",
+      "assert": "no_writes_between",
+      "t0": 55.95,
+      "t1": 56.8,
+      "except_subs": [
+        0,
+        1,
+        112
+      ]
+    },
+    {
+      "kind": "config",
+      "field": "Automatically",
+      "t": 56.8,
+      "value": 1
+    },
+    {
+      "kind": "sim_log",
+      "assert": "no_writes_between",
+      "t0": 56.85,
+      "t1": 57.7,
+      "except_subs": [
+        0,
+        1,
+        112
+      ]
+    },
+    {
+      "kind": "config",
+      "field": "init",
+      "t": 57.7,
+      "value": 1
+    },
+    {
+      "kind": "sim_log",
+      "assert": "no_writes_between",
+      "t0": 57.75,
+      "t1": 58.6,
+      "except_subs": [
+        0,
+        1,
+        112
+      ]
+    },
+    {
+      "kind": "config",
+      "field": "init",
+      "t": 58.6,
+      "value": 1
+    },
+    {
+      "kind": "sim_log",
+      "assert": "no_writes_between",
+      "t0": 58.65,
+      "t1": 59.5,
+      "except_subs": [
+        0,
+        1,
+        112
+      ]
+    },
+    {
+      "kind": "config",
+      "field": "patch",
+      "t": 59.5,
+      "value": 1
+    },
+    {
+      "kind": "sim_log",
+      "assert": "no_writes_between",
+      "t0": 59.55,
+      "t1": 60.4,
+      "except_subs": [
+        0,
+        1,
+        112
+      ]
+    },
+    {
+      "kind": "config",
+      "field": "patch",
+      "t": 60.4,
+      "value": 1
+    },
+    {
+      "kind": "sim_log",
+      "assert": "no_writes_between",
+      "t0": 60.45,
+      "t1": 61.3,
+      "except_subs": [
+        0,
+        1,
+        112
+      ]
+    },
+    {
+      "kind": "config",
+      "field": "hotWaterMode",
+      "t": 61.3,
+      "value": 1
+    },
+    {
+      "kind": "sim_log",
+      "assert": "no_writes_between",
+      "t0": 61.35,
+      "t1": 62.2,
+      "except_subs": [
+        0,
+        1,
+        112
+      ]
+    },
+    {
+      "kind": "config",
+      "field": "hotWaterMode",
+      "t": 62.2,
+      "value": 2
+    },
+    {
+      "kind": "save_rejected",
+      "param": "hotwater_temp",
+      "t": 62.6,
+      "window": 0.6
+    },
+    {
+      "kind": "save_rejected",
+      "param": "sleep_mode",
+      "t": 63.2,
+      "window": 0.6
+    },
+    {
+      "kind": "save_rejected",
+      "param": "sleep_setting",
+      "t": 63.8,
+      "window": 0.6
+    },
+    {
+      "kind": "save_rejected",
+      "param": "brew_mode",
+      "t": 64.4,
+      "window": 0.6
+    },
+    {
+      "kind": "save_rejected",
+      "param": "wifi_onoff",
+      "t": 65.0,
+      "window": 0.6
+    }
+  ]
+}
