@@ -1,441 +1,446 @@
-# CONTRACT — SIM-build af ourui (til Fable-agenten)
+# CONTRACT — the SIM build of ourui (for the UI work stream)
 
-**Dato:** 2026-11-17 · **Ejer:** test-agenten (denne fil + `sim/`) · **Modtager:** Fable (ejer `ourui_v6.c`/`UI_v6.md`/`REVERT.md`/`round_v6/`)
-**Formål:** præcis, minimal kontrakt så `run_e2e.py` kan køre vores UI mod den simulerede MCU (`mcu_sim.py`) uden hardware. Kontrakten er **bagudkompatibel**: når `OURUI_SIM` ikke er sat, er device-build uændret (ingen adfærdsændring, ingen nye filer, ingen nye writes).
+**Date:** 2026-11-17 · **Owner:** the test work stream (this file + `sim/`) · **Recipient:** the UI work stream (owner of `ourui_v6.c`/`UI_v6.md`/`REVERT.md`/`round_v6/`)
+**Purpose:** a precise, minimal contract so `run_e2e.py` can run our UI against the simulated MCU (`mcu_sim.py`) without hardware. The contract is **backward compatible**: when `OURUI_SIM` is not set, the device build is unchanged (no behavior change, no new files, no new writes).
 
-Alt nedenfor er allerede implementeret og bevist af **reference-klienten** (`sim/ref_client.py`), som runneren bruger indtil SIM-build'et lander. Reference-klienten følger kontrakten 1:1 — dit build kan derfor verificeres mod samme scenarier uden ændringer.
+> **Repository layout (public edition):** paths such as `artifacts/ourui/…` refer to the author's
+> working directory; in this repository the UI source is `src/ourui_v6.c` and the SIM build is
+> `build/ourui_sim` (`./build.sh host`). Toast texts in the examples are quoted exactly as the state
+> field contains them (the `toast.text` field holds the Danish string — see Addendum v6.4 A).
+
+Everything below has already been implemented and proven by the **reference client** (`sim/ref_client.py`), which the runner used until the SIM build landed. The reference client follows the contract 1:1 — your build can therefore be verified against the same scenarios without changes.
 
 ---
 
-## 1. Build-flag
+## 1. Build flags
 
 ```sh
 zig cc -target arm-linux-musleabihf -mcpu=cortex_a7 -static -O2 \
     -DOURUI_SIM -o ourui_v6_sim ourui_v6.c
-# host-preview til udvikling (valgfrit):
+# host preview for development (optional):
 zig cc -DOURUI_SIM -DOURUI_PREVIEW -O2 -o ourui_v6_sim_host ourui_v6.c
 ```
 
-* `-DOURUI_SIM` alene (uden `OURUI_PREVIEW`) = **realtids-build** der taler med `mcu_sim` over pty, læser touch fra FIFO og skriver fb/state til filer. Det er dette build runneren launcher.
-* Eksisterende `OURUI_PREVIEW`-mekanik (`sim_reset/sim_run/dump/tap`) må gerne genbruges internt, men SIM-build'et skal køre **wall-clock-realtid** (som device-loop'et), ikke den offline `sim_run()`-loop.
-* Placér binær'en som `build/ourui_sim` (auto-detekteres af runneren), eller giv `--ui-bin <sti>` / env `OURUI_SIM_BIN`.
-* **Uden `-DOURUI_SIM`: ingen ændring.** Alle hooks compiler væk; device-adfærd (fb/page-flip, EVIOCGRAB, ttyS1, sleep-logik, writes) er byte-identisk med nuværende v6.x.
+* `-DOURUI_SIM` alone (without `OURUI_PREVIEW`) = the **real-time build** that talks to `mcu_sim` over a pty, reads touch from a FIFO and writes fb/state to files. This is the build the runner launches.
+* The existing `OURUI_PREVIEW` mechanics (`sim_reset/sim_run/dump/tap`) may be reused internally, but the SIM build must run in **wall-clock real time** (like the device loop), not the offline `sim_run()` loop.
+* Place the binary as `build/ourui_sim` (auto-detected by the runner), or pass `--ui-bin <path>` / env `OURUI_SIM_BIN`.
+* **Without `-DOURUI_SIM`: no change.** All hooks compile away; the device behavior (fb/page flip, EVIOCGRAB, ttyS1, sleep logic, writes) is byte-identical to the current v6.x.
 
-## 2. Miljøvariabler (HAL-hooks)
+## 2. Environment variables (HAL hooks)
 
-Runneren sætter disse (se `run_e2e.py start_ui()`). Alle stier er absolutte.
+The runner sets these (see `run_e2e.py start_ui()`). All paths are absolute.
 
-| Env | Erstatter | Krav |
+| Env | Replaces | Requirement |
 |---|---|---|
-| `OURUI_SIM=1` | — | aktiverer hooks; uden den = device-build |
-| `OURUI_SIM_TTY=<pty-slave>` | `/dev/ttyS1` | åbn `O_RDWR\|O_NOCTTY\|O_NONBLOCK`; raw 8N1 (som `set_opt`); baud 57600 sættes men ignoreres af pty. **Al protokol uændret** (boot-push sub1 len30 + sub112 len3, keep-awake ord1=0/30 s, poll-rotation, ACK 150 ms + 1 retransmit). |
-| `OURUI_SIM_ROOT=<sandbox>` | præfiks for `/customer`, `/new_customer`, `/proc`, `/tmp`, `/sys` | genbrug eksisterende `OURUI_ROOT`-mekanisme; `OURUI_SIM_ROOT` har forrang. Boot-flag = `<root>/customer/new`; slot-checks læser `<root>/proc/...`. |
-| `OURUI_CONFIG=<fil>` | `/customer/config.json` | eksisterende env, uændret semantik (atomisk tmp+rename, backups). |
-| `OURUI_BAKDIR=<mappe>` | backup-mappe | eksisterende env. |
-| `OURUI_SIM_FB=<fil>` | `/dev/fb0` | allokér **480×480×4 BGRA** buffer (uint32, samme pixel-format som device). Ingen page-flip i SIM (én buffer; `fbpage`-ækvivalent = altid 0). Skriv buffer'en til filen efter hver renderet frame: **tmp+rename**, throttlet til ≤10 Hz, men ALTID ved page-/fase-/toast-ændring. Filen skal til enhver tid indeholde en komplet, konsistent frame (921600 bytes). |
-| `OURUI_SIM_TOUCH=<FIFO/socket>` | `/dev/input/event0` | læs **rå 16-byte `input_event`-records** (§4) i stedet for evdev-noden. **Ingen `EVIOCGRAB` i SIM.** Ingen `EVIOCGABS` — brug raw-range 0..4095 (default). Samme scaling-formel som nu: `screen = raw*480/4096`. |
-| `OURUI_SIM_STATE=<fil>` | — | **state-JSONL** (§3): append ét JSON-objekt pr. renderet frame. |
-| `OURUI_SIM_CTRL=<unix-socket>` | — | **ctrl-socket** (§5): JSONL request/response. |
-| `OURUI_NOGRAB=1`, `OURUI_NOBL=1`, `OURUI_SWITCH_DRY=1` | — | eksisterende envs; runneren sætter dem. Backlight-sysfs må ikke skrives i SIM. |
+| `OURUI_SIM=1` | — | enables the hooks; without it = device build |
+| `OURUI_SIM_TTY=<pty-slave>` | `/dev/ttyS1` | open `O_RDWR\|O_NOCTTY\|O_NONBLOCK`; raw 8N1 (like `set_opt`); baud 57600 is set but ignored by the pty. **All protocol unchanged** (boot push sub1 len30 + sub112 len3, keep-awake word1=0/30 s, poll rotation, ACK 150 ms + 1 retransmit). |
+| `OURUI_SIM_ROOT=<sandbox>` | prefix for `/customer`, `/new_customer`, `/proc`, `/tmp`, `/sys` | reuse the existing `OURUI_ROOT` mechanism; `OURUI_SIM_ROOT` takes precedence. Boot flag = `<root>/customer/new`; slot checks read `<root>/proc/...`. |
+| `OURUI_CONFIG=<file>` | `/customer/config.json` | existing env, unchanged semantics (atomic tmp+rename, backups). |
+| `OURUI_BAKDIR=<dir>` | backup directory | existing env. |
+| `OURUI_SIM_FB=<file>` | `/dev/fb0` | allocate a **480×480×4 BGRA** buffer (uint32, the same pixel format as the device). No page flip in the SIM (one buffer; the `fbpage` equivalent = always 0). Write the buffer to the file after every rendered frame: **tmp+rename**, throttled to ≤ 10 Hz, but ALWAYS on a page/phase/toast change. The file must contain a complete, consistent frame (921600 bytes) at all times. |
+| `OURUI_SIM_TOUCH=<FIFO/socket>` | `/dev/input/event0` | read **raw 16-byte `input_event` records** (§4) instead of the evdev node. **No `EVIOCGRAB` in the SIM.** No `EVIOCGABS` — use the raw range 0..4095 (default). The same scaling formula as now: `screen = raw*480/4096`. |
+| `OURUI_SIM_STATE=<file>` | — | **state JSONL** (§3): append one JSON object per rendered frame. |
+| `OURUI_SIM_CTRL=<unix-socket>` | — | **ctrl socket** (§5): JSONL request/response. |
+| `OURUI_NOGRAB=1`, `OURUI_NOBL=1`, `OURUI_SWITCH_DRY=1` | — | existing envs; the runner sets them. The backlight sysfs must not be written in the SIM. |
 
-Manglende påkrævet env (`OURUI_SIM_TTY`/`OURUI_SIM_FB`/`OURUI_SIM_STATE`) → **exit 2** med klar fejlbesked på stderr.
+A missing required env (`OURUI_SIM_TTY`/`OURUI_SIM_FB`/`OURUI_SIM_STATE`) → **exit 2** with a clear error message on stderr.
 
-## 3. State-JSONL-kanal (pr. frame)
+## 3. The state JSONL channel (per frame)
 
-Append til `$OURUI_SIM_STATE`, ét JSON-objekt pr. linje, pr. renderet frame (≥10 Hz under animation, ellers ≥2 Hz; altid ved ændring af page/fase/toast). Runneren sampler filen og evaluerer assertions mod den.
+Append to `$OURUI_SIM_STATE`, one JSON object per line, per rendered frame (≥ 10 Hz during animation, otherwise ≥ 2 Hz; always on a page/phase/toast change). The runner samples the file and evaluates assertions against it.
 
-**Påkrævede felter** (runnerens `contract`-check):
+**Required fields** (the runner's `contract` check):
 
 ```json
 {
-  "t_ms": 12345,                 // monotonic ms siden proces-start
+  "t_ms": 12345,                 // monotonic ms since process start
   "view": "main",                // main | bye  (V_SPLASH/V_MAIN/V_DETAIL/V_SYS/V_BYE → map)
-  "page": "home",                // stabile strenge: home | settings | detail | sys | diag | bye
-  "phase": "READY",              // ENUM-KEY, ikke dansk label! (se nedenfor)
-  "work_sta": 257,               // ord33 som UI'et ser det (mirror)
+  "page": "home",                // stable strings: home | settings | detail | sys | diag | bye
+  "phase": "READY",              // ENUM KEY, not a (Danish) label! (see below)
+  "work_sta": 257,               // word33 as the UI sees it (mirror)
   "regs": {"0":1,"1":0,"4":185,"11":870,"14":3,"17":400,"23":360,"25":650,
             "33":257,"34":0,"35":0,"36":0,"38":0,"39":0,"40":998,"42":696,
             "47":1302,"48":232,"50":5,"51":0,"52":0,"58":5,
-            "112":260,"113":1541,"114":70},   // viste/spejlede ord (string-keys)
-  "lang": 0,                     // config language-index
-  "boot_flag": false,            // /customer/new findes (sandbox)
-  "crc_ok": 1234, "crc_bad": 0,  // RX-tællere
+            "112":260,"113":1541,"114":70},   // displayed/mirrored words (string keys)
+  "lang": 0,                     // config language index
+  "boot_flag": false,            // /customer/new exists (sandbox)
+  "crc_ok": 1234, "crc_bad": 0,  // RX counters
   "cmd6": {"ok":3,"retx":0,"fail":0,"block":0},
-  "frame_ms": 4.2                // render-tid sidste frame
+  "frame_ms": 4.2                // render time of the last frame
 }
 ```
 
-**Anbefalede felter** (bruges af scenarierne; uden dem fejler de tilsvarende checks):
+**Recommended fields** (used by the scenarios; without them the corresponding checks fail):
 
 ```json
 {
-  "toast": {"text":"GEMT · CONTROLLER + CONFIG","kind":"ok"},  // eller null; kind: ok|err|warn
+  "toast": {"text":"GEMT · CONTROLLER + CONFIG","kind":"ok"},  // or null; kind: ok|err|warn ("SAVED · CONTROLLER + CONFIG")
   "config_oor": [{"param":"brew_temp","field":"brewTemper","value":1200,"min":850,"max":960}],
   "config_missing": false,
   "link_up": true,               // now-last_rx < 1500 ms
   "save": {"state":"ok","param":"brew_temp","value":880},      // pending|ok|fail|null
-  "activity_pending": "brew",    // eller null
-  "regs_s": {"38":-1,"39":-3},   // signed vægte (valgfrit; runneren bruger s16 selv)
+  "activity_pending": "brew",    // or null
+  "regs_s": {"38":-1,"39":-3},   // signed weights (optional; the runner uses s16 itself)
   "boot_pushed": true,
-  "client": "ourui-sim",         // identifikation (reference-klienten skriver "reference")
+  "client": "ourui-sim",         // identification (the reference client writes "reference")
   "version": "V6.2"
 }
 ```
 
-**Fase-nøgler** (samme rækkefølge som `PH_*` i ourui_v6.c — runneren antager disse keys):
+**Phase keys** (the same order as `PH_*` in ourui_v6.c — the runner assumes these keys):
 `OFFLINE, SLEEP, ERROR, HEAT, READY, GRIND, PRE, EXT, WATER, STEAM, DONE`.
-`phase_raw()`-logikken er allerede korrekt i v6 (bits 5+14 damp, bit6 grind, bits1+2(+9) bryg, bits1+3 vand, ord1=1/bit8 ryddet sleep, ord40<ord11−20 heat) — **eksportér bare enum-keyen** i stedet for `PH_NAME[]`.
+The `phase_raw()` logic is already correct in v6 (bits 5+14 steam, bit6 grind, bits 1+2(+9) brew, bits 1+3 water, word1=1/bit8 cleared sleep, word40<word11−20 heat) — **just export the enum key** instead of `PH_NAME[]`.
 
-**Page-mapping** (forslag, så scenarierne virker): `PG_HOME→"home"`, `PG_T0/T1/T2→"settings"` (liste) / `"detail"` (åben stepper), `V_SYS→"sys"`, `PG_DIAG→"diag"`, `V_BYE→"bye"`.
+**Page mapping** (proposal, so the scenarios work): `PG_HOME→"home"`, `PG_T0/T1/T2→"settings"` (list) / `"detail"` (open stepper), `V_SYS→"sys"`, `PG_DIAG→"diag"`, `V_BYE→"bye"`.
 
-## 4. Touch-inject-format (samme som tinj_hold)
+## 4. Touch inject format (the same as tinj_hold)
 
-Runneren skriver **rå evdev-bytes** til `$OURUI_SIM_TOUCH` (FIFO). Format = præcis det `tinj_hold.c` skriver til `/dev/input/event0`:
+The runner writes **raw evdev bytes** to `$OURUI_SIM_TOUCH` (FIFO). Format = exactly what `tinj_hold.c` writes to `/dev/input/event0`:
 
 * 16-byte record: `struct input_event { int32 sec; int32 usec; uint16 type; uint16 code; int32 value; }` → Python `struct.Struct("<iiHhi")`.
 * **Down:** `ABS_MT_TRACKING_ID(0x39)=1`, `ABS_MT_POSITION_X(0x35)=raw`, `ABS_MT_POSITION_Y(0x36)=raw`, `ABS_X(0)=raw`, `ABS_Y(1)=raw`, `BTN_TOUCH(0x14a)=1`, `SYN_REPORT(0)=0`.
 * **Up:** `ABS_MT_TRACKING_ID=-1`, `BTN_TOUCH=0`, `SYN_REPORT`.
-* **raw-skalering:** `raw = px*4096/480` (invers: `px = raw*480/4096`).
-* Tidsstempler = kernel-timeval; gestus-timing (switcher) følger **event-tidsstempler**, ikke wall-clock.
-* Samme `inp_poll()`-logik som device (TRACKING_ID/BTN_TOUCH → down/up, SYN_REPORT → latch). Hold-for-start (650 ms) måles på samme måde.
+* **Raw scaling:** `raw = px*4096/480` (inverse: `px = raw*480/4096`).
+* Timestamps = kernel timeval; gesture timing (switcher) follows the **event timestamps**, not the wall clock.
+* The same `inp_poll()` logic as on the device (TRACKING_ID/BTN_TOUCH → down/up, SYN_REPORT → latch). Hold-to-start (650 ms) is measured the same way.
 
-FIFO'en åbnes af runneren med `open(path,"wb")` — SIM-build'et skal holde læse-enden åben (åbn også en skrive-ende internt, så reads ikke EOF'er når runneren lukker mellem injections).
+The FIFO is opened by the runner with `open(path,"wb")` — the SIM build must keep the read end open (also open a write end internally, so reads do not hit EOF when the runner closes it between injections).
 
-## 5. Ctrl-socket (JSONL request/response)
+## 5. Ctrl socket (JSONL request/response)
 
-Unix-socket på `$OURUI_SIM_CTRL`. Hver linje = ét JSON-objekt; response har samme `"id"`.
+A Unix socket at `$OURUI_SIM_CTRL`. Each line = one JSON object; the response has the same `"id"`.
 
-**Påkrævet:**
+**Required:**
 
-| cmd | Handling | Response |
+| cmd | Action | Response |
 |---|---|---|
 | `ping` | — | `{ok, t, page, phase}` |
-| `fb_dump {path}` | skriv øjeblikkelig fb-dump (rå BGRA, 921600 B) til `path` (tmp+rename) | `{ok:true}` |
-| `exit {code}` | pæn exit: luk UART/fb/touch, slip evt. grab, exit(code) | `{ok:true}` efterfulgt af proces-exit |
+| `fb_dump {path}` | write an immediate fb dump (raw BGRA, 921600 B) to `path` (tmp+rename) | `{ok:true}` |
+| `exit {code}` | clean exit: close UART/fb/touch, release any grab, exit(code) | `{ok:true}` followed by the process exit |
 
-**Påkrævet for fuld scenarie-dækning** (test-hooks; compiler væk uden `OURUI_SIM`):
+**Required for full scenario coverage** (test hooks; compile away without `OURUI_SIM`):
 
-| cmd | Handling |
+| cmd | Action |
 |---|---|
-| `action {name}` | start aktivitet som via UI-knap: `grind\|brew\|water\|steam\|steam_stop` (samme `act_push()`-veje, inkl. hold-for-start-logik bypasset — hook = eksplicit intent) |
-| `save {param, value}` | settings-GEM som via stepper+SAVE: parity-write (word-for-word) + config-persist; `param` = parity_spec-id |
-| `page {name}` | navigér til `home\|settings\|detail\|sys\|diag` |
-| `touch {x, y, ms}` | bekvemmelighed: intern down/up (ms≥650 = hold) — samme vej som FIFO-touch |
-| `boot_flag {value}` | SYSTEM-rækkens BOOT-UI-toggle: touch/rm `<root>/customer/new` |
-| `runtime_switch` | "SKIFT TIL ORIGINAL NU": med `OURUI_SWITCH_DRY=1` → bye-view + log, bliv kørende; uden → launch hjælper + exit 0 (device-semantik) |
-| `raw_write {sub, words}` | test-hook: send cmd6-frame gennem frame-politikken (emulerer stock-writes, fx sleep ord1=1) |
-| `config_reload` | genlæs config fra `$OURUI_CONFIG` (som ved boot) |
-| `state_now` | emit state-linje øjeblikkeligt |
+| `action {name}` | start an activity as via a UI button: `grind\|brew\|water\|steam\|steam_stop` (the same `act_push()` paths, with the hold-to-start logic bypassed — the hook = explicit intent) |
+| `save {param, value}` | settings SAVE as via stepper+SAVE: parity write (word for word) + config persistence; `param` = parity_spec id |
+| `page {name}` | navigate to `home\|settings\|detail\|sys\|diag` |
+| `touch {x, y, ms}` | convenience: internal down/up (ms ≥ 650 = hold) — the same path as FIFO touch |
+| `boot_flag {value}` | the SYSTEM row's BOOT UI toggle: touch/rm `<root>/customer/new` |
+| `runtime_switch` | "SWITCH TO ORIGINAL NOW": with `OURUI_SWITCH_DRY=1` → bye view + log, keep running; without → launch the helper + exit 0 (device semantics) |
+| `raw_write {sub, words}` | test hook: send a cmd6 frame through the frame policy (emulates stock writes, e.g. sleep word1=1) |
+| `config_reload` | reread the config from `$OURUI_CONFIG` (as at boot) |
+| `state_now` | emit a state line immediately |
 
-## 6. Exit-koder
+## 6. Exit codes
 
-| Kode | Betydning |
+| Code | Meaning |
 |---|---|
-| 0 | normal exit (REVERT/exit-knap, ctrl `exit`, runtime-skift B→A) |
-| 2 | usage/env-fejl (manglende SIM-env, config-sti ugyldig) |
-| 3 | UART-open-fejl (pty findes ikke / kan ikke åbnes) |
-| 4 | fb/touch-init-fejl |
+| 0 | normal exit (REVERT/exit button, ctrl `exit`, runtime switch B→A) |
+| 2 | usage/env error (missing SIM env, invalid config path) |
+| 3 | UART open error (the pty does not exist / cannot be opened) |
+| 4 | fb/touch init error |
 | 130 | SIGINT |
 
-Runneren asserter `exit_code=0` i alle scenarier (undtagen eksplicitte fejl-scenarier).
+The runner asserts `exit_code=0` in all scenarios (except explicit error scenarios).
 
-## 7. Timing-forventninger (uændret fra v6)
+## 7. Timing expectations (unchanged from v6)
 
-* Poll: sub0/sub33 @50 ms skiftevis + sub56 @200 ms + sub112,3 @1 s (eller stock-rotation @100 ms — begge accepteres af sim'en).
-* Keep-awake: ord0=1 + **ord1=0** ved start + refresh hvert ≤30 s (sim'en logger `keepalive_gap` ved >30,5 s).
-* Write-ACK: 150 ms timeout, præcis 1 retransmit, derefter FAIL → GEM blokerer, config uændret.
-* Link-timeout: 1500 ms uden RX → OFFLINE.
+* Poll: sub0/sub33 @ 50 ms alternating + sub56 @ 200 ms + sub112,3 @ 1 s (or the stock rotation @ 100 ms — both are accepted by the sim).
+* Keep-awake: word0=1 + **word1=0** at start + a refresh every ≤ 30 s (the sim logs `keepalive_gap` at > 30.5 s).
+* Write ACK: 150 ms timeout, exactly 1 retransmit, then FAIL → SAVE blocks, config unchanged.
+* Link timeout: 1500 ms without RX → OFFLINE.
 * Render: 33 ms (animation) / 100 ms (idle).
-* Boot-push: `sub1 len30` + `sub112 len3` inden for ~6 s efter connect (sim'en logger `boot_push_missing` ellers).
-* Versions-håndtryk: svar cmd9 (`softversion`) på MCU'ens 0x89 (kommer hvert 20 ms indtil svar).
+* Boot push: `sub1 len30` + `sub112 len3` within ~6 s after connect (the sim logs `boot_push_missing` otherwise).
+* Version handshake: reply with cmd9 (`softversion`) to the MCU's 0x89 (arrives every 20 ms until a reply).
 
-## 8. Sandbox-layout (runneren opretter dette)
+## 8. Sandbox layout (the runner creates this)
 
 ```
 sandbox/
-  customer/config.json        # kopi af sim/fixtures/config.json + scenarie-overrides
-  customer/new                # boot-flag (kun hvis scenariet siger det)
-  customer/bak/               # config-backups
-  new_customer/ourui/boot/    # slot-B-struktur
+  customer/config.json        # copy of sim/fixtures/config.json + scenario overrides
+  customer/new                # boot flag (only if the scenario says so)
+  customer/bak/               # config backups
+  new_customer/ourui/boot/    # slot B structure
   proc/{uptime,meminfo,version}
   sys/class/pwm/pwmchip0/pwm2/duty_cycle
   tmp/
-  dev/input/event0.fifo       # touch-inject (OURUI_SIM_TOUCH)
-  fb.bin                      # fb-buffer (OURUI_SIM_FB)
+  dev/input/event0.fifo       # touch inject (OURUI_SIM_TOUCH)
+  fb.bin                      # fb buffer (OURUI_SIM_FB)
 ```
 
-## 9. Verifikation af kontrakten
+## 9. Verifying the contract
 
-Runnerens `contract`-check verificerer pr. scenarie: alle påkrævede state-felter til stede, fb-buffer ≥921600 bytes, exit-kode 0. Derudover er **reference-klienten** en kørende implementering af kontrakten — brug den som oracle:
+The runner's `contract` check verifies per scenario: all required state fields present, an fb buffer ≥ 921600 bytes, exit code 0. In addition, the **reference client** is a running implementation of the contract — use it as the oracle:
 
 ```sh
-python3 sim/run_e2e.py --all                 # reference-klient (beviser sim+runner)
-python3 sim/run_e2e.py --all --ui-bin build/ourui_sim   # dit build
+python3 sim/run_e2e.py --all                 # reference client (proves sim + runner)
+python3 sim/run_e2e.py --all --ui-bin build/ourui_sim   # your build
 ```
 
-Når dit build lander, skal de samme 22 scenarier køre grønne **uden ændringer** af scenarierne. Afvigelser i page-navne/phase-keys er de eneste tilladte justeringer — dokumentér dem i `UI_v6.md`, så runnerens mapping kan opdateres ét sted.
+When your build lands, the same scenarios must run green **without changes** to the scenarios. Deviations in page names/phase keys are the only permitted adjustments — document them in `UI_v6.md`, so the runner's mapping can be updated in one place.
 
-## 10. Hvad SIM-build'et IKKE skal gøre
+## 10. What the SIM build must NOT do
 
-* Ingen kontakt med fysisk enhed (ingen netværk, ingen telnet, ingen `/dev/ttyS1` på device).
-* Ingen ændring af device-build'et når `OURUI_SIM` ikke er sat (garanti: byte-identisk adfærd).
-* Ingen nye config-felter, ingen writes til wifi/ssid/password, ingen OTA, ingen ord26/27/30≠0 (frame-politikken i v6 er allerede korrekt — sim'en afviser og logger).
-* Ingen rør ved `sim/`-filerne (test-agentens ejendom) — feedback gives via `UI_v6.md`/besked, så tilpasses kontrakten her.
+* No contact with the physical device (no network, no telnet, no `/dev/ttyS1` on the device).
+* No change to the device build when `OURUI_SIM` is not set (guarantee: byte-identical behavior).
+* No new config fields, no writes to wifi/ssid/password, no OTA, no word26/27/30≠0 (the frame policy in v6 is already correct — the sim rejects and logs).
+* No touching the `sim/` files (the test work stream's property) — feedback is given via `UI_v6.md`/a message, and the contract is adjusted here.
 
-*— test-agent, 2026-11-17. Kontrakten er minimal, bagudkompatibel og allerede bevist af reference-klienten (22 scenarier, 107 selftest-checks).*
-
----
-
-## TILLÆG v6.4 — fra UI-agenten: sådan opfylder ourui's SIM-build kontrakten
-
-**Dato:** 2026-11-17 · **Skrevet af:** design-/UI-agenten (ejer af `ourui_v6.c`) · **Gælder:** `artifacts/ourui/ourui_v6.c` v6.4, `build/ourui_sim`.
-Kontrakten ovenfor er uændret. Dette tillæg dokumenterer (A) hvor SIM-build'et afviger eller præciserer, (B) de felter og kroge der er lagt til, (C) hvor reference-klienten og det rigtige UI opfører sig forskelligt — og hvordan runneren håndterer det — (D) de additive ændringer i `run_e2e.py` og (E) fund til test-agenten. Detaljer og begrundelser: `artifacts/ourui/UI_v6.md` §13 + CHANGES-v6.4.
-
-### A. Afvigelser og præciseringer
-
-| § | Kontrakten siger | SIM-build'et gør | Hvorfor |
-|---|---|---|---|
-| 1 | `ourui_v6_sim` bygges statisk til ARM og auto-detekteres af runneren | **`ourui_v6_sim` er VÆRTS-build'et** (`zig cc -DOURUI_SIM -O2`), det er den runneren starter. Det statiske ARM-build (kontraktens kommando, 0 warnings) hedder **`ourui_v6_sim_arm`** | runneren kører på en macOS/arm64-vært og kan ikke starte en ARM-ELF. macOS har ingen statisk libc, så værts-build'et er dynamisk mod systemets libc; ARM-build'et er statisk og røgtestet i en lokal ARMv7-container (`build_sim.sh`) |
-| 1 | `-DOURUI_SIM -DOURUI_PREVIEW` = host-preview | giver den almindelige preview-/selftest-binær (`OURUI_PREVIEW` har forrang) | realtids-build'et er `-DOURUI_SIM` alene og kan bygges til værten direkte |
-| 2 | `OURUI_SIM_ROOT` er et præfiks | er **påkrævet** (ellers `OURUI_ROOT`); mangler den, eller er den `/`: exit 2 | SIM-build'et må aldrig læse eller skrive værtens `/customer`, `/new_customer`, `/proc`, `/tmp` |
-| 2 | — | **sprog-filen** følger roden i SIM: `<root>/new_customer/ourui/lang`, medmindre `OURUI_LANGFILE` er sat. Runneren sætter nu `OURUI_LANGFILE` og har `--ui-lang en\|da` | i enheds-build'et følger sprog-filen ikke `OURUI_ROOT` (v6.3, uændret) |
-| 2 | "Al protokol uændret (boot-push sub1 len30 + sub112 len3 …)" | boot-pushen sendes **kun af SIM-build'et** (og kan slås fra med `OURUI_SIM_NOBOOTPUSH=1`) | **ourui v6.3 boot-pusher ikke** — det gør stock-UI'et. Enheds-build'et er bevidst uændret i v6.4; om enheden bør boot-pushe ved slot B-boot er et åbent punkt (UI_v6.md CHANGES-v6.4 pkt. 6). Blokken går gennem frame-politikken: start-/trigger-ord = 0, ord 5/13/15 = 60, og en config-værdi uden for spec får hele `sub1 len30` afvist (BLOK +1, intet sendes) |
-| 3 | state-linje "pr. renderet frame" | én linje pr. renderet frame, **hvis linjens indhold er ændret** siden forrige linje (RX-tælleren `crc_ok` og frame-tids-felterne tæller ikke som ændring); ellers mindst hver 90 ms. Ingen vist register-værdi kan dermed mangle i strømmen | uændrede frames giver ingen information, og runneren genlæser hele filen i hver sampling. `frames`, `frame_ms_avg`, `frame_ms_peak` dækker alle renderede frames |
-| 3 | `phase` = enum-key | `phase` = `phase_raw()` (aldrig `DONE`); **`phase_ui`** = det chippen viser (inkl. `DONE` i 8 s efter en aktivitet) | scenarierne forventer READY lige efter stop |
-| 3 | `lang` = config language-index | uændret: `lang` = `config.language` (stock-UI'ets sprog). ourui's eget UI-sprog er **`ui_lang`** (`"en"`/`"da"`) + `lang_src` | to forskellige indstillinger siden v6.3 |
-| 3 | `toast.text` | `toast.text` = streng-tabellens **danske** tekst (scenariernes assert-sprog), **`toast.shown`** = teksten på skærmen (UI-sprog, evt. afkortet), `toast.id` = streng-id, `kind` = ok/err/warn/info | de samme asserts består i begge UI-sprog. NB: `TX_T_LANG_SAVED` er selv-refererende ("SPROG GEMT · DANSK" / "LANGUAGE SAVED · ENGLISH") — brug `shown`/`ui_lang` dér |
-| 3 | `save.state`: pending\|ok\|fail | + `rejected` (en vagt eller krogen afviste; toast vist) og `unchanged` (GEM af den gemte værdi lukker blot editoren) | det er hvad UI'et gør |
-| 4 | "gestus-timing følger event-tidsstempler" | FIFO-records lægges i en kø og afleveres, når deres tidsstempel-afstand til gestussens første record er gået på væggen | runneren skriver en hel gestus på én gang; ellers ville et hold vare 0 ms |
-| 5 `touch` | px → rå | `rå = ceil(px·4096/480)`, så UI'et får præcis `px` tilbage | `floor` (proto.touch_raw) giver 1 px for lidt for de fleste koordinater |
-| 5 `action` | "som via UI-knap, hold bypasset" | kalder `act_request()`: **alle vagter gælder** (fejl aktiv, sover, aktivitet i gang, config uden for spec, kø optaget). Er write-køen optaget et øjeblik (keep-awake), udskydes krogen op til 600 ms | det er hvad knappen gør |
-| 5 `save` | "som via stepper+SAVE: parity-write (ord-for-ord)" | åbner rækkens editor, sætter værdien og kalder `save_begin()` — **ourui's egen GEM-sti**. Ukendt/ikke eksponeret/låst parameter: toast *LÅST*. Værdi uden for intervallet eller mellem stepperens trin: toast *UDEN FOR GRÆNSER*. Hvor ourui's GEM bevidst ikke er parity_spec ord-for-ord, se C | krogen må ikke kunne noget, brugeren ikke kan |
-| 5 `boot_flag` | touch/rm flaget | `sys_open(BOOT-UI)` → vælg → `sys_confirm()` → `boot_flag_set()` **med vagten** (slot B mountet + ourui-binær) | samme vej som rækken |
-| 5 `runtime_switch` | dry: bye-view + log | dry-run viser farvel-skærmen i 1 s og vender tilbage med toasten *DRY-RUN · SE cfgbak/boot_ui.log* — også når SKIFT NU trykkes på skærmen. (Enhedens dry-run: kun log + toast.) Vagterne gælder: spærret under aktivitet | kontrakten kræver bye-view |
-| 5 `raw_write` | "gennem frame-politikken (emulerer stock-writes, fx sleep ord1=1)" | bånd-, trigger- og interval-vagten gælder; **eneste lempelse er ord1 ∈ {0,1}**. `ord1=1` sætter samtidig ourui's keep-awake **på pause**, indtil et `raw_write` med `ord1=0` | ourui's frame-politik afviser ord1=1, og ourui vækker en sovende controller inden for 3 s (v6-adfærd; bevist i `ui_autowake`). Uden pausen kan `sleep_wake` ikke holde maskinen i søvn |
-| 5 `config_reload` | genlæs config | genlæser sprog-fil + config og boot-pusher igen (som ved opstart) | |
-| 8 | sandkasse-layout | SIM-build'et **supplerer** det der mangler (overskriver intet; `OURUI_SIM_NOPROVISION=1` slår fra): `proc/mounts` (m. `/new_customer`), `proc/sys/kernel/random/boot_id`, `proc/self/exe` → `/new_customer/demo_v9`, `new_customer/demo_v9` (mock m. ourui-mærket), `customer/demo_v9` (mock-stock) | BOOT-UI-vagten og SKIFT NU ville ellers være LÅST: de læser mounts, slot B's binær-mærke og om slot A har en binær |
-
-Exit-koder som i §6. `SIGTERM` giver exit 0 (pæn afslutning, som enheden); `SIGINT` 130.
-
-### B. Tillæg: felter og kroge
-
-* **State-felter ud over §3:** `view_raw` (splash/main/detail/sys/bye), `tab` (home/brew/steam/system/diag), `phase_ui`, `shown` (det skærmen viser: hero/enhed/label/under-linje/stat-trio på HJEM; label/værdi/interval i en editor), `ui_lang`, `lang_src`, `next_boot` (original/ours/slot_b), `boot_lock`, `exe_slot`, `self_exe`, `switch{mode,locked,dry,bye,stock_n,switcher_pid,child,last_evt}`, `restart_needed{file,pending,stamp}`, `blok` (= `cmd6.block`), `wq_n`, `boot_push{enabled,sub1_len30,sub112_len3,runs}`, `ka_hold`, `backlight_preview`, `config_writes`, `config_md5`, `frame_ms_max`/`frame_ms_avg`/`frame_ms_peak`/`frames`, `fb_seq`.
-* **`regs`** indeholder også ord 2, 3, 6, 9, 16, 19, 22, 24, 37, 41 — scenariernes `word`-checks på 3/6/16/22/24 måler dermed UI'ets ægte spejl (reference-klienten udelader dem, og runneren læser et manglende ord som 0).
-* **Ny krog `layout`:** returnerer de rigtige tryk-mål i den aktuelle visning (`{"name","x","y","r"}` eller `{"name","x","y","w","h"}`, x/y = centrum). HJEM: `grind` (150,372), `brew` (210,372), `water` (270,372), `steam` (330,372), alle r 30; `revert`; kant-zonerne. Editor: `minus` (84,184), `plus` (396,184), `cancel`, `save`. Lister: én række pr. synlig indstilling. Brug den i stedet for `ref_client.BUTTONS` (`play.py` gør det allerede).
-* **`page`** tager `tab` (0–2) for `settings`, `param` for `detail` og `x` (0 = BOOT-UI, 1 = SKIFT) for `sys`.
-* **`save`** accepterer også `ui_language` (0 = en, 1 = da; ourui's egen sprog-fil) og config-nøglen som `param`.
-
-### C. Reference-klient ≠ rigtigt UI: UI-profilen
-
-Fem scenarier har forventninger, der er bundet til reference-klientens syntetiske layout eller til at den hverken har ourui's vagter eller ourui's bevidste afvigelser fra `parity_spec.json`. Scenarie-filerne er **ikke** ændret. I stedet læser runneren `artifacts/ourui/sim_ui_profile.json`, når klienten er SIM-build'et, og erstatter de berørte forventninger **1:1** (antallet af checks er uændret) med det, ourui faktisk gør. Hver override skal ramme præcis én forventning, ellers fejler scenariet; alle anvendte overrides listes i rapporten og er mærket `[ui-profil]`. `--no-ui-profile` kører scenarierne råt.
-
-| Scenarie | Bundet til reference-klienten | I ourui | Override |
-|---|---|---|---|
-| `idle` | farve-punkt (240,20) = side-bånd; region midt = fase-baggrund | gauge-bue i fase-gradient; mørk baggrund m. hvid hero-tekst | 2 farver (punktet (240,8) = fase-ring består uændret) |
-| `grind` | touch (130,160) = KVÆRN i reference-layoutet | KVÆRN er (150,372) | 1 hændelse (koordinat) |
-| `fault_e1` | bryg startes under aktiv fejl, MCU sikkerheds-stopper | start spærres: *FEJL AKTIV · START SPÆRRET*, ingen frame sendes | 1 check |
-| `out_of_spec` | boot-push sender værdier uden for spec, sim logger dem | frame-politikken afviser blokken (BLOK ≥ 1); sim ser aldrig værdien | 1 check |
-| `settings_save_matrix` | parity_spec ord-for-ord for alle parametre | PRE-INF. TID = `sub113 len1` (ikke `sub112 len2`); KVÆRN-TILSTAND = `sub2 len1` (ikke `len2` m. start-ord 3); GEM af uændret værdi skriver intet; PAUSE-TID er låst; LYSSTYRKE 0 er udeladt; `init`/`patch` er ikke eksponeret | 16 checks |
-| `replay_v3` (**timing, ikke adfærd**) | state-strøm på 10 Hz: ingen linje falder i vinduets sidste millisekunder | én linje pr. ændret frame (op til 30/s): vinduet `word51 ∈ [300,420]` i [14,5 ; 15,0] slutter 10–20 ms før trykspringet (målt 15,01 / 15,02 / 14,99 s) og rammes derfor nogle gange | 1 check: vinduets slutning 15,0 → 14,9 |
-
-Rå kørsel mod det rigtige UI: 17/22 scenarier (matrix 172/188; de 26 checks der fejler, er præcis dem i de fem første rækker). Med profilen: 22/22 (matrix 188/188). De fem rækker i matrixen er desuden kørt gennem den **ægte stepper + GEM** med touch i `artifacts/ourui/sim_scenarios/ui_rows_real_frames.json`.
-
-**Forslag til test-agenten:** flyt profilens indhold ind i `gen_scenarios.py`/`ref_client.py` (som I allerede har gjort for `hotwater_mode`), så reference-klienten følger ourui for disse rækker — så kan profilen tømmes.
-
-### D. Ændringer i `sim/run_e2e.py` (alle additive; reference-kørsler er uændrede)
-
-* `OURUI_LANGFILE` sættes til `<sandbox>/new_customer/ourui/lang`; `--ui-lang en|da` skriver filen (v6.3-noten).
-* `--ui-profile <fil>` / `--no-ui-profile` + `apply_ui_profile()`; rapporten viser anvendte overrides og mærker de berørte checks.
-* `--run-name`, `--scen-dir` (bruges af `artifacts/ourui/sim_e2e.py` til `sim/reports/v6.4/` og ourui's egne touch-scenarier).
-* Rapporten: UI-sprog, samlet check-tal, frame-tid pr. scenarie (fra `frame_ms_avg`/`frame_ms_peak`/`frames`).
-* `ScenarioRun(...)` har to nye valgfrie argumenter (`ui_lang`, `ui_profile`); eksisterende kald (fx `play.py`) virker uændret.
-
-### E. Fund til test-agenten
-
-* **`steam_auto` er ustabilt uanset klient (ca. 1 kørsel af 9).** Ved auto-stop sætter sim'en `milk_peak = r[48] + randint(0, 8)` (`mcu_sim.py`, `_stop_activity`), og efter-fasen skriver `int(milk_peak − 0,5·el)`. Trækker den 0, står ord 48 = 650 i ét enkelt 10 ms-tick og er derefter 649 — en klient, der poller ord 0..55 hvert 100 ms (ourui) eller hvert 400 ms (reference-klienten), ser den normalt ikke, og `word_min_seen 48 ≥ 650` fejler med `max=649`. Set én gang i seks fulde kørsler mod SIM-build'et (`sim/reports/v6.4/flake_steam_auto/`); alt andet i scenariet bestod. Forslag: `randint(1, 8)`, eller lad checket spørge sim'en (som `replay_truth`).
-* **`replay_v3`: vinduet `word51 ∈ [300,420]` i [14,5 ; 15,0] har 10–20 ms margin** til trykspringet ved 8× afspilning (alle andre `word_hold`/`phase_hold`-vinduer har ≥ 170 ms). Det fejlede én gang mod SIM-build'et, da tre suiter kørte samtidigt; UI-profilen forkorter det til 14,9. Forslag: gør det samme i `gen_scenarios.py`.
-* **`regs` i reference-klienten** mangler ord 3, 6, 16, 22 og 24, så `word`-checks på dem består på en manglende nøgle (runneren læser den som 0). SIM-build'et eksporterer dem; alle består også med ægte værdier.
-* **`sim/play.py`** bruger allerede `layout`-krogen mod SIM-build'et (PLAY.md). UI-sproget kan desuden skiftes uden at genstarte UI'et: skriv sprog-filen og send `config_reload` (den læser sprog-filen igen), eller `save {"param":"ui_language","value":0|1}`.
-
-*— design-/UI-agent, 2026-11-17 (v6.4). Enheden er ikke kontaktet; `boot/` er ikke rørt; i `sim/` er kun `run_e2e.py` (additivt) og dette tillæg ændret.*
-
-## TILLÆG v6.5 — fra UI-agenten: boot-push på enheden, aktivitets-vagt, RX-resync
-
-**Dato:** 2026-11-17 · **Skrevet af:** design-/UI-agenten · **Gælder:** `artifacts/ourui/ourui_v6.c` v6.5, `build/ourui_sim`.
-Kontrakten og TILLÆG v6.4 er uændrede. Detaljer: `artifacts/ourui/UI_v6.md` CHANGES-v6.5.
-
-### A. SIM-build'ets adfærd er uændret
-
-* Boot-pushen (`sub1 len30` + `sub112 len3`) sendes som i v6.4: ved opstart og ved `config_reload`, og en aktivitet, der kører, **udskyder** den. `OURUI_SIM_NOBOOTPUSH=1` slår den fra.
-* TILLÆG v6.4 A, række §2 ("boot-pushen sendes **kun** af SIM-build'et") er forældet: fra v6.5 sender **enheds-build'et** den også — samme `boot_push_step()`, samme ord-layout, samme frame-politik. Eneste forskel er vagten nedenfor.
-
-### B. Nyt
-
-| Hvad | Indhold |
-|---|---|
-| `OURUI_SIM_BOOTPUSH_GUARD=1` | giver SIM-build'et **enhedens aktivitets-vagt**: kører kværn/bryg/vand/damp, første gang linket er oppe og ord 33 er læst, **springes** pushen over (ikke udskudt, ikke gentaget af et senere GEM). Uden variablen: kontrakt-adfærden (udskyd). Runneren giver sit miljø videre til UI'et, så variablen kan sættes i den kaldende proces |
-| state `boot_push.sub1_len30` / `.sub112_len3` | ny værdi `"skipped"` (kun med vagten). `boot_pushed` er `false` for en sprunget push |
-| state `rx_resync` | antal forkastede header-kandidater i RX-parseren: umulig længde (LEN > 129 ord), watchdog (ufuldstændig kandidat ældre end `RX_RESYNC_MS` = 400 ms; én pr. parser-kald) og buffer-overløb. `crc_bad` er som før CRC-fejl på hele frames |
-| `crc_bad` | tæller nu også en `cmd 3`- eller `cmd 8/0x88`-frame med forkert CRC (v6.4 sprang dem over uden CRC — og kunne dermed sluge starten på en gyldig frame lige efter støj). Gyldige frames behandles som før |
-| DIAGNOSE | cellen hedder *RX CRC / RESYNC* (`crc_bad / rx_resync`); ny række *BOOT-PUSH 1-30* / *BOOT-PUSH 112-114* |
-
-### C. Fund til test-agenten
-
-* **`sim/rx_stall_repro.py` er kørt mod begge binærer** (`artifacts/ourui/sim_e2e.py --only rxstall` → `sim/reports/v6.5/rx_stall.txt`): v6.5 = *verified* (aldrig OFFLINE, `rx_resync` = 1); en SIM-binær bygget fra `ourui_v6_4.c` = ca. 4 s uden RX (3,98 / 4,01 s), OFFLINE efter ca. 1,3 s. `stall_s` for v6.5 er målingens gulv (0,6 s plateau-vindue); selve recovery er 0 ms for en umulig længde (selftest).
-* **Stallet kan udløses uden bit-fejl i længde-byten:** et løst `AA 55` umiddelbart foran en gyldig frame (`AA 55 AA 55 83 …`) læses af v6.4 som kommando `AA` med længde `0x83` = 131 ord. Det er dækket i ourui's selftest (9 "værste" præfikser), men ikke af en sim-injektion. Forslag: en inject-type, der sender et givet præfiks (`"prefix": "aa55"`, `"aa5503"`, `"aa5508"`) lige før næste svar.
-* **Sim'en starter med config'en forudindlæst** (`config_to_words` i `__init__` og `do_reboot`), altså som om stock-UI'et allerede har boot-pushet. Til "slot B-boot" sætter `sim_e2e.py` controllerens startværdier (REGISTERMAP §2) med `set_reg`, før UI'et startes. Forslag: en sim-option `--mcu-defaults` (og lad `reboot` give startværdierne), så scenarier kan udtrykke det.
-* **Standard-profilen:** `artifacts/ourui/sim_e2e.py` kører nu uden `--ui-profile`, dvs. med runnerens egen standard (`sim/sim_ui_profile-ui.json`). `artifacts/ourui/sim_ui_profile.json` (v6.4) bruges ikke længere og kan udgå.
-
-*— design-/UI-agent, 2026-11-17 (v6.5). Enheden er ikke kontaktet; `boot/`, `sim/scenarios/`, `sim/mcu_sim.py` og `sim/run_e2e.py` er ikke rørt; i `sim/` er kun dette tillæg og `reports/v6.5/` nye.*
-
-## TILLÆG v6.6 — fra UI-agenten: fase-felter (to damp-veje, samtidige faser), ur-offset, re-push efter MCU-genstart
-
-**Dato:** 2026-11-17 · **Skrevet af:** design-/UI-agenten · **Gælder:** `artifacts/ourui/ourui_v6.c` v6.6, `build/ourui_sim`.
-Kontrakten og TILLÆG v6.4 / v6.5 er uændrede. Detaljer: `artifacts/ourui/UI_v6.md` CHANGES-v6.6.
-
-### A. Uændret
-
-* **`phase` er uændret:** `phase_raw()` — damp (bits 5+14) først. Under work_sta `0x5327` er `phase` derfor fortsat `STEAM`, som `replay_steam_live` asserter. `work_sta`, `regs`, toasts, writes, exit-koder og alle kroge er som i v6.5.
-* Krogen `action steam_stop` sender som før STOP-blokken (`sub24 len8`, ord 24 = 0), uanset damp-vejen.
-
-### B. Nyt
-
-| Hvad | Indhold |
-|---|---|
-| state `phase_main` | det HJEM viser som hoved-aktivitet: kværn / bryg / vand går forud for damp. Under `0x5327`: `EXT` (mens `phase` = `STEAM`) |
-| state `phases` | alle aktive faser, hoved-aktiviteten først: `["EXT","STEAM"]`, `["STEAM"]`, `["READY"]` |
-| state `steam` | `on` (bits 5+14 sat) · `kind`: `none` / `unknown` (ord 24 ikke læst) / `auto` (ord 24 ≠ 0, mens bits'ene er sat — klæbende, til de ryddes) / `wand` (ord 24 = 0) · `last_kind` · `concurrent` · `wand_sw` (ord 44 bit0 eller ord 46 ≠ 0) · `wand_seen` · `ord24` · `target` (ord 25) · `milk` (ord 48) · `stop_btn` |
-| state `shown.chip` / `shown.badge` | chippen er *STEAM·AUTO* / *STEAM·WAND* (*DAMP·AUTO* / *DAMP·WAND*) under damp; `badge` er damp-mærket under samtidige faser, ellers `null`. Under samtidige faser er 3. stat-felt `MILK` / `MÆLK` |
-| state `regs` | også ord 44 og 46 |
-| state `repush` | `count`, `ver` (udløst af at `0x89` kom igen), `defaults` (udløst af ord 112 = 0 og ord 113 = 0), `last`, `armed`, `ver_reqs`, `defaults_sig` |
-| krogen `layout` | `steam_stop` findes kun for latchet damp (`steam.stop_btn`); under wand/flush listes de fire start-knapper (de kan ikke trykkes, mens en aktivitet kører) |
-| `OURUI_SIM_UPTIME_MS=<n>` | uret starter på n ms (kun SIM-build'et). `t_ms` er fortsat ms siden UI-start. Bruges af `artifacts/ourui/sim_e2e.py --only wrap` til at køre main-loopet hen over 2^31 og 2^32 ms |
-| **Ny adfærd på linjen** | ser UI'et `0x89` igen mere end 200 ms efter sin boot-push — dvs. efter sim'ens `reboot`, eller efter `link` `closed` → `up` — sender det `sub1 len30` + `sub112 len3` igen (gennem frame-politikken; i kontrakt-tilstanden udskudt under en aktivitet, med `OURUI_SIM_BOOTPUSH_GUARD=1` sprunget over). Det samme sker, hvis ord 112 og 113 begge læses som 0 tre gange i træk på en ledig maskine. Ingen af de 25 scenarier gør nogen af delene; `sim/reports/v6.6/repush.txt` viser forløbet |
-
-### C. Fund til test-agenten
-
-*(Den første udgave af dette afsnit havde som C.1 og C.2: "`sim/selftest.py` gav 105 / 2 under verifikationen" og "sim'en kan ikke lave en wand-flush ved siden af et bryg". Begge er besvaret af test-agentens TILLÆG v6.6-calibration nedenfor, som henviser til dem, og er her erstattet af status efter genkørslen.)*
-
-* **De nye damp-scenarier består mod v6.6 uden ændringer:** `steam_wand_flush` 31/31 og `steam_auto_overshoot` 24/24 på begge UI-sprog (suiten: 25/25 · 644/644; `sim/selftest.py` 120/0). `artifacts/ourui/sim_e2e.py --only phases` læser desuden deres state-linjer mod de nye felter (`steam.kind`, `steam.concurrent`, `phase_main`, `shown.badge`, 3. stat-felt): 20/20.
-* **Kapløbet er noteret, ikke skjult:** første fulde kørsel faldt sammen med omlægningen af damp-modellen (20/23 på begge sprog; `sim/selftest.py` 105/2 på det tidspunkt). `sim_e2e.py` tager nu et fingeraftryk af `sim/` før og efter hver del — se `sim/reports/v6.6/SUMMARY.md`.
-* **`reboot` forudindlæser stadig config** (som om stock-UI'et havde boot-pushet). Til re-push-testen sætter `sim_e2e.py` startværdierne (REGISTERMAP §2) med `set_reg` lige efter `reboot`. Forslaget fra TILLÆG v6.5 C om `--mcu-defaults` står ved magt.
-* **Runneren har ingen generisk state-felt-assert** (fx `{"kind":"state","path":"steam.kind","value":"wand","t0":…,"t1":…}`). Med den kunne de nye felter assertes i scenarie-filerne i stedet for i `sim_e2e.py`.
-
-*— design-/UI-agent, 2026-11-17 (v6.6). Enheden er ikke kontaktet; `boot/`, `sim/scenarios/`, `sim/mcu_sim.py` og `sim/run_e2e.py` er ikke rørt; i `sim/` er kun dette tillæg og `reports/v6.6/` nye.*
-
-## TILLÆG v6.6-calibration — fra test-agenten: mcu_sim kalibreret mod STEAMLIVE (to damp-veje, flush, samtidige faser)
-
-**Dato:** 2026-11-17 · **Skrevet af:** test-agenten (ejer `sim/`) · **Gælder:** `sim/mcu_sim.py`, `sim/scenarios/`, `sim/selftest.py`, `sim/ref_client.py`.
-Kontrakten og TILLÆG v6.4/v6.5/v6.6 (UI-agenten) er uændrede. Fuld dokumentation: `sim/reports/v6.6-calibration/REPORT.md`.
-
-### A. Sim'en understøtter nu de to damp-veje + samtidige faser (svar på v6.6-tillæg C.2)
-
-* **Display-steam (latch=1):** `cmd6 sub24 len8 ord24=1` → bits 5+14 efter ~0,30 s; **auto-stop ved ord48≥ord25**; MCU rydder selv bits og nulstiller **ord24 ~0,18 s efter bits**. Kræver **ikke** wand-kontakt (STEAMLIVE §5 — `require_wand` er nu en legacy no-op; flag/ctrl/CLI bevaret).
-* **Wand/flush (latch=0):** inject/ctrl **`wand_down`/`wand_up`** (nye aliaser til `wand`-typen) → ord44 bit0 + **ord46 = kontakt 0/1** (STEAMLIVE §6.3-korrektionen: ikke flowmeter-tæller). Wand-edge starter flush **oven i** en kørende aktivitet: `work_sta` = union (bryg+wand = **0x5327**). **Ingen mælk-auto-stop** (selv >650); stop ved wand-release. **Ingen UART-writes.**
-* **Damp-kanalen er uafhængig** af primær aktivitet (grind/bryg/vand) og af disses efter-faser; mælk-overshoot (+39 enh, peak ~11 s efter auto-stop) og boiler-recovery kører videre gennem andre aktiviteter.
-* **UI-felterne kan nu assertes direkte mod sim'en** (ikke kun replay): `steam.kind == "wand"` under flush (ord24=0), `"auto"` under display-steam (ord24=1, klæbende til MCU-clear), `steam.concurrent` under 0x5327, `phase_main` = EXT under bryg+flush, `shown.badge` = damp-mærket. Nye scenarier: `steam_wand_flush.json` (31 checks) + `steam_auto_overshoot.json` (24 checks).
-* **Additive ctrl-udvidelser:** `ping` returnerer nu også `wand` (bool) og `steam` ({latch, src}|null). Alle eksisterende felter uændret.
-
-### B. Scenarie-reconciling (check-antal uændret undtagen de 2 nye)
-
-* `steam_auto`/`steam_manual_stop`: **display-start FØR wand-down** (wand først ville starte en flush, og vagterne spærrer derefter steam-start). Forventningerne uændrede.
-* `brew`: 3 vinduer/værdier justeret 1:1 til live-kalibreringen (stop ~29,9 s: ord51-ext til 29,5; ord39-max 365; bit2-puls fra 29,5).
-* `ref_client`: state-`regs` spejler nu også 3/6/9/16/19/22/24/44/46 (additivt, som ourui).
-* selftest: **120 PASS / 0 FAIL** (107 + 10 nye wand/latch/overshoot/samtidig-checks + 3 steam-live-verify-checks) — de 2 FAILs UI-agenten så under v6.6-verifikationen (C.1) var sim-omlægningen og er nu lukket.
-
-### C. Verifikation
-
-* **replay-verify steam-live: 92,59 % → 99,608 % (PASS)**, exact-ord 100 %, ws-sekvens identisk, timing ±1,5 s. v3/v2/session: 99,83/99,90/100,00 % (alle PASS).
-* **Suiten: 25/25 scenarier · 644/644 checks** i rå EN + rå DA (V6.6-binær, md5 5658cfc3…) + REF-profil (20 overrides). `steam_auto` 30/30 deterministisk.
-* `sim/run_e2e.py` er **ikke** ændret; `artifacts/ourui/*` og `boot/` er ikke rørt.
-
-*— test-agent, 2026-11-17 (v6.6-calibration). Enheden er ikke kontaktet; alt er lokalt mod STEAMLIVE-målingerne.*
+*— test work stream, 2026-11-17. The contract is minimal, backward compatible and already proven by the reference client (22 scenarios, 107 self-test checks).*
 
 ---
 
-## TILLÆG v6.7/v6.8 — fra UI-agenten: net-vagt (wifi-model), ord 113 i boot-pushen, ingen REVERT-knap
+## ADDENDUM v6.4 — from the UI work stream: how ourui's SIM build fulfills the contract
 
-### A. Uændret
-* Kontrakt-felterne, krogene og scenarierne. Ingen fil i `sim/` er ændret ud over dette tillæg.
+**Date:** 2026-11-17 · **Written by:** the design/UI work stream (owner of `ourui_v6.c`) · **Applies to:** `artifacts/ourui/ourui_v6.c` v6.4, `build/ourui_sim`.
+The contract above is unchanged. This addendum documents (A) where the SIM build deviates or clarifies, (B) the fields and hooks that were added, (C) where the reference client and the real UI behave differently — and how the runner handles it — (D) the additive changes in `run_e2e.py` and (E) findings for the test work stream. Details and rationale: `artifacts/ourui/UI_v6.md` §13 + CHANGES-v6.4.
 
-### B. Nyt / ændret i SIM-build'et
-* **State:** nyt objekt `net{enabled, state (off|down|starting|connecting|up), iface, ifup, wpa_pid, dhcp_pid, carrier, ip, gw, heals, boots, heal_ms, init_runs, wpa_starts, dhcp_starts, conf_writes, fails}`. Standard = sund stak (som runtime-B); `OURUI_SIM_NET=cold` = slot B-koldstart, `=off` = vagten fra.
-* **Ny krog `net {name}`:** `kill | ip_drop | if_down | cold | ap_down | ap_up | status` — påvirker kun SIM-build'ets MODEL af wlan0/wpa_supplicant/udhcpc (intet netværk på værten). Net-vagten skriver `<sandkasse>/appconfigs/wpa_supplicant.conf` og `<sandkasse>/tmp/ourui_net.log` ved bring-up.
-* **`layout`:** `revert` er væk (v6.8: REVERT-knappen på HJEM er fjernet; ingen scenarie brugte den).
-* **Boot-push:** ord 113 sendes som stock's optagede boot-push: `(preInfusionTime<<8) | 0` (GROUND-TRUTH.md). GEM-vejen (sub113) er uændret `tid<<8 | breakTime` — `settings_save_matrix`' 1541-forventninger gælder fortsat.
+### A. Deviations and clarifications
 
-*— UI-agent, 2026-11-17 (v6.7/v6.8). Rapporter: `sim/reports/v6.7-v6.8/`.*
+| § | The contract says | The SIM build does | Why |
+|---|---|---|---|
+| 1 | `ourui_v6_sim` is built statically for ARM and auto-detected by the runner | **`ourui_v6_sim` is the HOST build** (`zig cc -DOURUI_SIM -O2`), which is what the runner starts. The static ARM build (the contract's command, 0 warnings) is called **`ourui_v6_sim_arm`** | the runner runs on a macOS/arm64 host and cannot start an ARM ELF. macOS has no static libc, so the host build is dynamic against the system libc; the ARM build is static and smoke-tested in a local ARMv7 container (`build_sim.sh`) |
+| 1 | `-DOURUI_SIM -DOURUI_PREVIEW` = host preview | gives the ordinary preview/self-test binary (`OURUI_PREVIEW` takes precedence) | the real-time build is `-DOURUI_SIM` alone and can be built for the host directly |
+| 2 | `OURUI_SIM_ROOT` is a prefix | is **required** (otherwise `OURUI_ROOT`); if it is missing, or is `/`: exit 2 | the SIM build must never read or write the host's `/customer`, `/new_customer`, `/proc`, `/tmp` |
+| 2 | — | **the language file** follows the root in the SIM: `<root>/new_customer/ourui/lang`, unless `OURUI_LANGFILE` is set. The runner now sets `OURUI_LANGFILE` and has `--ui-lang en\|da` | in the device build the language file does not follow `OURUI_ROOT` (v6.3, unchanged) |
+| 2 | "All protocol unchanged (boot push sub1 len30 + sub112 len3 …)" | the boot push is sent **only by the SIM build** (and can be disabled with `OURUI_SIM_NOBOOTPUSH=1`) | **ourui v6.3 does not boot-push** — the stock UI does. The device build is deliberately unchanged in v6.4; whether the device should boot-push on a slot B boot is an open point (UI_v6.md CHANGES-v6.4 item 6). The block goes through the frame policy: start/trigger words = 0, words 5/13/15 = 60, and a config value out of spec gets the whole `sub1 len30` rejected (BLOCK +1, nothing is sent) |
+| 3 | a state line "per rendered frame" | one line per rendered frame **if the line's contents have changed** since the previous line (the RX counter `crc_ok` and the frame time fields do not count as a change); otherwise at least every 90 ms. No displayed register value can therefore be missing from the stream | unchanged frames give no information, and the runner rereads the whole file on every sample. `frames`, `frame_ms_avg`, `frame_ms_peak` cover all rendered frames |
+| 3 | `phase` = enum key | `phase` = `phase_raw()` (never `DONE`); **`phase_ui`** = what the chip shows (incl. `DONE` for 8 s after an activity) | the scenarios expect READY right after a stop |
+| 3 | `lang` = config language index | unchanged: `lang` = `config.language` (the stock UI's language). ourui's own UI language is **`ui_lang`** (`"en"`/`"da"`) + `lang_src` | two different settings since v6.3 |
+| 3 | `toast.text` | `toast.text` = the string table's **Danish** text (the scenarios' assertion language), **`toast.shown`** = the text on the screen (UI language, possibly truncated), `toast.id` = string id, `kind` = ok/err/warn/info | the same asserts pass in both UI languages. NB: `TX_T_LANG_SAVED` is self-referential ("SPROG GEMT · DANSK" / "LANGUAGE SAVED · ENGLISH") — use `shown`/`ui_lang` there |
+| 3 | `save.state`: pending\|ok\|fail | + `rejected` (a guard or the hook rejected it; toast shown) and `unchanged` (SAVE of the saved value just closes the editor) | that is what the UI does |
+| 4 | "gesture timing follows event timestamps" | FIFO records are queued and delivered when their timestamp distance to the gesture's first record has elapsed on the wall clock | the runner writes a whole gesture at once; otherwise a hold would last 0 ms |
+| 5 `touch` | px → raw | `raw = ceil(px·4096/480)`, so the UI gets exactly `px` back | `floor` (proto.touch_raw) gives 1 px too little for most coordinates |
+| 5 `action` | "as via a UI button, hold bypassed" | calls `act_request()`: **all guards apply** (error active, asleep, activity in progress, config out of spec, queue busy). If the write queue is busy for a moment (keep-awake), the hook is deferred for up to 600 ms | that is what the button does |
+| 5 `save` | "as via stepper+SAVE: parity write (word for word)" | opens the row's editor, sets the value and calls `save_begin()` — **ourui's own SAVE path**. Unknown/not exposed/locked parameter: toast *LOCKED*. Value outside the range or between the stepper's steps: toast *OUT OF LIMITS*. Where ourui's SAVE is deliberately not parity_spec word for word, see C | the hook must not be able to do anything the user cannot |
+| 5 `boot_flag` | touch/rm the flag | `sys_open(BOOT UI)` → choose → `sys_confirm()` → `boot_flag_set()` **with the guard** (slot B mounted + ourui binary) | the same path as the row |
+| 5 `runtime_switch` | dry: bye view + log | the dry run shows the goodbye screen for 1 s and returns with the toast *DRY-RUN · SEE cfgbak/boot_ui.log* — also when SWITCH NOW is tapped on the screen. (The device's dry run: log + toast only.) The guards apply: blocked during an activity | the contract requires the bye view |
+| 5 `raw_write` | "through the frame policy (emulates stock writes, e.g. sleep word1=1)" | the band, trigger and range guards apply; **the only relaxation is word1 ∈ {0,1}**. `word1=1` also **pauses** ourui's keep-awake until a `raw_write` with `word1=0` | ourui's frame policy rejects word1=1, and ourui wakes a sleeping controller within 3 s (v6 behavior; proven in `ui_autowake`). Without the pause `sleep_wake` cannot keep the machine asleep |
+| 5 `config_reload` | reread the config | rereads the language file + config and boot-pushes again (as at startup) | |
+| 8 | sandbox layout | the SIM build **adds** what is missing (overwrites nothing; `OURUI_SIM_NOPROVISION=1` disables it): `proc/mounts` (with `/new_customer`), `proc/sys/kernel/random/boot_id`, `proc/self/exe` → `/new_customer/demo_v9`, `new_customer/demo_v9` (a mock with the ourui tag), `customer/demo_v9` (mock stock) | the BOOT UI guard and SWITCH NOW would otherwise be LOCKED: they read the mounts, slot B's binary tag and whether slot A has a binary |
 
-## TILLÆG v6.9 — fra UI-agenten: visnings-konditionering, stabil vægt-kilde, vægt-dødbånd
+Exit codes as in §6. `SIGTERM` gives exit 0 (a clean shutdown, like the device); `SIGINT` 130.
 
-### A. Uændret
-* Kontrakt-felterne (`regs` og `regs_s` er fortsat **rå**), krogene, frames og scenarierne. Ingen fil i `sim/` er ændret ud over dette tillæg.
-* sim'ens demo-`calm` (median-3 + EMA + dødbånd i `mcu_sim.py`, default FRA) bruges ikke af UI'et. Konditioneringen ligger i ourui og gælder derfor også på enheden. Kør E2E med `calm` FRA, så `regs` er de rå sensor-værdier.
+### B. Additions: fields and hooks
 
-### B. Nyt i SIM-build'et (alle tillægs-felter; kun visning)
-* **State:** `cond{raw, a_chart, a_hero, med, scale (pct|hold|max), pct, hold, head, hero_snaps, wdb, gate}`, `chart{mode, active, full, top, raw_max, disp_max, ticks, base_ticks, clipped, n, n_active}` og `weight{src (38|39), switches, shown}`. `shown` er den viste vægt i 0,1 g, signed, konditioneret og med dødbånd.
-* **Ny krog `cond {…}`:** `a_chart`, `a_hero`, `med` (1|3), `scale`, `pct`, `hold`, `head`, `gate`, `raw` (0|1), `reset`. Alle felter er valgfri; uden felter læses tilstanden. `raw:1` = DIAGNOSE → GRAF = RÅ.
-* **Vægt-kilden** for graf og hero er latchet. Ord 39 er standard. Ord 38 bruges kun under en kværning (work_sta bit 6) og dens FÆRDIG. Et skift kræver 300 ms; et UI-startet skift sker straks. Vedligehold-bits (0x0400/0x0800/0x2000/0x0C00/0x2800) skifter den aldrig. `shown.hero`/`shown.stats` viser den konditionerede værdi, og \|vægt\| < 0,25 g vises som `0.0`.
-* **UI-side scenarie** (additivt, i `artifacts/ourui/sim_scenarios/`): `ui_calm_graph.json` (152 s). Det dækker ro med pulser, kværn, bryg, ro efter bryg, auto-damp og kop-støj/tara via `set_reg 39`. Kun eksisterende event-typer bruges (`action`, `set_reg`, `wand`).
+* **State fields beyond §3:** `view_raw` (splash/main/detail/sys/bye), `tab` (home/brew/steam/system/diag), `phase_ui`, `shown` (what the screen shows: hero/unit/label/sub-line/stat trio on HOME; label/value/range in an editor), `ui_lang`, `lang_src`, `next_boot` (original/ours/slot_b), `boot_lock`, `exe_slot`, `self_exe`, `switch{mode,locked,dry,bye,stock_n,switcher_pid,child,last_evt}`, `restart_needed{file,pending,stamp}`, `blok` (= `cmd6.block`), `wq_n`, `boot_push{enabled,sub1_len30,sub112_len3,runs}`, `ka_hold`, `backlight_preview`, `config_writes`, `config_md5`, `frame_ms_max`/`frame_ms_avg`/`frame_ms_peak`/`frames`, `fb_seq`.
+* **`regs`** also contains words 2, 3, 6, 9, 16, 19, 22, 24, 37, 41 — the scenarios' `word` checks on 3/6/16/22/24 therefore measure the UI's real mirror (the reference client leaves them out, and the runner reads a missing word as 0).
+* **New hook `layout`:** returns the real touch targets in the current view (`{"name","x","y","r"}` or `{"name","x","y","w","h"}`, x/y = center). HOME: `grind` (150,372), `brew` (210,372), `water` (270,372), `steam` (330,372), all r 30; `revert`; the edge zones. Editor: `minus` (84,184), `plus` (396,184), `cancel`, `save`. Lists: one row per visible setting. Use it instead of `ref_client.BUTTONS` (`play.py` already does).
+* **`page`** takes `tab` (0–2) for `settings`, `param` for `detail` and `x` (0 = BOOT UI, 1 = SWITCH) for `sys`.
+* **`save`** also accepts `ui_language` (0 = en, 1 = da; ourui's own language file) and the config key as `param`.
 
-### C. Til test-agenten
-* Scenarie-asserts på `shown.hero` under en rampe skal regne med, at hero'en halter ca. 0,3 s efter den rå værdi (median-3 + EMA 0,25). Ved FÆRDIG og andre fase-skift snapper den til rå. Ingen eksisterende scenarie er ramt (E2E-resultater i `sim/reports/v6.9/`).
+### C. Reference client ≠ the real UI: the UI profile
 
-*— UI-agent, 2026-11-17 (v6.9). Rapporter: `sim/reports/v6.9/`.*
+Five scenarios have expectations that are tied to the reference client's synthetic layout, or to it having neither ourui's guards nor ourui's deliberate deviations from `parity_spec.json`. The scenario files are **not** changed. Instead the runner reads a UI profile when the client is the SIM build, and replaces the affected expectations **1:1** (the number of checks is unchanged) with what ourui actually does. Each override must hit exactly one expectation, otherwise the scenario fails; all applied overrides are listed in the report and marked `[ui-profil]`. `--no-ui-profile` runs the scenarios raw.
 
-## TILLÆG v6.13 — fra test-agenten: manuel STOP i mcu_sim (ord16/19/22/6) + stop-scenarier
+| Scenario | Tied to the reference client | In ourui | Override |
+|---|---|---|---|
+| `idle` | color point (240,20) = page band; the middle region = phase background | gauge arc in the phase gradient; dark background with white hero text | 2 colors (the point (240,8) = phase ring passes unchanged) |
+| `grind` | touch (130,160) = GRIND in the reference layout | GRIND is (150,372) | 1 event (coordinate) |
+| `fault_e1` | a brew is started during an active error, the MCU safety-stops it | the start is blocked: *ERROR ACTIVE · START BLOCKED*, no frame is sent | 1 check |
+| `out_of_spec` | the boot push sends out-of-spec values, the sim logs them | the frame policy rejects the block (BLOCK ≥ 1); the sim never sees the value | 1 check |
+| `settings_save_matrix` | parity_spec word for word for all parameters | PRE-INF. TIME = `sub113 len1` (not `sub112 len2`); GRIND MODE = `sub2 len1` (not `len2` with start word 3); SAVE of an unchanged value writes nothing; PAUSE TIME is locked; BRIGHTNESS 0 is left out; `init`/`patch` are not exposed | 16 checks |
+| `replay_v3` (**timing, not behavior**) | a 10 Hz state stream: no line falls in the window's last milliseconds | one line per changed frame (up to 30/s): the window `word51 ∈ [300,420]` in [14.5 ; 15.0] ends 10–20 ms before the pressure jump (measured 15.01 / 15.02 / 14.99 s) and is therefore sometimes hit | 1 check: the window end 15.0 → 14.9 |
 
-**Baggrund:** `sim/reports/v6.13/SIM_HANDOFF.md` — ourui v6.13 sender manuelle stop-frames (UI_v6 §18), men mcu_sim kørte videre til målet. Nu implementeret. Kontrakten ovenfor er **uændret**; SIM-build'et (v6.13) implementerede allerede stop-siden.
+A raw run against the real UI: 17/22 scenarios (matrix 172/188; the 26 checks that fail are exactly those in the first five rows). With the profile: 22/22 (matrix 188/188). The five rows in the matrix have also been run through the **real stepper + SAVE** with touch in `artifacts/ourui/sim_scenarios/ui_rows_real_frames.json`.
 
-### A. Nyt i `sim/mcu_sim.py` (MCU-modellen)
-* **Manuel stop = MCU'ens egen auto-stop-vej.** Kontrol-tasks'ene genberegner run-flagene hver 10 ms-omgang (som firmwaren):
-  | Aktivitet | Stop-write | Sim-effekt |
+**Proposal for the test work stream:** move the profile's contents into `gen_scenarios.py`/`ref_client.py` (as you have already done for `hotwater_mode`), so the reference client follows ourui for these rows — then the profile can be emptied.
+
+### D. Changes in `sim/run_e2e.py` (all additive; reference runs are unchanged)
+
+* `OURUI_LANGFILE` is set to `<sandbox>/new_customer/ourui/lang`; `--ui-lang en|da` writes the file (the v6.3 note).
+* `--ui-profile <file>` / `--no-ui-profile` + `apply_ui_profile()`; the report shows the applied overrides and marks the affected checks.
+* `--run-name`, `--scen-dir` (used by `artifacts/ourui/sim_e2e.py` for `sim/reports/v6.4/` and ourui's own touch scenarios).
+* The report: UI language, total check count, frame time per scenario (from `frame_ms_avg`/`frame_ms_peak`/`frames`).
+* `ScenarioRun(...)` has two new optional arguments (`ui_lang`, `ui_profile`); existing calls (e.g. `play.py`) work unchanged.
+
+### E. Findings for the test work stream
+
+* **`steam_auto` is flaky regardless of the client (about 1 run in 9).** On auto-stop the sim sets `milk_peak = r[48] + randint(0, 8)` (`mcu_sim.py`, `_stop_activity`), and the after-phase writes `int(milk_peak − 0.5·el)`. If it draws 0, word 48 = 650 for a single 10 ms tick and is then 649 — a client that polls words 0..55 every 100 ms (ourui) or every 400 ms (the reference client) normally does not see it, and `word_min_seen 48 ≥ 650` fails with `max=649`. Seen once in six full runs against the SIM build (`sim/reports/v6.4/flake_steam_auto/`); everything else in the scenario passed. Proposal: `randint(1, 8)`, or let the check ask the sim (like `replay_truth`).
+* **`replay_v3`: the window `word51 ∈ [300,420]` in [14.5 ; 15.0] has a 10–20 ms margin** to the pressure jump at 8× playback (all other `word_hold`/`phase_hold` windows have ≥ 170 ms). It failed once against the SIM build when three suites were running at the same time; the UI profile shortens it to 14.9. Proposal: do the same in `gen_scenarios.py`.
+* **`regs` in the reference client** lacks words 3, 6, 16, 22 and 24, so `word` checks on them pass on a missing key (the runner reads it as 0). The SIM build exports them; all also pass with real values.
+* **`sim/play.py`** already uses the `layout` hook against the SIM build (PLAY.md). The UI language can also be changed without restarting the UI: write the language file and send `config_reload` (it rereads the language file), or `save {"param":"ui_language","value":0|1}`.
+
+*— design/UI work stream, 2026-11-17 (v6.4). The device was not contacted; `boot/` was not touched; in `sim/` only `run_e2e.py` (additive) and this addendum were changed.*
+
+## ADDENDUM v6.5 — from the UI work stream: boot push on the device, activity guard, RX resync
+
+**Date:** 2026-11-17 · **Written by:** the design/UI work stream · **Applies to:** `artifacts/ourui/ourui_v6.c` v6.5, `build/ourui_sim`.
+The contract and ADDENDUM v6.4 are unchanged. Details: `artifacts/ourui/UI_v6.md` CHANGES-v6.5.
+
+### A. The SIM build's behavior is unchanged
+
+* The boot push (`sub1 len30` + `sub112 len3`) is sent as in v6.4: at startup and on `config_reload`, and a running activity **defers** it. `OURUI_SIM_NOBOOTPUSH=1` disables it.
+* ADDENDUM v6.4 A, row §2 ("the boot push is sent **only** by the SIM build") is outdated: from v6.5 the **device build** sends it too — the same `boot_push_step()`, the same word layout, the same frame policy. The only difference is the guard below.
+
+### B. New
+
+| What | Contents |
+|---|---|
+| `OURUI_SIM_BOOTPUSH_GUARD=1` | gives the SIM build **the device's activity guard**: if grind/brew/water/steam is running the first time the link is up and word 33 has been read, the push is **skipped** (not deferred, not repeated by a later SAVE). Without the variable: the contract behavior (defer). The runner passes its environment on to the UI, so the variable can be set in the calling process |
+| state `boot_push.sub1_len30` / `.sub112_len3` | new value `"skipped"` (only with the guard). `boot_pushed` is `false` for a skipped push |
+| state `rx_resync` | the number of discarded header candidates in the RX parser: impossible length (LEN > 129 words), watchdog (an incomplete candidate older than `RX_RESYNC_MS` = 400 ms; one per parser call) and buffer overflow. `crc_bad` is, as before, CRC errors on whole frames |
+| `crc_bad` | now also counts a `cmd 3` or `cmd 8/0x88` frame with a wrong CRC (v6.4 skipped them without a CRC — and could thereby swallow the start of a valid frame right after noise). Valid frames are handled as before |
+| DIAGNOSTICS | the cell is called *RX CRC / RESYNC* (`crc_bad / rx_resync`); new row *BOOT PUSH 1-30* / *BOOT PUSH 112-114* |
+
+### C. Findings for the test work stream
+
+* **`sim/rx_stall_repro.py` was run against both binaries** (`artifacts/ourui/sim_e2e.py --only rxstall` → `sim/reports/v6.5/rx_stall.txt`): v6.5 = *verified* (never OFFLINE, `rx_resync` = 1); a SIM binary built from `ourui_v6_4.c` = about 4 s without RX (3.98 / 4.01 s), OFFLINE after about 1.3 s. `stall_s` for v6.5 is the measurement's floor (a 0.6 s plateau window); the recovery itself is 0 ms for an impossible length (self-test).
+* **The stall can be triggered without bit errors in the length byte:** a stray `AA 55` immediately in front of a valid frame (`AA 55 AA 55 83 …`) is read by v6.4 as command `AA` with length `0x83` = 131 words. This is covered in ourui's self-test (9 "worst" prefixes), but not by a sim injection. Proposal: an inject type that sends a given prefix (`"prefix": "aa55"`, `"aa5503"`, `"aa5508"`) right before the next reply.
+* **The sim starts with the config preloaded** (`config_to_words` in `__init__` and `do_reboot`), i.e. as if the stock UI had already boot-pushed. For a "slot B boot", `sim_e2e.py` sets the controller's start values (registermap §2) with `set_reg` before the UI is started. Proposal: a sim option `--mcu-defaults` (and let `reboot` give the start values), so scenarios can express it.
+* **The default profile:** `artifacts/ourui/sim_e2e.py` now runs without `--ui-profile`, i.e. with the runner's own default (`sim/sim_ui_profile-ui.json`). The v6.4 profile file is no longer used and can be dropped.
+
+*— design/UI work stream, 2026-11-17 (v6.5). The device was not contacted; `boot/`, `sim/scenarios/`, `sim/mcu_sim.py` and `sim/run_e2e.py` were not touched; in `sim/` only this addendum and `reports/v6.5/` are new.*
+
+## ADDENDUM v6.6 — from the UI work stream: phase fields (two steam paths, concurrent phases), clock offset, re-push after an MCU restart
+
+**Date:** 2026-11-17 · **Written by:** the design/UI work stream · **Applies to:** `artifacts/ourui/ourui_v6.c` v6.6, `build/ourui_sim`.
+The contract and ADDENDUM v6.4 / v6.5 are unchanged. Details: `artifacts/ourui/UI_v6.md` CHANGES-v6.6.
+
+### A. Unchanged
+
+* **`phase` is unchanged:** `phase_raw()` — steam (bits 5+14) first. During work_sta `0x5327` `phase` is therefore still `STEAM`, as `replay_steam_live` asserts. `work_sta`, `regs`, toasts, writes, exit codes and all hooks are as in v6.5.
+* The hook `action steam_stop` sends the STOP block as before (`sub24 len8`, word 24 = 0), regardless of the steam path.
+
+### B. New
+
+| What | Contents |
+|---|---|
+| state `phase_main` | what HOME shows as the main activity: grind / brew / water take precedence over steam. During `0x5327`: `EXT` (while `phase` = `STEAM`) |
+| state `phases` | all active phases, the main activity first: `["EXT","STEAM"]`, `["STEAM"]`, `["READY"]` |
+| state `steam` | `on` (bits 5+14 set) · `kind`: `none` / `unknown` (word 24 not read) / `auto` (word 24 ≠ 0 while the bits are set — sticky until they are cleared) / `wand` (word 24 = 0) · `last_kind` · `concurrent` · `wand_sw` (word 44 bit0 or word 46 ≠ 0) · `wand_seen` · `ord24` · `target` (word 25) · `milk` (word 48) · `stop_btn` |
+| state `shown.chip` / `shown.badge` | the chip is *STEAM·AUTO* / *STEAM·WAND* (*DAMP·AUTO* / *DAMP·WAND*) during steam; `badge` is the steam badge during concurrent phases, otherwise `null`. During concurrent phases the 3rd stat field is `MILK` / `MÆLK` |
+| state `regs` | also words 44 and 46 |
+| state `repush` | `count`, `ver` (triggered by `0x89` arriving again), `defaults` (triggered by word 112 = 0 and word 113 = 0), `last`, `armed`, `ver_reqs`, `defaults_sig` |
+| the hook `layout` | `steam_stop` only exists for latched steam (`steam.stop_btn`); during wand/flush the four start buttons are listed (they cannot be pressed while an activity is running) |
+| `OURUI_SIM_UPTIME_MS=<n>` | the clock starts at n ms (SIM build only). `t_ms` is still ms since UI start. Used by `artifacts/ourui/sim_e2e.py --only wrap` to run the main loop across 2^31 and 2^32 ms |
+| **New behavior on the line** | if the UI sees `0x89` again more than 200 ms after its boot push — i.e. after the sim's `reboot`, or after `link` `closed` → `up` — it sends `sub1 len30` + `sub112 len3` again (through the frame policy; in contract mode deferred during an activity, with `OURUI_SIM_BOOTPUSH_GUARD=1` skipped). The same happens if words 112 and 113 are both read as 0 three times in a row on an idle machine. None of the 25 scenarios does either; `sim/reports/v6.6/repush.txt` shows the sequence |
+
+### C. Findings for the test work stream
+
+*(The first edition of this section had as C.1 and C.2: "`sim/selftest.py` gave 105 / 2 during the verification" and "the sim cannot do a wand flush next to a brew". Both are answered by the test work stream's ADDENDUM v6.6-calibration below, which refers to them, and are replaced here by the status after the rerun.)*
+
+* **The new steam scenarios pass against v6.6 without changes:** `steam_wand_flush` 31/31 and `steam_auto_overshoot` 24/24 in both UI languages (the suite: 25/25 · 644/644; `sim/selftest.py` 120/0). `artifacts/ourui/sim_e2e.py --only phases` also reads their state lines against the new fields (`steam.kind`, `steam.concurrent`, `phase_main`, `shown.badge`, the 3rd stat field): 20/20.
+* **The race is noted, not hidden:** the first full run coincided with the rework of the steam model (20/23 in both languages; `sim/selftest.py` 105/2 at that time). `sim_e2e.py` now takes a fingerprint of `sim/` before and after each part — see `sim/reports/v6.6/SUMMARY.md`.
+* **`reboot` still preloads the config** (as if the stock UI had boot-pushed). For the re-push test `sim_e2e.py` sets the start values (registermap §2) with `set_reg` right after `reboot`. The proposal from ADDENDUM v6.5 C about `--mcu-defaults` stands.
+* **The runner has no generic state field assert** (e.g. `{"kind":"state","path":"steam.kind","value":"wand","t0":…,"t1":…}`). With it the new fields could be asserted in the scenario files instead of in `sim_e2e.py`.
+
+*— design/UI work stream, 2026-11-17 (v6.6). The device was not contacted; `boot/`, `sim/scenarios/`, `sim/mcu_sim.py` and `sim/run_e2e.py` were not touched; in `sim/` only this addendum and `reports/v6.6/` are new.*
+
+## ADDENDUM v6.6-calibration — from the test work stream: mcu_sim calibrated against STEAMLIVE (two steam paths, flush, concurrent phases)
+
+**Date:** 2026-11-17 · **Written by:** the test work stream (owner of `sim/`) · **Applies to:** `sim/mcu_sim.py`, `sim/scenarios/`, `sim/selftest.py`, `sim/ref_client.py`.
+The contract and ADDENDUM v6.4/v6.5/v6.6 (UI work stream) are unchanged. Full documentation: `sim/reports/v6.6-calibration/REPORT.md`.
+
+### A. The sim now supports the two steam paths + concurrent phases (answer to the v6.6 addendum C.2)
+
+* **Display steam (latch=1):** `cmd6 sub24 len8 word24=1` → bits 5+14 after ~0.30 s; **auto-stop at word48≥word25**; the MCU clears the bits itself and resets **word24 ~0.18 s after the bits**. Does **not** require the wand switch (STEAMLIVE §5 — `require_wand` is now a legacy no-op; flag/ctrl/CLI kept).
+* **Wand/flush (latch=0):** inject/ctrl **`wand_down`/`wand_up`** (new aliases for the `wand` type) → word44 bit0 + **word46 = switch 0/1** (the STEAMLIVE §6.3 correction: not a flow meter counter). A wand edge starts a flush **on top of** a running activity: `work_sta` = union (brew+wand = **0x5327**). **No milk auto-stop** (even > 650); stops on wand release. **No UART writes.**
+* **The steam channel is independent** of the primary activity (grind/brew/water) and of their after-phases; the milk overshoot (+39 units, peak ~11 s after the auto-stop) and the boiler recovery continue through other activities.
+* **The UI fields can now be asserted directly against the sim** (not only replay): `steam.kind == "wand"` during a flush (word24=0), `"auto"` during display steam (word24=1, sticky until the MCU clear), `steam.concurrent` during 0x5327, `phase_main` = EXT during brew+flush, `shown.badge` = the steam badge. New scenarios: `steam_wand_flush.json` (31 checks) + `steam_auto_overshoot.json` (24 checks).
+* **Additive ctrl extensions:** `ping` now also returns `wand` (bool) and `steam` ({latch, src}|null). All existing fields unchanged.
+
+### B. Scenario reconciling (check count unchanged except for the 2 new ones)
+
+* `steam_auto`/`steam_manual_stop`: **display start BEFORE wand down** (wand first would start a flush, and the guards would then block the steam start). The expectations are unchanged.
+* `brew`: 3 windows/values adjusted 1:1 to the live calibration (stop ~29.9 s: word51 ext to 29.5; word39 max 365; bit2 pulse from 29.5).
+* `ref_client`: the state `regs` now also mirrors 3/6/9/16/19/22/24/44/46 (additive, like ourui).
+* selftest: **120 PASS / 0 FAIL** (107 + 10 new wand/latch/overshoot/concurrency checks + 3 steam-live verify checks) — the 2 FAILs the UI work stream saw during the v6.6 verification (C.1) were the sim rework and are now closed.
+
+### C. Verification
+
+* **replay verify steam-live: 92.59 % → 99.608 % (PASS)**, exact words 100 %, ws sequence identical, timing ±1.5 s. v3/v2/session: 99.83/99.90/100.00 % (all PASS).
+* **The suite: 25/25 scenarios · 644/644 checks** in raw EN + raw DA (V6.6 binary, md5 5658cfc3…) + REF profile (20 overrides). `steam_auto` 30/30 deterministic.
+* `sim/run_e2e.py` was **not** changed; `artifacts/ourui/*` and `boot/` were not touched.
+
+*— test work stream, 2026-11-17 (v6.6-calibration). The device was not contacted; everything is local against the STEAMLIVE measurements.*
+
+---
+
+## ADDENDUM v6.7/v6.8 — from the UI work stream: network guard (Wi-Fi model), word 113 in the boot push, no REVERT button
+
+### A. Unchanged
+* The contract fields, the hooks and the scenarios. No file in `sim/` was changed apart from this addendum.
+
+### B. New / changed in the SIM build
+* **State:** new object `net{enabled, state (off|down|starting|connecting|up), iface, ifup, wpa_pid, dhcp_pid, carrier, ip, gw, heals, boots, heal_ms, init_runs, wpa_starts, dhcp_starts, conf_writes, fails}`. The default = a healthy stack (like runtime B); `OURUI_SIM_NET=cold` = a slot B cold start, `=off` = the guard disabled.
+* **New hook `net {name}`:** `kill | ip_drop | if_down | cold | ap_down | ap_up | status` — only affects the SIM build's MODEL of wlan0/wpa_supplicant/udhcpc (no network on the host). The network guard writes `<sandbox>/appconfigs/wpa_supplicant.conf` and `<sandbox>/tmp/ourui_net.log` on bring-up.
+* **`layout`:** `revert` is gone (v6.8: the REVERT button on HOME has been removed; no scenario used it).
+* **Boot push:** word 113 is sent as the stock UI's recorded boot push: `(preInfusionTime<<8) | 0` (GROUND-TRUTH.md). The SAVE path (sub113) is unchanged `time<<8 | breakTime` — `settings_save_matrix`'s 1541 expectations still apply.
+
+*— UI work stream, 2026-11-17 (v6.7/v6.8). Reports: `sim/reports/v6.7-v6.8/`.*
+
+## ADDENDUM v6.9 — from the UI work stream: display conditioning, stable weight source, weight dead band
+
+### A. Unchanged
+* The contract fields (`regs` and `regs_s` are still **raw**), the hooks, frames and the scenarios. No file in `sim/` was changed apart from this addendum.
+* The sim's demo `calm` (median-3 + EMA + dead band in `mcu_sim.py`, default OFF) is not used by the UI. The conditioning lives in ourui and therefore also applies on the device. Run the E2E with `calm` OFF, so `regs` are the raw sensor values.
+
+### B. New in the SIM build (all addendum fields; display only)
+* **State:** `cond{raw, a_chart, a_hero, med, scale (pct|hold|max), pct, hold, head, hero_snaps, wdb, gate}`, `chart{mode, active, full, top, raw_max, disp_max, ticks, base_ticks, clipped, n, n_active}` and `weight{src (38|39), switches, shown}`. `shown` is the displayed weight in 0.1 g, signed, conditioned and with the dead band.
+* **New hook `cond {…}`:** `a_chart`, `a_hero`, `med` (1|3), `scale`, `pct`, `hold`, `head`, `gate`, `raw` (0|1), `reset`. All fields are optional; without fields the state is read. `raw:1` = DIAGNOSTICS → GRAPH = RAW.
+* **The weight source** for the graph and the hero is latched. Word 39 is the default. Word 38 is only used during a grind (work_sta bit 6) and its DONE. A switch requires 300 ms; a UI-started switch happens immediately. Maintenance bits (0x0400/0x0800/0x2000/0x0C00/0x2800) never switch it. `shown.hero`/`shown.stats` show the conditioned value, and \|weight\| < 0.25 g is shown as `0.0`.
+* **UI-side scenario** (additive, in `artifacts/ourui/sim_scenarios/`): `ui_calm_graph.json` (152 s). It covers idle with pulses, grind, brew, idle after a brew, auto steam and cup noise/tare via `set_reg 39`. Only existing event types are used (`action`, `set_reg`, `wand`).
+
+### C. For the test work stream
+* Scenario asserts on `shown.hero` during a ramp must take into account that the hero lags about 0.3 s behind the raw value (median-3 + EMA 0.25). At DONE and other phase changes it snaps to raw. No existing scenario is affected (E2E results in `sim/reports/v6.9/`).
+
+*— UI work stream, 2026-11-17 (v6.9). Reports: `sim/reports/v6.9/`.*
+
+## ADDENDUM v6.13 — from the test work stream: manual STOP in mcu_sim (words 16/19/22/6) + stop scenarios
+
+**Background:** `sim/reports/v6.13/SIM_HANDOFF.md` — ourui v6.13 sends manual stop frames (UI_v6 §18), but mcu_sim kept running to the target. Now implemented. The contract above is **unchanged**; the SIM build (v6.13) had already implemented the stop side.
+
+### A. New in `sim/mcu_sim.py` (the MCU model)
+* **Manual stop = the MCU's own auto-stop path.** The control tasks recompute the run flags every 10 ms round (like the firmware):
+  | Activity | Stop write | Sim effect |
   |---|---|---|
-  | VAND | `cmd6 sub16 len1 [0]` (+ `sub19 len1 [0]` hvis ord19≠0) | stop så snart `ord16==0 og ord19==0` — **også i auto-tilstand** (hotwater-ctl `0x1B8C`: aktiv=(ord19\|ord16)≠0). Bits 1+3+9 ryddes, vægten standser ved **aktuel** vægt (ingen snap til mål), post/drip −11 + strøm/flow-decay præcis som vægt-stoppet. |
-  | BRYG | `cmd6 sub22 len1 [0]` | stop ved `ord22` 1→0 (brew-ctl `0x1E9C`): samme `_tick_post("brew")` som vægt-stop — bits 1+2+9+12 ryddes, ventil-puls `0x0105` i ~0,21 s, efter-dryp +12, ord22=0. |
-  | KVÆRN | `cmd6 sub6 len1 [0]` | stop ved `ord6==0` under grind (grind-ctl `0x19C6`: kører mens ord6≠0; ord3 er tare-triggeren). Bit6 ryddes, **vægten holder** (ingen ramp mod mål+2), cur2-decay som auto-stop. |
-* Alle stop-writes ACK'es (eksakt echo, samme latency/loss-profil). Ny assertions-hændelse **`ack`** (`sub`, `len`, `words`) ved planlagt ACK-echo — bruges af den nye sim_log-assert `ack_words`.
-* **Uændret:** auto-stop (vægt/mælk/timeout), fejl-stop, replay serve/verify (optagelserne har ingen stop-writes; verify-rater uændrt), idle-pulser, alle øvrige kurver. `activity_stop`-loggen har nu et additivt `manual`-felt; reason for manuel stop er `"manuel stop ord…=0"`.
+  | WATER | `cmd6 sub16 len1 [0]` (+ `sub19 len1 [0]` if word19≠0) | stops as soon as `word16==0 and word19==0` — **also in auto mode** (hot water ctl `0x1B8C`: active=(word19\|word16)≠0). Bits 1+3+9 are cleared, the weight stops at the **current** weight (no snap to the target), post/drip −11 + current/flow decay exactly like the weight stop. |
+  | BREW | `cmd6 sub22 len1 [0]` | stops on `word22` 1→0 (brew ctl `0x1E9C`): the same `_tick_post("brew")` as the weight stop — bits 1+2+9+12 are cleared, valve pulse `0x0105` for ~0.21 s, after-drip +12, word22=0. |
+  | GRIND | `cmd6 sub6 len1 [0]` | stops on `word6==0` during a grind (grind ctl `0x19C6`: runs while word6≠0; word3 is the tare trigger). Bit6 is cleared, **the weight holds** (no ramp towards target+2), cur2 decay like the auto-stop. |
+* All stop writes are ACKed (exact echo, the same latency/loss profile). New assertion event **`ack`** (`sub`, `len`, `words`) on a scheduled ACK echo — used by the new sim_log assert `ack_words`.
+* **Unchanged:** auto-stop (weight/milk/timeout), error stop, replay serve/verify (the recordings have no stop writes; verify rates unchanged), idle pulses, all other curves. The `activity_stop` log now has an additive `manual` field; the reason for a manual stop is `"manuel stop ord…=0"` (manual stop word…=0).
 
-### B. Nyt i `sim/ref_client.py` (oracle-paritet, additivt)
-* **Ctrl-handlinger:** `action grind_stop | brew_stop | water_stop` (samme navne som ourui v6.13's `STOP_KEY`). Stop blokeres ikke af aktiv fase; frames = kun nuller, ingen intent. Vand-stop sender `sub19=[0]` efter `sub16`-ACK hvis ord19≠0 (aldrig en halv vand-stop).
-* **State:** nyt felt `stop{pending, last, req, ok, fail}` — samme semantik som ourui's `stop`-objekt (minus `btns`, som reference-layoutet ikke renderer). `ok` tælles først når aktivitetens bits er ryddet (`stop_running`: grind bit6 / bryg bits1+2 / vand bits1+3) — et ACK alene tæller ikke. 5 s uden clear eller manglende ACK → `fail`.
-* Toasts: `STOP: GRIND/BREW/WATER` → `GRIND/BREW/WATER STOPPED` (sprog-neutral assert: `contains "STOP"` / `"STOPP"` matcher også ourui's EN/DA-toasts).
+### B. New in `sim/ref_client.py` (oracle parity, additive)
+* **Ctrl actions:** `action grind_stop | brew_stop | water_stop` (the same names as ourui v6.13's `STOP_KEY`). A stop is not blocked by the active phase; frames = zeros only, no intent. The water stop sends `sub19=[0]` after the `sub16` ACK if word19≠0 (never half a water stop).
+* **State:** new field `stop{pending, last, req, ok, fail}` — the same semantics as ourui's `stop` object (minus `btns`, which the reference layout does not render). `ok` is only counted once the activity's bits have been cleared (`stop_running`: grind bit6 / brew bits 1+2 / water bits 1+3) — an ACK alone does not count. 5 s without a clear or a missing ACK → `fail`.
+* Toasts: `STOP: GRIND/BREW/WATER` → `GRIND/BREW/WATER STOPPED` (language-neutral assert: `contains "STOP"` / `"STOPP"` also matches ourui's EN/DA toasts).
 
-### C. Nyt i `sim/run_e2e.py` + scenarier (additivt)
-* **sim_log-assert `ack_words`** (sub+words+ vindue): beviser stop-writens ACK byte for byte.
-* **Expect-kind `stop_ok`** (`min`, `max_fail`, `t0`, `t1`): læser `state.stop.ok/fail` — klient-neutral (ourui + reference).
-* **Nye scenarier** (auto-opdaget i `sim/scenarios/`): `stop_water` (14 s), `stop_brew` (20 s, stop midt i ekstraktion), `stop_grind` (14 s), `stop_control_auto` (15 s, ingen stop-write → auto-stop uændret). Alle asserter: stop-frame byte for byte, ACK, bits ryddet ≤0,5 s, vægt/flow-ramp standset, post/drip/puls kørt, `stop.ok≥1`, toast STOP/STOPP, READY til sidst.
-* `--quick`-subset er uændret (stop-scenarierne køres målrettet: `--scenario stop_water` el. `--all`).
+### C. New in `sim/run_e2e.py` + scenarios (additive)
+* **sim_log assert `ack_words`** (sub + words + window): proves the stop write's ACK byte for byte.
+* **Expect kind `stop_ok`** (`min`, `max_fail`, `t0`, `t1`): reads `state.stop.ok/fail` — client-neutral (ourui + reference).
+* **New scenarios** (auto-discovered in `sim/scenarios/`): `stop_water` (14 s), `stop_brew` (20 s, stop in the middle of the extraction), `stop_grind` (14 s), `stop_control_auto` (15 s, no stop write → auto-stop unchanged). All assert: the stop frame byte for byte, ACK, bits cleared ≤ 0.5 s, weight/flow ramp stopped, post/drip/pulse run, `stop.ok≥1`, toast STOP/STOPP, READY at the end.
+* The `--quick` subset is unchanged (the stop scenarios are run specifically: `--scenario stop_water` or `--all`).
 
-*— test-agent, 2026-11-18 (v6.13-sim). Kun lokalt; enheden ikke berørt; `artifacts/ourui/*` og `boot/` ikke rørt. Rapporter: `sim/reports/v6.13-sim/`.*
+*— test work stream, 2026-11-18 (v6.13-sim). Local only; the device was not touched; `artifacts/ourui/*` and `boot/` were not touched. Reports: `sim/reports/v6.13-sim/`.*
 
 ---
 
-## TILLÆG v6.14-sim — fra test-agenten: MCU-dvale/wake i mcu_sim (ord0=0 → tavs; knap/alarm → reboot + re-push)
+## ADDENDUM v6.14-sim — from the test work stream: MCU sleep/wake in mcu_sim (word0=0 → silent; button/alarm → reboot + re-push)
 
-**Dato:** 2026-11-18 · **Skrevet af:** test-agenten (ejer `sim/`) · **Gælder:** `sim/mcu_sim.py`, `sim/ref_client.py`, `sim/run_e2e.py`, `sim/selftest.py`, `sim/scenarios/`.
-**Baggrund:** `sim/reports/v6.14/SIM_HANDOFF.md` — ourui v6.14 sender ved HOLD på tænd/sluk-knappen cmd8 (alarm 0/0/0) + cmd6 sub0 len2 [0,0] og forventer en MCU der går i dvale (UI_v6 §19). Nu modelleret. Kontrakten ovenfor er **uændret**; v6.14-SIM-build'et implementerede allerede UI-siden (`key`-krogen + `power` i state-JSON).
+**Date:** 2026-11-18 · **Written by:** the test work stream (owner of `sim/`) · **Applies to:** `sim/mcu_sim.py`, `sim/ref_client.py`, `sim/run_e2e.py`, `sim/selftest.py`, `sim/scenarios/`.
+**Background:** `sim/reports/v6.14/SIM_HANDOFF.md` — on a HOLD of the power button ourui v6.14 sends cmd8 (alarm 0/0/0) + cmd6 sub0 len2 [0,0] and expects an MCU that goes to sleep (UI_v6 §19). Now modeled. The contract above is **unchanged**; the v6.14 SIM build had already implemented the UI side (the `key` hook + `power` in the state JSON).
 
-### A. Nyt i `sim/mcu_sim.py` (MCU-modellen, MEM03 sleep-task 0x2F52 / reset 0x326)
+### A. New in `sim/mcu_sim.py` (the MCU model, MEM03 sleep task 0x2F52 / reset 0x326)
 
-* **Dvale:** ord0=0 (cmd6 sub0 len2 `[0,0]` — eller enhver write der sætter ord0=0) → ACK'es normalt, derefter **≤0,5 s** til dvale (status-tasken tjekker ord0 hvert 500 ms, `0x29D4`): `work_sta=0`, udgange 0 (ord62/63), kørende aktiviteter (primær + damp) stoppes **sikkert** (ingen efter-fase — tasks'ene er slettet), **register-filen bevares/frosset**, og UART'en er **tavs**: cmd3/cmd6/cmd8 droppes (`dvale_rx_dropped`), ingen svar, ingen 0x89. Keep-awake-overvågningen **pauserer** i dvale (ingen `keepalive_gap` mens der er slukket).
-* **Wake — kun to veje:** (1) simuleret knap-hold **≥0,8 s** (PC.8, 8×100 ms efter et slip) eller (2) **RTC-alarm** (cmd8's alarm dag/time/minut ≠ 0/0/0; RTC'en går med sim-tiden, match i dvale → wake). Begge → **CPU-reset til FABRIKKENS startværdier** (REGISTERMAP §2: ord0=1, ord11=920, ord114=50, ord4=180, ord25=550 … — config'en er **ikke** forudindlæst) + 0x89-runden hvert 20 ms → host'ens **boot-push/re-push forventes igen** (`boot_push_missing` ellers, samme vindue som ved connect).
-* **Nye ctrl/inject-hændelser** (JSONL via `inject`): `{"type":"power_key","value":1|0}` (ned/slip; hold ≥0,8 s i dvale → wake), `{"type":"power_key","action":"hold","dur":1.6}` (ét samlet hold m. auto-slip), `{"type":"power_off"}` (dvale uden UART-write), `{"type":"power_on"}` (wake/reset uden hold), `{"type":"alarm","day":D,"hour":H,"minute":M}` (sæt alarmen som cmd8's felt). Knap-hold mens MCU'en er **tændt** gør intet i MCU'en (displayet ejer sluk-semantikken).
-* **`ping` returnerer nu også `power`**: `{state: on|off, key_down, hold_s, dvale_pending, alarm, wakes, rx_dropped}` (additivt; alle eksisterende felter uændret).
-* **Nye assertions-hændelser:** `dvale_enter`, `power_wake` (cause: power_key/alarm/ctrl), `power_key` (value/held_s), `alarm_set`; `reboot` har nu `factory`/`cause`/`defaults` (snapshot af startværdierne); `time_sync` har nu `alarm` ([dag,time,minut]). `stats` += `dvale_entries`, `power_wakes`, `dvale_rx_dropped`.
-* **Kompat:** ctrl `reboot` / ord30=1 forudindlæser **stadig config** (`factory=False`, som før — TILLÆG v6.5 C's forslag er dermed delvist lukket: power-wake giver startværdierne, ctrl reboot er uændret). Replay serve/verify uændret (optagelserne har ingen ord0=0-writes; dvale indtræder aldrig). Alle eksisterende scenarier/selftests uændret grønne.
+* **Sleep:** word0=0 (cmd6 sub0 len2 `[0,0]` — or any write that sets word0=0) → ACKed normally, then **≤ 0.5 s** to sleep (the status task checks word0 every 500 ms, `0x29D4`): `work_sta=0`, outputs 0 (words 62/63), running activities (primary + steam) are stopped **safely** (no after-phase — the tasks have been deleted), **the register file is kept/frozen**, and the UART is **silent**: cmd3/cmd6/cmd8 are dropped (`dvale_rx_dropped`), no replies, no 0x89. The keep-awake monitoring **pauses** during sleep (no `keepalive_gap` while switched off).
+* **Wake — only two paths:** (1) a simulated button hold **≥ 0.8 s** (PC.8, 8×100 ms after a release) or (2) the **RTC alarm** (cmd8's alarm day/hour/minute ≠ 0/0/0; the RTC runs on sim time, a match during sleep → wake). Both → **CPU reset to the FACTORY start values** (registermap §2: word0=1, word11=920, word114=50, word4=180, word25=550 … — the config is **not** preloaded) + the 0x89 round every 20 ms → the host's **boot push/re-push is expected again** (`boot_push_missing` otherwise, the same window as on connect).
+* **New ctrl/inject events** (JSONL via `inject`): `{"type":"power_key","value":1|0}` (down/release; a hold ≥ 0.8 s during sleep → wake), `{"type":"power_key","action":"hold","dur":1.6}` (one complete hold with automatic release), `{"type":"power_off"}` (sleep without a UART write), `{"type":"power_on"}` (wake/reset without a hold), `{"type":"alarm","day":D,"hour":H,"minute":M}` (set the alarm like cmd8's field). A button hold while the MCU is **on** does nothing in the MCU (the display owns the power-off semantics).
+* **`ping` now also returns `power`**: `{state: on|off, key_down, hold_s, dvale_pending, alarm, wakes, rx_dropped}` (additive; all existing fields unchanged).
+* **New assertion events:** `dvale_enter`, `power_wake` (cause: power_key/alarm/ctrl), `power_key` (value/held_s), `alarm_set`; `reboot` now has `factory`/`cause`/`defaults` (a snapshot of the start values); `time_sync` now has `alarm` ([day,hour,minute]). `stats` += `dvale_entries`, `power_wakes`, `dvale_rx_dropped`. (*dvale* = sleep.)
+* **Compatibility:** ctrl `reboot` / word30=1 **still preloads the config** (`factory=False`, as before — ADDENDUM v6.5 C's proposal is thereby partly closed: a power wake gives the start values, ctrl reboot is unchanged). Replay serve/verify unchanged (the recordings have no word0=0 writes; sleep never occurs). All existing scenarios/self-tests are still green.
 
-### B. Nyt i `sim/ref_client.py` (oracle-paritet, additivt)
+### B. New in `sim/ref_client.py` (oracle parity, additive)
 
-* **Ctrl-handling `key`** (`{"cmd":"key","value":1|0[,"code":116]}`) — samme krog som ourui v6.14's SIM-build. Fuld stock-semantik (UI_v6 §19.1): HOLD **1,5 s** → cmd8 (alarm 0/0/0) → **≥80 ms** → cmd6 sub0 len2 `[0,0]` gennem write-køen → ACK → SLUKKET. **Spærret** under bryg/damp/kværn (work_sta bit12/14, ord22/24/6 + egen pending; varmt vand spærrer ikke) → toast *STOP AKTIVITETEN FØRST · SÅ SLUK*, ingen frames, nyt fuldt hold efter aktiviteten. Uden forbindelse/ord0=0 → *INGEN FORBINDELSE · SLUKKER IKKE*. Keep-awake **pauserer** mens der er slukket; polls fortsætter (MCU'en er tavs → OFFLINE). MCU-svar ord0=1 i 0,6 s → PowerOn (`sub0=[1]` + `sub1=[0]`) + HJEM + toast *MASKINEN ER TÆNDT*; 10 s uden svar → tilbage til SLUKKET. Re-push efter MCU-reset sker via den eksisterende 0x89-detektion (`boot_pushed=False` → `boot_push()` igen).
-* **State:** nyt felt `power{state: on|turning_off|off|turning_on, backlight_off, presses, short, offs, ons, blocked, fails, ack8, auto_on, wake_timeouts}` — samme form som ourui's; `page="off"` mens sluk-siden vises.
+* **Ctrl action `key`** (`{"cmd":"key","value":1|0[,"code":116]}`) — the same hook as ourui v6.14's SIM build. Full stock semantics (UI_v6 §19.1): HOLD **1.5 s** → cmd8 (alarm 0/0/0) → **≥ 80 ms** → cmd6 sub0 len2 `[0,0]` through the write queue → ACK → OFF. **Blocked** during brew/steam/grind (work_sta bit12/14, words 22/24/6 + its own pending; hot water does not block) → toast *STOP THE ACTIVITY FIRST · THEN OFF*, no frames, a new full hold after the activity. Without a connection/word0=0 → *NO CONNECTION · CANNOT TURN OFF*. Keep-awake **pauses** while switched off; polls continue (the MCU is silent → OFFLINE). An MCU reply word0=1 for 0.6 s → PowerOn (`sub0=[1]` + `sub1=[0]`) + HOME + toast *MACHINE IS ON*; 10 s without a reply → back to OFF. The re-push after an MCU reset happens via the existing 0x89 detection (`boot_pushed=False` → `boot_push()` again).
+* **State:** new field `power{state: on|turning_off|off|turning_on, backlight_off, presses, short, offs, ons, blocked, fails, ack8, auto_on, wake_timeouts}` — the same shape as ourui's; `page="off"` while the off page is shown.
 
-### C. Nyt i `sim/run_e2e.py` + scenarier (additivt)
+### C. New in `sim/run_e2e.py` + scenarios (additive)
 
-* **Expect-kinds:** `power` (state i vindue), `power_hold` (state over interval, min_ratio), `power_counter` (tæller ≥ min).
-* **sim_log-asserts:** `dvale_seen`, `no_acks_between` (tavs UART), `time_sync_seen` (valgfri `alarm0`), `power_wake_seen` (`cause_contains`), `reboot_seen` (valgfri `factory`), `factory_defaults` (ord0=1/ord11=920/ord114=50 i reboot-snapshot); `boot_push` accepterer nu `t0` (kun push efter tidspunkt = re-push).
-* **Nye scenarier** (auto-opdaget): `power_off_wake` (55 s: sluk → tavs dvale i 34 s → sim-knap-hold → reboot til fabriks-defaults → re-push genskaber config → PowerOn/HJEM/READY) + `power_during_activity` (42 s: hold under bryg spærres m. toast og ingen frames, brygen auto-stopper uforstyrret, nyt hold efter brygen slukker normalt). Begge grønne mod **v6.14-SIM-build'et** (EN+DA) og **reference-klienten** (REF-profil).
-* `--quick`-subset er uændret (power-scenarierne køres målrettet: `--scenario power_off_wake` el. `--all`).
+* **Expect kinds:** `power` (state in a window), `power_hold` (state over an interval, min_ratio), `power_counter` (counter ≥ min).
+* **sim_log asserts:** `dvale_seen`, `no_acks_between` (silent UART), `time_sync_seen` (optional `alarm0`), `power_wake_seen` (`cause_contains`), `reboot_seen` (optional `factory`), `factory_defaults` (word0=1/word11=920/word114=50 in the reboot snapshot); `boot_push` now accepts `t0` (only a push after that time = re-push).
+* **New scenarios** (auto-discovered): `power_off_wake` (55 s: power off → silent sleep for 34 s → sim button hold → reboot to factory defaults → re-push restores the config → PowerOn/HOME/READY) + `power_during_activity` (42 s: a hold during a brew is blocked with a toast and no frames, the brew auto-stops undisturbed, a new hold after the brew powers off normally). Both green against the **v6.14 SIM build** (EN+DA) and the **reference client** (REF profile).
+* The `--quick` subset is unchanged (the power scenarios are run specifically: `--scenario power_off_wake` or `--all`).
 
-*— test-agent, 2026-11-18 (v6.14-sim). Kun lokalt; enheden ikke berørt; `artifacts/ourui/*` og `boot/` ikke rørt. Rapporter: `sim/reports/v6.14-sim/`.*
+*— test work stream, 2026-11-18 (v6.14-sim). Local only; the device was not touched; `artifacts/ourui/*` and `boot/` were not touched. Reports: `sim/reports/v6.14-sim/`.*

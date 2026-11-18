@@ -1,296 +1,293 @@
-# PLAY.md — interaktiv play-mode til SIM-miljøet (Meraki+ / ourui)
+# PLAY.md — interactive play mode for the SIM environment (Meraki+ / ourui)
 
-**Dato:** 2026-11-17 · **Ejer:** test-agenten · **Fil:** `sim/play.py` + `sim/play_viewer.html`
-**Politik:** kun lokal udvikling — **ingen kontakt med den fysiske enhed**. Kun Python stdlib.
-Fable's filer (`artifacts/ourui/`) er ikke rørt. Bagudkompatibel med `run_e2e.py`
-(samme sandbox-layout, samme kontrakt `CONTRACT.md`).
+**Date:** 2026-11-17 · **Owner:** the test work stream · **Files:** `sim/play.py` + `sim/play_viewer.html`
+**Policy:** local development only — **no contact with the physical device**. Python standard library
+only. The UI files were not touched. Backward compatible with `run_e2e.py` (same sandbox layout, same
+contract `CONTRACT.md`).
 
-Med play-mode kan du starte hele simmiljøet i ét kald og **klikke rundt på UI'et i en
-browser** med simuleret MCU og data: live framebuffer, state-panel, protokol-log,
-touch-injektion (ægte evdev-format), fejl-injektion, ACK-profiler, sprog, hastighed m.m.
+With play mode you can start the whole sim environment with one command and **click around the UI in
+a browser** with a simulated MCU and data: live framebuffer, state panel, protocol log, touch
+injection (real evdev format), fault injection, ACK profiles, language, speed and more.
+
+> Some viewer labels and log messages are still in Danish (e.g. "Genstart UI" = restart UI,
+> "GESTUS UDLØST" = gesture triggered).
 
 ---
 
 ## 1. Quickstart
 
 ```sh
-cd .
-
-# Ét kald — åbner browseren automatisk på http://127.0.0.1:8765:
+# One command — opens the browser automatically at http://127.0.0.1:8765:
 python3 sim/play.py
 
-# Nyttige varianter:
-python3 sim/play.py --port 9000 --lang en          # anden port + engelsk UI-sprog
-python3 sim/play.py --scenario steam_auto          # scenariets config/sim som udgangspunkt
-python3 sim/play.py --ack observed_v3              # ACK-profil ved start
-python3 sim/play.py --ui-bin /sti/til/ourui_v6_sim # eksplicit UI-binær
-python3 sim/play.py --no-browser                   # åbn ikke browser selv
-python3 sim/play.py --keep                         # bevar sandbox ved exit (fejlfinding)
-python3 sim/play.py --smoke --no-browser           # headless smoke-test (se §7)
+# Useful variants:
+python3 sim/play.py --port 9000 --lang en          # another port + English UI language
+python3 sim/play.py --scenario steam_auto          # the scenario's config/sim as the starting point
+python3 sim/play.py --ack observed_v3              # ACK profile at start
+python3 sim/play.py --ui-bin /path/to/ourui_sim    # explicit UI binary
+python3 sim/play.py --no-browser                   # do not open a browser
+python3 sim/play.py --keep                         # keep the sandbox on exit (troubleshooting)
+python3 sim/play.py --smoke --no-browser           # headless smoke test (see §7)
 ```
 
-Stop med **Ctrl-C** — det rydder pty, touch-FIFO, ctrl-sockets og sandbox
-(undtagen `--keep`). Snapshot-eksporter bevares altid i `sim/reports/play-exports/`.
+Stop with **Ctrl-C** — it cleans up the pty, the touch FIFO, the ctrl sockets and the sandbox (except
+with `--keep`). Snapshot exports are always kept in `sim/reports/play-exports/`.
 
-### Hvad startes?
+### What is started?
 
-`play.py` genbruger `run_e2e.py`'s launch-mekanik (`ScenarioRun.make_sandbox/start_sim/start_ui`):
+`play.py` reuses `run_e2e.py`'s launch mechanics (`ScenarioRun.make_sandbox/start_sim/start_ui`):
 
-1. **Sandbox** i `sim/reports/play-<tidsstempel>-<pid>/play/sandbox/` (samme layout som
-   CONTRACT §8: `customer/config.json`, `customer/new`, `proc`-mocks, `dev/input/event0.fifo`, `fb.bin`).
-2. **`mcu_sim.py`** på en pty med ctrl-socket + assertions-log (JSONL).
-3. **UI-klienten**: Fable's SIM-build hvis den findes — ellers **reference-klienten** (`ref_client.py`).
-4. **Web-viewer** på `http://127.0.0.1:<port>` (stdlib `http.server`, ingen dependencies,
-   binder kun til localhost).
+1. **Sandbox** in `sim/reports/play-<timestamp>-<pid>/play/sandbox/` (the same layout as CONTRACT §8:
+   `customer/config.json`, `customer/new`, `proc` mocks, `dev/input/event0.fifo`, `fb.bin`).
+2. **`mcu_sim.py`** on a pty with a ctrl socket + assertion log (JSONL).
+3. **The UI client**: the UI's SIM build if it exists — otherwise the **reference client**
+   (`ref_client.py`).
+4. **Web viewer** at `http://127.0.0.1:<port>` (stdlib `http.server`, no dependencies, binds to
+   localhost only).
 
-### UI-binær: auto-detektion og de to tilstande
+### UI binary: auto-detection and the two modes
 
-| Tilstand | Hvornår | Hvad ser du? |
+| Mode | When | What do you see? |
 |---|---|---|
-| **ourui SIM-build** (fuld visuel play) | `build/ourui_sim` findes (Fable's v6.4), eller `--ui-bin`/`OURUI_SIM_BIN` peger på en binær | Det rigtige Meraki+-UI renderet til fb-filen; klik rammer de rigtige knapper |
-| **Reference-klient** (protokol/state-play) | Indtil v6.4-binæren lander | Simpel fb-emulering (fase-ring + fire knapper + toast-region) = **placeholder-grafik**, men fuld protokol, state og interaktion. Viewer'en viser et blåt banner om dette. |
+| **ourui SIM build** (full visual play) | `build/ourui_sim` exists (`./build.sh host`), or `--ui-bin`/`OURUI_SIM_BIN` points to a binary | The real Meraki+ UI rendered to the fb file; clicks hit the real buttons |
+| **Reference client** (protocol/state play) | when no SIM build is found, or with `--force-reference` | A simple fb emulation (phase ring + four buttons + toast region) = **placeholder graphics**, but full protocol, state and interaction. The viewer shows a blue banner about this. |
 
-Auto-detektionen sker ved opstart. **Status 2026-11-17:** v6.4-binæren landede kl. 16:04
-(`build/ourui_sim`) og auto-detekteres nu — fuld visuel play er aktiv og
-verificeret (§7). Reference-tilstanden er stadig tilgængelig med `--force-reference`.
-
----
-
-## 2. Viewer'en — hvad kan du klikke på?
-
-### Framebuffer (venstre)
-
-* **Live fb** opdateres ~6 Hz (PNG fra `fb.bin`, cachet pr. frame).
-* **Klik** = tap (touch-down/up med det samme).
-* **Hold ≥650 ms** på en aktivitets-knap = *hold-for-start* (præcis som ourui:
-  du skal holde knappen nede i mindst 650 ms). En gul/grøn ring viser hold-tiden.
-* **Højreklik** (eller knappen "Gestus-test") = gestus-test: 3×1,6 s hold i hjørne-boksen
-  (75,75) injiceres som evdev-stream, og den **ægte `switcher_host`** køres i fil-mode
-  mod samme stream. Resultatet ("GESTUS UDLØST" / "ingen trigger") vises i panelet.
-* **Koordinat-overlay**: trådkors + `x=… y=… (raw …,…)` følger musen, så du kan se
-  præcis hvor du rammer. Mapping: `raw = px*4096/480` (invers: `px = raw*480/4096`),
-  samme formel som `tinj_hold`/CONTRACT §4.
-* **"Vis tryk-mål (layout)"** lægger de faktiske tryk-mål oven på fb'et: mod SIM-build'et
-  hentes de live fra build'ets ctrl `layout`-hook (hit_test-geometrien: grind 150,372 ·
-  brew 210,372 · water 270,372 · steam 330,372 · revert + swipe-edges); mod reference-
-  klienten bruges dets kendte knap-layout (grind 130,160 · brew 350,160 · water 130,330 ·
-  steam 350,330 · settings 240,430). Gestus-hjørnet (40,40–110,110) vises altid.
-
-### State-panel (højre)
-
-Fase (farvet enum-key: `READY/HEAT/PRE/EXT/GRIND/WATER/STEAM/ERROR/SLEEP/OFFLINE`),
-side (`home/settings/detail/sys/diag/bye`), `work_sta` (hex), sprog-index, boot-flag,
-link-status, CRC ok/bad, cmd6 ok/retx/fail/blok, frame-time (ms), `config_oor`,
-save-state, activity-pending, seneste toast, **config-md5** (opdateres live og logges
-ved hver ændring), MCU-mode/tid og ACK-profil.
-
-### Kontrol-panel
-
-| Gruppe | Kontroller |
-|---|---|
-| **Aktiviteter** | Grind/Bryg/Vand/Damp + Stop damp. **Simuleret touch-hold (750 ms)** på knappens tryk-mål — reference-layout mod ref_client, SIM-build'ets ctrl `layout` mod det rigtige UI. Ctrl `action` (kontrakt-hook) som fallback hvis målet ikke findes, og altid for `steam_stop`. Du kan også klikke/hold'e direkte på fb'et. |
-| **Side** | ctrl `page` home/settings/detail/sys/diag |
-| **Settings-GEM** | vælg parameter (brew_temp, grind_weight, …) + værdi → ctrl `save` (parity-write + config-persist). Se `save`-state, toast, config-md5 og protokol-loggens `WRITE sub11=[880]` + `CONFIG md5 …`. |
-| **Fejl & link** | Fejl-cycle (ingen→E1→E2→E3→ingen), CRC-garbage (2 s), Offline (link silent)/Genonline, Luk pty (closed → ny pty ved reopen + automatisk UI-genstart). Wand til/fra (v6.6: flush-vejen, også under bryg) + legacy "kræv wand for damp" (no-op). |
-| **ACK-profil** | normal/observed_v3/slow/lossy/no_ack — skiftes **live** (mcu_sim ctrl `ack_profile`). `no_ack` blokerer GEM (retransmit→FAIL, config uændret). |
-| **System & tid** | Hastighed 1×/2×/8×, pause/resume, UI-sprog Dansk/Engelsk (lang-fil), stock-sprog (config-index 0..10), boot-flag toggle, runtime-skift (dry: bye-view), MCU-genstart (boot-push), Genstart UI, Reset sandbox. |
-| **Snapshot** | Eksportér PNG + state (+ config-kopi) til `sim/reports/play-exports/<ts>_<label>/`. Seneste eksporter listes med links. |
-| **Protokol-log** | Seneste ~160 hændelser fra mcu_sim's assertions-log: writes (blå), AFVIST/RANGE/ACK-tab (røde), START/STOP/boot-push/version (grønne), fejl/link/garbage/reboot/config-md5 (gule). Auto-scroll. |
-
-### Tastatur-genveje
-
-| Tast | Handling |
-|---|---|
-| `g` / `b` / `h` / `s` | start grind / bryg / hotwater / steam (simuleret hold, samme strategi som knapperne) |
-| `e` | fejl-cycle: ingen → E1 (ord34=32) → E2 (ord35=16) → E3 (ord36=16) → ingen |
-| `l` | UI-sprog dansk ↔ engelsk |
-| `r` | reset sandbox (frisk session; exports bevares) |
-| `space` | pause / resume sim-tid |
-| `?` / `Esc` | vis / luk hjælpe-overlay |
-
-(Genveje ignoreres når fokus er i et input-felt.)
+Auto-detection happens at startup. **Status 2026-11-17:** the v6.4 binary landed at 16:04
+(`build/ourui_sim`) and is now auto-detected — full visual play is active and verified (§7). The
+reference mode is still available with `--force-reference`.
 
 ---
 
-## 3. HTTP-API (til scripts/curl)
+## 2. The viewer — what can you click?
 
-Viewer'en bruger disse endpoints — du kan også bruge dem direkte:
+### Framebuffer (left)
+
+* **Live fb** is updated at ~6 Hz (PNG from `fb.bin`, cached per frame).
+* **Click** = tap (touch down/up immediately).
+* **Hold ≥ 650 ms** on an activity button = *hold-to-start* (exactly as in ourui: you must hold the
+  button for at least 650 ms). A yellow/green ring shows the hold time.
+* **Right-click** (or the "gesture test" button) = gesture test: the trigger gesture is injected as
+  an evdev stream, and the **real `switcher_host`** is run in file mode against the same stream. The
+  result ("GESTUS UDLØST" = triggered / "ingen trigger" = no trigger) is shown in the panel.
+* **Coordinate overlay**: a crosshair + `x=… y=… (raw …,…)` follows the mouse, so you can see exactly
+  where you hit. Mapping: `raw = px*4096/480` (inverse: `px = raw*480/4096`), the same formula as
+  `tinj_hold`/CONTRACT §4.
+* **"Show touch targets (layout)"** overlays the actual touch targets on the fb: against the SIM build
+  they are fetched live from the build's ctrl `layout` hook (the hit_test geometry: grind 150,372 ·
+  brew 210,372 · water 270,372 · steam 330,372 · revert + swipe edges); against the reference client
+  its known button layout is used (grind 130,160 · brew 350,160 · water 130,330 · steam 350,330 ·
+  settings 240,430). The gesture zone is always shown.
+
+### State panel (right)
+
+Phase (colored enum key: `READY/HEAT/PRE/EXT/GRIND/WATER/STEAM/ERROR/SLEEP/OFFLINE`), page
+(`home/settings/detail/sys/diag/bye`), `work_sta` (hex), language index, boot flag, link status, CRC
+ok/bad, cmd6 ok/retx/fail/blocked, frame time (ms), `config_oor`, save state, activity pending, the
+last toast, **config md5** (updated live and logged on every change), MCU mode/time and ACK profile.
+
+### Control panel
+
+| Group | Controls |
+|---|---|
+| **Activities** | Grind/Brew/Water/Steam + Stop steam. **Simulated touch hold (750 ms)** on the button's touch target — the reference layout against ref_client, the SIM build's ctrl `layout` against the real UI. Ctrl `action` (contract hook) as a fallback if the target is not found, and always for `steam_stop`. You can also click/hold directly on the fb. |
+| **Page** | ctrl `page` home/settings/detail/sys/diag |
+| **Settings SAVE** | choose a parameter (brew_temp, grind_weight, …) + value → ctrl `save` (parity write + config persistence). See the `save` state, toast, config md5 and the protocol log's `WRITE sub11=[880]` + `CONFIG md5 …`. |
+| **Faults & link** | Fault cycle (none→E1→E2→E3→none), CRC garbage (2 s), Offline (link silent)/Back online, Close pty (closed → a new pty on reopen + automatic UI restart). Wand on/off (v6.6: the flush path, also during a brew) + legacy "require wand for steam" (no-op). |
+| **ACK profile** | normal/observed_v3/slow/lossy/no_ack — switched **live** (mcu_sim ctrl `ack_profile`). `no_ack` blocks SAVE (retransmit→FAIL, config unchanged). |
+| **System & time** | Speed 1×/2×/8×, pause/resume, UI language Danish/English (lang file), stock language (config index 0..10), boot flag toggle, runtime switch (dry: bye view), MCU restart (boot push), Restart UI, Reset sandbox. |
+| **Snapshot** | Export PNG + state (+ a config copy) to `sim/reports/play-exports/<ts>_<label>/`. The latest exports are listed with links. |
+| **Protocol log** | The latest ~160 events from mcu_sim's assertion log: writes (blue), REJECTED/RANGE/ACK loss (red), START/STOP/boot push/version (green), faults/link/garbage/reboot/config md5 (yellow). Auto-scroll. |
+
+### Keyboard shortcuts
+
+| Key | Action |
+|---|---|
+| `g` / `b` / `h` / `s` | start grind / brew / hot water / steam (simulated hold, same strategy as the buttons) |
+| `e` | fault cycle: none → E1 (word34=32) → E2 (word35=16) → E3 (word36=16) → none |
+| `l` | UI language Danish ↔ English |
+| `r` | reset the sandbox (fresh session; exports are kept) |
+| `space` | pause / resume sim time |
+| `?` / `Esc` | show / close the help overlay |
+
+(Shortcuts are ignored while the focus is in an input field.)
+
+---
+
+## 3. HTTP API (for scripts/curl)
+
+The viewer uses these endpoints — you can also use them directly:
 
 ```sh
-curl -s localhost:8765/api/state | python3 -m json.tool     # alt state i én JSON
+curl -s localhost:8765/api/state | python3 -m json.tool     # all state in one JSON
 curl -s localhost:8765/fb.png -o fb.png                     # live framebuffer
-curl -s -XPOST localhost:8765/api/touch -d '{"x":350,"y":160,"ms":700}'   # hold på BREW
+curl -s -XPOST localhost:8765/api/touch -d '{"x":350,"y":160,"ms":700}'   # hold on BREW
 curl -s -XPOST localhost:8765/api/activity -d '{"name":"brew"}'
-curl -s -XPOST localhost:8765/api/fault -d '{}'             # fejl-cycle
+curl -s -XPOST localhost:8765/api/fault -d '{}'             # fault cycle
 curl -s -XPOST localhost:8765/api/ack -d '{"profile":"no_ack"}'
 curl -s -XPOST localhost:8765/api/speed -d '{"factor":8}'
 curl -s -XPOST localhost:8765/api/pause -d '{"value":true}'
 curl -s -XPOST localhost:8765/api/lang -d '{"value":"da"}'
 curl -s -XPOST localhost:8765/api/save -d '{"param":"brew_temp","value":880}'
-curl -s -XPOST localhost:8765/api/snapshot -d '{"label":"min_test"}'
+curl -s -XPOST localhost:8765/api/snapshot -d '{"label":"my_test"}'
 curl -s -XPOST localhost:8765/api/gesture -d '{"presses":3}'
-curl -s -XPOST localhost:8765/api/reboot                    # MCU-genstart
-curl -s -XPOST localhost:8765/api/restart_ui                # UI-genstart (ved crash)
-curl -s -XPOST localhost:8765/api/reset                     # frisk sandbox
+curl -s -XPOST localhost:8765/api/reboot                    # MCU restart
+curl -s -XPOST localhost:8765/api/restart_ui                # UI restart (after a crash)
+curl -s -XPOST localhost:8765/api/reset                     # fresh sandbox
 ```
 
-Øvrige: `/api/garbage`, `/api/link {state:silent|up|closed}`, `/api/wand {on}`,
-`/api/require_wand {value}`, `/api/boot_flag {value}`, `/api/runtime_switch`,
-`/api/page {name}`, `/api/stock_lang {value}`, `/api/config {field,value,reload}`,
-`/api/layout` (de rigtige tryk-mål i aktuelle visning), `/api/scenarios`,
-`/exports/<fil>` (snapshot-filer).
+Others: `/api/garbage`, `/api/link {state:silent|up|closed}`, `/api/wand {on}`,
+`/api/require_wand {value}`, `/api/boot_flag {value}`, `/api/runtime_switch`, `/api/page {name}`,
+`/api/stock_lang {value}`, `/api/config {field,value,reload}`, `/api/layout` (the real touch targets
+in the current view), `/api/scenarios`, `/exports/<file>` (snapshot files).
 
 ---
 
-## 4. Robusthed
+## 4. Robustness
 
-* **UI-crash** → viewer'en viser rødt banner med exit-kode + stderr-udsnit og en
-  **Genstart UI**-knap (`/api/restart_ui`). State-filen startes frisk ved genstart.
-* **mcu_sim offline/død** → UI'en viser OFFLINE (forventet adfærd: link-timeout 1,5 s);
-  viewer'en viser MCU-status + Reset-knap.
-* **Pause** fryser MCU-tiden → UI'en viser OFFLINE (forventet); resume genopretter link.
-* **Luk pty** → OFFLINE; **Genonline** åbner ny pty og genstarter automatisk UI'en
-  med den nye pty-sti (en klient kan ikke skifte pty i live-drift).
-* **MCU-genstart** → sim'en rebooter (registre nulstilles, versions-håndtryk + boot-push
-  forventes igen). Reference-klienten detekterer 0x89-igen og re-handshaker + re-boot-pusher
-  (lille bagudkompatibel tilføjelse til `ref_client.py`; scenarierne er uændrede).
-* **Exit (Ctrl-C/SIGTERM)** → ctrl `exit` til UI+sim, proces-wait/terminate, sockets,
-  FIFO, pty og sandbox ryddes. `--keep` bevarer sandbox til fejlfinding.
-* **Writes** sker kun i sandbox (`sim/reports/play-*/`), designated exports
-  (`sim/reports/play-exports/`) og en kort `/tmp/ourui_e2e_<pid>_*`-mappe til
-  ctrl-sockets (AF_UNIX-stier må være ≤104 bytes på macOS; mappen ryddes ved exit).
-* **Hastighed >1×**: kun MCU'ens sim-tid skaleres; UI-klienten kører stadig wall-clock.
-  Keep-awake-tærsklen skaleres tilsvarende i sim'en, så der ikke kommer falske
-  `keepalive_gap`-logs. Aktiviteter gennemføres hurtigere (8× ≈ 8× hurtigere kurver).
+* **UI crash** → the viewer shows a red banner with the exit code + a stderr excerpt and a
+  **Restart UI** button (`/api/restart_ui`). The state file starts fresh on restart.
+* **mcu_sim offline/dead** → the UI shows OFFLINE (expected behavior: link timeout 1.5 s); the viewer
+  shows the MCU status + a Reset button.
+* **Pause** freezes the MCU time → the UI shows OFFLINE (expected); resume restores the link.
+* **Close pty** → OFFLINE; **Back online** opens a new pty and automatically restarts the UI with the
+  new pty path (a client cannot switch pty while running).
+* **MCU restart** → the sim reboots (registers are reset, the version handshake + boot push are
+  expected again). The reference client detects 0x89 again and re-handshakes + re-pushes (a small
+  backward-compatible addition to `ref_client.py`; the scenarios are unchanged).
+* **Exit (Ctrl-C/SIGTERM)** → ctrl `exit` to the UI + sim, process wait/terminate, sockets, FIFO, pty
+  and sandbox are cleaned up. `--keep` keeps the sandbox for troubleshooting.
+* **Writes** only happen in the sandbox (`sim/reports/play-*/`), the designated exports
+  (`sim/reports/play-exports/`) and a short `/tmp/ourui_e2e_<pid>_*` directory for the ctrl sockets
+  (AF_UNIX paths must be ≤ 104 bytes on macOS; the directory is cleaned up on exit).
+* **Speed > 1×**: only the MCU's sim time is scaled; the UI client still runs on the wall clock. The
+  keep-awake threshold is scaled accordingly in the sim, so there are no false `keepalive_gap` logs.
+  Activities complete faster (8× ≈ 8× faster curves).
 
 ---
 
-## 5. Hvad er tilføjet til sim-miljøet (bagudkompatibelt)?
+## 5. What was added to the sim environment (backward compatible)?
 
-| Fil | Tilføjelse |
+| File | Addition |
 |---|---|
-| `mcu_sim.py` | ctrl `speed {factor}`, `pause {value}`, `require_wand {value}`; `ping` returnerer nu også speed/paused/profile/require_wand. Live hastighed/pause i hoved-loopet (1×/upauset = byte-identisk adfærd). Keep-awake-tærskel skaleres med speed (1× uændret). `do_reboot` nulstiller boot-push-detektion + first-RX, så boot-push/versions-håndtryk forventes igen efter reboot. |
-| `ref_client.py` | 0x89 modtaget *efter* gennemført håndtryk = MCU-genstart → re-handshake + re-boot-push (som ved ny connect, PARITY §1.4). Påvirker ikke scenarier (ingen reboot i scenarierne). |
-| `run_e2e.py` | `start_ui()` sætter `OURUI_LANGFILE=<sandbox>/new_customer/ourui/lang` (v6.3+-sprogfil; manglende fil = fallback EN, uændret adfærd for ældre builds). |
-| `play.py`, `play_viewer.html`, `PLAY.md` | Selve play-mode-leverancen (nye filer). |
+| `mcu_sim.py` | ctrl `speed {factor}`, `pause {value}`, `require_wand {value}`; `ping` now also returns speed/paused/profile/require_wand. Live speed/pause in the main loop (1×/unpaused = byte-identical behavior). The keep-awake threshold scales with the speed (1× unchanged). `do_reboot` resets the boot push detection + first RX, so the boot push/version handshake are expected again after a reboot. |
+| `ref_client.py` | 0x89 received *after* a completed handshake = MCU restart → re-handshake + re-boot-push (as on a new connect, PARITY §1.4). Does not affect the scenarios (no reboot in the scenarios). |
+| `run_e2e.py` | `start_ui()` sets `OURUI_LANGFILE=<sandbox>/new_customer/ourui/lang` (the v6.3+ language file; a missing file = fallback EN, unchanged behavior for older builds). |
+| `play.py`, `play_viewer.html`, `PLAY.md` | The play mode deliverable itself (new files). |
 
-`selftest.py` (107 checks) og alle 22 scenarier er kørt igen efter ændringerne — se §7.
-
----
-
-## 6. Begrænsninger
-
-* **Fuld visuel play kræver v6.4-binæren.** Indtil den lander, er fb'et reference-klientens
-  simple emulering (fase-ring + knapper + toast-region) — ikke ourui's rigtige grafik.
-  Alle protokoller, state-felter, touch-mekanik og kontroller er dog de samme.
-* **Reference-klientens knap-layout** er ikke ourui's rigtige layout. Mod SIM-build'et
-  bruger play de rigtige tryk-mål fra ctrl `layout`; mod reference-klienten dets eget
-  layout. Direkte klik/hold på fb'et virker altid (det er bare touch-koordinater).
-* **Sprog:** ourui's UI-sprog (v6.3+) ligger i egen fil (`"en"`/`"da"`, `OURUI_LANGFILE`),
-  ikke i config.json. Play skriver filen; mod SIM-build'et genstartes UI'en automatisk
-  (filen indlæses ved boot). **DA findes ikke i stock's 11 sprog** (config-index 0..10 =
-  EN/DE/FR/IT/ES/PL/AR/简中/繁中/KO/JA) — stock-sprog-rækken er config-only og påvirker
-  ikke ourui's labels. Reference-klienten har ingen i18n (kun config-index i state).
-* **Steam har to veje (v6.6, STEAMLIVE §5-6).** Display-steam (UI-knappen / ord24=1)
-  kører **uden** wand-kontakt og auto-stopper ved mælk-setpoint. Wand-kontakten
-  (PE.2, "Wand til/fra") starter en **flush** (ord24=0, ingen auto-stop) — også oven i
-  et bryg (work_sta 0x5327) — og stopper ved wand-release. "Kræv wand for damp"-knappen
-  er en legacy no-op fra v6.6 (display-steam gatedes ikke længere; SESSION §5.2's
-  wand-krav blev live-modbevist).
-* **Pause/offline:** UI'en viser OFFLINE når MCU-tiden fryses eller linket lukkes —
-  det er korrekt adfærd (link-timeout 1,5 s), ikke en fejl.
-* **Gestus-testen** kører `switcher_host` i fil-mode mod en syntetisk stream (samme
-  metode som `gesture_switcher`-scenariet). Streamen injiceres også i UI'ens FIFO;
-  hjørne-holds starter ingen aktivitet i UI'et (korrekt — switcher'en ejer gestus).
-* **Ingen multi-touch/ghost-touches** — touch er syntetisk single-pointer (CONTRACT §4).
-* **fb-refresh ~6 Hz** i viewer'en (PNG-konvertering i ren Python); SIM-build'et skriver
-  selv fb ≤10 Hz (CONTRACT §2). Det er viewer-refresh, ikke UI-render, der er flaskehalsen.
-* **Replay-mode** understøttes ikke i play (scenarie-replays køres med `run_e2e.py`).
-  `--scenario` bruger kun scenariets `config`/`sim`/`boot_flag_initial` som udgangspunkt.
+`selftest.py` and all scenarios were rerun after the changes — see §7.
 
 ---
 
-## 7. Verifikation
+## 6. Limitations
 
-### Headless smoke (grøn NU, mod reference-klienten)
+* **Full visual play requires the SIM build.** Without it, the fb is the reference client's simple
+  emulation (phase ring + buttons + toast region) — not ourui's real graphics. All protocols, state
+  fields, touch mechanics and controls are, however, the same.
+* **The reference client's button layout** is not ourui's real layout. Against the SIM build, play
+  uses the real touch targets from ctrl `layout`; against the reference client its own layout. Direct
+  click/hold on the fb always works (it is just touch coordinates).
+* **Language:** ourui's UI language (v6.3+) lives in its own file (`"en"`/`"da"`, `OURUI_LANGFILE`),
+  not in config.json. Play writes the file; against the SIM build the UI is restarted automatically
+  (the file is loaded at boot). **Danish is not among the stock UI's 11 languages** (config index
+  0..10 = EN/DE/FR/IT/ES/PL/AR/简中/繁中/KO/JA) — the stock language row is config-only and does not
+  affect ourui's labels. The reference client has no i18n (only the config index in the state).
+* **Steam has two paths (v6.6, STEAMLIVE §5-6).** Display steam (the UI button / word24=1) runs
+  **without** the wand switch and auto-stops at the milk setpoint. The wand switch (PE.2, "Wand
+  on/off") starts a **flush** (word24=0, no auto-stop) — also on top of a brew (work_sta 0x5327) —
+  and stops when the wand is released. The "require wand for steam" button is a legacy no-op since
+  v6.6 (display steam is no longer gated; SESSION §5.2's wand requirement was disproven live).
+* **Pause/offline:** the UI shows OFFLINE when the MCU time is frozen or the link is closed — that is
+  correct behavior (link timeout 1.5 s), not a bug.
+* **The gesture test** runs `switcher_host` in file mode against a synthetic stream (the same method
+  as the `gesture_switcher` scenario). The stream is also injected into the UI's FIFO; the gesture
+  starts no activity in the UI (correct — the switcher owns the gesture).
+* **No multi-touch/ghost touches** — touch is a synthetic single pointer (CONTRACT §4).
+* **fb refresh ~6 Hz** in the viewer (PNG conversion in pure Python); the SIM build itself writes the
+  fb at ≤ 10 Hz (CONTRACT §2). The viewer refresh, not the UI render, is the bottleneck.
+* **Replay mode** is not supported in play (scenario replays are run with `run_e2e.py`).
+  `--scenario` only uses the scenario's `config`/`sim`/`boot_flag_initial` as the starting point.
+
+---
+
+## 7. Verification
+
+### Headless smoke (against the reference client)
+
+```sh
+python3 sim/play.py --smoke --no-browser --force-reference
+# → [smoke] 30/30 PASS · client=reference
+```
+
+The smoke test starts the whole environment, curls the viewer pages (`/`, `/api/state`, `/fb.png`),
+injects touch via the API and asserts state changes in the JSONL:
+
+1. Viewer HTML + contract fields in the state + PNG magic in the fb.
+2. **BREW hold via the touch API → phase PRE/EXT** in the state panel AND directly in `state.jsonl`;
+   the fb PNG changes during the brew.
+3. Speed 8× → **brew auto-stop** in the sim log.
+4. **STEAM → auto-stop at the milk setpoint** (word48≥word25, stop reason "milk ≥ setpoint").
+5. Fault cycle E1 → **ERROR phase** → clear → READY.
+6. **no_ack → SAVE blocked** (save=fail, config md5 unchanged) → normal → **SAVE ok**
+   (config.brewTemper=880 in the sandbox, md5 changed + logged, MCU write sub11=[880]).
+7. Language file = "da", boot flag toggle in the state, pause/resume, gesture (triggers the switcher),
+   touch tap raw mapping (240→2048), snapshot export (PNG + state exist), reset → fresh session.
+
+### Full visual smoke (against the SIM build — landed 2026-11-17 16:04)
+
+**The same command** — `--smoke` auto-detects the binary and runs the same checks against the real UI:
 
 ```sh
 python3 sim/play.py --smoke --no-browser
-# → [smoke] 30/30 PASS · klient=reference
+# → [smoke] 30/30 PASS · client=sim-build   (2026-11-17 16:08)
+#   binary: build/ourui_sim · md5 354976e839a26663310493446c7a3f97
 ```
 
-Smoken starter hele miljøet, curl'er viewer-siderne (`/`, `/api/state`, `/fb.png`),
-injicerer touch via API'et og asserter state-ændringer i JSONL:
+The visually relevant checks against the real UI:
 
-1. Viewer-HTML + kontrakt-felter i state + PNG-magic i fb.
-2. **BREW-hold via touch-API → fase PRE/EXT** i state-panel OG direkte i `state.jsonl`;
-   fb-PNG'en ændrer sig under brew.
-3. Hastighed 8× → **brew auto-stop** i sim-loggen.
-4. **STEAM → auto-stop ved mælk-setpoint** (ord48≥ord25, stopgrund "mælk ≥ setpoint").
-5. Fejl-cycle E1 → **ERROR-fase** → clear → READY.
-6. **no_ack → GEM blokerer** (save=fail, config-md5 uændret) → normal → **GEM ok**
-   (config.brewTemper=880 i sandbox, md5 ændret + logget, MCU-write sub11=[880]).
-7. Sprog-fil = "da", boot-flag toggle i state, pause/resume, gestus (3× hold udløser
-   switcher), touch-tap raw-mapping (240→2048), snapshot-eksport (PNG+state findes),
-   reset → frisk session.
+* **BREW via a touch hold on the real touch target (210,372 via ctrl `layout`) → phase PRE/EXT in the
+  state + the fb changes** (real graphics).
+* **STEAM → auto-stop at the target** (milk ≥ setpoint word48≥word25, sim log + state).
+* **Settings SAVE → the config in the sandbox changes (brewTemper=880) + md5 log** + word-for-word MCU
+  write sub11=[880].
 
-### Fuld visuel smoke (GRØN — v6.4-binæren landet 2026-11-17 16:04)
+In addition verified in a **real browser** (headless Chromium against a live play session): the
+viewer renders the real Meraki+ UI (Danish labels, gauges, READY badge); a real mouse hold ≥ 650 ms on
+the BREW button in the fb image → **EXT phase**; right-click → **gesture triggered** (the real
+switcher_host); keyboard `e` → ERROR → clear → READY; button zones/touch target overlay + coordinate
+overlay live. Screenshots + smoke log: `sim/reports/play-exports/verification-20261117/`
+(`play_real_ui.png`, `play_real_brew.png`, `play_viewer_top.png`, `smoke_simbuild.log`; not tracked in
+git).
 
-**Samme kommando** — `--smoke` auto-detekterede binæren og kørte de samme checks mod
-det rigtige UI:
-
-```sh
-python3 sim/play.py --smoke --no-browser
-# → [smoke] 30/30 PASS · klient=sim-build   (2026-11-17 16:08)
-#   binær: build/ourui_sim · md5 354976e839a26663310493446c7a3f97
-```
-
-De visuel-relevante checks mod det rigtige UI:
-
-* **BREW via touch-hold på det rigtige tryk-mål (210,372 via ctrl `layout`) → fase
-  PRE/EXT i state + fb ændrer sig** (rigtig grafik).
-* **STEAM → auto-stop ved target** (mælk ≥ setpoint ord48≥ord25, sim-log + state).
-* **Settings-GEM → config i sandbox ændres (brewTemper=880) + md5-log** +
-  word-for-word MCU-write sub11=[880].
-
-Derudover verificeret i en **ægte browser** (headless Chromium mod live play-session):
-viewer renderer det rigtige Meraki+-UI (danske labels, gauges, KLAR-badge); ægte
-musse-hold ≥650 ms på BREW-knappen i fb-billedet → **EXT-fase**; højreklik →
-**GESTUS UDLØST** (ægte switcher_host); tastatur `e` → ERROR → clear → READY;
-knap-zoner/tryk-mål-overlay + koordinat-overlay live. Screenshots + smoke-log:
-`sim/reports/play-exports/verification-20261117/` (`play_real_ui.png`,
-`play_real_brew.png`, `play_viewer_top.png`, `smoke_simbuild.log`).
-
-Kør også hele E2E-suiten mod binæren for fuld kontrakt-dækning (Fable's leverance):
+Also run the whole E2E suite against the binary for full contract coverage:
 
 ```sh
 python3 sim/run_e2e.py --all --ui-bin build/ourui_sim
 ```
 
-### Bagudkompatibilitet (kørt efter ændringerne)
+### Backward compatibility (run after the changes)
 
 ```sh
-python3 sim/selftest.py                 # 107 PASS / 0 FAIL
-python3 sim/run_e2e.py --all            # 22/22 scenarier (reference-klient)
+python3 sim/selftest.py                 # all PASS
+python3 sim/run_e2e.py --all            # all scenarios
 ```
 
-Interaktiv server-test (28 checks: touch→JSONL, MCU-reboot→re-handshake+boot-push,
-pty-luk→OFFLINE→reopen+UI-genstart, UI-crash→banner→genstart, speed/pause/ACK live,
-sprogfil, snapshot-servering, Ctrl-C/SIGTERM-cleanup) er kørt grønt mod en live
-play-session under udviklingen.
+An interactive server test (28 checks: touch→JSONL, MCU reboot→re-handshake + boot push, pty
+close→OFFLINE→reopen + UI restart, UI crash→banner→restart, speed/pause/ACK live, language file,
+snapshot serving, Ctrl-C/SIGTERM cleanup) was run green against a live play session during
+development.
 
 ---
 
-## 8. Fejlfinding
+## 8. Troubleshooting
 
-| Symptom | Årsag / løsning |
+| Symptom | Cause / solution |
 |---|---|
-| `kan ikke binde port 8765` | Porten er optaget — brug `--port <anden>`. |
-| Viewer viser "REFERENCE-KLIENT"-banner | v6.4-binæren findes ikke endnu (forventet). Læg den i `build/ourui_sim` eller brug `--ui-bin`. |
-| UI-crash-banner | Klik "Genstart UI"; stderr-udsnit vises i banneret. Fuld stderr ligger i play-processens output. |
-| Touch gør intet | Hold ≥650 ms på en aktivitets-knap (tap giver kun "HOLD ≥650 ms FOR START"-toast i reference). Mod SIM-build: brug det rigtige knap-layout. |
-| Steam starter ikke | "kræv wand for damp" er slået til og wand er fra — slå wand til eller kravet fra. |
-| Alt virker trægt ved 8× | MCU-tiden er 8× hurtigere, men UI polls/render er wall-clock — forventet. |
-| Sandbox væk efter exit | Ctrl-C rydder som designet; brug `--keep` for at bevare den, eller snapshot-eksport før exit. |
+| `kan ikke binde port 8765` (cannot bind port) | The port is in use — use `--port <other>`. |
+| The viewer shows the "REFERENCE CLIENT" banner | No SIM build was found. Run `./build.sh host` (→ `build/ourui_sim`) or use `--ui-bin`. |
+| UI crash banner | Click "Restart UI"; a stderr excerpt is shown in the banner. The full stderr is in the play process's output. |
+| Touch does nothing | Hold ≥ 650 ms on an activity button (a tap only gives a hold hint toast). Against the SIM build: use the real button layout. |
+| Steam does not start | "require wand for steam" is enabled and the wand is off — turn the wand on or the requirement off. |
+| Everything feels sluggish at 8× | The MCU time is 8× faster, but the UI polls/render are wall-clock — expected. |
+| Sandbox gone after exit | Ctrl-C cleans up by design; use `--keep` to keep it, or a snapshot export before exit. |
 
-*— test-agent, 2026-11-17. Alt kørt lokalt; enheden ikke berørt; Fable's filer ikke rørt.*
+*— test work stream, 2026-11-17. Everything run locally; the device was not touched.*

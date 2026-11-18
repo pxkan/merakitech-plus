@@ -1,456 +1,646 @@
-# REVERT — Meraki+ / ourui (fase 2 soft-replace)
+# REVERT — Meraki+ / ourui (phase 2 soft replace)
 
-> **Note (offentlig udgave):** Udviklingsnoter skrevet under udviklingen. Stier som `artifacts/…`, `boot_install.py`-trin og md5-tabeller refererer til forfatterens arbejdsmiljø; som slutbruger skal du bruge `./install.sh` og `./revert.sh` (se [README](../../README.md)). Producentens filer er ikke inkluderet; IP-adresser og andre personlige data er fjernet.
+> **Note (public edition):** Development notes written during development. Paths such as
+> `artifacts/…`, `boot_install.py` steps and md5 tables refer to the author's working environment; as
+> an end user, use `./install.sh` and `./revert.sh` (see the [README](../../README.md)). The
+> manufacturer's files are not included; IP addresses and other personal data have been removed.
+> References to `BOOT.md` are to [docs/boot.md](../boot.md); `WRITETEST.md`, `INSTALL-REPORT.md` and
+> `GROUND-TRUTH.md` are the author's working notes.
 
-> **Navn (v6.3):** UI'et hedder **Meraki+** på skærmen. `ourui` er fortsat kode-navnet — binær, proces, mappen `/new_customer/ourui/` og alle kommandoer herunder er uændrede. UI-tekster citeres på dansk (UI-SPROG = DANSK); en frisk installation starter på engelsk, og den engelske ordlyd står i UI_v6.md, Appendiks A. v6.3's eneste nye fil er sprog-filen — se [sidste afsnit](#v63-sprog-filen-lang--hvad-der-er-nyt-og-hvordan-det-fortrydes).
+> **Name (v6.3):** the UI is called **Meraki+** on the screen. `ourui` is still the code name — the
+> binary, the process, the directory `/new_customer/ourui/` and all commands below are unchanged. UI
+> texts are quoted in English (a fresh installation starts in English); the Danish wording is in
+> UI_v6.md, Appendix A. v6.3's only new file is the language file — see
+> [that section](#v63-the-language-file-lang--whats-new-and-how-to-undo-it).
 
-Normal revert (**v6.8, uændret i v6.9 og v6.10**): SYSTEM → **SKIFT TIL ORIGINAL NU** → **SKIFT NU** på Meraki+-skærmen. I run.sh-tilstand er det en ren
-exit (efter exit-påmindelsen, hvis config er gemt) → `run.sh`'s trap SIGCONT'er demo_v9 → original UI tilbage på <1 s. Ingen reboot.
-I slot B-boot (intet pauset stock-UI) starter samme knap stock-UI'et. **REVERT-knappen på HJEM findes ikke længere fra v6.8**
-(den var en fase-2-sikring; se [v6.8-afsnittet](#v68-revert-knappen-på-hjem-er-fjernet)). Til og med v6.7: tryk **REVERT** på HJEM.
+Normal revert (**v6.8, unchanged in v6.9 and v6.10**): SYSTEM → **SWITCH TO ORIGINAL NOW** → **SWITCH
+NOW** on the Meraki+ screen. In run.sh mode it is a clean exit (after the exit reminder, if the config
+was saved) → `run.sh`'s trap SIGCONTs demo_v9 → the original UI is back in < 1 s. No reboot. In a slot
+B boot (no paused stock UI) the same button starts the stock UI. **The REVERT button on HOME no longer
+exists from v6.8** (it was a phase 2 safeguard; see [the v6.8 section](#v68-the-revert-button-on-home-has-been-removed)).
+Up to and including v6.7: tap **REVERT** on HOME.
 
-Manuel revert (telnet root@<display-ip>):
+Manual revert (telnet root@<display-ip>):
 ```sh
-kill -CONT $(pidof demo_v9)     # original UI må gerne køre igen
-kill $(pidof ourui) 2>/dev/null # hvis ourui hænger (run.sh-trap gør det også)
+kill -CONT $(pidof demo_v9)     # the original UI may run again
+kill $(pidof ourui) 2>/dev/null # if ourui hangs (the run.sh trap does this too)
 ```
-Hvis run.sh selv er dræbt uden trap: `kill -CONT $(pidof demo_v9)` alene er nok.
+If run.sh itself was killed without the trap: `kill -CONT $(pidof demo_v9)` alone is enough.
 
-Garantier (v4, v6, v6.1, v6.2, v6.3, v6.4, v6.5, v6.6, v6.7, v6.8, v6.9 og v6.10 — v6.9 ændrer kun det, der tegnes ([afsnittet](#v69-rolig-graf-og-stabil-vægt--intet-nyt-på-enheden-ud-over-visningen)), og v6.10 kun hvordan trykket vises ([sidste afsnit](#v610-tryk-som-bar-estimat--kun-visning)); v6.2-tilføjelserne og v6.3's sprog-fil står i deres egne afsnit; v6.4 ændrer intet på enheden; v6.5's boot-push står i [sit afsnit](#v65-boot-push-ved-opstart--hvad-der-er-nyt-og-hvordan-det-fortrydes); v6.6's re-push i [sit afsnit](#v66-re-push-efter-mcu-genstart-64-bit-ur-damp-visning--hvad-der-er-nyt-og-hvordan-det-fortrydes); v6.7's net-vagt og v6.8's fjernede REVERT-knap i de to sidste afsnit):
-* demo_v9-binary, libs, pinit, test.sh er IKKE ændret.
-* ourui ligger i /new_customer/ourui (separat mappe). Med boot-integrationen (boot/BOOT.md) ligger samme binær desuden som /new_customer/demo_v9 — lagt der af `boot_install.py`, ikke af ourui.
-* MCU modtager kun normal protokol (cmd3 poll / cmd6 write / cmd9 svar); ingen OTA.
-* **v6.1:** hver cmd6-frame passerer en frame-politik (UI_v6.md §7a). ourui **kan ikke** sende
-  ord 26/27 ≠ 0 (vægt-kalibrering, skriver MCU-flash), ord 30 ≠ 0 (MCU-reboot), drain (28/29),
-  back-flush (20), self-test (8), sleep/drain (ord1 = 1) eller power-off (ord0 = 0). Der er
-  derfor ingen MCU-flash-tilstand at reverte efter ourui.
-* Watchdog (test.sh) checker kun demo_v9-PID-eksistens; SIGSTOP = PID findes → ingen genstart.
-* ourui dræber aldrig demo_v9 — og fra v6.2 er det bredere: ourui sender ikke et signal til nogen proces overhovedet (0 `kill()`-kald i kilden). **Gælder fortsat i v6.7:** net-vagten dræber aldrig en wpa_supplicant (heller ikke et init-script, der hænger).
-* **v6.7:** når wifi-stakken er NEDE (ingen wpa_supplicant), starter ourui den, som stock-UI'et gør: `/config/wifi/ssw01bInit.sh` (kun hvis `wlan0` mangler), `/config/wifi/wpa_supplicant -i wlan0 -Dnl80211 -c /appconfigs/wpa_supplicant.conf` og `udhcpc -i wlan0 -s /etc/init.d/udhcpc.script -a -q -b -t 20 -T 1`. Den eneste fil, der kan skrives, er `/appconfigs/wpa_supplicant.conf` — kun ved en bring-up og kun hvis indholdet afviger fra det, config.json giver (stock skriver samme fil i samme format). Log: `/tmp/ourui_net.log`. En sund stak røres ikke. `OURUI_NONET=1` slår det fra.
-* **v6.2:** ourui kan oprette/fjerne boot-flaget `/customer/new` og kan starte `/customer/demo_v9`. Begge dele sker kun fra to rækker nederst på SYSTEM, hver med bekræftelse.
-* **v6.3:** eneste nye skrivning er sprog-filen `/new_customer/ourui/lang` (2 bytes), og kun ved GEM på UI-SPROG. Stock-UI'ets `config.json` (herunder `language`) røres ikke af den, og der sendes ingen frame til MCU'en.
-* **v6.5:** ved opstart sender ourui stock-UI'ets to boot-push-blokke (`cmd6 sub1 len30` + `sub112 len3`) med værdierne fra `config.json`. Det er skrivninger til controllerens **RAM** gennem samme frame-politik som alt andet; der skrives ingen fil, og der er intet at reverte bagefter.
+Guarantees (v4, v6, v6.1, v6.2, v6.3, v6.4, v6.5, v6.6, v6.7, v6.8, v6.9 and v6.10 — v6.9 only changes
+what is drawn ([section](#v69-calm-graph-and-stable-weight--nothing-new-on-the-device-beyond-the-display)),
+and v6.10 only how the pressure is shown ([section](#v610-pressure-as-a-bar-estimate--display-only));
+the v6.2 additions and v6.3's language file are in their own sections; v6.4 changes nothing on the
+device; v6.5's boot push is in [its section](#v65-boot-push-at-startup--whats-new-and-how-to-undo-it);
+v6.6's re-push in [its section](#v66-re-push-after-an-mcu-restart-64-bit-clock-steam-display--whats-new-and-how-to-undo-it);
+v6.7's network guard and v6.8's removed REVERT button in the last two sections):
+* The demo_v9 binary, libs, pinit and test.sh are NOT changed.
+* ourui lives in /new_customer/ourui (a separate directory). With the boot integration
+  ([boot.md](../boot.md)) the same binary is also placed as /new_customer/demo_v9 — put there by
+  `boot_install.py` (now `tools/merakiplus.py`), not by ourui.
+* The MCU only receives the normal protocol (cmd3 poll / cmd6 write / cmd9 reply); no OTA.
+* **v6.1:** every cmd6 frame passes a frame policy (UI_v6.md §7a). ourui **cannot** send words 26/27
+  ≠ 0 (weight calibration, writes MCU flash), word 30 ≠ 0 (MCU reboot), drain (28/29), back-flush
+  (20), self-test (8), sleep/drain (word1 = 1) or power-off (word0 = 0). There is therefore no MCU
+  flash state to revert after ourui. *(v6.14 adds power-off via the physical power button only,
+  through the new intent `I_POWEROFF` — see [ui-guide.md §19](../ui-guide.md#19-the-power-button-v614).)*
+* The watchdog (test.sh) only checks that the demo_v9 PID exists; SIGSTOP = the PID exists → no
+  restart.
+* ourui never kills demo_v9 — and from v6.2 it is broader: ourui does not send a signal to any process
+  at all (0 `kill()` calls in the source). **Still true in v6.7:** the network guard never kills a
+  wpa_supplicant (not even a hanging init script).
+* **v6.7:** when the Wi-Fi stack is DOWN (no wpa_supplicant), ourui starts it the way the stock UI
+  does: `/config/wifi/ssw01bInit.sh` (only if `wlan0` is missing),
+  `/config/wifi/wpa_supplicant -i wlan0 -Dnl80211 -c /appconfigs/wpa_supplicant.conf` and
+  `udhcpc -i wlan0 -s /etc/init.d/udhcpc.script -a -q -b -t 20 -T 1`. The only file that can be
+  written is `/appconfigs/wpa_supplicant.conf` — only on a bring-up and only if the contents differ
+  from what config.json gives (the stock UI writes the same file in the same format). Log:
+  `/tmp/ourui_net.log`. A healthy stack is not touched. `OURUI_NONET=1` disables it.
+* **v6.2:** ourui can create/remove the boot flag `/customer/new` and can start `/customer/demo_v9`.
+  Both only happen from two rows at the bottom of SYSTEM, each with confirmation.
+* **v6.3:** the only new write is the language file `/new_customer/ourui/lang` (2 bytes), and only on
+  SAVE of UI LANGUAGE. The stock UI's `config.json` (including `language`) is not touched by it, and
+  no frame is sent to the MCU.
+* **v6.5:** at startup ourui sends the stock UI's two boot push blocks (`cmd6 sub1 len30` +
+  `sub112 len3`) with the values from `config.json`. These are writes to the controller's **RAM**
+  through the same frame policy as everything else; no file is written, and there is nothing to revert
+  afterwards.
 
-Fjern installation helt:
+Remove the installation completely:
 ```sh
-rm -rf /new_customer/ourui      # OBS v6: gem cfgbak/ først, hvis config er ændret (se nedenfor); fjerner også sprog-filen lang (v6.3)
+rm -rf /new_customer/ourui      # NOTE v6: keep cfgbak/ first if the config was changed (see below); also removes the language file lang (v6.3)
 ```
 
 ---
 
-## v6: persistente writes — hvad der er nyt
+## v6: persistent writes — what's new
 
-**v4 skrev aldrig til disk. v6 gør, når brugeren trykker GEM i settings.** Det er de eneste
-persistente ændringer, og de rammer kun disse stier:
+**v4 never wrote to disk. v6 does, when the user taps SAVE in the settings.** These are the only
+persistent changes, and they only hit these paths:
 
-| Sti | Hvad | Hvornår |
+| Path | What | When |
 |---|---|---|
-| `/customer/config.json` | ét tal-felt udskiftet (atomisk tmp+rename) | hver GEM |
-| `/customer/.ourui_cfg.tmp` | midlertidig; findes kun i millisekunder | under GEM |
-| `/new_customer/ourui/cfgbak/config.json.orig` | **pristine kopi** fra før ourui's allerførste write; overskrives aldrig | første GEM |
-| `/new_customer/ourui/cfgbak/config.json.bak` | versionen umiddelbart før seneste write | hver GEM |
-| `/new_customer/ourui/cfgbak/config_writes.log` | én linje pr. write: tid, felt, gammel→ny, md5 før/efter | hver GEM |
-| `/new_customer/ourui/cfgbak/RESTART_NEEDED` | flag: stock-UI har endnu ikke læst den nye config | hver GEM |
+| `/customer/config.json` | one numeric field replaced (atomic tmp+rename) | every SAVE |
+| `/customer/.ourui_cfg.tmp` | temporary; only exists for milliseconds | during SAVE |
+| `/new_customer/ourui/cfgbak/config.json.orig` | **pristine copy** from before ourui's very first write; never overwritten | first SAVE |
+| `/new_customer/ourui/cfgbak/config.json.bak` | the version immediately before the latest write | every SAVE |
+| `/new_customer/ourui/cfgbak/config_writes.log` | one line per write: time, field, old→new, md5 before/after | every SAVE |
+| `/new_customer/ourui/cfgbak/RESTART_NEEDED` | flag: the stock UI has not yet read the new config | every SAVE |
 
-Derudover ændrer v6 tilstand, som **ikke** er på disk:
-* **MCU-registre** (ord 2, 4, 11, 14, 17, 23, 25, 112–114) ved GEM — virker straks i controlleren.
-  De er RAM i MCU'en og genskabes fra `config.json`, hver gang demo_v9 starter: `fuart_thread`
-  boot-pusher `cmd6 sub1 len30` + `cmd6 sub112 len3` (PARITY.md §1.4). Efter en demo_v9-genstart
-  er controlleren altså lig med config — uanset hvad ourui har skrevet i mellemtiden.
-* **Backlight-PWM** (`/sys/class/pwm/pwmchip0/pwm2/duty_cycle`) under LYSSTYRKE-redigering.
-  ANNULLER og exit gendanner den gemte værdi.
-* **Input-greb** (`EVIOCGRAB` på `/dev/input/event0`). Frigives automatisk, når ourui-processen
-  dør — også ved `kill -9`.
+In addition, v6 changes state that is **not** on disk:
+* **MCU registers** (words 2, 4, 11, 14, 17, 23, 25, 112–114) on SAVE — take effect immediately in the
+  controller. They are RAM in the MCU and are restored from `config.json` every time demo_v9 starts:
+  `fuart_thread` boot-pushes `cmd6 sub1 len30` + `cmd6 sub112 len3` (PARITY.md §1.4). After a demo_v9
+  restart the controller therefore equals the config — regardless of what ourui has written in the
+  meantime.
+* **Backlight PWM** (`/sys/class/pwm/pwmchip0/pwm2/duty_cycle`) while editing BRIGHTNESS. CANCEL and
+  exit restore the saved value.
+* **Input grab** (`EVIOCGRAB` on `/dev/input/event0`). Released automatically when the ourui process
+  dies — also on `kill -9`.
 
-### Se hvad ourui har ændret
+### See what ourui has changed
 ```sh
 cat /new_customer/ourui/cfgbak/config_writes.log
 md5sum /customer/config.json /new_customer/ourui/cfgbak/config.json.orig
 ```
-Ens md5 = config er tilbage på udgangspunktet (kendt baseline: `<config-md5-redacted>`).
+Identical md5 = the config is back at the starting point (known baseline: `<config-md5-redacted>`).
 
-### Gendan config (fuld revert af alle settings-ændringer)
-Kør mens ourui **ikke** kører. Samme tmp+mv-mønster som WRITETEST.md §7 — aldrig in-place:
+### Restore the config (full revert of all settings changes)
+Run while ourui is **not** running. The same tmp+mv pattern as WRITETEST.md §7 — never in place:
 ```sh
 cd /new_customer/ourui/cfgbak
-md5sum config.json.orig                       # bekræft at det er den forventede baseline
+md5sum config.json.orig                       # confirm it is the expected baseline
 cp config.json.orig /customer/.restore.tmp
-md5sum /customer/.restore.tmp                 # skal matche linjen ovenfor
+md5sum /customer/.restore.tmp                 # must match the line above
 mv /customer/.restore.tmp /customer/config.json
-kill $(pidof demo_v9)                         # watchdog genstarter; læser config + boot-pusher til MCU
+kill $(pidof demo_v9)                         # the watchdog restarts it; reads the config + boot-pushes to the MCU
 sleep 5; pidof demo_v9; md5sum /customer/config.json
 rm -f RESTART_NEEDED
 ```
-Kun ét skridt tilbage: brug `config.json.bak` i stedet for `config.json.orig`.
+Only one step back: use `config.json.bak` instead of `config.json.orig`.
 
-Findes `cfgbak/` ikke, har v6 aldrig skrevet config. Er mappen væk, selv om config er ændret:
-brug den lokale kopi `artifacts/write_test/config.json.baseline` (md5 `<config-md5>…`), pushet som
-i WRITETEST.md §3.
+If `cfgbak/` does not exist, v6 has never written the config. If the directory is gone even though
+the config was changed: use the local copy `artifacts/write_test/config.json.baseline` (md5
+`<config-md5>…`), pushed as in WRITETEST.md §3.
 
-### Efter en GEM: genstart stock-UI'et, før det bruges (ikke en revert)
-demo_v9 læser `config.json` **kun ved opstart**. Efter REVERT (SIGCONT) kører det videre på sit
-gamle RAM-spejl, og det har tre følger, indtil det genstartes:
-1. Stock-UI'et **viser** de gamle værdier.
-2. Dets næste blok-write (fx bryg-start, som medsender bryg-temp, damp-niveau og vand-vægt)
-   sender de **gamle** værdier til controlleren og overskriver dem, ourui satte.
-3. Ændrer man en indstilling i stock-UI'et, skriver det hele sit gamle config-træ — ourui's
-   ændringer i filen kan gå tabt, eller stock's egne kan (dets write-fd peger på den gamle inode).
+### After a SAVE: restart the stock UI before it is used (not a revert)
+demo_v9 reads `config.json` **only at startup**. After REVERT (SIGCONT) it keeps running on its old RAM
+mirror, and that has three consequences until it is restarted:
+1. The stock UI **shows** the old values.
+2. Its next block write (e.g. a brew start, which sends along the brew temp, steam level and water
+   weight) sends the **old** values to the controller and overwrites the ones ourui set.
+3. If you change a setting in the stock UI, it writes its whole old config tree — ourui's changes in
+   the file can be lost, or the stock UI's own can (its write fd points at the old inode).
 
-Derfor, når `cfgbak/RESTART_NEEDED` findes. Fra v6.2 viser ourui påmindelsen **på skærmen ved REVERT** (*"STOCK-UI KRÆVER GENSTART AF demo_v9 FOR NYE VÆRDIER"* + kommandoen) og på stdout ved exit — men kun når den er sand: der kører et stock-UI, som blev startet før seneste GEM i samme boot. Efter en maskin-genstart, efter en demo_v9-genstart og i slot B-boot (hvor intet stock-UI er pauset) vises den ikke, selv om filen ligger der:
+Therefore, when `cfgbak/RESTART_NEEDED` exists: from v6.2 ourui shows the reminder **on the screen at
+REVERT** (*"STOCK UI NEEDS A RESTART OF demo_v9 …"* + the command) and on stdout on exit — but only
+when it is true: a stock UI is running that was started before the latest SAVE in the same boot. After
+a machine restart, after a demo_v9 restart and in a slot B boot (where no stock UI is paused) it is not
+shown, even if the file is there:
 ```sh
 kill $(pidof demo_v9) && rm -f /new_customer/ourui/cfgbak/RESTART_NEEDED
-sleep 5; pidof demo_v9          # watchdog har startet den igen
+sleep 5; pidof demo_v9          # the watchdog has started it again
 ```
-Ved opstarten læser demo_v9 den nye config og boot-pusher den til controlleren, så config,
-stock-UI og controller er i sync. Bemærk OTA-forbeholdet i WRITETEST.md §7: en genstart kan
-udløse vendor-OTA, hvis der er kommet en ny version.
+At startup demo_v9 reads the new config and boot-pushes it to the controller, so the config, the stock
+UI and the controller are in sync. Note the OTA caveat in WRITETEST.md §7: a restart can trigger a
+vendor OTA if a new version has been released.
 
-Gælder også **STOCK-SPROG** (redigerbar fra v6.1; hed SPROG før v6.3): feltet påvirker kun stock-UI'et og først efter
-genstart. Står stock-UI'et på et sprog, man ikke kan læse, så sæt STOCK-SPROG tilbage til ENGELSK i
-ourui (SYSTEM-siden) eller gendan config som ovenfor, og genstart demo_v9. Meraki+'s eget sprog er en
-anden indstilling (UI-SPROG, v6.3) og ligger ikke i config — se sidste afsnit.
+This also applies to **STOCK LANG.** (editable from v6.1; called LANGUAGE before v6.3): the field only
+affects the stock UI, and only after a restart. If the stock UI is set to a language you cannot read,
+set STOCK LANG. back to ENGLISH in ourui (the SYSTEM page) or restore the config as above, and restart
+demo_v9. Meraki+'s own language is a different setting (UI LANGUAGE, v6.3) and is not in the config —
+see the v6.3 section.
 
-### Hvis en GEM blev afbrudt (strøm/crash midt i)
-* `rename()` er atomisk: `config.json` er enten den gamle eller den nye, aldrig halv.
-* En efterladt `/customer/.ourui_cfg.tmp` er harmløs: `rm -f /customer/.ourui_cfg.tmp`.
-* MCU kan have fået den nye værdi, mens config har den gamle. Løses af en demo_v9-genstart
-  (boot-pushen sætter controlleren lig config) eller ved at gemme parameteren igen i ourui.
+### If a SAVE was interrupted (power/crash in the middle)
+* `rename()` is atomic: `config.json` is either the old or the new one, never half.
+* A leftover `/customer/.ourui_cfg.tmp` is harmless: `rm -f /customer/.ourui_cfg.tmp`.
+* The MCU may have received the new value while the config has the old one. Resolved by a demo_v9
+  restart (the boot push sets the controller equal to the config) or by saving the parameter again in
+  ourui.
 
-### Tilbage til v4 (monitor-only, ingen writes)
-Afhænger af hvordan integrations-ingeniøren installerer v6; anbefalet layout er v6 som `ourui`
-og v4 bevaret som `ourui_v4.bin`:
+### Back to v4 (monitor-only, no writes)
+Depends on how the integration engineer installs v6; the recommended layout is v6 as `ourui` and v4
+kept as `ourui_v4.bin`:
 ```sh
 cd /new_customer/ourui && cp ourui_v4.bin ourui
 ```
-Bemærk at v4 har keep-awake-buggen (skriver ord1=1 = sleep/drain).
+Note that v4 has the keep-awake bug (writes word1=1 = sleep/drain).
 
-### Tilbage til v6.0 (før spec-afstemningen)
-Frarådes: v6.0's grænser var antagelser (bl.a. bryg-temp 80–98 °C og gruppe-temp op til 90 °C mod
-spec'ens 85–96 / 30–80), `timemode` var vendt om, og der var ingen frame-politik. v6.0-binæren
-havde md5 `90bcf094253e69f0559051339d2032f5`; v6.1 har `4d927802cbeb69cc949f463021b29b99`.
-En config gemt af v6.0 med en værdi uden for spec vises rødt i v6.1 og spærrer aktivitets-start,
-indtil værdien er rettet (eller config er gendannet fra `config.json.orig`).
+### Back to v6.0 (before the spec alignment)
+Not recommended: v6.0's limits were assumptions (e.g. brew temp 80–98 °C and group temp up to 90 °C
+vs. the spec's 85–96 / 30–80), `timemode` was inverted, and there was no frame policy. The v6.0 binary
+had md5 `90bcf094253e69f0559051339d2032f5`; v6.1 has `4d927802cbeb69cc949f463021b29b99`. A config
+saved by v6.0 with an out-of-spec value is shown in red in v6.1 and blocks activity starts until the
+value is fixed (or the config is restored from `config.json.orig`).
 
 ---
 
-## v6.2: BOOT-UI-flag og runtime-skift — hvad der er nyt, og hvordan det fortrydes
+## v6.2: the BOOT UI flag and runtime switching — what's new, and how to undo it
 
-v6.2 kan to nye ting fra SYSTEM-siden (UI_v6.md, CHANGES-v6.2; krav fra `boot/BOOT.md` §9). Selve boot-installationen (switcher-daemonen, guard-linjen i `demo.sh`, ourui som `/new_customer/demo_v9`) er kollegaens og fortrydes efter **BOOT.md §5** — ikke her.
+v6.2 can do two new things from the SYSTEM page (UI_v6.md, CHANGES-v6.2; requirements from
+[boot.md](../boot.md) §9). The boot installation itself (the switcher daemon, the guard line in
+`demo.sh`, ourui as `/new_customer/demo_v9`) belongs to the boot work stream and is undone according
+to **boot.md §5** — not here.
 
-### Hvad v6.2 rører
+### What v6.2 touches
 
-| Sti / tilstand | Hvad | Hvornår |
+| Path / state | What | When |
 |---|---|---|
-| `/customer/new` | vendor'ens boot-flag: findes = boot slot B, findes ikke = boot slot A. Oprettes (tom fil) eller fjernes, efterfulgt af `sync()` | **kun** ved GEM på BOOT-UI — og kun når `/new_customer` er mountet og dens `demo_v9` er ourui |
-| `/new_customer/ourui/cfgbak/boot_ui.log` | én linje pr. flag-ændring og pr. runtime-skift (tid, hvad, årsag) | ved de to handlinger |
-| `/new_customer/ourui/cfgbak/RESTART_NEEDED` | har fået en sidste linje `boot_id=… mono_s=…` (bruges til at afgøre, om påmindelsen stadig gælder); fjernes af ourui efter et vellykket runtime-skift | hver GEM / ved skift |
-| en ny proces `/customer/demo_v9` | startet af ourui med `fork` + `setsid` + `execl`, cwd `/customer`, stdio `/dev/null` | **kun** ved SKIFT TIL ORIGINAL NU, når der ikke allerede findes et stock-UI |
+| `/customer/new` | the vendor's boot flag: exists = boot slot B, does not exist = boot slot A. Created (empty file) or removed, followed by `sync()` | **only** on SAVE of BOOT UI — and only when `/new_customer` is mounted and its `demo_v9` is ourui |
+| `/new_customer/ourui/cfgbak/boot_ui.log` | one line per flag change and per runtime switch (time, what, reason) | on the two actions |
+| `/new_customer/ourui/cfgbak/RESTART_NEEDED` | has gained a last line `boot_id=… mono_s=…` (used to decide whether the reminder still applies); removed by ourui after a successful runtime switch | every SAVE / on a switch |
+| a new process `/customer/demo_v9` | started by ourui with `fork` + `setsid` + `execl`, cwd `/customer`, stdio `/dev/null` | **only** on SWITCH TO ORIGINAL NOW, when there is not already a stock UI |
 
-v6.2 skriver **intet** i `/tmp`, rører hverken `demo.sh`, `test.sh`, `demo_v9`-binærerne, pinit eller libs, og **sender ikke et signal til nogen proces** (kilden har 0 `kill()`-kald; `round_v6/boot_check.txt`). Der startes ingen hjælper-proces: det, ourui forker, *er* stock-UI'et fra første instruktion efter `execl`. Der er derfor **ingen hjælper at dræbe**.
+v6.2 writes **nothing** in `/tmp`, touches neither `demo.sh`, `test.sh`, the `demo_v9` binaries, pinit
+nor libs, and **does not send a signal to any process** (the source has 0 `kill()` calls;
+`round_v6/boot_check.txt`). No helper process is started: what ourui forks *is* the stock UI from the
+first instruction after `execl`. There is therefore **no helper to kill**.
 
-### Se tilstanden
+### See the state
 ```sh
-ls -l /customer/new 2>/dev/null || echo "intet flag = slot A (original) ved naeste boot"
+ls -l /customer/new 2>/dev/null || echo "no flag = slot A (original) at next boot"
 for p in $(pidof demo_v9); do echo "$p $(readlink /proc/$p/exe)"; done   # /customer/… = stock, /new_customer/… = ourui
 pidof switcher; tail -5 /tmp/switcher.log
 cat /new_customer/ourui/cfgbak/boot_ui.log
 ```
-Det samme står på ourui's DIAGNOSE-side (scroll ned til *BOOT · SLOT · SWITCHER*).
+The same is shown on ourui's DIAGNOSTICS page (scroll down to *BOOT · SLOT · SWITCHER*).
 
-### Fortryd BOOT-UI-valget (gælder først ved næste genstart)
-I ourui: SYSTEM → BOOT-UI → vælg det andet → GEM. Eller fra telnet — det er præcis det samme, ourui gør:
+### Undo the BOOT UI choice (only takes effect at the next restart)
+In ourui: SYSTEM → BOOT UI → choose the other one → SAVE. Or from telnet — this is exactly what ourui
+does:
 ```sh
-rm -f /customer/new && sync      # original (slot A) ved naeste boot
-touch /customer/new && sync      # ourui (slot B) ved naeste boot — KUN hvis /new_customer/demo_v9 er ourui
+rm -f /customer/new && sync      # original (slot A) at next boot
+touch /customer/new && sync      # ourui (slot B) at next boot — ONLY if /new_customer/demo_v9 is ourui
 ```
-Flaget er hele persistensen; der er intet andet at rydde op. Bemærk BOOT.md §7: en vendor-OTA sætter eller fjerner selv flaget og kan lægge sin egen binær i slot B. ourui opdager det (BOOT-UI viser *"LÅST · SLOT B ER IKKE MERAKI+"*) og rører så ikke flaget.
+The flag is the entire persistence; there is nothing else to clean up. Note boot.md §7: a vendor OTA
+sets or removes the flag by itself and can put its own binary in slot B. ourui detects this (BOOT UI
+shows *"LOCKED · SLOT B IS NOT MERAKI+"*) and then does not touch the flag.
 
-### Fortryd et runtime-skift (ourui → stock, uden genstart)
-Skiftet ændrer ingen filer. Tilbage til ourui:
-* **Gestus:** 3 lange tryk (≥ 1,5 s) øverst til venstre inden for 6 s — kræver at switcher-daemonen kører (BOOT.md §2).
-* **Genstart:** maskinen følger flaget.
-* **Telnet, bootet i slot B:** `kill $(pidof demo_v9)` — watchdog'en er `test.sh new_customer` og starter ourui igen inden for ca. 1 s.
-* **Telnet, bootet i slot A:** det er retningen stock → ourui; se nedenfor.
+### Undo a runtime switch (ourui → stock, without a restart)
+The switch changes no files. Back to ourui:
+* **Gesture:** see [gesture.md](../gesture.md) (from v6.12: hold one finger in the center for 5 s;
+  before: 3 long presses (≥ 1.5 s) in the top-left corner within 6 s) — requires the switcher daemon
+  to be running (boot.md §2).
+* **Restart:** the machine follows the flag.
+* **Telnet, booted in slot B:** `kill $(pidof demo_v9)` — the watchdog is `test.sh new_customer` and
+  starts ourui again within about 1 s.
+* **Telnet, booted in slot A:** that is the stock → ourui direction; see below.
 
-### Hvis et skift går galt
-ourui afslutter kun, hvis stock-processen stadig lever 400 ms efter start. Dør den inden da, tager ourui skærmen igen og viser *"SKIFT FEJLEDE"*. Dør den senere, starter watchdog'en boot-slottets binær (ourui ved B-boot). Skulle noget alligevel stå forkert:
+### If a switch goes wrong
+ourui only exits if the stock process is still alive 400 ms after the start. If it dies before then,
+ourui takes the screen back and shows *"SWITCH FAILED"*. If it dies later, the watchdog starts the boot
+slot's binary (ourui on a B boot). Should something still be wrong:
 ```sh
 for p in $(pidof demo_v9); do echo "$p $(readlink /proc/$p/exe)"; done
-# to UI'er paa én gang (maa ikke ske): afslut den, der ikke skal koere — ourui afslutter paent paa SIGTERM
-kill <pid for /new_customer/demo_v9>
-# intet UI og ingen watchdog-genstart efter et par sekunder: start stock i haanden (som demo.sh's A-gren)
+# two UIs at once (must not happen): end the one that should not run — ourui exits cleanly on SIGTERM
+kill <pid of /new_customer/demo_v9>
+# no UI and no watchdog restart after a few seconds: start the stock UI by hand (like demo.sh's A branch)
 cd /customer && export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/customer/libs:/config/wifi && ./demo_v9 &
 ```
-Touch i stock-UI'et virker ikke efter et skift: en proces holder stadig `EVIOCGRAB`. `ls -l /proc/*/fd 2>/dev/null | grep event0` viser hvem; v6.2 lukker alle sine fds før `execl`, så det bør kun kunne være en hængende ourui.
+Touch does not work in the stock UI after a switch: a process is still holding `EVIOCGRAB`.
+`ls -l /proc/*/fd 2>/dev/null | grep event0` shows who; v6.2 closes all of its fds before `execl`, so
+it should only be possible for it to be a hanging ourui.
 
-### Den omvendte vej til tests (stock → ourui uden genstart) — ikke en del af ourui
-Det gør switcher-daemonen ved gestus (BOOT.md §3.2), og `boot_install.py boot-test` trin c afprøver det med `tinj_hold`. I hånden er det samme mønster, **stop-først** så watchdog'en aldrig ser et hul:
+### The reverse path for testing (stock → ourui without a restart) — not part of ourui
+The switcher daemon does this on the gesture (boot.md §3.2), and `boot_install.py boot-test` step c
+tests it with `tinj_hold`. By hand it is the same pattern, **stop-first** so the watchdog never sees a
+gap:
 ```sh
-A=$(pidof demo_v9)                      # skal vaere praecis én pid, og dens exe skal vaere /customer/demo_v9
-kill -STOP $A                           # watchdog'en ser stadig pid'en
+A=$(pidof demo_v9)                      # must be exactly one pid, and its exe must be /customer/demo_v9
+kill -STOP $A                           # the watchdog still sees the pid
 cd /new_customer && LD_LIBRARY_PATH=/new_customer/libs:/config/wifi ./demo_v9 >>/tmp/ourui_boot.log 2>&1 &
-B=$!; sleep 1; readlink /proc/$B/exe    # skal vise /new_customer/demo_v9
-kill -9 $A                              # foerst nu; kom B ikke op:  kill -CONT $A
+B=$!; sleep 1; readlink /proc/$B/exe    # must show /new_customer/demo_v9
+kill -9 $A                              # only now; if B did not come up:  kill -CONT $A
 ```
-Kør ikke `run.sh` i slot B-boot: den forudsætter et stock-UI at pause (BOOT.md §9.3).
+Do not run `run.sh` in a slot B boot: it assumes a stock UI to pause (boot.md §9.3).
 
-### Fjern alt hvad v6.2 har lagt
+### Remove everything v6.2 has put down
 ```sh
-rm -f /customer/new && sync                         # kun hvis flaget er sat af os (se boot_ui.log)
+rm -f /customer/new && sync                         # only if the flag was set by us (see boot_ui.log)
 rm -f /new_customer/ourui/cfgbak/boot_ui.log
 ```
-Fuld tilbagerulning af boot-integrationen (guard-linje, switcher, vendor-binær tilbage i slot B): BOOT.md §5.
+Full rollback of the boot integration (guard line, switcher, vendor binary back in slot B): boot.md §5.
 
-### Tilbage til v6.1
-`artifacts/ourui/ourui_v6_1.bin` (md5 `4d927802cbeb69cc949f463021b29b99`, kilde `ourui_v6_1.c`) er v6.1 uændret. `boot_install.py install` uploader `artifacts/ourui/ourui_v6` og læser md5 ved kørsel, så tilbagerulning er `cp ourui_v6_1.bin ourui_v6` lokalt og derefter `install`. Bemærk hvad man mister i slot B-boot: v6.1 har ingen SKIFT TIL ORIGINAL NU, og dens REVERT afslutter blot — hvorefter watchdog'en starter den igen. v6.2-binæren har md5 `0bb93da0ed0824c424f1e16530f07022`.
+### Back to v6.1
+`artifacts/ourui/ourui_v6_1.bin` (md5 `4d927802cbeb69cc949f463021b29b99`, source `ourui_v6_1.c`) is
+v6.1 unchanged. `boot_install.py install` uploads `artifacts/ourui/ourui_v6` and reads the md5 at run
+time, so a rollback is `cp ourui_v6_1.bin ourui_v6` locally and then `install`. Note what you lose in a
+slot B boot: v6.1 has no SWITCH TO ORIGINAL NOW, and its REVERT just exits — after which the watchdog
+starts it again. The v6.2 binary has md5 `0bb93da0ed0824c424f1e16530f07022`.
 
 ---
 
-## v6.3: sprog-filen `lang` — hvad der er nyt, og hvordan det fortrydes
+## v6.3: the language file `lang` — what's new, and how to undo it
 
-v6.3 giver UI'et et produktnavn (Meraki+) og to sprog (UI_v6.md, CHANGES-v6.3). Det eneste nye på disk er én lille fil.
+v6.3 gives the UI a product name (Meraki+) and two languages (UI_v6.md, CHANGES-v6.3). The only new
+thing on disk is one small file.
 
-### Hvad v6.3 rører
+### What v6.3 touches
 
-| Sti | Hvad | Hvornår |
+| Path | What | When |
 |---|---|---|
-| `/new_customer/ourui/lang` | UI-sproget som ren tekst: præcis `en` eller `da` (2 bytes, intet linjeskift) | **kun** ved GEM på SYSTEM → UI-SPROG |
-| `/new_customer/ourui/lang.tmp` | midlertidig; findes kun i millisekunder (tmp → fsync → genlæs → `rename()`) | under samme GEM |
+| `/new_customer/ourui/lang` | the UI language as plain text: exactly `en` or `da` (2 bytes, no newline) | **only** on SAVE of SYSTEM → UI LANGUAGE |
+| `/new_customer/ourui/lang.tmp` | temporary; only exists for milliseconds (tmp → fsync → reread → `rename()`) | during the same SAVE |
 
-v6.3 skriver **ikke** til `/customer/config.json` for sprogets skyld (`language` dér er stock-UI'ets eget felt og er uafhængigt), sender ingen cmd6-frame, laver ingen `cfgbak/`-backup og intet `RESTART_NEEDED`. Filen læses én gang ved opstart. Mangler den, kan den ikke læses, eller står der andet end `en`/`da`, starter UI'et på **engelsk**.
+v6.3 does **not** write to `/customer/config.json` for the language (`language` there is the stock UI's
+own field and is independent), sends no cmd6 frame, makes no `cfgbak/` backup and no
+`RESTART_NEEDED`. The file is read once at startup. If it is missing, cannot be read, or contains
+anything other than `en`/`da`, the UI starts in **English**.
 
-### Se og skift sproget fra telnet
+### See and change the language from telnet
 ```sh
-cat /new_customer/ourui/lang 2>/dev/null || echo "(ingen fil = engelsk)"
-echo da > /new_customer/ourui/lang     # dansk fra naeste start (linjeskiftet taales)
-echo en > /new_customer/ourui/lang     # engelsk fra naeste start
+cat /new_customer/ourui/lang 2>/dev/null || echo "(no file = English)"
+echo da > /new_customer/ourui/lang     # Danish from the next start (the newline is tolerated)
+echo en > /new_customer/ourui/lang     # English from the next start
 ```
-Et kørende ourui læser ikke filen igen; skift i UI'et (SYSTEM → UI-SPROG → −/+ → GEM) slår igennem med det samme uden genstart. DIAGNOSE nederst (*OM*) viser det aktive sprog og kilden: *FRA FIL*, *STANDARD (INGEN FIL)*, *UKENDT VÆRDI I FIL* eller *IKKE GEMT*.
+A running ourui does not read the file again; a change in the UI (SYSTEM → UI LANGUAGE → −/+ → SAVE)
+takes effect immediately without a restart. DIAGNOSTICS at the bottom (*ABOUT*) shows the active
+language and its source: *FROM FILE*, *DEFAULT (NO FILE)*, *UNKNOWN FILE VALUE* or *NOT SAVED*.
 
-### Fortryd (tilbage til default)
+### Undo (back to the default)
 ```sh
-rm -f /new_customer/ourui/lang /new_customer/ourui/lang.tmp     # engelsk ved naeste start
+rm -f /new_customer/ourui/lang /new_customer/ourui/lang.tmp     # English at the next start
 ```
-Der er intet andet at rydde op. En efterladt `lang.tmp` (strøm væk midt i GEM) er harmløs; `lang` er enten den gamle eller den nye, aldrig halv.
+There is nothing else to clean up. A leftover `lang.tmp` (power lost in the middle of a SAVE) is
+harmless; `lang` is either the old or the new one, never half.
 
-### Hvis UI'et står på et sprog, man ikke kan læse
-UI-SPROG er **øverste række på SYSTEM** (side 4 af 5: swipe tre gange mod venstre fra HJEM), og de to valg hedder altid *ENGLISH* og *DANSK*. Eller fra telnet: `rm -f /new_customer/ourui/lang` og start ourui igen.
+### If the UI is set to a language you cannot read
+UI LANGUAGE is the **top row on SYSTEM** (page 4 of 5: swipe left three times from HOME), and the two
+choices are always called *ENGLISH* and *DANSK*. Or from telnet: `rm -f /new_customer/ourui/lang` and
+start ourui again.
 
-### Miljø-variabel
-`OURUI_LANGFILE=<fil>` peger sprog-filen et andet sted hen (test / simulator). Default er stien ovenfor.
+### Environment variable
+`OURUI_LANGFILE=<file>` points the language file somewhere else (test / simulator). The default is the
+path above.
 
-### Tilbage til v6.2
-`artifacts/ourui/ourui_v6_2.bin` (md5 `0bb93da0ed0824c424f1e16530f07022`, kilde `ourui_v6_2.c`) er v6.2 uændret. Tilbagerulning som for v6.1: `cp ourui_v6_2.bin ourui_v6` lokalt og derefter `boot_install.py install` (den læser md5 ved kørsel). v6.2 kender ikke sprog-filen og lader den ligge; den er dansk-sproget og viser navnet OURUI. v6.3-binæren har md5 `5815176d0e766c7a6532b88014e932fb`.
+### Back to v6.2
+`artifacts/ourui/ourui_v6_2.bin` (md5 `0bb93da0ed0824c424f1e16530f07022`, source `ourui_v6_2.c`) is
+v6.2 unchanged. Rollback as for v6.1: `cp ourui_v6_2.bin ourui_v6` locally and then
+`boot_install.py install` (it reads the md5 at run time). v6.2 does not know the language file and
+leaves it alone; it is Danish-only and shows the name OURUI. The v6.3 binary has md5
+`5815176d0e766c7a6532b88014e932fb`.
 
-## v6.4: SIM-build — intet nyt på enheden
+## v6.4: the SIM build — nothing new on the device
 
-v6.4 gør UI'et kørbart uden hardware mod test-agentens simulerede MCU (UI_v6.md §13 + CHANGES-v6.4). **Enheds-binæren gør det samme som v6.3.** Kildeteksten efter preprocessoren er token for token den samme bortset fra to ting, begge kun tekst:
+v6.4 makes the UI runnable without hardware against the test work stream's simulated MCU (UI_v6.md §13
++ CHANGES-v6.4). **The device binary does the same as v6.3.** The source text after the preprocessor is
+token for token the same except for two things, both text only:
 
-* versions-strengen `V6.4` (splash, DIAGNOSE, binær-mærket `@(#)ourui V6.4 …` — BOOT-UI-vagten genkender fortsat alle versioner på de første 10 tegn);
-* toasten ved GEM uden ACK: *GEM FEJLET · INGEN ACK · INTET GEMT* (før: *INGEN ACK · INTET GEMT*).
+* the version string `V6.4` (splash, DIAGNOSTICS, the binary tag `@(#)ourui V6.4 …` — the BOOT UI
+  guard still recognizes all versions by the first 10 characters);
+* the toast on SAVE without an ACK: *SAVE FAILED · NO ACK · NOT SAVED* (before: *NO ACK · NOT SAVED*).
 
-Det betyder for revert:
+What this means for revert:
 
-* **Ingen nye filer, stier, writes eller miljø-variabler på enheden.** Alt i afsnittene ovenfor gælder uændret. `OURUI_SIM_*`-variablerne findes kun i SIM-build'et; enheds-binæren indeholder dem ikke (`strings ourui_v6 | grep -c OURUI_SIM` = 0).
-* **Boot-pushen** (`cmd6 sub1 len30` + `sub112 len3`), som SIM-build'et sender, fordi test-kontrakten kræver den, er **ikke** i enheds-binæren. Efter en ourui-GEM gælder derfor stadig: genstart stock-UI'et, før det bruges (afsnittet *Efter en GEM*).
-* SIM-binærerne `ourui_v6_sim` (vært) og `ourui_v6_sim_arm` (statisk ARM) skal **ikke** installeres på enheden. `ourui_v6_sim_arm` ville afslutte med exit 2, fordi `OURUI_SIM_ROOT` mangler — den åbner aldrig `/dev/fb0`, `/dev/ttyS1` eller `/dev/input/event0`.
-* E2E-kørslerne skriver kun i `sim/reports/…` (sandkasser) og en kort `/tmp`-mappe til sockets. `artifacts/config.json` er urørt (md5 `<config-md5-redacted>`).
+* **No new files, paths, writes or environment variables on the device.** Everything in the sections
+  above applies unchanged. The `OURUI_SIM_*` variables only exist in the SIM build; the device binary
+  does not contain them (`strings ourui_v6 | grep -c OURUI_SIM` = 0).
+* **The boot push** (`cmd6 sub1 len30` + `sub112 len3`), which the SIM build sends because the test
+  contract requires it, is **not** in the device binary. *(It was added to the device binary in v6.5.)*
+  After an ourui SAVE the rule therefore still applies: restart the stock UI before it is used (the
+  section *After a SAVE*).
+* The SIM binaries `ourui_v6_sim` (host) and `ourui_v6_sim_arm` (static ARM) must **not** be installed
+  on the device. `ourui_v6_sim_arm` would exit with code 2 because `OURUI_SIM_ROOT` is missing — it
+  never opens `/dev/fb0`, `/dev/ttyS1` or `/dev/input/event0`.
+* The E2E runs only write in `sim/reports/…` (sandboxes) and a short `/tmp` directory for sockets.
+  `artifacts/config.json` is untouched (md5 `<config-md5-redacted>`).
 
-### Tilbage til v6.3
-`artifacts/ourui/ourui_v6_3.bin` (md5 `5815176d0e766c7a6532b88014e932fb`, kilde `ourui_v6_3.c`, md5 `4ac62cd08de36f7fea026eec5a3494ab`) er v6.3 uændret. Tilbagerulning som for de tidligere versioner: `cp ourui_v6_3.bin ourui_v6` lokalt og derefter `boot_install.py install`. v6.4-binæren har md5 `1fe0b5b8c3b24abf0cadcde7b099076a`. Sprog-filen og `cfgbak/` er de samme i v6.3 og v6.4.
+### Back to v6.3
+`artifacts/ourui/ourui_v6_3.bin` (md5 `5815176d0e766c7a6532b88014e932fb`, source `ourui_v6_3.c`, md5
+`4ac62cd08de36f7fea026eec5a3494ab`) is v6.3 unchanged. Rollback as for the earlier versions:
+`cp ourui_v6_3.bin ourui_v6` locally and then `boot_install.py install`. The v6.4 binary has md5
+`1fe0b5b8c3b24abf0cadcde7b099076a`. The language file and `cfgbak/` are the same in v6.3 and v6.4.
 
-## v6.5: boot-push ved opstart — hvad der er nyt, og hvordan det fortrydes
+## v6.5: boot push at startup — what's new, and how to undo it
 
-v6.5 ændrer to ting i enheds-binæren (UI_v6.md CHANGES-v6.5):
+v6.5 changes two things in the device binary (UI_v6.md CHANGES-v6.5):
 
-1. **Boot-push.** Når ourui starter — i slot B-boot og i run.sh-tilstand — sender den efter PowerOn og keep-awake de to blokke, stock-UI'et sender ved sin egen opstart: `cmd6 sub1 len30` (ord 1..30) og `cmd6 sub112 len3` (ord 112..114), med værdierne fra `/customer/config.json`. Kører en aktivitet allerede, når ourui starter, springes den over.
-2. **RX-resync-watchdog.** Ren modtage-logik; sender intet og skriver intet.
+1. **Boot push.** When ourui starts — in a slot B boot and in run.sh mode — it sends, after PowerOn
+   and keep-awake, the two blocks the stock UI sends at its own startup: `cmd6 sub1 len30` (words
+   1..30) and `cmd6 sub112 len3` (words 112..114), with the values from `/customer/config.json`. If an
+   activity is already running when ourui starts, it is skipped.
+2. **RX resync watchdog.** Pure receive logic; sends nothing and writes nothing.
 
-### Hvad boot-pushen rører
+### What the boot push touches
 
 | | |
 |---|---|
-| Filer | **ingen** — hverken `config.json`, `cfgbak/`, flag eller sprog-fil |
-| Controlleren | registerfilen i **RAM** (ord 1..30 og 112..114). Den nulstilles i forvejen ved hver strøm-cyklus, og stock-UI'et overskriver den med sin egen boot-push, hver gang det starter |
-| MCU-flash | intet. Ord 26/27 (kalibrering) og 30 (reboot) er 0 i blokken og kan ikke være andet (frame-politikken) |
-| Stock-UI'ets RAM-spejl | røres ikke. Reglen *Efter en GEM: genstart stock-UI'et, før det bruges* gælder uændret |
+| Files | **none** — neither `config.json`, `cfgbak/`, the flag nor the language file |
+| The controller | the register file in **RAM** (words 1..30 and 112..114). It is reset anyway on every power cycle, and the stock UI overwrites it with its own boot push every time it starts |
+| MCU flash | nothing. Words 26/27 (calibration) and 30 (reboot) are 0 in the block and cannot be anything else (the frame policy) |
+| The stock UI's RAM mirror | not touched. The rule *After a SAVE: restart the stock UI before it is used* applies unchanged |
 
-Der er derfor **ingen tilstand at reverte** efter en boot-push. Vil man have controlleren tilbage på det, stock-UI'et selv ville sætte: genstart stock-UI'et (`kill $(pidof demo_v9)` — watchdog'en starter det, og dets boot-push skriver de samme ord). Med uændret config er det de samme værdier.
+There is therefore **no state to revert** after a boot push. If you want the controller back on what
+the stock UI itself would set: restart the stock UI (`kill $(pidof demo_v9)` — the watchdog starts it,
+and its boot push writes the same words). With an unchanged config these are the same values.
 
-To ting, boot-pushen gør i run.sh-tilstand, som ourui v6.4 ikke gjorde:
+Two things the boot push does in run.sh mode that ourui v6.4 did not:
 
-* Opskrifts-ord, stock-UI'et måtte have sat fra et NFC-kort eller et preset (ord 13, 15, 18), går tilbage til boot-værdierne (60 / 60 / 0) — som ved en genstart af stock-UI'et.
-* Ord 113's lo-byte får igen `breakTime`; controlleren overskriver den selv ved næste bryg.
+* Recipe words the stock UI may have set from an NFC card or a preset (words 13, 15, 18) go back to
+  the boot values (60 / 60 / 0) — as on a restart of the stock UI.
+* The low byte of word 113 gets `breakTime` again; the controller overwrites it itself at the next
+  brew.
 
-### Se hvad den gjorde
-DIAGNOSE, scrollet én række ned: **BOOT-PUSH 1-30** og **BOOT-PUSH 112-114** viser OK · INGEN ACK · AFVIST (config uden for spec) · INGEN CONFIG · SPRUNGET OVER (en aktivitet kørte ved opstart) · FRA. `CMD6 OK` er 4 lige efter en normal start (PowerOn, vågen, to blokke). Boot-pushen skriver ingen log-fil.
+### See what it did
+DIAGNOSTICS, scrolled down one row: **BOOT PUSH 1-30** and **BOOT PUSH 112-114** show OK · NO ACK ·
+REJECTED (config out of spec) · NO CONFIG · SKIPPED (an activity was running at startup) · OFF.
+`CMD6 OK` is 4 right after a normal start (PowerOn, awake, two blocks). The boot push writes no log
+file.
 
-### Slå den fra uden at skifte binær
+### Disable it without switching binaries
 ```sh
-OURUI_NOBOOTPUSH=1 ./run.sh          # v6.4-adfærden: ingen boot-push; DIAGNOSE viser FRA
-OURUI_READONLY=1 ./run.sh            # som hidtil: ingen cmd6 overhovedet (heller ikke keep-awake)
+OURUI_NOBOOTPUSH=1 ./run.sh          # the v6.4 behavior: no boot push; DIAGNOSTICS shows OFF
+OURUI_READONLY=1 ./run.sh            # as before: no cmd6 at all (not even keep-awake)
 ```
-I slot B-boot starter `demo.sh` binæren uden miljø-variabler; dér slås boot-pushen fra ved at lægge v6.4-binæren ind (nedenfor) — eller ved at boote stock (`rm /customer/new`).
+In a slot B boot `demo.sh` starts the binary without environment variables; there the boot push is
+disabled by installing the v6.4 binary (below) — or by booting the stock UI (`rm /customer/new`).
 
-### Tilbage til v6.4
-`artifacts/ourui/ourui_v6_4.bin` (md5 `1fe0b5b8c3b24abf0cadcde7b099076a`, kilde `ourui_v6_4.c`, md5 `5bdaf341f77dcec3554707cf6cd9df70`) er v6.4 uændret. Tilbagerulning som for de tidligere versioner: `cp ourui_v6_4.bin ourui_v6` lokalt og derefter `boot_install.py install` (den læser md5 ved kørsel). v6.5-binæren har md5 `e84785d514c11ef88705ac97240b98c1`. Sprog-filen, `cfgbak/` og boot-flaget er de samme i v6.4 og v6.5; v6.4 kender ikke `OURUI_NOBOOTPUSH` og ignorerer den.
+### Back to v6.4
+`artifacts/ourui/ourui_v6_4.bin` (md5 `1fe0b5b8c3b24abf0cadcde7b099076a`, source `ourui_v6_4.c`, md5
+`5bdaf341f77dcec3554707cf6cd9df70`) is v6.4 unchanged. Rollback as for the earlier versions:
+`cp ourui_v6_4.bin ourui_v6` locally and then `boot_install.py install` (it reads the md5 at run
+time). The v6.5 binary has md5 `e84785d514c11ef88705ac97240b98c1`. The language file, `cfgbak/` and
+the boot flag are the same in v6.4 and v6.5; v6.4 does not know `OURUI_NOBOOTPUSH` and ignores it.
 
-## v6.6: re-push efter MCU-genstart, 64-bit-ur, damp-visning — hvad der er nyt, og hvordan det fortrydes
+## v6.6: re-push after an MCU restart, 64-bit clock, steam display — what's new, and how to undo it
 
-v6.6 ændrer tre ting i enheds-binæren (UI_v6.md CHANGES-v6.6). Kun den første sender noget, v6.5 ikke sendte:
+v6.6 changes three things in the device binary (UI_v6.md CHANGES-v6.6). Only the first one sends
+anything v6.5 did not send:
 
-1. **Re-push.** Genstarter controlleren, mens ourui kører, sendes boot-pushen igen: de **samme to blokke** (`cmd6 sub1 len30` + `cmd6 sub112 len3`), samme værdier fra `config.json`, gennem samme frame-politik, write-kø og aktivitets-vagt. Den udløses af, at controllerens versions-forespørgsel (`0x89`) kommer igen efter opstarten, eller af at ord 112 og 113 begge står på 0 (MCU'ens startværdier) i tre læsninger i træk på en ledig maskine. Mindst 5 s mellem to; højst 3 signatur-udløste pr. 10 min.
-2. **64-bit-ur.** Ingen ændring i, hvad der sendes eller hvornår — uret løber blot ikke længere rundt efter 24,86 døgn. **v6.5 og ældre må ikke stå som permanent slot B-boot:** ved 24,86 døgns oppetid sender de en strøm af keep-awake-writes i 30 s, og poll eller skærm kan derefter gå i stå, til processen genstartes.
-3. **Damp-visning.** Kun skærmen: *DAMP·AUTO* / *DAMP·WAND*, damp-mærke under bryg, STOP-knappen kun for latchet damp. Start- og stop-frames er de samme som i v6.5.
+1. **Re-push.** If the controller restarts while ourui is running, the boot push is sent again: the
+   **same two blocks** (`cmd6 sub1 len30` + `cmd6 sub112 len3`), the same values from `config.json`,
+   through the same frame policy, write queue and activity guard. It is triggered by the controller's
+   version request (`0x89`) arriving again after startup, or by words 112 and 113 both being 0 (the
+   MCU's start values) in three reads in a row on an idle machine. At least 5 s between two; at most 3
+   signature-triggered ones per 10 min.
+2. **64-bit clock.** No change in what is sent or when — the clock simply no longer wraps around after
+   24.86 days. **v6.5 and older must not be used as a permanent slot B boot:** at 24.86 days of uptime
+   they send a stream of keep-awake writes for 30 s, and the poll or the screen can then stall until
+   the process is restarted.
+3. **Steam display.** Screen only: *STEAM·AUTO* / *STEAM·WAND*, a steam badge during a brew, the STOP
+   button only for latched steam. The start and stop frames are the same as in v6.5.
 
-### Hvad v6.6 rører
+### What v6.6 touches
 
 | | |
 |---|---|
-| Filer | **ingen nye, ingen ændrede formater** — `config.json`, `cfgbak/`, `RESTART_NEEDED`, flag og sprog-fil er som i v6.5 |
-| Controlleren | som boot-pushen: registerfilen i RAM (ord 1..30 og 112..114), ingen flash, ord 26/27/30 = 0 |
-| Miljø-variabler | ingen nye på enheden. `OURUI_NOBOOTPUSH=1` slår nu også re-pushen fra; `OURUI_READONLY=1` som hidtil |
+| Files | **no new ones, no changed formats** — `config.json`, `cfgbak/`, `RESTART_NEEDED`, the flag and the language file are as in v6.5 |
+| The controller | like the boot push: the register file in RAM (words 1..30 and 112..114), no flash, words 26/27/30 = 0 |
+| Environment variables | no new ones on the device. `OURUI_NOBOOTPUSH=1` now also disables the re-push; `OURUI_READONLY=1` as before |
 
-Der er **ingen tilstand at reverte** efter en re-push: den skriver de værdier, controlleren allerede havde før sin genstart.
+There is **no state to revert** after a re-push: it writes the values the controller already had
+before its restart.
 
-### Se hvad den gjorde
-DIAGNOSE, scrollet én række ned. Uden re-push hedder rækken *BOOT-PUSH 1-30* / *BOOT-PUSH 112-114*, som i v6.5. Efter en re-push hedder den **RE-PUSH n · 1-30** / **112-114**, hvor n er antallet siden ourui startede; cellerne viser udfaldet af den seneste push. `CMD6 OK` er steget med 2 pr. re-push. Der skrives ingen log-fil.
+### See what it did
+DIAGNOSTICS, scrolled down one row. Without a re-push the row is called *BOOT PUSH 1-30* /
+*BOOT PUSH 112-114*, as in v6.5. After a re-push it is called **RE-PUSH n · 1-30** / **112-114**,
+where n is the number since ourui started; the cells show the outcome of the latest push. `CMD6 OK`
+has increased by 2 per re-push. No log file is written.
 
-### Slå den fra uden at skifte binær
+### Disable it without switching binaries
 ```sh
-OURUI_NOBOOTPUSH=1 ./run.sh          # ingen boot-push og ingen re-push; DIAGNOSE viser FRA
+OURUI_NOBOOTPUSH=1 ./run.sh          # no boot push and no re-push; DIAGNOSTICS shows OFF
 ```
-I slot B-boot starter `demo.sh` binæren uden miljø-variabler; dér er vejen v6.5-binæren (nedenfor) — med forbeholdet om uret.
+In a slot B boot `demo.sh` starts the binary without environment variables; there the way is the v6.5
+binary (below) — with the caveat about the clock.
 
-### Tilbage til v6.5
-`artifacts/ourui/ourui_v6_5.bin` (md5 `e84785d514c11ef88705ac97240b98c1`, kilde `ourui_v6_5.c`, md5 `f6e502b3d4cb7d212d1a1786520b2de4`) er v6.5 uændret. Tilbagerulning som for de tidligere versioner: `cp ourui_v6_5.bin ourui_v6` lokalt og derefter `boot_install.py install` (den læser md5 ved kørsel). v6.6-binæren har md5 `c22153af54069d9d1fcbe43fcb118c99`. Sprog-filen, `cfgbak/`, `RESTART_NEEDED` og boot-flaget er de samme i v6.5 og v6.6, så der er intet at rydde op ved et skift i nogen af retningerne. BOOT-UI-vagten genkender begge binærer som ourui (`round_v6/boot_check.txt`).
+### Back to v6.5
+`artifacts/ourui/ourui_v6_5.bin` (md5 `e84785d514c11ef88705ac97240b98c1`, source `ourui_v6_5.c`, md5
+`f6e502b3d4cb7d212d1a1786520b2de4`) is v6.5 unchanged. Rollback as for the earlier versions:
+`cp ourui_v6_5.bin ourui_v6` locally and then `boot_install.py install` (it reads the md5 at run
+time). The v6.6 binary has md5 `c22153af54069d9d1fcbe43fcb118c99`. The language file, `cfgbak/`,
+`RESTART_NEEDED` and the boot flag are the same in v6.5 and v6.6, so there is nothing to clean up when
+switching in either direction. The BOOT UI guard recognizes both binaries as ourui
+(`round_v6/boot_check.txt`).
 
 ---
 
-## v6.7: wifi ved opstart og selv-heal (net-vagt) — hvad der er nyt, og hvordan det fortrydes
+## v6.7: Wi-Fi at startup and self-healing (network guard) — what's new, and how to undo it
 
-**Hvorfor:** ved slot B-boot starter stock-UI'et aldrig, og det er stock-UI'et (libmi_wlan, styret af `/config/wifi/wlan.json`) — ikke `demo.sh` — der bringer wifi op. En B-bootet maskine var derfor uden netværk (boot/ondevice/INSTALL-REPORT.md §3.1): ingen telnet, ingen fjern-revert. v6.7 gør det samme som stock, men **kun når stakken er nede**.
+**Why:** on a slot B boot the stock UI never starts, and it is the stock UI (libmi_wlan, controlled by
+`/config/wifi/wlan.json`) — not `demo.sh` — that brings Wi-Fi up. A B-booted machine was therefore
+without a network (INSTALL-REPORT.md §3.1): no telnet, no remote revert. v6.7 does the same as the
+stock UI, but **only when the stack is down**.
 
-### Hvad v6.7 rører
+### What v6.7 touches
 
-| | Hvornår | Hvad |
+| | When | What |
 |---|---|---|
-| Processer | kun når der ingen wpa_supplicant kører (ved opstart: straks; ellers efter 3 s) | `sh -c "source /config/wifi/ssw01bInit.sh dummy1 dummy2 "` hvis `wlan0` mangler (insmod af driveren, `mkdir /tmp/wifi/run`) · `wpa_supplicant` med stock's argumenter · 1 s senere `udhcpc` med stock's argumenter — medmindre `wlan0` stadig har sin IP og default-rute (så beholdes de). Børnene får PPid 1 og ingen af ourui's fd'er |
-| | wpa_supplicant lever, men `wlan0` er administrativt nede i 3 s | `ifconfig wlan0 up` (ioctl, som stock's MI_WLAN_Open) |
-| | wpa_supplicant lever, ingen IP (8 s) eller ingen default-rute trods carrier (3 s), ingen udhcpc | `udhcpc` med stock's argumenter (backoff op til 60 s ved gentagelse) |
-| Filer | ved bring-up, kun hvis indholdet afviger | `/appconfigs/wpa_supplicant.conf` (tmp + fsync + rename), byte for byte i wpa_supplicant's `save_config`-format; ssid/password fra `config.json` (læses, skrives aldrig). `demo.sh` kopierer `.conf_bak` over filen ved **hver** boot, og stock's `save_config` skriver den igen, så der er intet varigt at fortryde |
-| | altid (tmpfs) | `/tmp/ourui_net.log` (kun overgange; password skrives aldrig; roteres ved 128 kB), `/tmp/wifi/run/`, en død `/tmp/wifi/run/wpa_supplicant/wlan0`-socket fjernes før start |
-| Controlleren | — | intet nyt fra net-vagten. **Ord 113 i boot-pushen** sendes nu som stock's optagede (`0x0600`, lo-byte 0 — GROUND-TRUTH.md); GEM-vejen er uændret |
+| Processes | only when no wpa_supplicant is running (at startup: immediately; otherwise after 3 s) | `sh -c "source /config/wifi/ssw01bInit.sh dummy1 dummy2 "` if `wlan0` is missing (insmod of the driver, `mkdir /tmp/wifi/run`) · `wpa_supplicant` with the stock UI's arguments · 1 s later `udhcpc` with the stock UI's arguments — unless `wlan0` still has its IP and default route (then they are kept). The children get PPid 1 and none of ourui's fds |
+| | wpa_supplicant is alive, but `wlan0` has been administratively down for 3 s | `ifconfig wlan0 up` (ioctl, like the stock UI's MI_WLAN_Open) |
+| | wpa_supplicant is alive, no IP (8 s) or no default route despite carrier (3 s), no udhcpc | `udhcpc` with the stock UI's arguments (backoff up to 60 s on repeats) |
+| Files | on bring-up, only if the contents differ | `/appconfigs/wpa_supplicant.conf` (tmp + fsync + rename), byte for byte in wpa_supplicant's `save_config` format; ssid/password from `config.json` (read, never written). `demo.sh` copies `.conf_bak` over the file on **every** boot, and the stock UI's `save_config` writes it again, so there is nothing lasting to undo |
+| | always (tmpfs) | `/tmp/ourui_net.log` (transitions only; the password is never written; rotated at 128 kB), `/tmp/wifi/run/`, a dead `/tmp/wifi/run/wpa_supplicant/wlan0` socket is removed before the start |
+| The controller | — | nothing new from the network guard. **Word 113 in the boot push** is now sent as the stock UI's recorded value (`0x0600`, low byte 0 — GROUND-TRUTH.md); the SAVE path is unchanged |
 
-**Aldrig:** et signal til en proces (0 `kill()`), en ændring af `config.json`, slots eller flag, et netværk når `wifionoff = 0` i config, og intet, når `OURUI_NONET=1` eller `OURUI_ROOT` er sat.
+**Never:** a signal to a process (0 `kill()`), a change to `config.json`, slots or the flag, a network
+when `wifionoff = 0` in the config, and nothing at all when `OURUI_NONET=1` or `OURUI_ROOT` is set.
 
-### Se hvad den gjorde
+### See what it did
 ```sh
-cat /tmp/ourui_net.log                                   # én linje pr. overgang (OPPE ved start / SELV-HEAL faerdig paa N ms / ...)
-/new_customer/ourui/ourui --net-status                   # kun læsning: probe + om conf-filen er identisk med config.json's
+cat /tmp/ourui_net.log                                   # one line per transition (up at start / self-heal done in N ms / ...)
+/new_customer/ourui/ourui --net-status                   # read-only: probe + whether the conf file matches config.json's
 ```
-DIAGNOSE (scrollet ned): **NETVÆRK · WPA-PID / IP / TILSTAND**, fx `841 / <display-ip> / OPPE` (grøn) eller `- / <display-ip> / STARTER` (rav).
+DIAGNOSTICS (scrolled down): **NETWORK · WPA PID / IP / STATE**, e.g. `841 / <display-ip> / UP`
+(green) or `- / <display-ip> / STARTING` (amber).
 
-### Slå den fra uden at skifte binær
+### Disable it without switching binaries
 ```sh
-OURUI_NONET=1 ./run.sh          # net-vagten er slået helt fra (DIAGNOSE: FRA)
+OURUI_NONET=1 ./run.sh          # the network guard is disabled completely (DIAGNOSTICS: OFF)
 ```
-Er netværket allerede startet af ourui, er det en almindelig wpa_supplicant med stock's argumenter (PPid 1). Den kan blive kørende; ved næste reboot starter stock / ourui forfra. Skal den væk: `kill $(pidof wpa_supplicant)` (det gør ourui aldrig selv).
+If the network was already started by ourui, it is an ordinary wpa_supplicant with the stock UI's
+arguments (PPid 1). It can keep running; at the next reboot the stock UI / ourui start from scratch.
+If it has to go: `kill $(pidof wpa_supplicant)` (ourui never does that itself).
 
-### Tilbage til v6.6
-`artifacts/ourui/ourui_v6_6.bin` (md5 `c22153af54069d9d1fcbe43fcb118c99`) er v6.6 uændret — **men v6.6 i slot B-boot giver en maskine uden netværk** (INSTALL-REPORT §3.1). Forgængerens ufærdige v6.7-mellemstand er gemt som `ourui_v6_7wip.c` / `ourui_v6_7wip.bin` til sporbarhed; den skal ikke installeres (bl.a. 10 røde selftests og et `kill()`-kald).
+### Back to v6.6
+`artifacts/ourui/ourui_v6_6.bin` (md5 `c22153af54069d9d1fcbe43fcb118c99`) is v6.6 unchanged — **but
+v6.6 in a slot B boot gives a machine without a network** (INSTALL-REPORT §3.1). The predecessor's
+unfinished v6.7 intermediate state is kept as `ourui_v6_7wip.c` / `ourui_v6_7wip.bin` for
+traceability; it must not be installed (among other things 10 red self-tests and a `kill()` call).
 
 ---
 
-## v6.8: REVERT-knappen på HJEM er fjernet
+## v6.8: the REVERT button on HOME has been removed
 
-REVERT-pillen nederst på HJEM var en fase-2-sikring. Fra v6.8 er HJEM: gauge + stats + aktivitets-ikoner + side-prikker. Der er **ingen tryk-zone** tilbage, hvor pillen sad (selftest: hele feltet 150..330 × 404..480 giver intet mål — både ledig og under bryg).
+The REVERT pill at the bottom of HOME was a phase 2 safeguard. From v6.8 HOME is: gauge + stats +
+activity icons + page dots. There is **no touch zone** left where the pill was (self-test: the whole
+field 150..330 × 404..480 gives no target — both idle and during a brew).
 
-**Flugtvejene er uændrede:**
-1. SYSTEM → **SKIFT TIL ORIGINAL NU** → **SKIFT NU**. I run.sh-tilstand = ren exit (exit-påmindelsen først, hvis config er gemt) → run.sh SIGCONT'er demo_v9 — præcis det, REVERT gjorde. I slot B-boot starter den stock-UI'et (BOOT.md §9.2). Spærret under en aktivitet.
-2. SYSTEM → **BOOT-UI** (næste genstart: original).
-3. Switcher-gestussen (3 lange tryk øverst til venstre) — uændret.
-4. `run.sh`'s trap ved enhver exit (crash, Ctrl-C, `kill $(pidof ourui)`) og telnet-kommandoerne øverst i denne fil.
+**The escape routes are unchanged:**
+1. SYSTEM → **SWITCH TO ORIGINAL NOW** → **SWITCH NOW**. In run.sh mode = a clean exit (the exit
+   reminder first, if the config was saved) → run.sh SIGCONTs demo_v9 — exactly what REVERT did. In a
+   slot B boot it starts the stock UI (boot.md §9.2). Blocked during an activity.
+2. SYSTEM → **BOOT UI** (next restart: original).
+3. The switcher gesture — unchanged.
+4. `run.sh`'s trap on any exit (crash, Ctrl-C, `kill $(pidof ourui)`) and the telnet commands at the
+   top of this file.
 
-Run.sh-teksten på skift-skærmen hedder nu *RUN.SH-TILSTAND · REN EXIT* (før: *· SOM REVERT*). Ingen filer, ingen frames, intet på enheden ændres af v6.8. **Tilbage til v6.7-adfærden** (med knap) findes ikke som separat binær; v6.6 (`ourui_v6_6.bin`) har knappen, men ikke net-vagten.
+The run.sh text on the switch screen is now *RUN.SH MODE · CLEAN EXIT* (before: *· LIKE REVERT*). No
+files, no frames, nothing on the device is changed by v6.8. **Back to the v6.7 behavior** (with the
+button) does not exist as a separate binary; v6.6 (`ourui_v6_6.bin`) has the button, but not the
+network guard.
 
 ---
 
-## v6.9: rolig graf og stabil vægt — intet nyt på enheden ud over visningen
+## v6.9: calm graph and stable weight — nothing new on the device beyond the display
 
-v6.9 ændrer **kun det, der tegnes** (UI_v6.md §14 og "CHANGES-v6.9"): graf, hero, gauge og BAR-felt viser median-3 + EMA af de rå samples, vægten har en fast kilde (latch i stedet for fase pr. sample) og et dødbånd under 0,25 g, og DIAGNOSE har rækken **GRAF** (glat / rå).
+v6.9 changes **only what is drawn** (UI_v6.md §14 and "CHANGES-v6.9"): the graph, hero, gauge and BAR
+field show median-3 + EMA of the raw samples, the weight has a fixed source (a latch instead of the
+phase per sample) and a dead band below 0.25 g, and DIAGNOSTICS has the row **GRAPH** (smooth / raw).
 
-### Hvad v6.9 rører
+### What v6.9 touches
 | | |
 |---|---|
-| Filer | **ingen nye.** GRAF-valget på DIAGNOSE gælder kun sessionen og skrives ingen steder |
-| Controlleren | **intet nyt** — samme frames, samme frame-politik, samme boot-push, samme auto-stop (MCU'ens). Build-tjekket viser 29 styrings-/protokol-stykker token-identiske med v6.8 |
-| Processer / netværk | intet nyt (net-vagten er v6.7's, uændret) |
+| Files | **no new ones.** The GRAPH choice on DIAGNOSTICS only applies to the session and is not written anywhere |
+| The controller | **nothing new** — the same frames, the same frame policy, the same boot push, the same auto-stop (the MCU's). The build check shows 29 control/protocol fragments token-identical to v6.8 |
+| Processes / network | nothing new (the network guard is v6.7's, unchanged) |
 
-Styring, writes, vagter, tærskler og DIAGNOSE-tællere læser fortsat de **rå** værdier. Se dem rå på skærmen: DIAGNOSE → **GRAF · TRYK FOR AT SKIFTE** → **RÅ · UFILTRERET** (chartet mærkes **RÅ**; glemmes ved genstart).
+Control logic, writes, guards, thresholds and DIAGNOSTICS counters still read the **raw** values. See
+them raw on the screen: DIAGNOSTICS → **GRAPH · TAP TO TOGGLE** → **RAW · UNFILTERED** (the chart is
+labelled **RAW**; forgotten on restart).
 
-### Tilbage til v6.8
-`artifacts/ourui/ourui_v6_8wip.bin` (md5 `75887fb154ffef20cc72696064e16c39`, kilde `ourui_v6_8wip.c` md5 `5cdcc14b0503c67b939e27b6579655ff`) er v6.8 — den hidtidige enheds-binær, med net-vagten og uden REVERT-knap. Læg den på `ourui`'s plads som enhver anden version (ingen data, config eller flag at rydde op i). Stand ved v6.9-rundens start (forgængerens delvise v6.9): `ourui_v6_9wip.c` / `ourui_v6_9wip.bin` — **skal ikke installeres** (2 røde selftests, vægt-kilden følger fasen, intet dødbånd).
+### Back to v6.8
+`artifacts/ourui/ourui_v6_8wip.bin` (md5 `75887fb154ffef20cc72696064e16c39`, source `ourui_v6_8wip.c`
+md5 `5cdcc14b0503c67b939e27b6579655ff`) is v6.8 — the previous device binary, with the network guard
+and without the REVERT button. Put it in `ourui`'s place like any other version (no data, config or
+flag to clean up). The state at the start of the v6.9 round (the predecessor's partial v6.9):
+`ourui_v6_9wip.c` / `ourui_v6_9wip.bin` — **must not be installed** (2 red self-tests, the weight
+source follows the phase, no dead band).
 
 
-### Status ved v6.9-afslutningen (2026-11-17, kl. 23)
-* **Enheds-binæren** `ourui_v6` har md5 `2dce4eba0b4ce68dcd0369e955cf3b77`. Kilden er `ourui_v6.c` md5 `440be5124c0d986ec23e4c3b08f84149`, og et nyt build fra den er byte-identisk. Den er **ikke** lagt på enheden.
-* **Ingen tryk-zone fra REVERT (v6.8):** selftesten giver stadig `T_NONE` i hele feltet 150..329 × 404..479, både ledig og under bryg. Ingen UI-streng nævner REVERT. Mutanten `pille` fanges stadig (mutations-prøver 10/10).
-* **Net-vagtens selv-heal på enheden (v6.7)** er stadig **ikke bevist på enheden**. Den svarede ikke på netværket (<display-ip> "Host is down"). `net_heal_proof.py` er uændret og klar. Den laver ingen reboots, rører ikke flag, slots eller config og bruger kun tmpfs, plus ét kontrolleret kill af stock's wpa_supplicant, mens demo_v9 er SIGSTOP'et.
-* **Fortryd v6.9** som ovenfor: `ourui_v6_8wip.bin` på `ourui`'s plads. Der er ingen data at rydde op i.
+### Status at the end of v6.9 (2026-11-17, 23:00)
+* **The device binary** `ourui_v6` has md5 `2dce4eba0b4ce68dcd0369e955cf3b77`. The source is
+  `ourui_v6.c` md5 `440be5124c0d986ec23e4c3b08f84149`, and a new build from it is byte-identical. It
+  has **not** been put on the device.
+* **No touch zone from REVERT (v6.8):** the self-test still gives `T_NONE` in the whole field
+  150..329 × 404..479, both idle and during a brew. No UI string mentions REVERT. The mutant `pille`
+  is still caught (mutation probes 10/10).
+* **The network guard's self-healing on the device (v6.7)** is still **not proven on the device**. It
+  did not answer on the network (<display-ip> "Host is down"). `net_heal_proof.py` is unchanged and
+  ready. It does no reboots, does not touch the flag, slots or config and only uses tmpfs, plus one
+  controlled kill of the stock wpa_supplicant while demo_v9 is SIGSTOPped.
+* **Undo v6.9** as above: `ourui_v6_8wip.bin` in `ourui`'s place. There is no data to clean up.
 
-## v6.10: tryk som ≈bar-estimat — kun visning
+## v6.10: pressure as a ≈bar estimate — display only
 
-v6.10 ændrer **kun hvordan trykket vises** (UI_v6.md §16 og "CHANGES-v6.10"): *TRYK\* UKALIBRERET* er blevet **≈BAR · EST.** med ét lineært anker (pre-infusion 358 rå i optagelsen = config `preInfusionPressure`, 4 bar → k = 0,01117 bar/rå), pulser over 20 bar vises som *PULS* i stedet for et tal, DIAGNOSE har blokken **TRYK · ESTIMAT**, og et tap på chartet/BAR-feltet giver en toast med grundlaget.
+v6.10 changes **only how the pressure is shown** (UI_v6.md §16 and "CHANGES-v6.10"):
+*PRESSURE\* UNCALIBRATED* has become **≈BAR · EST.** with a single linear anchor (pre-infusion 358 raw
+in the recording = config `preInfusionPressure`, 4 bar → k = 0.01117 bar/raw), pulses above 20 bar are
+shown as *PULSE* instead of a number, DIAGNOSTICS has the block **PRESSURE · ESTIMATE**, and a tap on
+the chart/BAR field gives a toast with the basis.
 
-### Hvad v6.10 rører
+### What v6.10 touches
 | | |
 |---|---|
-| Filer | **ingen nye.** Ankeret *læses* fra `config.json` (`preInfusionPressure`, samme indlæsning som settings-tabellen) — der skrives intet |
-| Controlleren | **intet nyt** — samme frames, frame-politik, boot-push og auto-stop. Build-tjekket: 37 styrings-/protokol-/konditionerings-stykker er token-identiske med v6.9; toast-tappet sender ingen frames (selftest) |
-| Processer / netværk | intet nyt |
+| Files | **no new ones.** The anchor is *read* from `config.json` (`preInfusionPressure`, the same loading as the settings table) — nothing is written |
+| The controller | **nothing new** — the same frames, frame policy, boot push and auto-stop. Build check: 37 control/protocol/conditioning fragments are token-identical to v6.9; the toast tap sends no frames (self-test) |
+| Processes / network | nothing new |
 
-### Tilbage til v6.9
-`artifacts/ourui/ourui_v6_9.bin` (md5 `2dce4eba0b4ce68dcd0369e955cf3b77`, kilde `ourui_v6_9.c` md5 `440be5124c0d986ec23e4c3b08f84149`) er v6.9 — den hidtidige enheds-binær. SIM-builds: `ourui_v6_9_sim` / `ourui_v6_9_sim_arm`. Læg den på `ourui`'s plads som enhver anden version; der er ingen data, config eller flag at rydde op i. Rå tryk-værdier ses også uden at fortryde: DIAGNOSE → **GRAF** → **RÅ · UFILTRERET** (BAR-feltet viser så ord 51 rå under *TRYK RÅ*).
+### Back to v6.9
+`artifacts/ourui/ourui_v6_9.bin` (md5 `2dce4eba0b4ce68dcd0369e955cf3b77`, source `ourui_v6_9.c` md5
+`440be5124c0d986ec23e4c3b08f84149`) is v6.9 — the previous device binary. SIM builds:
+`ourui_v6_9_sim` / `ourui_v6_9_sim_arm`. Put it in `ourui`'s place like any other version; there is no
+data, config or flag to clean up. Raw pressure values can also be seen without undoing anything:
+DIAGNOSTICS → **GRAPH** → **RAW · UNFILTERED** (the BAR field then shows word 51 raw under
+*PRESSURE RAW*).
 
-### Status ved v6.10-afslutningen (2026-11-17)
-* **Enheds-binæren** `ourui_v6` har md5 `29bc801c1c777d9cb3484bfa960c66bc` (kilde `ourui_v6.c` md5 `23672df8557a1fbb4d54cdb6b220c244`; reproducerbar). Den er **ikke** lagt på enheden; enheden er ikke kontaktet i runden. Ingen reboots, flag-, slot- eller config-writes.
-* Mutanten `pille` (REVERT-zonen) fanges stadig; mutations-prøver 14/14.
+### Status at the end of v6.10 (2026-11-17)
+* **The device binary** `ourui_v6` has md5 `29bc801c1c777d9cb3484bfa960c66bc` (source `ourui_v6.c`
+  md5 `23672df8557a1fbb4d54cdb6b220c244`; reproducible). It has **not** been put on the device; the
+  device was not contacted in the round. No reboots, flag, slot or config writes.
+* The mutant `pille` (the REVERT zone) is still caught; mutation probes 14/14.
 
-## v6.11: UX-review — kun visning og touch-ruter
+## v6.11: UX review — display and touch routes only
 
-v6.11 ændrer **hvordan UI'et ser ud og navigeres** (UI_v6.md §17 og "CHANGES-v6.11"): klart sprog i stedet for ord-numre og rå koder, hævet kontrast, et start-hint i det tomme chart-felt, et tandhjul til indstillingerne, luk-chevron og stryg-ned i detaljerne, en swipe-vagt og DIAGNOSE i sektioner.
+v6.11 changes **how the UI looks and is navigated** (UI_v6.md §17 and "CHANGES-v6.11"): plain language
+instead of word numbers and raw codes, raised contrast, a start hint in the empty chart field, a gear
+for the settings, a close chevron and swipe-down in the details, a swipe guard and DIAGNOSTICS in
+sections.
 
-### Hvad v6.11 rører
+### What v6.11 touches
 | | |
 |---|---|
-| Filer | **ingen nye.** Tandhjulet, chevronen og stryg-ned skifter kun side eller lukker en visning (som ANNULLER). Der skrives intet |
-| Controlleren | **intet nyt.** Samme frames, frame-politik, boot-push, aktivitets-recepter og auto-stop. Build-tjekket: 47 styrings-/protokol-stykker er token-identiske med v6.10. Selftesten bekræfter, at tandhjul og kant-tryk ikke sender nogen frames |
-| Processer / netværk | intet nyt |
-| Revert-vejen | **uændret:** SYSTEM → *SKIFT TIL ORIGINAL NU* → *SKIFT NU*. Teksterne der er de samme. Tandhjulet ligger, hvor REVERT-pillen sad før v6.8, men det **skifter kun side** (selftest + mutanten `pille`) |
+| Files | **no new ones.** The gear, the chevron and swipe-down only change the page or close a view (like CANCEL). Nothing is written |
+| The controller | **nothing new.** The same frames, frame policy, boot push, activity recipes and auto-stop. Build check: 47 control/protocol fragments are token-identical to v6.10. The self-test confirms that the gear and edge taps send no frames |
+| Processes / network | nothing new |
+| The revert path | **unchanged:** SYSTEM → *SWITCH TO ORIGINAL NOW* → *SWITCH NOW*. The texts there are the same. The gear sits where the REVERT pill was before v6.8, but it **only changes the page** (self-test + the mutant `pille`) |
 
-### Tilbage til v6.10
-`artifacts/ourui/ourui_v6_10.bin` (md5 `29bc801c1c777d9cb3484bfa960c66bc`, kilde `ourui_v6_10.c` md5 `23672df8557a1fbb4d54cdb6b220c244`) er v6.10, den hidtidige enheds-binær. SIM-builds: `ourui_v6_10_sim` / `ourui_v6_10_sim_arm`. Læg den på `ourui`'s plads som ved tidligere versioner. Der er ingen data at rydde op i; UI-sprog-filen har samme format.
+### Back to v6.10
+`artifacts/ourui/ourui_v6_10.bin` (md5 `29bc801c1c777d9cb3484bfa960c66bc`, source `ourui_v6_10.c` md5
+`23672df8557a1fbb4d54cdb6b220c244`) is v6.10, the previous device binary. SIM builds:
+`ourui_v6_10_sim` / `ourui_v6_10_sim_arm`. Put it in `ourui`'s place as for earlier versions. There is
+no data to clean up; the UI language file has the same format.
 
-### Status ved v6.11-afslutningen (2026-11-18)
-* **Enheds-binæren** `ourui_v6` har md5 `725386ccadade594275f20cc998885eb` (kilde `ourui_v6.c` md5 `e9eea8caebfa5d832884d96996dbd2c7`; reproducerbar). Den er **ikke** lagt på enheden; enheden er ikke kontaktet i runden. Ingen reboots, flag-, slot- eller config-writes.
-* Mutanten `pille` (REVERT-zonen) fanges stadig; mutations-prøver 20/20.
+### Status at the end of v6.11 (2026-11-18)
+* **The device binary** `ourui_v6` has md5 `725386ccadade594275f20cc998885eb` (source `ourui_v6.c`
+  md5 `e9eea8caebfa5d832884d96996dbd2c7`; reproducible). It has **not** been put on the device; the
+  device was not contacted in the round. No reboots, flag, slot or config writes.
+* The mutant `pille` (the REVERT zone) is still caught; mutation probes 20/20.
 
-## v6.13: manuel STOP for vand / bryg / kværn
+## v6.13: manual STOP for water / brew / grind
 
-v6.13 tilføjer STOP-knapper på HJEM (UI_v6.md §18 og "CHANGES-v6.13"). Et tryk sender én af tre nye stop-frames til controlleren: `sub16 len1` (ord 16 = 0, + `sub19 len1`, hvis ord 19 ≠ 0), `sub22 len1` (ord 22 = 0) eller `sub6 len1` (ord 6 = 0). Det er de samme ord, som MCU'ens egen auto-stop nulstiller.
+v6.13 adds STOP buttons on HOME (UI_v6.md §18 and "CHANGES-v6.13"). A tap sends one of three new stop
+frames to the controller: `sub16 len1` (word 16 = 0, + `sub19 len1` if word 19 ≠ 0), `sub22 len1`
+(word 22 = 0) or `sub6 len1` (word 6 = 0). These are the same words the MCU's own auto-stop resets.
 
-### Hvad v6.13 rører
+### What v6.13 touches
 | | |
 |---|---|
-| Filer | **ingen nye.** STOP skriver hverken i config, flag eller lang-filen |
-| Controlleren | **kun ved tryk på STOP:** én cmd6-write af ét ord til 0 (vand evt. to). Frame-politikken, start-recepterne, damp-stoppet, boot-pushen og auto-stop er token-identiske med v6.12 (build-tjekket: 47 stykker). En stop-frame indeholder kun nuller og kan ikke starte noget |
-| Processer / netværk | intet nyt |
-| Revert-vejen | **uændret:** SYSTEM → *SKIFT TIL ORIGINAL NU* → *SKIFT NU*. STOP-knappen ligger i aktions-rækken (y 344–400), ikke i SKIFT-/tandhjuls-zonerne |
+| Files | **no new ones.** STOP writes neither to the config, the flag nor the lang file |
+| The controller | **only on a STOP tap:** one cmd6 write of one word to 0 (water possibly two). The frame policy, the start recipes, the steam stop, the boot push and the auto-stop are token-identical to v6.12 (build check: 47 fragments). A stop frame only contains zeros and cannot start anything |
+| Processes / network | nothing new |
+| The revert path | **unchanged:** SYSTEM → *SWITCH TO ORIGINAL NOW* → *SWITCH NOW*. The STOP button sits in the action row (y 344–400), not in the SWITCH/gear zones |
 
-### Tilbage til v6.12
-`artifacts/ourui/ourui_v6_12.bin` (md5 `725386ccadade594275f20cc998885eb`, kilde `ourui_v6_12.c` md5 `e9eea8caebfa5d832884d96996dbd2c7`) er v6.12, den udrullede binær. SIM-builds: `ourui_v6_12_sim` / `ourui_v6_12_sim_arm`. Læg den på `ourui`'s plads på samme måde som ved de tidligere rul-tilbage (md5-tjek før og efter). Ingen config-/flag-ændringer er nødvendige: v6.13 har ingen tilstand på disken.
+### Back to v6.12
+`artifacts/ourui/ourui_v6_12.bin` (md5 `725386ccadade594275f20cc998885eb`, source `ourui_v6_12.c` md5
+`e9eea8caebfa5d832884d96996dbd2c7`) is v6.12, the deployed binary. SIM builds: `ourui_v6_12_sim` /
+`ourui_v6_12_sim_arm`. Put it in `ourui`'s place in the same way as for the earlier rollbacks (md5
+check before and after). No config/flag changes are needed: v6.13 has no state on disk.
 
-### Status ved v6.13-afslutningen (2026-11-18)
-* **Enheds-binæren** `ourui_v6` har md5 `163692b5b3e11d8294471c5a0eae578b` (kilde `ourui_v6.c` md5 `eec5085ddc1861c212d396c70771e9dc`; reproducerbar). Den er **ikke** lagt på enheden. Maskinen var offline i hele runden, så der er ingen reboots og ingen flag-, slot- eller config-writes.
-* On-device-beviset for STOP køres med `python3 verify_stop_v613.py`, når maskinen er tændt. Scriptet bruger run.sh-tilstand i `/tmp/ourui_s`, rører ingen config, flag eller slots og laver ingen reboot.
+### Status at the end of v6.13 (2026-11-18)
+* **The device binary** `ourui_v6` has md5 `163692b5b3e11d8294471c5a0eae578b` (source `ourui_v6.c`
+  md5 `eec5085ddc1861c212d396c70771e9dc`; reproducible). It has **not** been put on the device. The
+  machine was offline for the whole round, so there were no reboots and no flag, slot or config writes.
+* The on-device proof of STOP is run with `python3 verify_stop_v613.py` when the machine is switched
+  on. The script uses run.sh mode in `/tmp/ourui_s`, touches no config, flag or slots and does no
+  reboot.

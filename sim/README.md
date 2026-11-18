@@ -1,25 +1,35 @@
-# sim/ — E2E-testmiljø til ourui (MerakiTech Gen 1 espresso-display)
+# sim/ — E2E test environment for ourui (MerakiTech Gen 1 espresso display)
 
-> **Repo-layout (offentlig udgave):** noterne nedenfor blev skrevet i forfatterens arbejdsmappe.
-> I dette repo gælder: UI-kilden er `src/ourui_v6.c`; SIM-build'et bygges af `./build.sh` til
-> `build/ourui_sim` (auto-detekteres; prebuilt: `bin/ourui_sim-*`); switcher-koden ligger i `boot/`;
-> config-baseline (Wi-Fi-felter erstattet med pladsholdere) og parity-spec ligger i `sim/fixtures/`;
-> UART-optagelserne til replay ligger komprimeret i `sim/fixtures/captures/*.csv.gz`
-> (kun kolonnerne `ts,direction,raw_hex`). Øvrige `artifacts/…`-stier er historiske.
+> **Repository layout (public edition):** the notes below were written in the author's working
+> directory. In this repository: the UI source is `src/ourui_v6.c`; the SIM build is built by
+> `./build.sh` into `build/ourui_sim` (auto-detected; prebuilt: `bin/ourui_sim-*`); the switcher code
+> lives in `boot/`; the config baseline (Wi-Fi fields replaced with placeholders) and the parity spec
+> live in `sim/fixtures/`; the UART recordings for replay are stored compressed in
+> `sim/fixtures/captures/*.csv.gz` (only the columns `ts,direction,raw_hex`). Other `artifacts/…`
+> paths are historical.
 >
-> **Hurtigt:** `./build.sh host && python3 sim/selftest.py && python3 sim/run_e2e.py --all --quick --parallel 4`
+> **Quick:** `./build.sh host && python3 sim/selftest.py && python3 sim/run_e2e.py --all --quick --parallel 4`
+>
+> Some runner/selftest console output and scenario descriptions are still in Danish (e.g. `SAMLET`
+> = total, `fejl` = errors); scenario assertions that match UI toasts use the UI's own EN/DA strings.
 
-**Dato:** 2026-11-17 · **Ejer:** test-agenten · **Status:** KOMPLET OG VERIFICERET LOKALT
-**Politik:** kun lokal udvikling — **ingen kontakt med den fysiske enhed**. Fable-agentens filer (`ourui_v6.c`, `UI_v6.md`, `REVERT.md`, `round_v6/`) er **ikke rørt**. Kun Python stdlib (ingen Pillow i `.venv` → egne PNG-rutiner i `png.py`, samme metode som `artifacts/write_test/fb2png.py`).
+**Date:** 2026-11-17 · **Owner:** the test work stream · **Status:** COMPLETE AND VERIFIED LOCALLY
+**Policy:** local development only — **no contact with the physical device**. The UI work stream's
+files (`ourui_v6.c`, `UI_v6.md`, `REVERT.md`, `round_v6/`) were **not touched**. Python standard
+library only (no Pillow → our own PNG routines in `png.py`, the same method as
+`artifacts/write_test/fb2png.py`).
 
-Hele UI'et kan testes uden hardware: en **simuleret MCU** (`mcu_sim.py`) taler den rigtige UART-protokol over en pty, en **scenarie-motor** driver tidslinjer med fejl-injektion, og en **runner** (`run_e2e.py`) launcher ourui's SIM-build (eller reference-klienten indtil det lander), injicerer touch, sampler UI-state + framebuffer og kører assertions.
+The whole UI can be tested without hardware: a **simulated MCU** (`mcu_sim.py`) speaks the real UART
+protocol over a pty, a **scenario engine** drives timelines with fault injection, and a **runner**
+(`run_e2e.py`) launches ourui's SIM build (or the reference client until it landed), injects touch,
+samples UI state + the framebuffer and runs assertions.
 
 ---
 
-## 1. Arkitektur
+## 1. Architecture
 
 ```
-                        sim/reports/run-*/<scenarie>/
+                        sim/reports/run-*/<scenario>/
                         ┌──────────────────────────────────────────┐
                         │ sandbox/            state.jsonl          │
                         │  customer/config.json  fb.bin            │
@@ -30,109 +40,120 @@ Hele UI'et kan testes uden hardware: en **simuleret MCU** (`mcu_sim.py`) taler d
                               ▲            ▲             ▲
         ┌─────────────────────┘            │             └──────────────────┐
         │                                  │                                │
-┌───────┴────────┐   evdev-FIFO    ┌───────┴────────┐   JSONL-ctrl   ┌───────┴────────┐
-│  run_e2e.py    │ ──────────────► │  ourui SIM-    │ ◄────────────► │  mcu_sim.py    │
-│  (runner)      │   touch-inject  │  build (Fable) │                │  (simuleret    │
-│                │ ◄────────────── │  ELLER         │ ◄────────────► │   powerMcu)    │
+┌───────┴────────┐   evdev FIFO    ┌───────┴────────┐   JSONL ctrl   ┌───────┴────────┐
+│  run_e2e.py    │ ──────────────► │  ourui SIM     │ ◄────────────► │  mcu_sim.py    │
+│  (runner)      │   touch inject  │  build         │                │  (simulated    │
+│                │ ◄────────────── │  OR            │ ◄────────────► │   powerMcu)    │
 │  events/samples│   state+fb      │  ref_client.py │   pty (UART    │                │
-│  assertions    │                 │  (reference)   │   AA 55+CRC)   │ 129-ords model │
-│  rapport JSON/MD│                └────────────────┘                │ fase-maskine   │
-│  contact-sheet │                                                   │ fejl-injektion │
-└────────────────┘                                                   │ assertions-log │
-        │                                                            │ REPLAY-motor   │
-        │  gestus-stream (fil-mode)                                  └───────┬────────┘
+│  assertions    │                 │  (reference)   │   AA 55+CRC)   │ 129-word model │
+│  report JSON/MD│                 └────────────────┘                │ phase machine  │
+│  contact sheet │                                                   │ fault injection│
+└────────────────┘                                                   │ assertion log  │
+        │                                                            │ REPLAY engine  │
+        │  gesture stream (file mode)                                └───────┬────────┘
         ▼                                                                    │
 ┌────────────────┐                                                           │
-│ switcher_host  │  (ÆGTE daemon-kode fra boot/)             │
+│ switcher_host  │  (the REAL daemon code from boot/)                        │
 └────────────────┘                                                           ▼
-                                                              artifacts/uart_live_v2/v3/
-                                                              uart_session/frames.csv
-                                                              (REPLAY-ground-truth)
+                                                              sim/fixtures/captures/
+                                                              *.csv.gz
+                                                              (REPLAY ground truth)
 ```
 
-* **`mcu_sim.py`** — komplet MCU-model: 129-ords register-file initialiseret fra sandbox-`config.json` (PARITY §1.3 inkl. byte-pakning word112/113/114), cmd3/cmd6/cmd8/cmd9 + 0x83/0x86/0x88/0x89, bånd-validering (ord 0..31 + 112..114), trigger-politik (26/27/30=0 ellers AFVIS+log), ACK-echo med latency/loss/retransmit-profiler, boot-push-detektion, versions-håndtryk, fase-maskine med syntetiske sensor-kurver, fejl-injektion og JSONL-assertions-log.
-* **`ref_client.py`** — protokol-level reference-klient der implementerer **samme kontrakt** som ourui's SIM-build (`CONTRACT.md`): boot-push, keep-awake (ord1=0!), poll-rotation, frame-politik, ACK/retransmit (150 ms + 1), hold-for-start touch, settings-GEM, minimal fb-renderer (cirkel-clip r234, fase-farver, page-/toast-regioner). Beviser sim'en + runneren + assertions-pipelinen **nu**.
-* **`run_e2e.py`** — runner: sandbox → sim → UI-klient → events → sampling → assertions → rapport (JSON + MD + PNG-snapshots + contact-sheet).
-* **`scenarios/*.json`** — 22 tidslinjer (genereret af `gen_scenarios.py`).
-* **`selftest.py`** — 107 protokol-checks uden runner (CRC, chunking, write-politik, auto-stop, boot-push, packing, keep-awake, fejl, ACK-profiler, replay-verify).
-* **`proto.py`** — fælles CRC/frame/parse/registernavne/parity/evdev-hjælpere.
-* **`png.py`** — dependency-free PNG (BGRA→PNG, thumbnails, contact-sheet m. 5×7 bitmap-font).
-* **`CONTRACT.md`** — den præse kontrakt til Fable's SIM-build.
+* **`mcu_sim.py`** — a complete MCU model: a 129-word register file initialized from the sandbox
+  `config.json` (PARITY §1.3 incl. the byte packing of words 112/113/114), cmd3/cmd6/cmd8/cmd9 +
+  0x83/0x86/0x88/0x89, band validation (words 0..31 + 112..114), trigger policy (26/27/30=0, otherwise
+  REJECT + log), ACK echo with latency/loss/retransmit profiles, boot push detection, version
+  handshake, a phase machine with synthetic sensor curves, fault injection and a JSONL assertion log.
+* **`ref_client.py`** — a protocol-level reference client that implements **the same contract** as
+  ourui's SIM build (`CONTRACT.md`): boot push, keep-awake (word1=0!), poll rotation, frame policy,
+  ACK/retransmit (150 ms + 1), hold-to-start touch, settings SAVE, a minimal fb renderer (circle clip
+  r234, phase colors, page/toast regions). It proved the sim + runner + assertion pipeline before the
+  real UI's SIM build existed.
+* **`run_e2e.py`** — runner: sandbox → sim → UI client → events → sampling → assertions → report
+  (JSON + MD + PNG snapshots + contact sheet).
+* **`scenarios/*.json`** — timelines (generated by `gen_scenarios.py`).
+* **`selftest.py`** — protocol checks without the runner (CRC, chunking, write policy, auto-stop, boot
+  push, packing, keep-awake, faults, ACK profiles, replay verify).
+* **`proto.py`** — shared CRC/frame/parse/register name/parity/evdev helpers.
+* **`png.py`** — dependency-free PNG (BGRA→PNG, thumbnails, contact sheet with a 5×7 bitmap font).
+* **`CONTRACT.md`** — the precise contract for the UI's SIM build.
 
 ## 2. Quickstart
 
 ```sh
-cd .
-
-# 1. Selftests (protokol-niveau, ~2 s):
+# 1. Self-tests (protocol level, ~3 s):
 python3 sim/selftest.py
 
-# 2. Ét scenarie (reference-klient, ~12-67 s):
+# 2. One scenario (~12–67 s):
 python3 sim/run_e2e.py --scenario brew
 
-# 3. Alle 22 scenarier (~6 min):
+# 3. All scenarios:
 python3 sim/run_e2e.py --all
 
-# 4. Når Fable's SIM-build lander (auto-detekteres som build/ourui_sim):
+# 4. Against a specific UI binary (build/ourui_sim is auto-detected):
 python3 sim/run_e2e.py --all --ui-bin build/ourui_sim
 
-# Rapporter: sim/reports/run-<timestamp>/report.md (+ report.json, contact_sheet.png pr. scenarie)
-python3 sim/run_e2e.py --list          # scenarie-oversigt
+# Reports: sim/reports/run-<timestamp>/report.md (+ report.json, contact_sheet.png per scenario)
+python3 sim/run_e2e.py --list          # list of scenarios
 ```
 
- Manuel leg med sim'en alene:
+Playing with the sim on its own:
 
 ```sh
 python3 sim/mcu_sim.py --pty-file /tmp/pty --ctrl /tmp/simctrl --assert-log /tmp/a.jsonl
-# i en anden terminal: tal protokollen mod $(cat /tmp/pty) med fx sim/selftest.py's RawClient,
-# eller injicér: echo '{"cmd":"inject","event":{"type":"fault","e1":32,"dur":5},"id":1}' | nc -U /tmp/simctrl
+# in another terminal: speak the protocol against $(cat /tmp/pty), e.g. with sim/selftest.py's RawClient,
+# or inject: echo '{"cmd":"inject","event":{"type":"fault","e1":32,"dur":5},"id":1}' | nc -U /tmp/simctrl
 ```
 
-## 3. Scenarier (25 stk.)
+For an interactive browser view of the simulator, see [PLAY.md](PLAY.md).
 
-| Scenarie | Varighed | Hvad bevises |
+## 3. Scenarios
+
+| Scenario | Duration | What it proves |
 |---|---|---|
-| `idle` | 12 s | poll-rotation, keep-awake, boot-push, versions-håndtryk, circle/farve/region-tjek |
-| `sleep_wake` | 28 s | ord1=1 → drain (ws 0x0001, kølende boilers) → ord1=0 → HEAT → READY |
-| `grind` | 17 s | **touch hold-for-start (650 ms)** → bit6 → vægt-ramp → auto-stop ~187/185 (live) → ord6 konsumeret |
-| `brew` | 40 s | pre-infusion plateau ord51≈358 (6 s) → ekstraktion ≈1346 → prædiktivt stop 352 (live) → efter-dryp 364 → ord22 ryddet af MCU (+0,16 s) |
-| `hotwater` | 15 s | sub9 len11 → ws 0x030B → dosering → auto-stop ord39≥ord17 → ord16 ryddet |
-| `steam_auto` | 40 s | display-steam (sub24 len8, latch) + wand-kontakt → ws 0x4121 → mælk-ramp → **auto-stop ord48≥ord25 uden stop-write** (ord24 MCU-clear +0,18 s) |
-| `steam_wand_flush` | 34 s | **v6.6:** wand-flush UNDER bryg → ws 0x5327 (union), ord24=0/ord46=1, **ingen auto-stop >650**, release-stop, bryg-vægt fortsætter, ingen flush-writes |
-| `steam_auto_overshoot` | 60 s | **v6.6:** kold mælk (116) → ramp → auto-stop 650 → **overshoot-peak ~689 (+39) ~11 s efter stop**; cur1 ~7340 / ord51 ~16650 under damp |
-| `steam_manual_stop` | 12 s | display-steam + wand-kontakt → manuel stop sub24 ord24=0 før setpoint |
-| `stop_water` | 14 s | **v6.13:** VAND (auto) → manuel stop sub16 ord16=0 midt i doseringen → ACK, bits 1+3+9 ryddet ≤0,5 s, vægt holdt + post/drip −11 som auto-stop, stop.ok=1 |
-| `stop_brew` | 20 s | **v6.13:** BRYG → manuel stop sub22 ord22=0 midt i ekstraktionen → ACK, ventil-puls 0x0105, efter-dryp +12 som auto-stop, stop.ok=1 |
-| `stop_grind` | 14 s | **v6.13:** KVÆRN → manuel stop sub6 ord6=0 midt i rampen → ACK, bit6 ryddet, vægten HOLDER (ingen ramp mod mål), cur2-decay, stop.ok=1 |
-| `stop_control_auto` | 15 s | **v6.13-kontrol:** VAND uden stop-word → ingen stop-writes, ord16=1 under doseringen, MCU auto-stop ved ord39≥ord17 (uændret) |
-| `power_off_wake` | 55 s | **v6.14:** HOLD 1,6 s → cmd8 (alarm 0/0/0) + sub0 len2 [0,0] ACK → **dvale** (tavs UART, regs frosset, keep-awake pause i 34 s) → sim-knap-hold → **reboot til fabriks-defaults** (ord11=920/ord114=50) → 0x89 → **re-push** genskaber config → PowerOn + HJEM + READY |
-| `power_during_activity` | 42 s | **v6.14:** power-HOLD under bryg **spærres** (toast, ingen frames — stock stopper aldrig en aktivitet ved sluk); brygen auto-stopper uforstyrret; nyt fuldt hold efter brygen slukker normalt |
-| `fault_e1/e2/e3` | 12-16 s | fejl-bits ord34/35/36 → fejl-UI + sikkerheds-stop af aktivitet |
-| `crc_garbage` | 12 s | garbage-stream + CRC-korruption → resync, link bevares |
-| `no_ack` | 12 s | **GEM blokerer** (retransmit→FAIL, config uændret) → recovery med normal profil |
-| `offline` | 14 s | link silent → OFFLINE efter 1,5 s → recovery. Ægte pty-lukning (`link closed` → ny pty ved reopen) bevises i selftest T10. |
-| `out_of_spec` | 14 s | config uden for spec → start spærret, sim logger boot-push-overtrædelser → rettelse → start |
-| `language` | 10 s | sprog config-only (EN index 0..10; **DA findes ikke i stock's 11 sprog** — ourui's labels er fast dansk, dokumenteret afvigelse) |
-| `boot_flag_toggle` | 10 s | `/customer/new` touch/rm i sandbox, ingen MCU-writes |
-| `runtime_switch` | 10 s | "SKIFT TIL ORIGINAL NU" (dry-run): bye-view → tilbage, flag uændret |
-| `gesture_switcher` | 12 s | **ÆGTE `switcher_host`** i fil-mode: 3×1,6 s hjørne-hold → trigger; 2 hold → ingen; UI ignorerer hjørnet |
-| `settings_save_matrix` | 67 s | **min/max/step/original pr. parity_spec-parameter** (188 checks): word-for-word MCU-writes, byte-pakning 112/113, config-persist, config-only uden writes, låste felter afvises. Service-triggers (backflush/drain/kalib/reboot/self-test) og felter uden grænser (timezone/preset/versioner/wifi-strenge) er bevidst udeladt — de er ikke UI-settings (PARITY §2.3/§5). |
-| `replay_v3` | 42 s | v3 grind+bryg-trace serveres som sandhed (8× hastighed) |
-| `replay_v2` | 20 s | v2 hot water-trace (2 dispenseringer, 8×) |
-| `replay_session` | 20 s | session sleep/drain-trace (8×) |
-| `replay_steam_live` | 34 s | **LIVE steam+grind+bryg+flush-session** (2026-11-17) som sandhed (8×): auto-stop, flush 0x5327, samtidige faser |
+| `idle` | 12 s | poll rotation, keep-awake, boot push, version handshake, circle/color/region checks |
+| `sleep_wake` | 28 s | word1=1 → drain (ws 0x0001, cooling boilers) → word1=0 → HEAT → READY |
+| `grind` | 17 s | **touch hold-to-start (650 ms)** → bit6 → weight ramp → auto-stop ~187/185 (live) → word6 consumed |
+| `brew` | 40 s | pre-infusion plateau word51≈358 (6 s) → extraction ≈1346 → predictive stop 352 (live) → after-drip 364 → word22 cleared by the MCU (+0.16 s) |
+| `hotwater` | 15 s | sub9 len11 → ws 0x030B → dispensing → auto-stop word39≥word17 → word16 cleared |
+| `steam_auto` | 40 s | display steam (sub24 len8, latch) + wand switch → ws 0x4121 → milk ramp → **auto-stop word48≥word25 without a stop write** (word24 MCU clear +0.18 s) |
+| `steam_wand_flush` | 34 s | **v6.6:** wand flush DURING a brew → ws 0x5327 (union), word24=0/word46=1, **no auto-stop >650**, release stop, the brew weight continues, no flush writes |
+| `steam_auto_overshoot` | 60 s | **v6.6:** cold milk (116) → ramp → auto-stop 650 → **overshoot peak ~689 (+39) ~11 s after the stop**; cur1 ~7340 / word51 ~16650 during steam |
+| `steam_manual_stop` | 12 s | display steam + wand switch → manual stop sub24 word24=0 before the setpoint |
+| `stop_water` | 14 s | **v6.13:** WATER (auto) → manual stop sub16 word16=0 in the middle of dispensing → ACK, bits 1+3+9 cleared ≤ 0.5 s, weight held + post/drip −11 like the auto-stop, stop.ok=1 |
+| `stop_brew` | 20 s | **v6.13:** BREW → manual stop sub22 word22=0 in the middle of the extraction → ACK, valve pulse 0x0105, after-drip +12 like the auto-stop, stop.ok=1 |
+| `stop_grind` | 14 s | **v6.13:** GRIND → manual stop sub6 word6=0 in the middle of the ramp → ACK, bit6 cleared, the weight HOLDS (no ramp towards the target), cur2 decay, stop.ok=1 |
+| `stop_control_auto` | 15 s | **v6.13 control:** WATER without a stop word → no stop writes, word16=1 during dispensing, MCU auto-stop at word39≥word17 (unchanged) |
+| `power_off_wake` | 55 s | **v6.14:** HOLD 1.6 s → cmd8 (alarm 0/0/0) + sub0 len2 [0,0] ACK → **sleep** (silent UART, registers frozen, keep-awake paused for 34 s) → sim button hold → **reboot to factory defaults** (word11=920/word114=50) → 0x89 → **re-push** restores the config → PowerOn + HOME + READY |
+| `power_during_activity` | 42 s | **v6.14:** a power HOLD during a brew is **blocked** (toast, no frames — the stock UI never stops an activity on power-off); the brew auto-stops undisturbed; a new full hold after the brew powers off normally |
+| `fault_e1/e2/e3` | 12–16 s | error bits words 34/35/36 → error UI + safety stop of the activity |
+| `crc_garbage` | 12 s | garbage stream + CRC corruption → resync, the link is kept |
+| `no_ack` | 12 s | **SAVE is blocked** (retransmit→FAIL, config unchanged) → recovery with the normal profile |
+| `offline` | 14 s | link silent → OFFLINE after 1.5 s → recovery. A real pty close (`link closed` → a new pty on reopen) is proven in selftest T10. |
+| `out_of_spec` | 14 s | config out of spec → start blocked, the sim logs boot push violations → fix → start |
+| `language` | 10 s | language is config-only (EN index 0..10; **Danish is not among the stock UI's 11 languages** — ourui's own UI language is a separate setting, a documented deviation) |
+| `boot_flag_toggle` | 10 s | `/customer/new` touch/rm in the sandbox, no MCU writes |
+| `runtime_switch` | 10 s | "SWITCH TO ORIGINAL NOW" (dry run): bye view → back, flag unchanged |
+| `gesture_switcher` | 12 s | **the REAL `switcher_host`** in file mode: trigger gesture → trigger; incomplete gesture → none; the UI ignores the gesture |
+| `settings_save_matrix` | 67 s | **min/max/step/original per parity_spec parameter** (188 checks): word-for-word MCU writes, byte packing 112/113, config persistence, config-only without writes, locked fields rejected. Service triggers (backflush/drain/calibration/reboot/self-test) and fields without limits (timezone/preset/versions/Wi-Fi strings) are deliberately left out — they are not UI settings (PARITY §2.3/§5). |
+| `replay_v3` | 42 s | the v3 grind+brew trace served as the truth (8× speed) |
+| `replay_v2` | 20 s | the v2 hot water trace (2 dispenses, 8×) |
+| `replay_session` | 20 s | the session sleep/drain trace (8×) |
+| `replay_steam_live` | 34 s | the **LIVE steam+grind+brew+flush session** (2026-11-17) as the truth (8×): auto-stop, flush 0x5327, concurrent phases |
 
-### Sådan tilføjes et scenarie
+### Adding a scenario
 
-Scenarier er JSON i `sim/scenarios/` (kan skrives i hånden eller genereres — `gen_scenarios.py` er den reproducerbare kilde til de 22):
+Scenarios are JSON files in `sim/scenarios/` (they can be written by hand or generated —
+`gen_scenarios.py` is the reproducible source):
 
 ```json
 {
-  "name": "mit_scenarie",
-  "description": "dansk beskrivelse",
+  "name": "my_scenario",
+  "description": "a short description",
   "duration_s": 20,
   "config": {"brewTemper": 880},
-  "sim": {"profile": "normal", "seed": 1, "require_wand": true},  // require_wand: legacy no-op fra v6.6
+  "sim": {"profile": "normal", "seed": 1, "require_wand": true},  // require_wand: legacy no-op since v6.6
   "replay": {"csv": "sim/fixtures/captures/uart_live_v3.csv.gz", "mode": "serve", "speed": 8},
   "events": [
     {"t": 2.0, "target": "ui", "cmd": "action", "name": "brew"},
@@ -145,7 +166,7 @@ Scenarier er JSON i `sim/scenarios/` (kan skrives i hånden eller genereres — 
     {"t": 3.0, "target": "sim", "event": {"type": "wand_down"}},
     {"t": 6.0, "target": "sim", "event": {"type": "wand_up"}},
     {"t": 3.0, "target": "sim", "cmd": "ack_profile", "profile": "no_ack"},
-    {"t": 4.0, "target": "runner", "op": "snapshot", "label": "mit_billede"},
+    {"t": 4.0, "target": "runner", "op": "snapshot", "label": "my_picture"},
     {"t": 5.0, "target": "runner", "op": "config_set", "field": "brewTemper", "value": 870, "reload": true},
     {"t": 6.0, "target": "runner", "op": "gesture", "name": "positiv", "presses": 3, "inject_ui": true}
   ],
@@ -169,129 +190,192 @@ Scenarier er JSON i `sim/scenarios/` (kan skrives i hånden eller genereres — 
 }
 ```
 
-**Expect-kinds:** `phase`, `phase_hold`, `phase_seq`, `word`, `word_hold`, `word_min_seen`, `work_sta_seen`, `stop_ok` (v6.13: `state.stop.ok/fail`), `page`, `view`, `toast`, `lang`, `config`, `flag`, `save`, `save_rejected`, `config_oor_min`, `exit_code`, `crc_bad_min`, `offline_seen`, `link_up_at`, `cmd6`, `circle`, `region`, `point`, `gesture`, `contract`, `replay_truth`, `sim_log`.
-**sim_log-asserts:** `boot_push`, `version`, `keepalive_ok`, `no_reboot`, `no_calib`, `no_band_rejects`, `range_max`, `range_min`, `write_words`, `ack_words` (v6.13: ACK-echo sub+words), `no_write_word`, `no_writes_between`, `activity_start`, `activity_stop`, `sleep_write_seen`, `awake_write_seen`, `acks_dropped_min`, `writes_min`.
-**Universal-checks** (køres altid medmindre slået fra): circle-tjek på alle snapshots, SIM-kontrakt (state-felter + fb-størrelse), ingen reboot/kalib-trigger-writes, ingen bånd-overskridelser, 0 range-overtrædelser, keep-awake ≤30 s, boot-push + versions-håndtryk, exit 0, 0 cmd6-fejl.
+(`"positiv"` and `"vægt"` are literal values matched by the runner/sim log — "positive" and "weight".)
 
-Kør derefter: `python3 sim/run_e2e.py --scenario mit_scenarie`.
+**Expect kinds:** `phase`, `phase_hold`, `phase_seq`, `word`, `word_hold`, `word_min_seen`,
+`work_sta_seen`, `stop_ok` (v6.13: `state.stop.ok/fail`), `page`, `view`, `toast`, `lang`, `config`,
+`flag`, `save`, `save_rejected`, `config_oor_min`, `exit_code`, `crc_bad_min`, `offline_seen`,
+`link_up_at`, `cmd6`, `circle`, `region`, `point`, `gesture`, `contract`, `replay_truth`, `sim_log`.
+**sim_log asserts:** `boot_push`, `version`, `keepalive_ok`, `no_reboot`, `no_calib`,
+`no_band_rejects`, `range_max`, `range_min`, `write_words`, `ack_words` (v6.13: ACK echo sub+words),
+`no_write_word`, `no_writes_between`, `activity_start`, `activity_stop`, `sleep_write_seen`,
+`awake_write_seen`, `acks_dropped_min`, `writes_min`.
+**Universal checks** (always run unless disabled): circle check on all snapshots, SIM contract (state
+fields + fb size), no reboot/calibration trigger writes, no band violations, 0 range violations,
+keep-awake ≤ 30 s, boot push + version handshake, exit 0, 0 cmd6 errors.
 
-## 4. Assertions-liste (hvad miljøet fanger)
+Then run: `python3 sim/run_e2e.py --scenario my_scenario`.
 
-1. **Protokol:** CRC-16/MODBUS på alle frames; chunked reads ≤32 B; resync efter garbage; cmd9 byte-LEN; cmd8 fast 15 B; boot-push (sub1 len30 + sub112 len3) ved connect; 0x89→cmd9 håndtryk.
-2. **Write-politik:** bånd 0..31 + 112..114 (alt andet afvises+logges); trigger-ord 26/27/30=0 (afvises+logges); parity-grænser pr. ord (logges som `range_violation` — MCU'en har ingen checks, UI'et er eneste værn); ACK=eksakt echo.
-3. **Keep-awake:** ord1=0 forventes hvert ≤30 s → `keepalive_gap` i sim-loggen (runneren fejler scenariet).
-4. **Fase-kurver:** work_sta pr. fase (idle 0x0101, grind 0x0141, brew 0x1107/0x1307, vand 0x030B, damp 0x4121, sleep 0x0001); pre-infusion plateau ≈358 i ~6 s; ekstraktion ≈1346; prædiktivt vægt-stop + efter-dryp; auto-stop ved mål (vand/brew) og mælk-setpoint (damp); MCU-ejet flag-clear (ord16/22/24).
-5. **UI-state:** fase/page/toasts/sprog/boot-flag/config-oor pr. frame mod forventninger; save-blokering ved ACK-udeblivelse (config uændret!); hold-for-start; låste felter afvises.
-6. **Framebuffer:** circle-tjek (intet uden for r240, hjørner sorte, max-radius ≤234,71 — portet fra `check_circle.py`); farve/region-tjek (fase-ring, page-region, baggrund, toast).
-7. **Settings-matrix:** word-for-word writes mod `parity_spec.json` (min/max/step/original), byte-pakning 112/113 med løbende config-tilstand, config-only-parametre uden MCU-writes.
-8. **Gestus:** den ægte switcher-daemon udløses af 3×1,6 s hjørne-hold og ikke af 2 hold; UI'et starter ingen aktivitet af hjørne-holds.
-9. **Replay:** sim'ens svar matches frame-for-frame mod optagne registre (se tolerancer nedenfor).
+## 4. List of assertions (what the environment catches)
 
-## 5. REPLAY-mode + tolerancer
+1. **Protocol:** CRC-16/MODBUS on all frames; chunked reads ≤ 32 B; resync after garbage; cmd9 byte
+   LEN; cmd8 fixed 15 B; boot push (sub1 len30 + sub112 len3) on connect; 0x89→cmd9 handshake.
+2. **Write policy:** bands 0..31 + 112..114 (everything else is rejected + logged); trigger words
+   26/27/30=0 (rejected + logged); parity limits per word (logged as `range_violation` — the MCU has
+   no checks, the UI is the only guard); ACK = exact echo.
+3. **Keep-awake:** word1=0 is expected every ≤ 30 s → `keepalive_gap` in the sim log (the runner fails
+   the scenario).
+4. **Phase curves:** work_sta per phase (idle 0x0101, grind 0x0141, brew 0x1107/0x1307, water 0x030B,
+   steam 0x4121, sleep 0x0001); pre-infusion plateau ≈358 for ~6 s; extraction ≈1346; predictive
+   weight stop + after-drip; auto-stop at the target (water/brew) and the milk setpoint (steam);
+   MCU-owned flag clearing (words 16/22/24).
+5. **UI state:** phase/page/toasts/language/boot flag/config-oor per frame against expectations; SAVE
+   blocked when ACKs are missing (config unchanged!); hold-to-start; locked fields rejected.
+6. **Framebuffer:** circle check (nothing outside r240, corners black, max radius ≤ 234.71 — ported
+   from `check_circle.py`); color/region checks (phase ring, page region, background, toast).
+7. **Settings matrix:** word-for-word writes against `parity_spec.json` (min/max/step/original), byte
+   packing 112/113 with a running config state, config-only parameters without MCU writes.
+8. **Gesture:** the real switcher daemon is triggered by the trigger gesture and not by an incomplete
+   one; the UI starts no activity from the gesture.
+9. **Replay:** the sim's replies are matched frame for frame against recorded registers (see the
+   tolerances below).
 
-To modes (`--replay <frames.csv> --replay-mode serve|verify`):
+## 5. REPLAY mode + tolerances
 
-* **serve** (scenarierne `replay_v2/v3/session`): optagelsen afspilles som **sandhed** på live polls (registerspejlet føres af optagne RX-frames; optagne writes appliceres). Live klient-writes (boot-push/keep-awake) lægges ovenpå — i session-scenariet giver keep-awake kortvarige SLEEP→READY-flickers (dokumenteret; forventning bruger `min_ratio`). Hastighed styres med `speed` (scenarierne bruger 8×). Ved 8× kan kortvarige toppe (fx vægt-peak 405 i 1-2 frames) falde mellem UI'ens polls → **`replay_truth`-assertions** spørger sim'en om optagelsens min/max i vinduet (aliasing-sikkert) i stedet for at kræve at UI-spejlet så præcis toppen.
-* **verify** (selftest T11 + `mcu_sim.py --replay-mode verify`): sim'ens **egen fase-maskine** drives af de optagne writes på de optagne tidspunkter, og svarene sammenlignes **frame-for-frame** med optagelsen. Rå strace-logs (`uart_trace.log`) dekodes først til `frames.csv` med den eksisterende decoder: `.venv/bin/python artifacts/uart_live_v3/decode_uart_v3.py <log> --fd 13 --outdir <mappe>` (v2/v3/session er allerede dekodet i artifacts). Resultat:
+Two modes (`--replay <frames.csv> --replay-mode serve|verify`):
 
-| Optagelse | Samples | Match | Exact-fejl | work_sta-sekvens | Timing |
+* **serve** (the scenarios `replay_v2/v3/session`): the recording is played back as **the truth** on
+  live polls (the register mirror is driven by recorded RX frames; recorded writes are applied). Live
+  client writes (boot push/keep-awake) are layered on top — in the session scenario keep-awake gives
+  brief SLEEP→READY flickers (documented; the expectation uses `min_ratio`). The speed is controlled
+  with `speed` (the scenarios use 8×). At 8×, brief peaks (e.g. the weight peak 405 for 1–2 frames)
+  can fall between the UI's polls → **`replay_truth` assertions** ask the sim for the recording's
+  min/max in the window (aliasing-safe) instead of requiring the UI mirror to have seen exactly the
+  peak.
+* **verify** (selftest T11 + `mcu_sim.py --replay-mode verify`): the sim's **own phase machine** is
+  driven by the recorded writes at the recorded times, and the replies are compared **frame for
+  frame** with the recording. Raw strace logs (`uart_trace.log`) are first decoded to `frames.csv`
+  with the existing decoder (`decode_uart_v3.py <log> --fd 13 --outdir <dir>`, in the author's
+  working environment; the recordings in this repo are already decoded). Result:
+
+| Recording | Samples | Match | Exact errors | work_sta sequence | Timing |
 |---|---|---|---|---|---|
-| v3 (grind+bryg, 485 s) | 138.355 | **99,52 %** | 0 | ✓ identisk | ✓ ±1,5 s |
-| v2 (hot water ×2, 365 s) | 106.778 | **97,89 %** | 0 | ✓ identisk | ✓ ±1,5 s |
-| session (sleep/drain, 729 s) | 209.538 | **98,93 %** | 0 | ✓ identisk | ✓ ±1,5 s |
+| v3 (grind+brew, 485 s) | 138,355 | **99.52 %** | 0 | ✓ identical | ✓ ±1.5 s |
+| v2 (hot water ×2, 365 s) | 106,778 | **97.89 %** | 0 | ✓ identical | ✓ ±1.5 s |
+| session (sleep/drain, 729 s) | 209,538 | **98.93 %** | 0 | ✓ identical | ✓ ±1.5 s |
 
-**Tolerance-klasser** (dokumenteret afvigelse mellem syntetisk kurve og optagelse):
+**Tolerance classes** (documented deviation between the synthetic curve and the recording):
 
-| Klasse | Ord | Tolerance |
+| Class | Words | Tolerance |
 |---|---|---|
-| `exact` | setup/flag/statiske (0..32 m.fl., 34-37, 43-46, 54, 56-57, 59-67, 73-114, 128) | **0** — skal matche præcist |
-| `event` | 3, 6, 9, 16, 22, 24, 33 (work_sta) | tidsforskudt match ±0,75 s (trigger-konsumering er asynkron); work_sta maskeres for idle-pulser (bits 10/11/13) |
-| `sensor` | 40, 41, 42, 47, 48, 49, 68-72 | \|Δ\| ≤ 15 (1,5 °C / ADC-enheder); **fysiske hændelser synkes** (ord48 mælk-påfyldning/probe: rec<sim−20 el. dev>60; ord68 vandforbrug: dev>40) — som weight-physync |
-| `weight` | 38, 39, 53, 55 | \|Δ\| ≤ 30 (3 g) eller tidsforskudt ±0,75 s; **fysiske spring** (>100 kalibrerede / >40 rå celler: kop fjernet, tare-glitch) synkes fra sandheden (+ rå-celle-base justeres) og tælles separat (`physical_sync`) |
-| `fast` | 50, 51, 52, 58 | \|Δ\| ≤ max(400, 35 %) eller tidsforskudt ±15 %; **stokastiske idle-vedligeholdscyklusser** (min<200 vs max>200 i idle — små 400-1000 og store >1000) tåles på begge sider (fasen er ikke deterministisk i originalen) |
+| `exact` | setup/flags/static (0..32 etc., 34-37, 43-46, 54, 56-57, 59-67, 73-114, 128) | **0** — must match exactly |
+| `event` | 3, 6, 9, 16, 22, 24, 33 (work_sta) | time-shifted match ±0.75 s (trigger consumption is asynchronous); work_sta is masked for idle pulses (bits 10/11/13) |
+| `sensor` | 40, 41, 42, 47, 48, 49, 68-72 | \|Δ\| ≤ 15 (1.5 °C / ADC units); **physical events are synced** (word48 milk refill/probe: rec<sim−20 or dev>60; word68 water consumption: dev>40) — like the weight physync |
+| `weight` | 38, 39, 53, 55 | \|Δ\| ≤ 30 (3 g) or time-shifted ±0.75 s; **physical jumps** (>100 calibrated / >40 raw cells: cup removed, tare glitch) are synced from the truth (+ the raw cell base is adjusted) and counted separately (`physical_sync`) |
+| `fast` | 50, 51, 52, 58 | \|Δ\| ≤ max(400, 35 %) or time-shifted ±15 %; **stochastic idle maintenance cycles** (min<200 vs max>200 at idle — small 400–1000 and large >1000) are tolerated on both sides (the phase is not deterministic in the original) |
 
-**PASS-kriterier:** exact-ord 100 %, samlet match ≥92 %, work_sta-sekvens (maskeret) identisk i rækkefølge, alle transitions inden for ±1,5 s. **v6.6-kalibrering (STEAMLIVE.md):** grind-start +0,39 s, brew-start +0,17 s, vand-start +0,18 s, damp-start +0,30 s; vægt-rater 19,4/18,6/63,8 enh/s (bryg: ramp fra pre+2,75 s, stop mål−8, efter-dryp +12); sleep-køling 0,1125/0,07 enh/s; damp-ramp 14 enh/s midter-rate (kold start 9,8 / slut-fase 12,6), **auto-stop-overshoot +39 enh → peak ~11 s efter stop**, cur1 ~7340 / ord51 ~16650 under damp, s-boiler drop/recovery + flush 11,6 enh/s, wand-flush (latch=0) uden auto-stop. **Verify steam-live: 99,608 % (PASS)**; korte bit9-pre-pulser filtreres fra ws-sekvensen (stokastisk placering: v3 el 1,14 s vs live el 4,97 s). Se `reports/v6.6-calibration/REPORT.md`.
+**PASS criteria:** exact words 100 %, overall match ≥ 92 %, the work_sta sequence (masked) identical
+in order, all transitions within ±1.5 s. **v6.6 calibration (STEAMLIVE.md):** grind start +0.39 s,
+brew start +0.17 s, water start +0.18 s, steam start +0.30 s; weight rates 19.4/18.6/63.8 units/s
+(brew: ramp from pre+2.75 s, stop at target−8, after-drip +12); sleep cooling 0.1125/0.07 units/s;
+steam ramp 14 units/s mid rate (cold start 9.8 / final phase 12.6), **auto-stop overshoot +39 units →
+peak ~11 s after the stop**, cur1 ~7340 / word51 ~16650 during steam, s boiler drop/recovery + flush
+11.6 units/s, wand flush (latch=0) without auto-stop. **Verify steam-live: 99.608 % (PASS)**; short
+bit9 pre-pulses are filtered from the ws sequence (stochastic placement: v3 at 1.14 s vs live at
+4.97 s). See `reports/v6.6-calibration/REPORT.md`.
 
-## 6. Hvad miljøet IKKE dækker
+## 6. What the environment does NOT cover
 
-* **Ægte fb-timing på Cortex-A7** (SSD202): render-tid, page-flip-tearing, mmap-latens og LVGL-lignende compositor-effekt er ikke modelleret. SIM-build'et renderer til en buffer; `frame_ms` måles på host.
-* **Ægte touch-elektrik:** tw31xx-controllerens støj, ghost-touches, multi-finger og raw-range-kalibrering er ikke modelleret (evdev-formatet er ægte, men events er syntetiske).
-* **MCU-bootloader/OTA:** `CC DD`-OTA-protokollen, flash-staging, bootloader-kopi og V120-check er **ikke** simuleret (kun `AA 55`-linket). OTA-test kræver separat leverance.
-* **Fysisk sensor-fysik:** kurverne er kalibrerede emuleringer, ikke en termodynamisk/vægt-model. Ord51's identitet (tryk vs. pumpe-drive) og bar-skala er **uafklaret** (BREW §7) — sim'en bruger rå plateau-værdier (358/1346), ikke bar.
-* **Steam-kurvens form:** nu **live-kalibreret** (STEAMLIVE.md §5, capture 2026-11-17): ramp 1,403 °C/s (midter-rate), auto-stop ved ord48≥ord25, overshoot +3,9 °C (peak ~11 s efter stop), ord24 MCU-clear +0,18 s. Rest-afvigelser i verify (0,39 %): mælk-probens variable afkøling/flush-jet (ikke-observerbar fysik) og vandniveauets vedligehold-purges — se `reports/v6.6-calibration/REPORT.md` §8.
-* **MCU'ens præcise stop-algoritme** (prædiktiv vægt-kompensation) er approximeret (stop ved mål−8 + efter-dryp +12, live-kalibreret; bryg#1 i replay seed'es med kvadratisk ramp-fit fra optagelsen).
-* **WiFi/NFC/preset-apply/lave-tidssync (cmd8 DST-logik)** er uden for scope (cmd8 ACK'es dog protokol-korrekt).
-* **Replay-aliasing:** ved høj afspilningshastighed kan UI-spejlet misse kortvarige toppe (se `replay_truth` ovenfor).
-* **ourui's rigtige grafik/layout:** reference-klientens fb er en simpel emulering (fase-ring + knapper + regioner). Circle-/farve-/region-checks bliver først rigtigt meningsfulde med Fable's SIM-build — kontrakten sikrer at de samme assertions så gælder det rigtige UI.
+* **Real fb timing on the Cortex-A7** (SSD202): render time, page-flip tearing, mmap latency and
+  LVGL-like compositor effects are not modeled. The SIM build renders to a buffer; `frame_ms` is
+  measured on the host.
+* **Real touch electronics:** the tw31xx controller's noise, ghost touches, multi-finger and raw range
+  calibration are not modeled (the evdev format is real, but the events are synthetic).
+* **MCU bootloader/OTA:** the `CC DD` OTA protocol, flash staging, the bootloader copy and the V120
+  check are **not** simulated (only the `AA 55` link). OTA testing requires a separate deliverable.
+* **Physical sensor physics:** the curves are calibrated emulations, not a thermodynamic/weight model.
+  Word51's identity (pressure vs. pump drive) and bar scale are **unresolved** (BREW §7) — the sim
+  uses the raw plateau values (358/1346), not bar.
+* **The shape of the steam curve:** now **calibrated live** (STEAMLIVE.md §5, capture 2026-11-17):
+  ramp 1.403 °C/s (mid rate), auto-stop at word48≥word25, overshoot +3.9 °C (peak ~11 s after the
+  stop), word24 MCU clear +0.18 s. Remaining deviations in verify (0.39 %): the milk probe's variable
+  cooling/flush jet (unobservable physics) and the water level's maintenance purges — see
+  `reports/v6.6-calibration/REPORT.md` §8.
+* **The MCU's exact stop algorithm** (predictive weight compensation) is approximated (stop at
+  target−8 + after-drip +12, calibrated live; brew #1 in replay is seeded with a quadratic ramp fit
+  from the recording).
+* **Wi-Fi/NFC/preset apply/low-level time sync (cmd8 DST logic)** are out of scope (cmd8 is, however,
+  ACKed protocol-correctly).
+* **Replay aliasing:** at high playback speed the UI mirror can miss brief peaks (see `replay_truth`
+  above).
+* **ourui's real graphics/layout** with the reference client: the reference client's fb is a simple
+  emulation (phase ring + buttons + regions). The circle/color/region checks only become truly
+  meaningful with the real UI's SIM build — the contract ensures that the same assertions then apply to
+  the real UI.
 
-## 7. Verifikations-status (LEVERANCE 5)
+## 7. Verification status (DELIVERABLE 5)
 
-| Check | Resultat |
+| Check | Result |
 |---|---|
-| `sim/selftest.py` (CRC, chunking, write-politik, auto-stop, boot-push, packing, keep-awake, fejl, ACK-profiler, offline, cmd8, replay) | **107 PASS / 0 FAIL** |
-| Replay-verify v3 (BREW-trace) | **PASS** (99,52 %, exact 100 %, ws-sekvens+timing OK) |
-| Replay-verify v2 + session | **PASS** (97,89 % / 98,93 %) |
-| `run_e2e.py --all` m. reference-klient | **22/22 scenarier PASS, 553/553 checks** (definitiv kørsel: `sim/reports/run-20261117-152210/report.md`) |
-| Settings-save-matrix (parity_spec min/max/step) | **188/188 checks** |
-| Gestus mod ægte `switcher_host` | trigger ✓ / 2-hold nej ✓ |
-| Ingen enhedskontakt; Fable's filer urørt; `sim/fixtures/config.json` md5 = baseline `<config-md5>…` | ✓ |
+| `sim/selftest.py` (CRC, chunking, write policy, auto-stop, boot push, packing, keep-awake, faults, ACK profiles, offline, cmd8, replay) | **107 PASS / 0 FAIL** |
+| Replay verify v3 (BREW trace) | **PASS** (99.52 %, exact 100 %, ws sequence + timing OK) |
+| Replay verify v2 + session | **PASS** (97.89 % / 98.93 %) |
+| `run_e2e.py --all` with the reference client | **22/22 scenarios PASS, 553/553 checks** (definitive run: `sim/reports/run-20261117-152210/report.md`) |
+| Settings save matrix (parity_spec min/max/step) | **188/188 checks** |
+| Gesture against the real `switcher_host` | trigger ✓ / incomplete gesture no ✓ |
+| No device contact; the UI work stream's files untouched; `sim/fixtures/config.json` md5 = baseline `<config-md5>…` | ✓ |
 
-**Hvad der først kan køres når Fable's SIM-build lander:** de samme 22 scenarier mod det rigtige UI (`--ui-bin`), dvs. ægte ourui-grafik i circle-/farve-/region-checks, ægte stepper/settings-UI i matrix-scenariet, ægte BOOT-UI/SKIFT-knapper, ægte DIAGNOSE-side. Kontrakten (`CONTRACT.md`) er designet så scenarierne kører **uden ændringer**; reference-klienten er oracle for felt-navne og timing.
+**What could only be run once the UI's SIM build landed:** the same scenarios against the real UI
+(`--ui-bin`), i.e. real ourui graphics in the circle/color/region checks, the real stepper/settings UI
+in the matrix scenario, the real BOOT UI/SWITCH buttons, the real DIAGNOSTICS page. The contract
+(`CONTRACT.md`) is designed so the scenarios run **without changes**; the reference client is the
+oracle for field names and timing.
 
-### v6.6-status (2026-11-17, STEAMLIVE-kalibrering)
+### v6.6 status (2026-11-17, STEAMLIVE calibration)
 
-| Check | Resultat |
+| Check | Result |
 |---|---|
-| `sim/selftest.py` | **120 PASS / 0 FAIL** (107 + wand/latch/overshoot/samtidig + steam-live-verify) |
-| Replay-verify **steam-live** (kalibrerings-målet) | **PASS 99,608 %** (exact 100 %, ws-sekvens+timing OK) — var 92,59 % FAIL |
-| Replay-verify v3 / v2 / session | **PASS** (99,83 % / 99,90 % / 100,00 %) |
-| `run_e2e.py --all` mod ourui V6.6 (rå EN/DA) + REF | **25/25 scenarier · 644/644 checks** |
-| steam_auto deterministisk 30× | **30/30 PASS** |
-| Nye scenarier | `steam_wand_flush` (31) + `steam_auto_overshoot` (24) |
+| `sim/selftest.py` | **120 PASS / 0 FAIL** (107 + wand/latch/overshoot/concurrency + steam-live verify) |
+| Replay verify **steam-live** (the calibration target) | **PASS 99.608 %** (exact 100 %, ws sequence + timing OK) — was 92.59 % FAIL |
+| Replay verify v3 / v2 / session | **PASS** (99.83 % / 99.90 % / 100.00 %) |
+| `run_e2e.py --all` against ourui V6.6 (raw EN/DA) + REF | **25/25 scenarios · 644/644 checks** |
+| steam_auto deterministic 30× | **30/30 PASS** |
+| New scenarios | `steam_wand_flush` (31) + `steam_auto_overshoot` (24) |
 
-Detaljer: `sim/reports/v6.6-calibration/REPORT.md` + CONTRACT.md TILLÆG v6.6-calibration.
+Details: `sim/reports/v6.6-calibration/REPORT.md` + CONTRACT.md ADDENDUM v6.6-calibration.
 
-### v6.13-status (2026-11-18, manuel STOP — SIM_HANDOFF)
+### v6.13 status (2026-11-18, manual STOP — SIM_HANDOFF)
 
-| Check | Resultat |
+| Check | Result |
 |---|---|
-| `sim/selftest.py` | **150 PASS / 0 FAIL** (120 + T12 manuel STOP + 4 stop-frame-vektorer) |
-| Manuel stop i mcu_sim | ord16/19=0 (vand, **også auto-tilstand**), ord22=0 (bryg), ord6=0 (kværn) → samme stop-vej som auto-stop (post/drip/decay), ACK'et |
-| Replay-verify v3 / v2 / session / steam-live | **Uændret** (99,83 / 99,92 / 100,00 / 99,64 %) — optagelserne har ingen stop-writes |
-| Nye scenarier (EN + DA + REF) | `stop_water`/`stop_brew`/`stop_grind`/`stop_control_auto`: **4/4 · 100/100 checks i hver klient** |
+| `sim/selftest.py` | **150 PASS / 0 FAIL** (120 + T12 manual STOP + 4 stop frame vectors) |
+| Manual stop in mcu_sim | word16/19=0 (water, **also auto mode**), word22=0 (brew), word6=0 (grind) → the same stop path as the auto-stop (post/drip/decay), ACKed |
+| Replay verify v3 / v2 / session / steam-live | **Unchanged** (99.83 / 99.92 / 100.00 / 99.64 %) — the recordings have no stop writes |
+| New scenarios (EN + DA + REF) | `stop_water`/`stop_brew`/`stop_grind`/`stop_control_auto`: **4/4 · 100/100 checks in each client** |
 | `run_e2e.py --all --quick --parallel 4` | **5/5 · 97/97** |
 | Regression (gesture/steam/brew/hotwater/grind/replay-serve) | **8/8 · 178/178** |
-| UI'ets egne stop-scenarier (v6.13, DA) genkørt | **3/3 · 51/51** — slutter READY (før: aktiviteten kørte videre) |
+| The UI's own stop scenarios (v6.13, DA) rerun | **3/3 · 51/51** — end in READY (before: the activity kept running) |
 
-Detaljer: `sim/reports/v6.13-sim/SUMMARY.md` + CONTRACT.md TILLÆG v6.13.
+Details: `sim/reports/v6.13-sim/SUMMARY.md` + CONTRACT.md ADDENDUM v6.13.
 
-### v6.14-status (2026-11-18, MCU-dvale/wake — SIM_HANDOFF)
+### v6.14 status (2026-11-18, MCU sleep/wake — SIM_HANDOFF)
 
-| Check | Resultat |
+| Check | Result |
 |---|---|
-| `sim/selftest.py` | **187 PASS / 0 FAIL** (150 + T13 dvale/wake: 37 checks) |
-| Dvale i mcu_sim | ord0=0 → ACK + ≤0,5 s til **tavs dvale** (work_sta=0, udgange 0, aktiviteter stoppet sikkert, regs frosset, keep-awake pause); cmd3/cmd6/cmd8 droppes |
-| Wake | knap-hold **≥0,8 s** eller **RTC-alarm** (cmd8) → CPU-reset til **fabriks-startværdier** + 0x89-runde → boot-push/re-push forventes (config genskabes) |
-| Nye scenarier (EN + DA, v6.14-SIM + REF) | `power_off_wake` (38 checks) + `power_during_activity` (29 checks): **grønne i alle klienter/sprog** |
-| `run_e2e.py --all --quick --parallel 4` | **5/5 · 97/97** (v6.14-SIM-build) |
-| Regression (stop×4/gesture×2/steam×4/brew/grind/hotwater/sleep_wake/replay-serve×4 = 18, EN+DA) | **18/18 · 394/394 i hvert sprog** — optagelserne har ingen ord0=0-writes; dvale indtræder aldrig i replay |
+| `sim/selftest.py` | **187 PASS / 0 FAIL** (150 + T13 sleep/wake: 37 checks) |
+| Sleep in mcu_sim | word0=0 → ACK + ≤ 0.5 s to **silent sleep** (work_sta=0, outputs 0, activities stopped safely, registers frozen, keep-awake paused); cmd3/cmd6/cmd8 are dropped |
+| Wake | button hold **≥ 0.8 s** or **RTC alarm** (cmd8) → CPU reset to the **factory start values** + 0x89 round → boot push/re-push expected (config restored) |
+| New scenarios (EN + DA, v6.14 SIM + REF) | `power_off_wake` (38 checks) + `power_during_activity` (29 checks): **green in all clients/languages** |
+| `run_e2e.py --all --quick --parallel 4` | **5/5 · 97/97** (v6.14 SIM build) |
+| Regression (stop×4/gesture×2/steam×4/brew/grind/hotwater/sleep_wake/replay-serve×4 = 18, EN+DA) | **18/18 · 394/394 in each language** — the recordings have no word0=0 writes; sleep never occurs in replay |
 
-Detaljer: `sim/reports/v6.14-sim/SUMMARY.md` + CONTRACT.md TILLÆG v6.14-sim.
+Details: `sim/reports/v6.14-sim/SUMMARY.md` + CONTRACT.md ADDENDUM v6.14-sim.
 
-## 8. Fil-inventar
+## 8. File inventory
 
-| Fil | Formål |
+| File | Purpose |
 |---|---|
-| `mcu_sim.py` | simuleret MCU (pty, register-model, fase-maskine, fejl, assertions-log, replay) |
-| `ref_client.py` | reference-klient (implementerer CONTRACT.md; beviser sim'en nu) |
-| `run_e2e.py` | runner (sandbox, launch, events, sampling, assertions, rapport) |
-| `selftest.py` | 187 protokol-/model-selftests (v6.14: + dvale/wake T13) |
-| `proto.py` | CRC/frame/parse/parity/evdev-fællesbibliotek |
-| `png.py` | dependency-free PNG + contact-sheet |
-| `gen_scenarios.py` | reproducerbar generator til scenarios/*.json |
-| `scenarios/*.json` | 31 tidslinjer (v6.14: + power_off_wake/power_during_activity) |
-| `CONTRACT.md` | kontrakt til Fable's SIM-build |
-| `README.md` | denne fil |
-| `reports/run-*/` | kørsels-rapporter (JSON + MD + PNG + logs) |
+| `mcu_sim.py` | simulated MCU (pty, register model, phase machine, faults, assertion log, replay) |
+| `ref_client.py` | reference client (implements CONTRACT.md) |
+| `run_e2e.py` | runner (sandbox, launch, events, sampling, assertions, report) |
+| `selftest.py` | 187 protocol/model self-tests (v6.14: + sleep/wake T13) |
+| `proto.py` | CRC/frame/parse/parity/evdev shared library |
+| `png.py` | dependency-free PNG + contact sheet |
+| `gen_scenarios.py` | reproducible generator for scenarios/*.json |
+| `scenarios/*.json` | 31 timelines (v6.14: + power_off_wake/power_during_activity) |
+| `play.py`, `play_viewer.html`, `PLAY.md` | interactive browser simulator |
+| `CONTRACT.md` | the contract for the UI's SIM build |
+| `README.md` | this file |
+| `reports/run-*/` | run reports (JSON + MD + PNG + logs; not tracked in git) |
 
-*— test-agent, 2026-11-17. Alt kørt lokalt; enheden ikke berørt; Fable's filer ikke rørt.*
+*— test work stream, 2026-11-17. Everything run locally; the device was not touched.*
