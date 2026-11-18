@@ -1,300 +1,300 @@
-# GESTUS-FIX v6.12 — simplere center-hold-gestus + grab-bypass + auto raw-range
+# GESTURE-FIX v6.12 — simpler center-hold gesture + grab bypass + automatic raw range
 
-> **Note (offentlig udgave):** Udviklingsnoter skrevet under udviklingen. Stier som `artifacts/…`, `boot_install.py`-trin og md5-tabeller refererer til forfatterens arbejdsmiljø; som slutbruger skal du bruge `./install.sh` og `./revert.sh` (se [README](../README.md)). Producentens filer er ikke inkluderet; IP-adresser og andre personlige data er fjernet.
+> **Note (public edition):** Development notes written during development. Paths such as
+> `artifacts/…`, `boot_install.py` steps and md5 tables refer to the author's working environment; as
+> an end user, use `./install.sh` and `./revert.sh` (see the [README](../README.md)). The
+> manufacturer's files are not included; IP addresses and other personal data have been removed.
 
-**Dato:** 2026-11-18 · **Status:** FORBEREDT LOKALT — **on-device verifikation PENDING**
-(maskinen er slukket af brugeren; ingen kontakt med enheden er sket under forberedelsen).
-**Ejer:** boot-agenten (`artifacts/ourui/boot/`). Fable's filer (`ourui_v6.c`, `UI_v6.md`,
-`build_sim.sh`, `REVERT.md`) er **IKKE ændret**; `sim/mcu_sim.py`, `sim/scenarios/`,
-`sim/run_e2e.py` er **IKKE ændrt** (jf. opgaveinstruks).
-
----
-
-## 1. Rodårsag (FINDINGS.md 'Gestus-debug', 2026-11-18)
-
-Gestus'en A→B triggede **ikke fysisk** på enheden. Diagnose indtil pause:
-
-* Touch-hardware + driver virker (131 IRQs; stock reagerer på knapper efter IC-reset
-  via driver-sysfs). Orientering KORREKT (grinder-cirklen øv-venstre åbnede grinder).
-* Enhedens ABS_MT raw-range er **0..480** — ikke 4095 som tinj/sim antog.
-* `/tmp/switcher.log` har **INGEN event-linjer nogensinde** (kun startup) mens IRQs
-  flytter sig → **hypotese: stock `demo_v9` griber `/dev/input/event0 EKSKLUSIVT
-  (`EVIOCGRAB`)** → den read-only switcher ser aldrig events → gestus A→B umulig
-  mens stock kører og grabber.
-* Tidligere "gestus bestået" (INSTALL-REPORT v6.6/v6.11 §6) var sandsynligvis
-  **injection mens stock var SIGSTOP'et/ikke-grabbende** — ikke et fysisk bevis.
-
-Konsekvens: gestus-fixet kræver (1) en gestus der kan udføres fysisk uden at ramme
-stock-knapper, og (2) en **grab-bypass** så switcher'en ser events mens stock kører.
+**Date:** 2026-11-18 · **Status:** PREPARED LOCALLY — **on-device verification PENDING**
+(the machine was switched off by the user; no contact with the device took place during preparation).
+**Owner:** the boot work stream (`artifacts/ourui/boot/`). The UI files (`ourui_v6.c`, `UI_v6.md`,
+`build_sim.sh`, `REVERT.md`) were **NOT changed**; `sim/mcu_sim.py`, `sim/scenarios/` and
+`sim/run_e2e.py` were **NOT changed** (as instructed).
 
 ---
 
-## 2. Ny gestus-specifikation (v6.12)
+## 1. Root cause (gesture debugging, 2026-11-18)
 
-| Parameter | Værdi |
+The A→B gesture did **not trigger physically** on the device. Diagnosis up to the pause:
+
+* The touch hardware + driver work (131 IRQs; the stock UI reacts to buttons after an IC reset via
+  the driver's sysfs). Orientation CORRECT (the grinder circle top-left opened the grinder).
+* The device's ABS_MT raw range is **0..480** — not 4095 as tinj/the sim assumed.
+* `/tmp/switcher.log` has **NO event lines ever** (only startup) while the IRQ count moves →
+  **hypothesis: the stock `demo_v9` grabs `/dev/input/event0` EXCLUSIVELY (`EVIOCGRAB`)** → the
+  read-only switcher never sees events → the A→B gesture is impossible while the stock UI is running
+  and grabbing.
+* An earlier "gesture passed" (INSTALL-REPORT v6.6/v6.11 §6) was probably **injection while the
+  stock UI was SIGSTOPped/not grabbing** — not a physical proof.
+
+Consequence: the gesture fix requires (1) a gesture that can be performed physically without hitting
+stock buttons, and (2) a **grab bypass** so the switcher sees events while the stock UI is running.
+
+---
+
+## 2. New gesture specification (v6.12)
+
+| Parameter | Value |
 |---|---|
-| Gestus | **ÉN sammenhængende hold ≥ 5000 ms** i skærmens center — ingen multi-press |
-| Zone | cirkel om **(240,240)** med radius **40 px** (fingeren skal blive i zonen hele holdet) |
-| Trigger | ved **release** efter gyldigt hold (driveren rapporterer kun ændringer; et stille hold giver ingen events undervejs) |
-| Cooldown | 10 s efter trigger (uændret) |
-| Fallback | `SWITCHER_GESTURE=corner` = legacy 3× long-press ≥1500 ms i x<90,y<90 inden for 6 s (uændret logik) |
+| Gesture | **ONE continuous hold ≥ 5000 ms** in the center of the screen — no multi-press |
+| Zone | circle around **(240,240)** with radius **40 px** (the finger must stay inside the zone for the whole hold) |
+| Trigger | on **release** after a valid hold (the driver only reports changes; a still hold produces no events in between) |
+| Cooldown | 10 s after a trigger (unchanged) |
+| Fallback | `SWITCHER_GESTURE=corner` = legacy 3× long press ≥ 1500 ms in x<90, y<90 within 6 s (unchanged logic) |
 
-**Env-konfiguration** (default = center 5000 ms):
+**Environment configuration** (default = center 5000 ms):
 
-| Env | Default | Effekt |
+| Env | Default | Effect |
 |---|---|---|
-| `SWITCHER_GESTURE` | `center` | `corner` vælger hjørne-fallback |
-| `SWITCHER_HOLD_MS` | 5000 (center) / 1500 (corner) | minimum hold-tid |
-| `SWITCHER_CENTER_X` / `_Y` | 240 / 240 | gestus-center |
-| `SWITCHER_CENTER_R` | **40** | gestus-radius i px (1..240) |
+| `SWITCHER_GESTURE` | `center` | `corner` selects the corner fallback |
+| `SWITCHER_HOLD_MS` | 5000 (center) / 1500 (corner) | minimum hold time |
+| `SWITCHER_CENTER_X` / `_Y` | 240 / 240 | gesture center |
+| `SWITCHER_CENTER_R` | **40** | gesture radius in px (1..240) |
 
-### 2.1 Center er verificeret ikke-interaktivt — men radius 60 ville kollidere
+### 2.1 The center is verified to be non-interactive — but a radius of 60 would collide
 
-Målt på stock-home-capture (`final_A_stock_v611.png`,
-script: `measure_stock_home.py`): de fire aktivitets-knapper
-(Grinder/Hot Water/Brew/Steam) er cirkler med center ≈ (160,154), (320,154), (160,326),
-(320,326) og radius ≈ 72 px. **Center (240,240) er baggrund** (mellem knapperne) ✓.
-Men nærmeste knap-kant ligger kun **≈ 45 px** fra center:
+Measured on a capture of the stock home screen (`final_A_stock_v611.png`, script:
+`measure_stock_home.py`): the four activity buttons (Grinder/Hot Water/Brew/Steam) are circles with
+centers ≈ (160,154), (320,154), (160,326), (320,326) and radius ≈ 72 px. **The center (240,240) is
+background** (between the buttons) ✓. But the nearest button edge is only **≈ 45 px** from the center:
 
-| Knapp-center | Afstand til (240,240) | Kant (r≈72) |
+| Button center | Distance to (240,240) | Edge (r≈72) |
 |---|---|---|
-| (160,154) | 117,5 px | 45,5 px |
-| (320,154) | 117,5 px | 45,5 px |
-| (160,326) | 117,5 px | 45,5 px |
-| (320,326) | 117,5 px | 45,5 px |
+| (160,154) | 117.5 px | 45.5 px |
+| (320,154) | 117.5 px | 45.5 px |
+| (160,326) | 117.5 px | 45.5 px |
+| (320,326) | 117.5 px | 45.5 px |
 
-En radius på ~60 px (opgavens oprindelige forslag) ville derfor **overlappe
-knappernes tryk-flade**: en finger der driver 50 px mod en knap under holdet ville
-udløse stock-knappen (stock modtager ALLE touches, også under gestus'en). Derfor er
-**default-radius 40 px** (5 px margin til nærmeste kant) — stadig rigelig tolerance
-for et stille hold (typisk finger-jitter ±5-10 px). Radius kan hæves med
-`SWITCHER_CENTER_R` hvis brugeren accepterer drift-risikoen. På sleep-skærmen er
-center også baggrund (ethvert tryk vækker kun skærmen). Gestus'en bør udføres fra
-home/sleep; på andre stock-sider kan center indeholde navigation (harmløst —
-aktuatorer startes kun fra de fire knapper med bekræftelse).
+A radius of ~60 px (the task's original suggestion) would therefore **overlap the buttons' touch
+area**: a finger drifting 50 px towards a button during the hold would trigger the stock button (the
+stock UI receives ALL touches, also during the gesture). That is why the **default radius is 40 px**
+(5 px margin to the nearest edge) — still plenty of tolerance for a still hold (typical finger jitter
+±5–10 px). The radius can be raised with `SWITCHER_CENTER_R` if the user accepts the drift risk. On
+the sleep screen the center is also background (any touch only wakes the screen). The gesture should
+be performed from the home/sleep screen; on other stock pages the center may contain navigation
+(harmless — actuators are only started from the four buttons with confirmation).
 
 ---
 
-## 3. Grab-bypass (prioritet a → b → c, auto-fallback i switcher'en)
+## 3. Grab bypass (priority a → b → c, automatic fallback in the switcher)
 
-**(a) Duplikat-node (auto):** switcher'en åbner nu **ALLE** touch-noder
-(`event0..9` med `ABS_MT_POSITION_X`, navn TECHWIN/tw31xx foretrækkes) read-only
-**samtidigt** og læser fra dem alle (max 4). Findes en duplikat-node som stock ikke
-grabber, leverer den events → gestus virker uden indgreb i stock. Begge noder levende
-er harmløst: gestus-maskinen er idempotent over for duplikerede down/up, og cooldown
-blokerer dobbelt-trigger. `EVIOCGABS` virker også på en grab'et node (grab blokerer
-kun event-levering, ikke ioctl) → raw-range detekteres uanset.
+**(a) Duplicate node (automatic):** the switcher now opens **ALL** touch nodes (`event0..9` with
+`ABS_MT_POSITION_X`, names TECHWIN/tw31xx preferred) read-only **at the same time** and reads from
+all of them (max 4). If there is a duplicate node that the stock UI does not grab, it delivers events
+→ the gesture works without interfering with the stock UI. Both nodes being live is harmless: the
+gesture state machine is idempotent with respect to duplicated down/up events, and the cooldown
+prevents a double trigger. `EVIOCGABS` also works on a grabbed node (a grab only blocks event
+delivery, not ioctls) → the raw range is detected regardless.
 
-**(b) Sysfs-fallback (auto):** tw31xx-driveren eksponerer **`lu_coordinate_x`,
-`lu_coordinate_y`, `point_num`** i sysfs (fundet i `tw31xx_new.ko`'s strenge;
-`sysfs_create_group` + attribut-navne). Grab påvirker kun evdev-klienter — ikke sysfs.
-Switcher'en auto-scanner `/sys/bus/i2c/devices/*/` (override: `SWITCHER_SYSFS_DIR`)
-og poller hvert 50 ms. **Blind-detektion:** hvis evdev har leveret 0 events siden
-start mens sysfs ser touch (point_num > 0) i ≥3 s, skiftes automatisk til sysfs-kilden
-(logges: "evdev BLIND … skifter til sysfs (bypass b)"). Leverer evdev igen events
-(fx efter shim + stock-genstart), skiftes tilbage. `SWITCHER_SOURCE=evdev|sysfs`
-tvinger kilde; `SWITCHER_SYSFS_SCREEN=1` hvis koordinaterne allerede er pixels
-(default: raw i detekteret range — på enheden er raw 0..480 ≈ pixels, så forskellen
-er ≤1 px og harmløs for center-zonen).
+**(b) Sysfs fallback (automatic):** the tw31xx driver exposes **`lu_coordinate_x`,
+`lu_coordinate_y`, `point_num`** in sysfs (found in the strings of `tw31xx_new.ko`;
+`sysfs_create_group` + attribute names). A grab only affects evdev clients — not sysfs. The switcher
+automatically scans `/sys/bus/i2c/devices/*/` (override: `SWITCHER_SYSFS_DIR`) and polls every
+50 ms. **Blindness detection:** if evdev has delivered 0 events since start while sysfs sees touches
+(point_num > 0) for ≥ 3 s, it switches automatically to the sysfs source (logged: "evdev BLIND …
+switching to sysfs (bypass b)"). If evdev delivers events again (e.g. after shim + stock restart), it
+switches back. `SWITCHER_SOURCE=evdev|sysfs` forces a source; `SWITCHER_SYSFS_SCREEN=1` if the
+coordinates are already pixels (default: raw in the detected range — on the device raw 0..480 ≈
+pixels, so the difference is ≤ 1 px and harmless for the center zone).
 
-**(c) LD_PRELOAD-shim (forberedt, anvendes af verify-scriptet hvis a+b fejler):**
-`grab_shim.c` → `grab_shim.so` (4500 B, ARM EABI5 hard-float,
-**freestanding `-nostdlib`**: ingen DT_NEEDED, ingen UND-symboler — kun rå
-EABI-syscalls (ioctl 54, readlink 85) → loader i stock's glibc/armhf-proces uden
-libc-afhængighed). Shim'en interposer `ioctl` og returnerer **0 for `EVIOCGRAB`
-uden kernel-kald** — men **KUN** i processer hvis `/proc/self/exe ==
-/customer/demo_v9` (stock, inkl. watchdog-genstart og runtime-B→A-launch). Alle
-andre ioctls og alle andre processer (inkl. ourui i B-mode) får uændret
-pass-through → **ourui's eget grab bevares** (ingen fantom-tryk i SIGSTOP'et stock).
-Stock tror den grabber, men gør det ikke → read-only switcher ser events.
+**(c) LD_PRELOAD shim (prepared, used by the verify script if a+b fail):** `grab_shim.c` →
+`grab_shim.so` (4500 B, ARM EABI5 hard-float, **freestanding `-nostdlib`**: no DT_NEEDED, no UND
+symbols — only raw EABI syscalls (ioctl 54, readlink 85) → loads into the stock glibc/armhf process
+without a libc dependency). The shim interposes `ioctl` and returns **0 for `EVIOCGRAB` without a
+kernel call** — but **ONLY** in processes whose `/proc/self/exe == /customer/demo_v9` (stock,
+including watchdog restarts and the runtime B→A launch). All other ioctls and all other processes
+(including ourui in B mode) get an unchanged pass-through → **ourui's own grab is preserved** (no
+phantom touches in the SIGSTOPped stock UI). The stock UI believes it is grabbing, but is not → the
+read-only switcher sees events.
 
-Export sker i demo.sh's **eksisterende guard-linje** (præcis ÉN linje bevaret):
+The export happens in demo.sh's **existing guard line** (exactly ONE line kept):
 
 ```sh
 [ -x /new_customer/ourui/boot/switcher ] && { [ -f /new_customer/ourui/boot/grab_shim.so ] && export LD_PRELOAD=/new_customer/ourui/boot/grab_shim.so${LD_PRELOAD:+:$LD_PRELOAD}; /new_customer/ourui/boot/switcher & }
 ```
 
-`-f`-testen gør manglende .so harmløs; export'en arves af `test.sh`-watchdog'en →
-også watchdog-genstartet stock får shim'en. `boot_install.py install` opgraderer
-automatisk en legacy guard-linje (v6.11) til den nye (md5-gates, stadig ÉN linje).
+The `-f` test makes a missing .so harmless; the export is inherited by the `test.sh` watchdog → a
+stock UI restarted by the watchdog also gets the shim. `boot_install.py install` automatically
+upgrades a legacy guard line (v6.11) to the new one (md5 gates, still ONE line).
 
-**Risiko (c):** stock mister KUN eksklusiviteten på event0 — evdev leverer stadig
-til stock som før (grab fratager kun *andre* læsere events). Stock's egen
-input-adfærd er uændret; ourui's grab i B-mode er uændret. Fejler preload i en
-proces, ville glibc afvise processen — derfor loader verify-scriptet shim'en i
-`/bin/true` (rc=0-gate) FØR guard-linjen ændres, og .so'en er verificeret selvbaaren
-(ingen UND/NEEDED, hard-float ABI som stock's `ld-linux-armhf.so.3`).
+**Risk (c):** the stock UI ONLY loses its exclusivity on event0 — evdev still delivers to the stock
+UI as before (a grab only takes events away from *other* readers). The stock UI's own input behavior
+is unchanged; ourui's grab in B mode is unchanged. If the preload failed in a process, glibc would
+reject the process — which is why the verify script loads the shim into `/bin/true` (rc=0 gate)
+BEFORE the guard line is changed, and the .so is verified to be self-contained (no UND/NEEDED,
+hard-float ABI like the stock `ld-linux-armhf.so.3`).
 
 ---
 
-## 4. Raw-range alignment (screen ↔ raw identisk overalt)
+## 4. Raw range alignment (screen ↔ raw identical everywhere)
 
-Fælles formel (tinj.c's invers): `screen = (raw−min)·480/(max−min+1)`;
-injection: `raw = px·(max−min+1)/480` (floor → ±1 px afrunding, harmløst for zonen).
+Common formula (the inverse of tinj.c): `screen = (raw−min)·480/(max−min+1)`;
+injection: `raw = px·(max−min+1)/480` (floor → ±1 px rounding, harmless for the zone).
 
-| Komponent | Range-kilde | Fallback | Status |
+| Component | Range source | Fallback | Status |
 |---|---|---|---|
-| switcher (device) | `EVIOCGABS` (ST+MT, MT forrang) ved åbning af hver node | **0..480** (device-konstant) | ✅ auto |
-| switcher (fil-mode) | `SWITCHER_RAW_MAX` | **0..480** (var 4095) | ✅ device-default; sim-passede streams giver 4095 |
-| tinj / tinj_hold | `EVIOCGABS` | **0..480** (var 4095) | ✅ auto + rebuild |
-| ourui (device) | `EVIOCGABS` i `inp_open` (allerede til stede, bevist rc=0 på device) | 4095 (kun hvis ALLE ioctl fejler — sker ikke på device) | ✅ uændret kilde (Fable's parity-gate; SIM deklarerer 0..4095) |
-| ourui (SIM) | deklareret 0..4095 (SIM-HAL, ingen ioctl) | — | ✅ uændrt |
-| sim/proto.py | `touch_raw(px, rmin, rmax)`; **`DEVICE_RAW_MAX = 480`** tilføjet som konstant | default 4095 = SIM's deklarerede range | ✅ sim beholder sit range |
+| switcher (device) | `EVIOCGABS` (ST+MT, MT takes precedence) when opening each node | **0..480** (device constant) | ✅ automatic |
+| switcher (file mode) | `SWITCHER_RAW_MAX` | **0..480** (was 4095) | ✅ device default; sim-fed streams pass 4095 |
+| tinj / tinj_hold | `EVIOCGABS` | **0..480** (was 4095) | ✅ automatic + rebuilt |
+| ourui (device) | `EVIOCGABS` in `inp_open` (already present, proven rc=0 on the device) | 4095 (only if ALL ioctls fail — does not happen on the device) | ✅ source unchanged (UI parity gate; the SIM declares 0..4095) |
+| ourui (SIM) | declared 0..4095 (SIM HAL, no ioctl) | — | ✅ unchanged |
+| sim/proto.py | `touch_raw(px, rmin, rmax)`; **`DEVICE_RAW_MAX = 480`** added as a constant | default 4095 = the SIM's declared range | ✅ the sim keeps its range |
 
-`pick_ranges()` (ren logik) er unit-testet: ingen ioctl-svar → 0..480; MT har forrang
-over ST; 4095-svar → 4095 (auto-detektion virker begge veje).
+`pick_ranges()` (pure logic) is unit-tested: no ioctl replies → 0..480; MT takes precedence over ST;
+a 4095 reply → 4095 (automatic detection works both ways).
 
 ---
 
-## 5. Lokal verifikation (maskine OFF — alt kørt lokalt, 0 warnings)
+## 5. Local verification (machine OFF — everything run locally, 0 warnings)
 
-| Gate | Resultat |
+| Gate | Result |
 |---|---|
-| `boot/build.sh` (ARM statisk switcher/tinj_hold + ARM .so + host-builds, `-Wall -Wextra -Werror`) | ✅ 0 warnings |
-| `grab_shim.so` ELF-gate: ingen DT_NEEDED, ingen UND-symboler, kun `ioctl` eksporteret, hard-float | ✅ (build.sh-gate) |
-| `switcher_selftest` (center-hold, grænser, drift, corner-fallback, skalering begge ranges, pick_ranges, sysfs-samples, env, mode-logik) | ✅ **50/50** |
-| `grab_shim_selftest` (decision-matrix + live ioctl no-op/passthrough) | ✅ **13/13** |
-| `test_switcher.py` (fil-mode e2e: center positiv/negativ×3, raw-4095 override, corner positiv/negativ, center-vs-corner, env-override) | ✅ **ALT GRØNT (9 gates)** |
-| `boot_install.py` mock: setup/backup/install/boot-test/revert-test (ny mock-rod `mock_root_v612`) | ✅ alle gates |
-| Legacy-opgradering: simuleret v6.11-device (demo.sh `53cfde05…` + state) → install opgraderer guard-linjen → **samme installed-md5 `b295aa11…` som fresh install**, præcis ÉN linje, placering gates | ✅ |
-| tinj rebuild (ARM statisk) | ✅ |
+| `boot/build.sh` (ARM static switcher/tinj_hold + ARM .so + host builds, `-Wall -Wextra -Werror`) | ✅ 0 warnings |
+| `grab_shim.so` ELF gate: no DT_NEEDED, no UND symbols, only `ioctl` exported, hard-float | ✅ (build.sh gate) |
+| `switcher_selftest` (center hold, limits, drift, corner fallback, scaling for both ranges, pick_ranges, sysfs samples, env, mode logic) | ✅ **50/50** |
+| `grab_shim_selftest` (decision matrix + live ioctl no-op/pass-through) | ✅ **13/13** |
+| `test_switcher.py` (file-mode e2e: center positive/negative×3, raw-4095 override, corner positive/negative, center-vs-corner, env override) | ✅ **ALL GREEN (9 gates)** |
+| `boot_install.py` mock: setup/backup/install/boot-test/revert-test (new mock root `mock_root_v612`) | ✅ all gates |
+| Legacy upgrade: simulated v6.11 device (demo.sh `53cfde05…` + state) → install upgrades the guard line → **same installed md5 `b295aa11…` as a fresh install**, exactly ONE line, placement gates | ✅ |
+| tinj rebuild (ARM static) | ✅ |
 
-Beviser: `boot/test-logs/` (selftest.log, v612_*.evdev/.switcher.log), `boot/install.log`,
+Evidence: `boot/test-logs/` (selftest.log, v612_*.evdev/.switcher.log), `boot/install.log`,
 `boot/mock_root_v612/`.
 
-### MD5 (lokalt bygget 2026-11-18, v6.12)
+### MD5 (built locally 2026-11-18, v6.12)
 
-| Fil | md5 |
+| File | md5 |
 |---|---|
-| `boot/switcher` (ARM statisk) | `e6bcb460ddeec8504e45d664641cc4b3` |
-| `boot/tinj_hold` (ARM statisk) | `9dfb369f3bc6ae697a13225769844591` |
+| `boot/switcher` (ARM static) | `e6bcb460ddeec8504e45d664641cc4b3` |
+| `boot/tinj_hold` (ARM static) | `9dfb369f3bc6ae697a13225769844591` |
 | `boot/grab_shim.so` (ARM .so, 4500 B) | `62c4ae551bb95ccb5c8f213c351a6207` |
-| `boot/evprobe` (ARM statisk, uændret kilde) | `beac2fce98108e89b8f7402b54d5f57a` |
-| `tinj` (ARM statisk, rebuild m. 480-fallback) | `294650eb40081acd3708aeedadd3918a` |
+| `boot/evprobe` (ARM static, unchanged source) | `beac2fce98108e89b8f7402b54d5f57a` |
+| `tinj` (ARM static, rebuilt with the 480 fallback) | `294650eb40081acd3708aeedadd3918a` |
 | `boot/switcher_selftest` (host) | `4f137fdd96200e7a520e7169bed395af` |
 | `boot/switcher_host` (host) | `8704444e226699cea5cea6eefc9127d6` |
 | `boot/grab_shim_selftest` (host) | `67c88f7b333338741ced5144d5754b13` |
-| `boot/demo.sh.new` (vendor-kopi + ny guard-linje) | `b295aa11f2a66593e50ff810a6b402c4` |
-| `ourui_v6` (Fable's v6.11, **uændret**) | `725386ccadade594275f20cc998885eb` |
+| `boot/demo.sh.new` (vendor copy + new guard line) | `b295aa11f2a66593e50ff810a6b402c4` |
+| `ourui_v6` (the UI's v6.11, **unchanged**) | `725386ccadade594275f20cc998885eb` |
 
-Device-md5'er (v6.11-sluttilstand, til sammenligning ved verify): switcher `6222d8c2…`,
-tinj_hold `32d04919…`, demo.sh m. legacy guard `b8e3a47a…`, vendor-original `c1ed3d66…`.
+Device md5s (v6.11 final state, for comparison during verification): switcher `6222d8c2…`,
+tinj_hold `32d04919…`, demo.sh with legacy guard `b8e3a47a…`, vendor original `c1ed3d66…`.
 
 ---
 
-## 6. On-device verifikation (NÅR MASKINEN TÆNDES) — PENDING
+## 6. On-device verification (WHEN THE MACHINE IS SWITCHED ON) — PENDING
 
-Kør (bruger ved maskinen, stock A ledig):
+Run (user at the machine, stock A idle):
 
 ```sh
 cd artifacts/ourui/boot/ondevice
-python3 verify_gesture_v612.py          # --plan viser planen uden device-kontakt
+python3 verify_gesture_v612.py          # --plan shows the plan without touching the device
 ```
 
-Scriptet (`verify_gesture_v612.py`, harness-mønstre
-fra net_heal_proof_v611: korte kommandoer, push'ede scripts, md5-round-trips):
+The script (`verify_gesture_v612.py`, harness patterns from net_heal_proof_v611: short commands,
+pushed scripts, md5 round trips):
 
-1. **Preflight:** stock A exe-link + config-baseline-md5; brugeren bekræfter ledig maskine.
-2. **Push:** switcher/tinj_hold/grab_shim.so/evprobe → `/new_customer/ourui/boot/` (md5-gates).
-3. **Node-inventar:** `evprobe info` → touch-noder + raw-ranges (forventet 0..480).
-4. **Grab-diagnose:** `evprobe cap` på alle touch-noder samtidigt (6 s) mens brugeren
-   rører skærmen → hvilke noder leverer events mens stock kører?
-5. **Sysfs-probe:** `point_num/lu_coordinate_x/y` samples (24×250 ms) mens brugeren
-   holder center → live?
-6. **Bypass-valg i prioritet:** (a) duplikat/ugrebet node leverer → switcher auto;
-   (b) sysfs live → switcher auto-fallback; (c) ellers shim: `/bin/true`-load-test →
-   guard-linje opgraderes atomisk (backup `demo.sh.bak.v611`, md5-gates, ÉN linje) →
-   ét kontrolleret `kill` af stock (watchdog genstarter MED shim-env; fallback-launch
-   efter 20 s) → `/proc/<pid>/maps` skal vise `grab_shim.so`.
-7. **Switcher-genstart** (ny binær); startup-log skal vise CENTER-hold + kilder.
-8. **BRUGEREN holder center ≥5 s** → A→B verificeres: `GESTUS UDLØST` + `skift A→B
-   FÆRDIG` i switcher.log + exe-link `/new_customer/demo_v9` (ingen reboot).
-9. **BRUGEREN trykker SWITCH NOW** (tandhjul → SYSTEM → SKIFT TIL ORIGINAL NU →
-   SWITCH NOW, fysisk) → B→A verificeres: exe-link `/customer/demo_v9` + boot_ui.log.
-10. **Slut-gates:** config-md5 urørt, flag væk, switcher kører, `/tmp/ourui_g` ryddet.
-11. Skriver `ondevice/gestus_v612/{result.json,GESTUS-VERIFY-v612.md,telnet_transcript.txt}`
-    og opdaterer markør-sektionen nedenfor.
+1. **Preflight:** stock A exe link + config baseline md5; the user confirms the machine is idle.
+2. **Push:** switcher/tinj_hold/grab_shim.so/evprobe → `/new_customer/ourui/boot/` (md5 gates).
+3. **Node inventory:** `evprobe info` → touch nodes + raw ranges (expected 0..480).
+4. **Grab diagnosis:** `evprobe cap` on all touch nodes at the same time (6 s) while the user touches
+   the screen → which nodes deliver events while the stock UI is running?
+5. **Sysfs probe:** `point_num/lu_coordinate_x/y` samples (24×250 ms) while the user holds the
+   center → live?
+6. **Bypass selection by priority:** (a) a duplicate/ungrabbed node delivers → switcher automatic;
+   (b) sysfs live → switcher automatic fallback; (c) otherwise the shim: `/bin/true` load test →
+   guard line upgraded atomically (backup `demo.sh.bak.v611`, md5 gates, ONE line) → one controlled
+   `kill` of the stock UI (the watchdog restarts it WITH the shim env; fallback launch after 20 s) →
+   `/proc/<pid>/maps` must show `grab_shim.so`.
+7. **Switcher restart** (new binary); the startup log must show CENTER hold + sources.
+8. **The USER holds the center ≥ 5 s** → A→B is verified: `GESTUS UDLØST` + `skift A→B FÆRDIG` in
+   switcher.log + exe link `/new_customer/demo_v9` (no reboot).
+9. **The USER taps SWITCH NOW** (gear → SYSTEM → SWITCH TO ORIGINAL NOW → SWITCH NOW, physically) →
+   B→A is verified: exe link `/customer/demo_v9` + boot_ui.log.
+10. **Final gates:** config md5 untouched, flag gone, switcher running, `/tmp/ourui_g` cleaned up.
+11. Writes `ondevice/gestus_v612/{result.json,GESTUS-VERIFY-v612.md,telnet_transcript.txt}` and
+    updates the marker section below.
 
-Ingen reboot, ingen writes til config/flag/UART/fb; device-writes kun boot-binærer,
-`/tmp/ourui_g` og (kun ved bypass c) demo.sh + ét stock-kill med watchdog-fallback.
+No reboot, no writes to config/flag/UART/fb; device writes only for the boot binaries, `/tmp/ourui_g`
+and (only with bypass c) demo.sh + one stock kill with watchdog fallback.
 
 <!-- ONDEVICE-RESULT:BEGIN -->
-**Status:** VERIFIED · **Bypass:** a_enkelt_node_ugrebet · **Dato:** 2026-11-18
+**Status:** VERIFIED · **Bypass:** a_single_node_ungrabbed · **Date:** 2026-11-18
 
-On-device verifikation: ALLE GATES GRØNNE (`GESTUS-VERIFY-v612.md`, `result.json`).
+On-device verification: ALL GATES GREEN (`GESTUS-VERIFY-v612.md`, `result.json`).
 <!-- ONDEVICE-RESULT:END -->
 
 ---
 
-## 7. REVERT (fortryd grab-bypass / gestus-fix)
+## 7. REVERT (undo the grab bypass / gesture fix)
 
-**Bypass a/b (ingen demo.sh-ændring):**
+**Bypass a/b (no demo.sh change):**
 ```sh
 kill $(pidof switcher) 2>/dev/null
 rm -f /new_customer/ourui/boot/switcher /new_customer/ourui/boot/grab_shim.so
-# (guard-linjen er harmløs uden binary: [ -x … ]-gaten; legacy-linjen uden shim-export
-#  hvis den blev opgraderet: se nedenfor)
-kill $(pidof demo_v9)     # watchdog genstarter stock uden preload (kun nødvendigt ved c)
+# (the guard line is harmless without the binary: the [ -x … ] gate; for the legacy line without
+#  the shim export, if it was upgraded: see below)
+kill $(pidof demo_v9)     # the watchdog restarts the stock UI without preload (only needed for c)
 ```
 
-**Bypass c (shim + guard-linje):**
+**Bypass c (shim + guard line):**
 ```sh
-# 1. demo.sh tilbage til v6.11-tilstand (legacy guard, UDEN shim-export):
+# 1. demo.sh back to the v6.11 state (legacy guard, WITHOUT the shim export):
 cp /new_customer/ourui/boot/demo.sh.bak.v611 /customer/.demo_sh.tmp
-md5sum /customer/.demo_sh.tmp     # skal være b8e3a47a7cc3f222066154ce82f85ee9
+md5sum /customer/.demo_sh.tmp     # must be b8e3a47a7cc3f222066154ce82f85ee9
 mv /customer/.demo_sh.tmp /customer/demo.sh && chmod 755 /customer/demo.sh && sync
-# 2. shim væk + switcher væk:
+# 2. remove the shim + the switcher:
 rm -f /new_customer/ourui/boot/grab_shim.so
 kill $(pidof switcher) 2>/dev/null
-# 3. stock genstartes uden LD_PRELOAD (watchdog arver demo.sh's env):
-kill $(pidof demo_v9)             # eller reboot
+# 3. the stock UI is restarted without LD_PRELOAD (the watchdog inherits demo.sh's env):
+kill $(pidof demo_v9)             # or reboot
 ```
 
-**Fuld revert (alt boot-persistens væk, byte-identisk vendor-tilstand):**
-`python3 boot_install.py revert-test` (BOOT.md §5.1) — genskaber demo.sh fra
-`demo.sh.bak` (vendor-original `c1ed3d66…`), dræber switcher, fjerner flag, reboot,
-genskaber vendor-B. Herefter er hverken guard-linje, shim eller switcher til stede.
+**Full revert (all boot persistence gone, byte-identical vendor state):**
+`python3 boot_install.py revert-test` (BOOT.md §5.1) — restores demo.sh from `demo.sh.bak` (vendor
+original `c1ed3d66…`), kills the switcher, removes the flag, reboots, restores vendor B. Afterwards
+neither the guard line, the shim nor the switcher is present.
 
-**Kun gestus'en tilbage til legacy hjørne (behold install):** start switcher med
-`SWITCHER_GESTURE=corner` (env i guard-linjen eller manuel start) — center-gestus'en
-er default, men corner-logikken er uændret og testet.
+> End users: `./revert.sh` does all of this for you (see the [README](../README.md#remove-meraki-revert)).
 
----
-
-## 8. Sim-påvirkning + pending til sim-ejeren
-
-* `sim/play.py`: gestus-API/smoke opdateret til v6.12 (center-hold 5,2 s + corner-
-  fallback som to checks; `SWITCHER_RAW_MAX=4095`/`SWITCHER_GESTURE` sættes midlertidigt
-  om `run_e2e.run_gesture`, som arver `os.environ`).
-* `sim/proto.py`: `DEVICE_RAW_MAX = 480` tilføjet; `touch_raw`/`touch_stream` beholder
-  SIM's deklarerede 0..4095 (uændret adfærd).
-* **`sim/run_e2e.py` + `sim/scenarios/` er IKKE ændrt** (instruks). Deres gestus-trin
-  (`run_gesture`: 3×1,6 s i (75,75), raw 4095, ingen env) forventer den GAMLE default
-  og vil fejle mod v6.12-switcher'en. **Pending til sim-ejeren:** enten sæt
-  `SWITCHER_GESTURE=corner` + `SWITCHER_RAW_MAX=4095` i `run_gesture`'s env (ét linje-
-  fix) eller skriv scenarierne om til center-hold (1×5200 ms i (240,240)). Indtil da
-  er gestus-scenarierne kendt-røde mod v6.12; resten af suiten er upåvirket (UI/
-  protokol-ruter bruger SIM's eget 4095-range).
-* `ourui_v6.c` er ikke ændret: device-pathen auto-detekterer allerede raw-range via
-  `EVIOCGABS` (bevist på enheden), og Fable's `build_sim.sh`-parity-gate ville flagge
-  ethvert indgreb. 4095-fallback'en der rammer kun hvis alle fire ioctl'er fejler
-  (sker ikke på device). Næste UI-runde kan eventuelt sætte fallback'en til 480.
+**Only the gesture back to the legacy corner (keep the install):** start the switcher with
+`SWITCHER_GESTURE=corner` (env in the guard line or manual start) — the center gesture is the
+default, but the corner logic is unchanged and tested.
 
 ---
 
-## 9. Leverance-filer (v6.12)
+## 8. Impact on the sim + pending items for the sim owner
 
-| Fil | Indhold |
+* `sim/play.py`: gesture API/smoke test updated to v6.12 (center hold 5.2 s + corner fallback as two
+  checks; `SWITCHER_RAW_MAX=4095`/`SWITCHER_GESTURE` are set temporarily around
+  `run_e2e.run_gesture`, which inherits `os.environ`).
+* `sim/proto.py`: `DEVICE_RAW_MAX = 480` added; `touch_raw`/`touch_stream` keep the SIM's declared
+  0..4095 (unchanged behavior).
+* **`sim/run_e2e.py` + `sim/scenarios/` were NOT changed** (as instructed). Their gesture step
+  (`run_gesture`: 3×1.6 s at (75,75), raw 4095, no env) expects the OLD default and will fail
+  against the v6.12 switcher. **Pending for the sim owner:** either set `SWITCHER_GESTURE=corner` +
+  `SWITCHER_RAW_MAX=4095` in `run_gesture`'s env (a one-line fix) or rewrite the scenarios to a
+  center hold (1×5200 ms at (240,240)). Until then the gesture scenarios are known-red against v6.12;
+  the rest of the suite is unaffected (UI/protocol routes use the SIM's own 4095 range).
+* `ourui_v6.c` was not changed: the device path already auto-detects the raw range via `EVIOCGABS`
+  (proven on the device), and the UI's `build_sim.sh` parity gate would flag any change. The 4095
+  fallback there only applies if all four ioctls fail (does not happen on the device). A future UI
+  round may set the fallback to 480.
+
+---
+
+## 9. Deliverables (v6.12)
+
+| File | Contents |
 |---|---|
-| `boot/switcher.c` + `boot/switcher` | center-hold-gestus + multi-node (a) + sysfs-fallback (b) + auto raw-range |
-| `boot/grab_shim.c` + `boot/grab_shim.so` + `boot/grab_shim_selftest` | LD_PRELOAD-bypass (c), freestanding ARM .so |
-| `boot/tinj_hold.c` + `boot/tinj_hold`, `tinj.c` + `tinj` | 480-fallback + `gesture center/corner` |
-| `boot/build.sh`, `boot/test_switcher.py` | builds + lokale gates (50+13+9) |
-| `boot/boot_install.py`, `boot/demo.sh.new` | ny guard-linje (ÉN linje, shim-export) + legacy-opgradering |
-| `boot/measure_stock_home.py` | geometri-måling af stock-home (radius-begrundelse) |
-| `boot/ondevice/verify_gesture_v612.py` | on-device verify (køres når maskinen tændes) |
-| `boot/GESTUS-FIX.md` | dette dokument |
-| `boot/mock_root_v612/`, `boot/test-logs/v612_*` | lokale beviser |
+| `boot/switcher.c` + `boot/switcher` | center-hold gesture + multi-node (a) + sysfs fallback (b) + automatic raw range |
+| `boot/grab_shim.c` + `boot/grab_shim.so` + `boot/grab_shim_selftest` | LD_PRELOAD bypass (c), freestanding ARM .so |
+| `boot/tinj_hold.c` + `boot/tinj_hold`, `tinj.c` + `tinj` | 480 fallback + `gesture center/corner` |
+| `boot/build.sh`, `boot/test_switcher.py` | builds + local gates (50+13+9) |
+| `boot/boot_install.py`, `boot/demo.sh.new` | new guard line (ONE line, shim export) + legacy upgrade |
+| `boot/measure_stock_home.py` | geometry measurement of the stock home screen (radius rationale) |
+| `boot/ondevice/verify_gesture_v612.py` | on-device verification (run when the machine is switched on) |
+| `boot/GESTUS-FIX.md` | this document |
+| `boot/mock_root_v612/`, `boot/test-logs/v612_*` | local evidence |
 
-*Boot-agenten, 2026-11-18. Maskinen står slukket i stock A (v6.11 installeret i B);
-v6.12 er bygget og testet lokalt og venter på on-device verify.*
+*Boot work stream, 2026-11-18. The machine is switched off in stock A (v6.11 installed in B); v6.12
+was built and tested locally and is waiting for on-device verification.*

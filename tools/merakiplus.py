@@ -12,7 +12,7 @@ How it talks to the display: the vendor firmware runs an unauthenticated root te
 server on port 23. Commands are sent over that; files are pushed with the display's own
 busybox `nc -l` (raw TCP), and every file is md5-verified after transfer and after install.
 
-Safety model (see README "Sikkerhed"):
+Safety model (see README "Security and OTA" and the disclaimer):
   * Slot A (/customer/demo_v9, libs, test.sh) is never written. config.json is never written.
   * Slot B's existing binary and /customer/demo.sh are backed up (md5-verified) before anything
     is changed; backups are never overwritten by later runs.

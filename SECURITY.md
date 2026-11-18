@@ -27,7 +27,7 @@ Out of scope — the manufacturer's firmware. The display module ships with an *
 telnet server** (port 23) and an **unsigned OTA update channel**. These are weaknesses of the vendor
 firmware, which Meraki+ uses but did not create and cannot fix; please report them to the
 manufacturer. Until fixed, isolate the machine on its own network/VLAN and block inbound access (see
-the README section *Sikkerhed og OTA*).
+the README section *Security and OTA*).
 
 ## Supported versions
 

@@ -1,223 +1,308 @@
-# Meraki+ — UI-guide
+# Meraki+ — UI guide
 
-Denne guide er uddraget af den fulde UI-specifikation ([dev/UI_v6.md](dev/UI_v6.md)) og beskriver
-siderne, touch-zonerne og indstillingerne i **Meraki+ v6.14**. Kort brugervejledning: se
-[README → Brug](../README.md#brug). Adresser i firkantede parenteser (fx `[0x12bcfc]`) henviser til
-stedet i det originale UI-program, hvor grænsen er aflæst (se [dev/PARITY.md](dev/PARITY.md)).
+This guide is extracted from the full UI specification ([dev/UI_v6.md](dev/UI_v6.md)) and describes the
+pages, touch zones and settings in **Meraki+ v6.14**. For a short user guide, see
+[README → Usage](../README.md#usage). Addresses in square brackets (e.g. `[0x12bcfc]`) refer to the
+place in the original UI program where the limit was read (see [dev/PARITY.md](dev/PARITY.md)).
 
-## 3. Side-kort og touch
+The UI is available in **English and Danish** (*SYSTEM → UI LANGUAGE*). This guide uses the English
+labels; where a Danish label is useful for cross-reference with the developer notes, it is given in
+parentheses.
 
-Fem sider i en ring; **swipe vandret** skifter (v6.11: gestussen skal *starte* vandret — akse-lås ved de første 14 px — være ≥ 60 px lang og højst ~30° fra vandret, |dx| ≥ 1,7·|dy|; v6.10: |dx| ≥ 60, |dy| ≤ 50). Side-prikker nederst; på HJEM desuden et **tandhjul** (v6.11), der åbner BRYG.
+## 3. Page map and touch
 
-| # | Side | Indhold |
+Five pages in a ring; **a horizontal swipe** changes page (v6.11: the gesture must *start* horizontally
+— axis lock during the first 14 px — be ≥ 60 px long and at most ~30° from horizontal,
+|dx| ≥ 1.7·|dy|; v6.10: |dx| ≥ 60, |dy| ≤ 50). Page dots at the bottom; on HOME there is also a
+**gear** (v6.11) that opens BREW.
+
+| # | Page | Contents |
 |---|---|---|
-| 0 | **HJEM** | **v6.3:** titellinjen *MERAKI+* øverst inden for ringen · gauge, fase-chip, hero-tal, auto-stop-linje, chart (40 s), 3 stats, 4 aktivitets-knapper, side-prikker. **v6.8:** ingen REVERT-knap |
-| 1 | **BRYG** | 9 rækker — espresso-kerne (spec tier 1) |
-| 2 | **DAMP · VAND** | 5 rækker — mælk, damp, varmt vand + vand-temp-**sensor** (spec tier 1) |
-| 3 | **SYSTEM** | 11 rækker — **v6.3: UI-SPROG øverst** (ourui's egen indstilling), derefter skærm, lyd, stock-sprog, tid (spec tier 2 + de tier 3-felter der er rene config-flag) + **v6.2:** *OPSTART · UI-VALG* med **BOOT-UI** og **SKIFT TIL ORIGINAL NU** |
-| 4 | **DIAGNOSE** | link, RX OK / CRC-fejl, work_sta, E1–E3, cmd6 OK/retx/fejl/**blokeret**, vågen, net, frame-ms, spejl 112–114, config-md5 + **v6.2:** boot-blok (flag, næste boot, exe-slot, slot B, switcher, stock-proces, PID'er, seneste skift) + **v6.3:** *OM*-blok (UI-sprog og hvor det kommer fra, ordmærke m. version, tagline) — siden scroller lodret |
+| 0 | **HOME** | **v6.3:** the title line *MERAKI+* at the top inside the ring · gauge, phase chip, hero number, auto-stop line, chart (40 s), 3 stats, 4 activity buttons, page dots. **v6.8:** no REVERT button |
+| 1 | **BREW** | 9 rows — espresso core (spec tier 1) |
+| 2 | **STEAM · WATER** | 5 rows — milk, steam, hot water + the water temperature **sensor** (spec tier 1) |
+| 3 | **SYSTEM** | 11 rows — **v6.3: UI LANGUAGE at the top** (ourui's own setting), then screen, sound, stock language, time (spec tier 2 + the tier 3 fields that are pure config flags) + **v6.2:** *STARTUP · UI CHOICE* with **BOOT UI** and **SWITCH TO ORIGINAL NOW** |
+| 4 | **DIAGNOSTICS** | link, RX OK / CRC errors, work_sta, E1–E3, cmd6 OK/retx/errors/**blocked**, awake, network, frame ms, mirror 112–114, config md5 + **v6.2:** boot block (flag, next boot, exe slot, slot B, switcher, stock process, PIDs, last switch) + **v6.3:** *ABOUT* block (UI language and where it comes from, wordmark with version, tagline) — the page scrolls vertically |
 
-Modale visninger: **splash** (boot), **stepper-detalje** (fra en liste-række) og — fra v6.2 — **system-handling** (BOOT-UI, skift-bekræftelse, exit-påmindelse; samme geometri og knap-zoner som stepper-detaljen) samt den sidste frame før et runtime-skift.
+Modal views: **splash** (boot), **stepper detail** (from a list row) and — from v6.2 — the **system
+action** (BOOT UI, switch confirmation, exit reminder; same geometry and button zones as the stepper
+detail) as well as the last frame before a runtime switch.
 
-**HJEM pr. fase** — hero-tal og gauge skifter mening, så det vigtigste altid er størst:
+**HOME per phase** — the hero number and the gauge change meaning, so the most important value is
+always the largest:
 
-| Fase | Hero | Gauge | Stats |
+| Phase | Hero | Gauge | Stats |
 |---|---|---|---|
-| KLAR / VARMER OP / SOVER / FEJL | brygkedel-temp (ord 40) | 20–120 °C, markør = bryg-setpoint | gruppe (42), damp (47), vægt (39) |
-| KVÆRNER | dosis-vægt (ord 38) | vægt / mål, markør = mål | tid, strøm (58), kværn-trin (37) |
-| PRE-INFUSION / EKSTRAKTION | vægt i kop (ord 39) | **tryk rå** (ord 51, 0–1600) + indre ring = vægt/mål | tid, ≈bar · est., flow (52) |
-| VARMT VAND | vægt (39) | vægt / mål | tid, flow, kedel |
-| DAMP | mælk-temp (ord 48) | 20–80 °C, markør = mål | tid, kedel (ord 47), niveau |
-| FÆRDIG (8 s) | slutværdi | som aktiviteten | "FÆRDIG PÅ x S" |
+| READY / HEATING UP / ASLEEP / ERROR | brew boiler temp (word 40) | 20–120 °C, marker = brew setpoint | group (42), steam (47), weight (39) |
+| GRINDING | dose weight (word 38) | weight / target, marker = target | time, current (58), grinder step (37) |
+| PRE-INFUSION / EXTRACTION | weight in the cup (word 39) | **raw pressure** (word 51, 0–1600) + inner ring = weight/target | time, ≈bar · est., flow (52) |
+| HOT WATER | weight (39) | weight / target | time, flow, boiler |
+| STEAM | milk temp (word 48) | 20–80 °C, marker = target | time, boiler (word 47), level |
+| DONE (8 s) | final value | as for the activity | "DONE IN x S" |
 
-**Tryk-mærkning (v6.10; v6.11: kortere tekster):** gaugen viser fortsat rå-skala. Bar-tallet er mærket `≈BAR EST.` (v6.10: `≈BAR · EST.`) og chartet `TRYK` (v6.10: `TRYK ≈BAR · EST.`; estimatet står i feltet lige under). Omregningen er ét lineært anker: pre-infusion-plateauet i optagelsen (358 rå) = config `preInfusionPressure` (4 bar), dvs. k = 4/358 = 0,01117 bar pr. rå enhed. Over 20 bar vises intet tal (*PULS*). Grundlag og forbehold: [§16](#16-tryk-estimat-v610). (Til og med v6.9: `≈BAR*` / `TRYK* UKALIBRERET` med hypotesen "1346 rå ≈ 9 bar".)
+**Pressure labelling (v6.10; v6.11: shorter texts):** the gauge still shows the raw scale. The bar
+value is labelled `≈BAR EST.` (v6.10: `≈BAR · EST.`) and the chart `PRESSURE` (v6.10:
+`PRESS. ≈BAR · EST.`; the estimate is in the field right below). The conversion is a single linear
+anchor: the pre-infusion plateau in the recording (358 raw) = config `preInfusionPressure` (4 bar),
+i.e. k = 4/358 = 0.01117 bar per raw unit. Above 20 bar no number is shown (*PULSE*). Basis and
+caveats: [calibration.md §16](calibration.md#16-pressure-estimate-v610). (Up to and including v6.9:
+`≈BAR*` / `PRESSURE* UNCALIBRATED` with the hypothesis "1346 raw ≈ 9 bar".)
 
-**Touch-zoner** (til test; pixel-koordinater):
+**Touch zones** (for testing; pixel coordinates):
 
-| Element | Zone | Gestus |
+| Element | Zone | Gesture |
 |---|---|---|
-| KVÆRN / BRYG / VAND / DAMP | cirkler r=30 om (150 / 210 / 270 / 330, 372) | **hold ≥ 650 ms**; kort tryk giver kun en hjælpe-toast |
-| STOP DAMP (kun under damp) | 150..330 × 344..400 | tap |
-| ~~REVERT~~ | — | **fjernet i v6.8** (CHANGES-v6.8): ingen tryk-zone tilbage i 150..330 × 404..480. Samme vej ud: SYSTEM → *SKIFT TIL ORIGINAL NU* (i run.sh-tilstand en ren exit) |
-| Kant-tap (HJEM + DIAGNOSE; **v6.11 også listerne**: x<64 / x≥416) | x<70 / x>410, y 150..330 | tap = forrige / næste side |
-| **v6.11** tandhjul (kun HJEM) | 208..271 × 426..471 (64 × 46 px) | tap = BRYG-listen (ingen frame) |
-| **v6.11** luk-chevron (detalje + system-visning) | 196..283 × 34..79 (88 × 46 px) | tap = ANNULLER / TILBAGE |
-| **v6.11** stryg ned (detalje + system-visning) | hvor som helst, ikke startet på −/+ | ≥ 70 px lodret, ≤ ~30° skævt = ANNULLER / TILBAGE |
-| Liste-række k | x 64..416, y-center 121 + 58·k − scroll | tap åbner detalje; lodret træk scroller |
-| **v6.2** BOOT-UI / SKIFT TIL ORIGINAL NU | SYSTEM række 12 / 13 (v6.3: én række længere nede pga. UI-SPROG): y-center 121 + 58·k + 30 − scroll (k = 11 / 12; max scroll 488 → y 301 / 359 — samme skærm-position som i v6.2) | tap åbner system-handlingen |
-| **v6.2** DIAGNOSE | hele feltet y 86..394 | lodret træk scroller (v6.3: max 431; boot-blokken står øverst i feltet ved scroll 280, OM-blokken ved max; v6.10: TRYK · ESTIMAT mellem GRAF og OM) |
-| **v6.10** chartet / BAR-feltet | chartet 118..362 × 240..294, når det viser tryk; BAR-feltet 193..287 × 298..338 under bryg | tap = toast med grundlaget (*PRÆ-INF. 4 BAR = RÅ 358 · LINEÆR*) — ingen frames |
-| − / + | cirkler r=42 om (84,184) / (396,184) | tap = ét trin; hold = gentag (170 → 90 → 45 ms, ×5-trin efter ~28 gentagelser) |
-| ANNULLER / GEM | 100..236 / 244..380 × 284..348 | tap |
-| TILBAGE (låst række / sensor) | 170..310 × 284..348 | tap; −/+ findes ikke |
+| GRIND / BREW / WATER / STEAM | circles r=30 around (150 / 210 / 270 / 330, 372) | **hold ≥ 650 ms**; a short tap only gives a help toast |
+| STOP STEAM (only during steam) | 150..330 × 344..400 | tap |
+| ~~REVERT~~ | — | **removed in v6.8** (CHANGES-v6.8): no touch zone left in 150..330 × 404..480. The same way out: SYSTEM → *SWITCH TO ORIGINAL NOW* (in run.sh mode a clean exit) |
+| Edge tap (HOME + DIAGNOSTICS; **v6.11 also the lists**: x<64 / x≥416) | x<70 / x>410, y 150..330 | tap = previous / next page |
+| **v6.11** gear (HOME only) | 208..271 × 426..471 (64 × 46 px) | tap = the BREW list (no frame) |
+| **v6.11** close chevron (detail + system view) | 196..283 × 34..79 (88 × 46 px) | tap = CANCEL / BACK |
+| **v6.11** swipe down (detail + system view) | anywhere, not started on −/+ | ≥ 70 px vertical, ≤ ~30° skew = CANCEL / BACK |
+| List row k | x 64..416, y center 121 + 58·k − scroll | tap opens the detail; vertical drag scrolls |
+| **v6.2** BOOT UI / SWITCH TO ORIGINAL NOW | SYSTEM row 12 / 13 (v6.3: one row further down because of UI LANGUAGE): y center 121 + 58·k + 30 − scroll (k = 11 / 12; max scroll 488 → y 301 / 359 — the same screen position as in v6.2) | tap opens the system action |
+| **v6.2** DIAGNOSTICS | the whole field y 86..394 | vertical drag scrolls (v6.3: max 431; the boot block is at the top of the field at scroll 280, the ABOUT block at max; v6.10: PRESSURE · ESTIMATE between GRAPH and ABOUT) |
+| **v6.10** the chart / the BAR field | the chart 118..362 × 240..294 when it shows pressure; the BAR field 193..287 × 298..338 during brewing | tap = toast with the basis (*PRE-INF. 4 BAR = RAW 358 · LINEAR*) — no frames |
+| − / + | circles r=42 around (84,184) / (396,184) | tap = one step; hold = repeat (170 → 90 → 45 ms, ×5 steps after ~28 repeats) |
+| CANCEL / SAVE | 100..236 / 244..380 × 284..348 | tap |
+| BACK (locked row / sensor) | 170..310 × 284..348 | tap; −/+ do not exist |
 
 ---
 
-## 4. Settings-tabel (det der faktisk er implementeret)
+## 4. Settings table (what is actually implemented)
 
-Én tabel (`SET[]`) er eneste sandhed for label, config-felt, ord, grænser, trin og status. Alle tal er **rå config-enheder** og inklusive. Kolonnen **Status**: **BEVIST** = interval og trin er adresse-bevist i PARITY.md §2 · **SKØN** = min og trin er bevist, max er et skøn · **LÅST** = vises uden editor · **SENSOR** = read-only måleværdi.
+One table (`SET[]`) is the single source of truth for label, config field, word, limits, step and
+status. All numbers are **raw config units** and inclusive. The **Status** column: **PROVEN** =
+range and step are address-proven in PARITY.md §2 · **ESTIMATE** = min and step are proven, max is an
+estimate · **LOCKED** = shown without an editor · **SENSOR** = read-only measured value.
 
-### 4.1 Side BRYG (spec tier 1)
-| Label | config-felt | Ord | Write ved GEM | Min..max / trin | Vises som | Status |
+### 4.1 BREW page (spec tier 1)
+| Label | config field | Word | Write on SAVE | Min..max / step | Shown as | Status |
 |---|---|---|---|---|---|---|
-| KVÆRN-DOSIS | `autoGrindWeight` | 4 | sub4 len1 | 10..309 / 1 | 1,0–30,9 g | **BEVIST** [0xf4984] |
-| KVÆRN-TILSTAND | `grindMode` | 2 | sub2 len1 | 1..2 | 1 VÆGT / 2 TID | **BEVIST** [0x122180] |
-| BRYG-VÆGT | `autobrewWeight` | 23 | sub23 len1 | 100..990 / 10 | 10–99 g | **BEVIST** [0x12be5c] |
-| BRYG-TEMP | `brewTemper` | 11 | sub11 len1 | 850..960 / 10 | 85,0–96,0 °C | **BEVIST** [0x12bcfc] |
-| PRE-INFUSION | `preInfusionSwitch` | 112 hi-byte | sub112 len2 | 0..1 | FRA / TIL | **BEVIST** [0x103858] |
-| PRE-INF. TID | `preInfusionTime` | 113 hi-byte | sub113 len1 | 5..15 / 1 (loft 60) | 5–15 s | **SKØN** (max) |
-| PRE-INF. TRYK | `preInfusionPressure` | 112 lo-byte | sub112 len2 | 3..4 / 1 | 3–4 bar | **BEVIST** (MCU 0x1E10 kender kun 3 og 4) |
-| PAUSE-TID | `breakTime` | 113 lo-byte | — (ingen editor) | — | 5 s | **LÅST** (uden effekt, §4.5) |
-| GRUPPEHOVED | `headTemper` | 114 | sub114 len1 | 30..80 / 10 (loft 100) | 30–80 °C | **SKØN** (max) |
+| GRIND DOSE | `autoGrindWeight` | 4 | sub4 len1 | 10..309 / 1 | 1.0–30.9 g | **PROVEN** [0xf4984] |
+| GRIND MODE | `grindMode` | 2 | sub2 len1 | 1..2 | 1 WEIGHT / 2 TIME | **PROVEN** [0x122180] |
+| BREW WEIGHT | `autobrewWeight` | 23 | sub23 len1 | 100..990 / 10 | 10–99 g | **PROVEN** [0x12be5c] |
+| BREW TEMP | `brewTemper` | 11 | sub11 len1 | 850..960 / 10 | 85.0–96.0 °C | **PROVEN** [0x12bcfc] |
+| PRE-INFUSION | `preInfusionSwitch` | 112 high byte | sub112 len2 | 0..1 | OFF / ON | **PROVEN** [0x103858] |
+| PRE-INF. TIME | `preInfusionTime` | 113 high byte | sub113 len1 | 5..15 / 1 (ceiling 60) | 5–15 s | **ESTIMATE** (max) |
+| PRE-INF. PRESSURE | `preInfusionPressure` | 112 low byte | sub112 len2 | 3..4 / 1 | 3–4 bar | **PROVEN** (MCU 0x1E10 only knows 3 and 4) |
+| PAUSE TIME | `breakTime` | 113 low byte | — (no editor) | — | 5 s | **LOCKED** (no effect, §4.5) |
+| GROUP HEAD | `headTemper` | 114 | sub114 len1 | 30..80 / 10 (ceiling 100) | 30–80 °C | **ESTIMATE** (max) |
 
-### 4.2 Side DAMP · VAND (spec tier 1)
-| Label | config-felt | Ord | Write ved GEM | Min..max / trin | Vises som | Status |
+### 4.2 STEAM · WATER page (spec tier 1)
+| Label | config field | Word | Write on SAVE | Min..max / step | Shown as | Status |
 |---|---|---|---|---|---|---|
-| MÆLKETEMP | `AtuoSteamTarge` | 25 | sub25 len1 | 450..700 / 10 | 45,0–70,0 °C | **BEVIST** [0x12bf80] |
-| DAMP-NIVEAU | `steamGears` | 14 | sub14 len1 | 1..4 / 1 | BLID / MILD / MEDIUM / STÆRK | **BEVIST** [0xdd028] |
-| VARMT VAND | `autoHotWaterTarget` | 17 | sub17 len1 | 300..5000 / 100 | 30–500 g i trin à 10 g | **BEVIST** [0xfbf0c] |
-| VAND-TILSTAND | `hotWaterMode` | (16/19 i start-blok) | — kun config | 1..2 | 1 AUTO / 2 MANUEL | **BEVIST** [0x11344c] |
-| VAND-SENSOR | *(ingen)* | 40 (read-only) | — ingen write findes | — | live, fx 99,9 °C | **SENSOR** [0x112c9c] |
+| MILK TEMP | `AtuoSteamTarge` | 25 | sub25 len1 | 450..700 / 10 | 45.0–70.0 °C | **PROVEN** [0x12bf80] |
+| STEAM LEVEL | `steamGears` | 14 | sub14 len1 | 1..4 / 1 | GENTLE / MILD / MEDIUM / STRONG | **PROVEN** [0xdd028] |
+| HOT WATER | `autoHotWaterTarget` | 17 | sub17 len1 | 300..5000 / 100 | 30–500 g in steps of 10 g | **PROVEN** [0xfbf0c] |
+| WATER MODE | `hotWaterMode` | (16/19 in the start block) | — config only | 1..2 | 1 AUTO / 2 MANUAL | **PROVEN** [0x11344c] |
+| WATER SENSOR | *(none)* | 40 (read-only) | — no write exists | — | live, e.g. 99.9 °C | **SENSOR** [0x112c9c] |
 
-### 4.3 Side SYSTEM (kun config — ingen MCU-write)
-| Label | config-felt | Min..max | Vises som | Spec-tier | Status |
+### 4.3 SYSTEM page (config only — no MCU write)
+| Label | config field | Min..max | Shown as | Spec tier | Status |
 |---|---|---|---|---|---|
-| **UI-SPROG** (v6.3) | *(ingen — egen fil `/new_customer/ourui/lang`)* | 0..1 | ENGLISH / DANSK (endonymer) | — | ourui's egen indstilling; **ikke** en spec-parameter og ikke i `--dump-table` (CHANGES-v6.3 pkt. 2) |
-| LYSSTYRKE | `backlight` | 1..10 | live preview (PWM `duty = 100 − 7·v`) | 2 | **BEVIST** 0..10; **0 bevidst udeladt** (duty 100 = mørk skærm, som brugeren ikke kan finde tilbage fra) |
-| LYDSTYRKE | `volume` | 0..100 | 0–100 | 2 | **BEVIST** for slideren; UI-hint om den diskrete vælger (§4.4) |
-| TEMP-ENHED | `Temperature` | 0..1 | 0 °F / 1 °C — styrer også ourui's visning | 2 | **BEVIST** |
-| STOCK-SPROG (før v6.3: SPROG) | `language` | 0..10 | 11 sprog, uden dansk (navnene vises på UI-sproget) | 2 | **BEVIST** — oplåst i v6.1; styrer kun stock-UI'et |
-| VAND-GENVEJ | `hotWaterShortcut` | 0..1 | FRA / TIL | 2 | **BEVIST** |
-| SOMMERTID | `sumtime` | 0..1 | FRA / TIL | 2 | **BEVIST** |
-| RENSE-PÅMINDELSE | `clearTip` | 0..1 | FRA / TIL | 2 | **BEVIST** |
-| TIDSFORMAT | `timemode` | 0..1 | **0 = 24-TIMERS / 1 = 12-TIMERS** | 3 | **BEVIST** [`update_time` 0xd5978] |
-| AUTO-TID | `Automatically` | 0..1 | FRA / TIL | 3 | **BEVIST** |
-| TIDSZONE | `timeZone` | — | 48 | 3 | **LÅST** (spec har ingen indeks-tabel) |
+| **UI LANGUAGE** (v6.3) | *(none — its own file `/new_customer/ourui/lang`)* | 0..1 | ENGLISH / DANSK (endonyms) | — | ourui's own setting; **not** a spec parameter and not in `--dump-table` (CHANGES-v6.3 item 2) |
+| BRIGHTNESS | `backlight` | 1..10 | live preview (PWM `duty = 100 − 7·v`) | 2 | **PROVEN** 0..10; **0 deliberately left out** (duty 100 = a dark screen the user cannot find their way back from) |
+| VOLUME | `volume` | 0..100 | 0–100 | 2 | **PROVEN** for the slider; UI hint about the discrete selector (§4.4) |
+| TEMP UNIT | `Temperature` | 0..1 | 0 °F / 1 °C — also controls ourui's display | 2 | **PROVEN** |
+| STOCK LANG. (before v6.3: LANGUAGE) | `language` | 0..10 | 11 languages, Danish not among them (the names are shown in the UI language) | 2 | **PROVEN** — unlocked in v6.1; only controls the stock UI |
+| WATER SHORTCUT | `hotWaterShortcut` | 0..1 | OFF / ON | 2 | **PROVEN** |
+| DAYLIGHT SAVING | `sumtime` | 0..1 | OFF / ON | 2 | **PROVEN** |
+| CLEANING REMINDER | `clearTip` | 0..1 | OFF / ON | 2 | **PROVEN** |
+| TIME FORMAT | `timemode` | 0..1 | **0 = 24-HOUR / 1 = 12-HOUR** | 3 | **PROVEN** [`update_time` 0xd5978] |
+| AUTO TIME | `Automatically` | 0..1 | OFF / ON | 3 | **PROVEN** |
+| TIME ZONE | `timeZone` | — | 48 | 3 | **LOCKED** (the spec has no index table) |
 
-### 4.4 Hvad der stadig er skøn eller låst
-| Række | Hvad er usikkert | Hvordan UI'et viser det | Hvorfor det er forsvarligt |
+### 4.4 What is still estimated or locked
+| Row | What is uncertain | How the UI shows it | Why it is justifiable |
 |---|---|---|---|
-| PRE-INF. TID | pickerens option-antal er ikke kortlagt (PARITY §6.6); max 15 = stock's egen default | **`MAX = SKØN`** i rav ved intervallet + `≈` foran værdien i listen | 5–15 s er harmløst; feltet er én byte |
-| GRUPPEHOVED | samme picker-anomali; spec'ens max 80 er selv et forsigtigt skøn | **`MAX = SKØN`** + `≈` | E1 udløses først ved > 110 °C; 80 ligger langt under |
-| LYDSTYRKE | stock har to kontroller: slider 0–100 (det ourui redigerer) og en diskret vælger High/Medium/Low/Mute, hvis mapping ikke er kortlagt | **`TRIN = SKØN`** + `≈` (noten siger *"… · SLIDER 0-100"*) | ren config, ingen MCU-write |
-| PAUSE-TID | max ukendt — og værdien har ingen effekt | låst, rav note *"INGEN EFFEKT · MCU BRUGER PRE-INF. TID"* | §4.5 |
-| TIDSZONE | indeks-tabellens størrelse og betydning | låst, *"SPEC HAR INGEN INDEKS-TABEL"* | et ugyldigt indeks kunne vælte stock's tids-/DST-logik |
+| PRE-INF. TIME | the picker's number of options has not been mapped (PARITY §6.6); max 15 = the stock UI's own default | **`MAX = ESTIMATE`** in amber next to the range + `≈` in front of the value in the list | 5–15 s is harmless; the field is one byte |
+| GROUP HEAD | the same picker anomaly; the spec's max of 80 is itself a cautious estimate | **`MAX = ESTIMATE`** + `≈` | E1 only triggers at > 110 °C; 80 is far below |
+| VOLUME | the stock UI has two controls: a 0–100 slider (what ourui edits) and a discrete High/Medium/Low/Mute selector whose mapping has not been mapped | **`STEPS = ESTIMATE`** + `≈` (the note says *"… · 0-100 SLIDER"*) | config only, no MCU write |
+| PAUSE TIME | max unknown — and the value has no effect | locked, amber note *"NO EFFECT · PRE-INF. TIME IS USED"* | §4.5 |
+| TIME ZONE | the size and meaning of the index table | locked, *"THE SPEC HAS NO INDEX TABLE"* | an invalid index could break the stock UI's time/DST logic |
 
-**Skøn-reglen:** har stock-UI'et selv gemt en værdi over mit skønnede max (fx `headTemper=90`), er det evidens for at pickeren når dertil, og intervallet udvides til den værdi — dog aldrig over loftet (60 s / 100 °C). **Beviste** grænser udvides aldrig.
+**The estimate rule:** if the stock UI itself has saved a value above my estimated max (e.g.
+`headTemper=90`), that is evidence that the picker reaches it, and the range is extended to that value
+— but never above the ceiling (60 s / 100 °C). **Proven** limits are never extended.
 
-**Verificér online** (§11 M): tæl pickerens options for pre-inf. tid/tryk/pause og gruppe-temp i stock-UI'et, og ret `max` i de to SF_EST-rækker.
+**Verify online** (§11 M): count the picker's options for pre-inf. time/pressure/pause and group temp
+in the stock UI, and correct `max` in the two SF_EST rows.
 
-### 4.5 Bevidst fjernet, låst eller ikke eksponeret
-| Felt | Beslutning | Begrundelse (spec) |
+### 4.5 Deliberately removed, locked or not exposed
+| Field | Decision | Rationale (spec) |
 |---|---|---|
-| varmt-vand-**temperatur** | **sensor-række**, ikke en indstilling | Stock har intet setpoint: den viste temperatur er e-boilerens målte (ord 40, `hotWaterTemperUpdate` 0x112c9c). Rækken står på DAMP · VAND, hvor man ville lede efter indstillingen, og siger *"INTET SETPOINT FINDES"* |
-| `breakTime` | **låst**, værdien vises | MCU-opskriften 0x1E10 kopierer `preInfusionTime` ind i ord113 lo-byte, før timingen `ord13 + ord113_lo` beregnes — den separate pause-værdi bliver altid erstattet. En editor ville være en knap uden virkning. Værdien pakkes fortsat i ord113 lo, så frames er identiske med stock's |
-| `brewMode` | **fjernet** | vestigial: `get/setExtractModeValue` har 0 kaldere |
-| `sleepMode`, `sleepModeSetting` | **fjernet** | ingen editor i stock (setterne har 0 kaldere); sleep-timing er hardcodet (~600 s screensaver / ~1800 s power-off). ourui holder selv maskinen vågen (§7.1) |
-| `theme` | ikke eksponeret | feltet findes ikke i `config.json`, og `getTheme` har **0 kaldere** i `demo_v9` (`grep -c '<getTheme>' demo_v9.dis` = 1, kun definitionen) — en gemt værdi ville aldrig blive læst. ourui tilføjer desuden aldrig nøgler |
-| `presetStore` / NFC | udskudt | §9 |
-| wifi (`ssid`, `password`, `wifionoff`), `init`, `patch`, versionsfelter | ikke eksponeret | må ikke røres / ikke brugerindstillinger |
-| kalibrering (ord 26/27), reboot (ord 30), drain (28/29), back-flush (20), self-test (8) | ikke eksponeret **og** umulige at sende | §7a |
+| hot water **temperature** | **sensor row**, not a setting | The stock UI has no setpoint: the temperature shown is the e-boiler's measured value (word 40, `hotWaterTemperUpdate` 0x112c9c). The row sits on STEAM · WATER, where you would look for the setting, and says *"NO SETPOINT EXISTS"* |
+| `breakTime` | **locked**, the value is shown | The MCU recipe 0x1E10 copies `preInfusionTime` into the low byte of word113 before the timing `word13 + word113_lo` is computed — the separate pause value is always replaced. An editor would be a button with no effect. The value is still packed into word113 lo, so the frames are identical to the stock UI's |
+| `brewMode` | **removed** | vestigial: `get/setExtractModeValue` has 0 callers |
+| `sleepMode`, `sleepModeSetting` | **removed** | no editor in the stock UI (the setters have 0 callers); sleep timing is hard-coded (~600 s screensaver / ~1800 s power-off). ourui keeps the machine awake itself (§7.1) |
+| `theme` | not exposed | the field does not exist in `config.json`, and `getTheme` has **0 callers** in `demo_v9` (`grep -c '<getTheme>' demo_v9.dis` = 1, only the definition) — a saved value would never be read. In addition, ourui never adds keys |
+| `presetStore` / NFC | deferred | §9 |
+| Wi-Fi (`ssid`, `password`, `wifionoff`), `init`, `patch`, version fields | not exposed | must not be touched / not user settings |
+| calibration (words 26/27), reboot (word 30), drain (28/29), back-flush (20), self-test (8) | not exposed **and** impossible to send | §7a |
 
-### 4.6 Range-vagt (tre lag)
-1. **Stepperen** clamper til intervallet og snapper til trin-gitteret.
-2. **GEM** afviser alt uden for intervallet; aktivitets-start spærres, hvis en config-værdi der indgår i en cmd6-frame er uden for spec eller mangler (*"CONFIG UDEN FOR SPEC · RET FØRST"*).
-3. **Frame-politikken** (§7a) afviser enhver frame med et ord uden for sit interval — også hvis lag 1–2 skulle have en fejl.
+### 4.6 Range guard (three layers)
+1. **The stepper** clamps to the range and snaps to the step grid.
+2. **SAVE** rejects anything outside the range; an activity start is blocked if a config value used in
+   a cmd6 frame is out of spec or missing (*"CONFIG OUT OF SPEC · FIX FIRST"*).
+3. **The frame policy** (§7a) rejects any frame with a word outside its range — even if layers 1–2
+   should have a bug.
 
-En config-værdi uden for et bevist interval kan kun opstå, hvis filen er ændret uden om stock-UI'et. Den vises som den er, i rødt (liste-række med rød tone, detalje med *"UDEN FOR SPEC · VÆLG NY VÆRDI"*), og første tryk på −/+ fører den ind i intervallet.
+A config value outside a proven range can only occur if the file was changed outside the stock UI. It
+is shown as it is, in red (a list row with a red tint, the detail with *"OUT OF SPEC · PICK A NEW
+VALUE"*), and the first tap on −/+ brings it into range.
 
 ---
 
-## 4a. Quirks fra spec'en — og hvad ourui gør ved dem
+## 4a. Quirks from the spec — and what ourui does about them
 
-| # | Quirk (PARITY) | Konsekvens i ourui |
+| # | Quirk (PARITY) | Consequence in ourui |
 |---|---|---|
-| 1 | Hot water har ingen temperatur-indstilling; visningen er ord 40 | sensor-række (§4.5) |
-| 2 | `brewMode` vestigial | fjernet |
-| 3 | `sleepMode`/`sleepModeSetting` uden editor, timing hardcodet | fjernet |
-| 4 | ord112 = `(switch<<8)\|tryk`, ord113 = `(tid<<8)\|pause`, ord114 = `headTemper` i hele °C (MCU ×10) | `pack112`/`pack113` matcher præcist — testet for alle kombinationer + 5 byte-vektorer (§10) |
-| 5 | MCU 0x1E10 håndterer kun tryk 3 og 4; andre værdier ignoreres | interval 3..4; frame-politikken afviser ord112 med andet tryk |
-| 6 | ord13 = 60 ved boot, overskrives af 0x1E10 (340/440 ved 120 V, ord15 = 300/350 ved 220 V) | ourui sender ord13/15 = 60 som observeret og rører dem ellers ikke; politikken afviser andre værdier |
-| 7 | `breakTime` overskrives af MCU'en | låst (§4.5). Før BRYG sammenlignes ord113 kun på **hi-byten**, ellers ville spejlet (fx `0606` efter et bryg) udløse en unødig re-sync hver gang |
-| 8 | Boot-push findes: `fuart_thread` sender `sub1 len30` + `sub112 len3` | reload-semantikken i §5 er rettet |
-| 9 | Trigger-ord 3/6/9/26/27/30 skal være 0 i normale blokke; ord30 = 1 rebooter MCU'en | §7a |
-| 10 | ~~Damp kræver fysisk wand-kontakt~~ — **afkræftet live** (STEAMLIVE §6.3): display-damp starter 0,22 s efter writen med wand-kontakten = 0. Wand-kontakten alene giver en *flush* uden auto-stop | **v6.6:** *"STARTER DAMP…"*, derefter *DAMP·AUTO*; wand alene = *DAMP·WAND* uden STOP-knap ([CHANGES-v6.6](#changes-v66) pkt. 2) |
-| 11 | Picker-navigation anomal → option-antal ukendt | SF_EST + synlig hint (§4.4) |
-| 12 | Volume: slider + diskret vælger | hint (§4.4) |
+| 1 | Hot water has no temperature setting; the display is word 40 | sensor row (§4.5) |
+| 2 | `brewMode` vestigial | removed |
+| 3 | `sleepMode`/`sleepModeSetting` without an editor, timing hard-coded | removed |
+| 4 | word112 = `(switch<<8)\|pressure`, word113 = `(time<<8)\|pause`, word114 = `headTemper` in whole °C (MCU ×10) | `pack112`/`pack113` match exactly — tested for all combinations + 5 byte vectors (§10) |
+| 5 | MCU 0x1E10 only handles pressures 3 and 4; other values are ignored | range 3..4; the frame policy rejects word112 with any other pressure |
+| 6 | word13 = 60 at boot, overwritten by 0x1E10 (340/440 at 120 V, word15 = 300/350 at 220 V) | ourui sends word13/15 = 60 as observed and does not otherwise touch them; the policy rejects other values |
+| 7 | `breakTime` is overwritten by the MCU | locked (§4.5). Before BREW, word113 is only compared on the **high byte**, otherwise the mirror (e.g. `0606` after a brew) would trigger an unnecessary re-sync every time |
+| 8 | A boot push exists: `fuart_thread` sends `sub1 len30` + `sub112 len3` | the reload semantics in §5 have been corrected |
+| 9 | Trigger words 3/6/9/26/27/30 must be 0 in normal blocks; word30 = 1 reboots the MCU | §7a |
+| 10 | ~~Steam requires the physical wand switch~~ — **disproven live** (STEAMLIVE §6.3): display steam starts 0.22 s after the write with the wand switch = 0. The wand switch alone gives a *flush* without auto-stop | **v6.6:** *"STARTING STEAM…"*, then *STEAM·AUTO*; the wand alone = *STEAM·WAND* without a STOP button ([CHANGES-v6.6](dev/UI_v6.md#changes-v66) item 2) |
+| 11 | Picker navigation is anomalous → number of options unknown | SF_EST + a visible hint (§4.4) |
+| 12 | Volume: slider + discrete selector | hint (§4.4) |
 
-**To fund ud over spec'en** (begge verificerbare i `demo_v9.dis`):
-* **`timemode` var vendt om i v6.** `model_data_init` gemmer `timemode != 0` i model+0x59, og `update_time` [0xd5978] formaterer med `"%02d:%02d"` når den er 0 og `A.M./P.M.` ellers. Altså **0 = 24 t, 1 = 12 t**. Nuværende config har 1, så stock viser 12-timers ur.
-* **`sumtime` er sommertid**, ikke "timer-visning" som spec'ens label gætter: accessoren hedder `getSumerTimeSwitchValue` [0xd2804]. v6's label SOMMERTID er beholdt.
+**Two findings beyond the spec** (both verifiable in `demo_v9.dis`):
+* **`timemode` was inverted in v6.** `model_data_init` stores `timemode != 0` in model+0x59, and
+  `update_time` [0xd5978] formats with `"%02d:%02d"` when it is 0 and with `A.M./P.M.` otherwise. So
+  **0 = 24 h, 1 = 12 h**. The current config has 1, so the stock UI shows a 12-hour clock.
+* **`sumtime` is daylight saving time**, not "timer display" as the spec's label guesses: the accessor
+  is called `getSumerTimeSwitchValue` [0xd2804]. v6's label DAYLIGHT SAVING (SOMMERTID) is kept.
 
 ---
 
-## 18. Manuel STOP (v6.13)
+## 18. Manual STOP (v6.13)
 
-**Fejlen (brugerrapport):** varmt vand kunne ikke stoppes fra Meraki+-skærmen. Kun damp havde en STOP-knap; kværn, bryg og vand stoppede kun ved vægt-målet. v6.13 giver alle fire aktiviteter en STOP-knap. Auto-stop er uændret — STOP er et tillæg.
+**The bug (user report):** hot water could not be stopped from the Meraki+ screen. Only steam had a
+STOP button; grind, brew and water only stopped at the target weight. v6.13 gives all four activities
+a STOP button. Auto-stop is unchanged — STOP is an addition.
 
-### 18.1 Stop-frames — byte for byte, med bevis
+### 18.1 Stop frames — byte for byte, with evidence
 
-Alle tre stop-ord er fundet i MCU-firmwaren (`MEM03_V514_260923.bin`, md5 `e96155da…`, disassembly i `mcu_analysis/`) og krydstjekket mod stock-UI'ets egne stop-kald (`demo_v9`, symboler bevaret, `demo_v9.dis`). Mønstret er det samme for alle tre: **MCU'ens egen auto-stop skriver netop dét ord til 0**, og en manuel write af samme ord rammer derfor præcis samme kodevej.
+All three stop words were found in the MCU firmware (`MEM03_V514_260923.bin`, md5 `e96155da…`,
+disassembly in `mcu_analysis/`) and cross-checked against the stock UI's own stop calls (`demo_v9`,
+symbols preserved, `demo_v9.dis`). The pattern is the same for all three: **the MCU's own auto-stop
+writes exactly that word to 0**, and a manual write of the same word therefore hits exactly the same
+code path.
 
-| Aktivitet | Stop-frame (cmd6, CRC-16/MODBUS LE) | MCU-firmware: hvad styrer aktiviteten | MCU'ens egen auto-stop | Stock-UI'ets stop-kald | Bits der ryddes |
+| Activity | Stop frame (cmd6, CRC-16/MODBUS LE) | MCU firmware: what controls the activity | The MCU's own auto-stop | The stock UI's stop call | Bits cleared |
 |---|---|---|---|---|---|
-| **VAND** (auto, ourui's start) | `aa 55 06 10 01 00 00 c0 0f` — sub16 len1, ord 16 = 0 | hotwater-ctl `0x1B8C`: `aktiv = (ord19 \| ord16) != 0`, genberegnet hver omgang (`0x1C44..0x1C4E`); aktiv → `work_sta \|= 0x20A` (`0x1C8A`) | vægt-stop `0x1C80`: `strh r4,[r6,#0x20]` (ord 16 = 0) | `hotWaterStartStop` `0x11468C`: spejl-ord 16 = 0, `usart_send(6,16,1)` | bit 3 altid (`0x1C9A`); bits 1+9, når kedel-påfyldningen er ledig (`[0x2000002B] == 9`, `0x1CA2`) |
-| VAND (manuel tilstand) | `aa 55 06 13 01 00 00 c0 4b` — sub19 len1, ord 19 = 0 | samme (`ord19 \| ord16`) | — | `hotWaterStartStop` `0x114720`: `usart_send(6,19,1)` | som ovenfor |
-| **BRYG** | `aa 55 06 16 01 00 00 c0 87` — sub22 len1, ord 22 = 0 | brew-ctl `0x1E9C`: ved hver **ændring** af ord 22 bliver `running = (ord22 != 0)` (`0x1F94..0x1FC6`) | vægt-stop `0x1F92`: `strh r5,[r6,#0x2c]` (ord 22 = 0) | home-`onClick` `0x109694`: spejl-ord 22 vendes til 0, `usart_send(6,5,18)` (hele blokken) | bits 2+12 i 1. omgang (`0x20C4`, `& 0xEFFB`), ventil-puls på bit 2 efter 10 omgange (`0x20D2`); bits 1+9, når påfyldningen er ledig (`0x20F0`) |
-| **KVÆRN** | `aa 55 06 06 01 00 00 c4 47` — sub6 len1, ord 6 = 0 | grind-ctl `0x19C6`: kværnen kører, mens ord 6 ≠ 0 (`0x1AA2`: `work_sta \|= 0x40`, ellers `&= ~0x40`) | vægt `0x1A68`, timeout `0x1A72`, fejl `0x1A3E`/`0x1A8C`: alle `ord 6 = 0` | home-`onClick` `0x10928C`: spejl-ord 6 = 0, `usart_send(6,6,1)` (start-grenen `0x109278` sender `sub3 len4`) | bit 6 |
-| DAMP (uændret fra v6) | `aa 55 06 18 08 00 00 8a 02 00 … 00 0c f7` — sub24 len8, ord 24 = 0 | steam-ctl `0x210E` | ord 48 ≥ ord 25 | (SESSION.md §10.3) | bits 5+14 |
+| **WATER** (auto, ourui's start) | `aa 55 06 10 01 00 00 c0 0f` — sub16 len1, word 16 = 0 | hot water ctl `0x1B8C`: `active = (word19 \| word16) != 0`, recomputed every round (`0x1C44..0x1C4E`); active → `work_sta \|= 0x20A` (`0x1C8A`) | weight stop `0x1C80`: `strh r4,[r6,#0x20]` (word 16 = 0) | `hotWaterStartStop` `0x11468C`: mirror word 16 = 0, `usart_send(6,16,1)` | bit 3 always (`0x1C9A`); bits 1+9 when the boiler refill is idle (`[0x2000002B] == 9`, `0x1CA2`) |
+| WATER (manual mode) | `aa 55 06 13 01 00 00 c0 4b` — sub19 len1, word 19 = 0 | the same (`word19 \| word16`) | — | `hotWaterStartStop` `0x114720`: `usart_send(6,19,1)` | as above |
+| **BREW** | `aa 55 06 16 01 00 00 c0 87` — sub22 len1, word 22 = 0 | brew ctl `0x1E9C`: on every **change** of word 22, `running = (word22 != 0)` (`0x1F94..0x1FC6`) | weight stop `0x1F92`: `strh r5,[r6,#0x2c]` (word 22 = 0) | home `onClick` `0x109694`: mirror word 22 flipped to 0, `usart_send(6,5,18)` (the whole block) | bits 2+12 in the 1st round (`0x20C4`, `& 0xEFFB`), valve pulse on bit 2 after 10 rounds (`0x20D2`); bits 1+9 when the refill is idle (`0x20F0`) |
+| **GRIND** | `aa 55 06 06 01 00 00 c4 47` — sub6 len1, word 6 = 0 | grind ctl `0x19C6`: the grinder runs while word 6 ≠ 0 (`0x1AA2`: `work_sta \|= 0x40`, otherwise `&= ~0x40`) | weight `0x1A68`, timeout `0x1A72`, error `0x1A3E`/`0x1A8C`: all `word 6 = 0` | home `onClick` `0x10928C`: mirror word 6 = 0, `usart_send(6,6,1)` (the start branch `0x109278` sends `sub3 len4`) | bit 6 |
+| STEAM (unchanged since v6) | `aa 55 06 18 08 00 00 8a 02 00 … 00 0c f7` — sub24 len8, word 24 = 0 | steam ctl `0x210E` | word 48 ≥ word 25 | (SESSION.md §10.3) | bits 5+14 |
 
-**Bryg — hvorfor kun ord 22 og ikke stock's hele blok?** Stock sender `sub5 len18` med spejlets ord 5..22, hvor kun ord 22 er ændret; de øvrige 17 ord er MCU'ens egne, pollede værdier. cmd6 er `memcpy` + ACK (`0x99C6`, ingen sub-specifik logik), så for MCU'en er det eneste, der sker, at ord 22 går 1 → 0 — præcis det, ourui's `sub22 len1` gør. Den smalle frame kan ikke overskrive en opskrifts-værdi med et forældet spejl.
+**Brew — why only word 22 and not the stock UI's whole block?** The stock UI sends `sub5 len18` with
+the mirror's words 5..22, where only word 22 has changed; the other 17 words are the MCU's own polled
+values. cmd6 is `memcpy` + ACK (`0x99C6`, no sub-specific logic), so for the MCU the only thing that
+happens is that word 22 goes 1 → 0 — exactly what ourui's `sub22 len1` does. The narrow frame cannot
+overwrite a recipe value with a stale mirror.
 
-**Ord 9 og ord 3 er ikke stop-ord.** Ord 9 (bryg/vand) og ord 3 (kværn) er tare-triggere, som MCU'en konsumerer og nulstiller inden for 10 ms efter starten (`0x1ED2`, `0x19F2`). At skrive dem til 0 under en aktivitet gør intet. *(REGISTERMAP §2.2 kalder ord 6 "tare" og ord 7 "run". Byte-offsets `[r6,#6]` = ord 3 og `[r6,#0xc]` = ord 6 viser, at ord 3 er tare-triggeren og ord 6 run-flaget.)*
+**Words 9 and 3 are not stop words.** Word 9 (brew/water) and word 3 (grind) are tare triggers that
+the MCU consumes and resets within 10 ms of the start (`0x1ED2`, `0x19F2`). Writing them to 0 during
+an activity does nothing. *(REGISTERMAP §2.2 calls word 6 "tare" and word 7 "run". The byte offsets
+`[r6,#6]` = word 3 and `[r6,#0xc]` = word 6 show that word 3 is the tare trigger and word 6 the run
+flag.)*
 
-**Sikkert midt i et forløb?** Ja, for alle tre. Stock-UI'et tilbyder samme stop (vand-knappen, bryg-knappen og kværn-knappen er toggles), og MCU'en kører samme stop-vej som ved vægt-målet. For bryg betyder det også ventil-pulsen bagefter (trykaflastning, BREW.md §4).
+**Safe in the middle of a run?** Yes, for all three. The stock UI offers the same stop (the water,
+brew and grind buttons are toggles), and the MCU runs the same stop path as at the target weight. For
+brewing this also means the valve pulse afterwards (pressure relief, BREW.md §4).
 
-**Kendt undtagelse (ikke observeret):** et bryg startet af den fysiske "e"-kontakt (PA.15, `0x1F52`-grenen) kører med ord 22 = 0. Dér kan ord 22 = 0 ikke stoppe brygget. ourui melder det ærligt som *"STOP IKKE BEKRÆFTET · PRØV IGEN"* efter 5 s. Denne vej er aldrig set på maskinen.
+**Known exception (not observed):** a brew started by the physical "e" switch (PA.15, the `0x1F52`
+branch) runs with word 22 = 0. There, word 22 = 0 cannot stop the brew. ourui reports this honestly
+as *"STOP NOT CONFIRMED · TRY AGAIN"* after 5 s. This path has never been seen on the machine.
 
-### 18.2 UI'et
+### 18.2 The UI
 
-* **Knappen** står samme sted og har samme stil som STOP DAMP: den røde pille i aktions-rækken (tryk-felt 180 × 56 px, pille 160 × 44 px i F_S; v6.6–v6.12's pille var 150 px). Teksterne er *STOP WATER / STOP BREW / STOP GRIND* og *STOP VAND / STOP BRYG / STOP KVÆRN*. Knappen vises, mens aktivitetens work_sta-bits står (`phase_main`). Den er væk i FÆRDIG-visningen, og ventil-pulsen efter et bryg (`0105`) giver ingen knap.
-* **To knapper:** kører en hoved-aktivitet samtidig med latchet damp (fx `5327` + ord 24 = 1), står der to knapper side om side: venstre = hoved-aktiviteten, højre = STOP DAMP. Hver har et tryk-felt på 148 × 56 px og en pille på 136 × 44 px i F_XS. Wand/flush har stadig ingen STOP-knap.
-* **Feedback:** et tryk (aktiveres ved slip, som alle knapper) viser straks toasten *"STOPPER VAND…"*. Når MCU'en har ryddet bits'ene, kommer *"VAND STOPPET"* (grøn). Kommer der intet ACK, heller ikke efter retransmit, vises *"STOP: INTET SVAR · PRØV IGEN"* (rød). Er bits'ene ikke ryddet efter 5 s, vises *"STOP IKKE BEKRÆFTET · PRØV IGEN"* (gul). Et ACK alene tæller ikke som bekræftelse. Et nyt tryk, mens stop-framen venter på ACK, køer ikke en frame mere.
-* **Underlinjen** beholder auto-stop-forventningen: *"AUTO-STOP VED 40.0 G · ELLER STOP"*.
-* **Frame-politik:** stop-frames indeholder kun nuller og går gennem den samme port og write-kø som alt andet (CRC + ACK-vent + én retransmit). De kræver ingen intent og kan ikke starte noget. `OURUI_READONLY=1` sender intet, og toasten siger hvorfor.
-* **SIM:** state-JSON har `stop: {btns, pending, last, req, ok, fail}`. ctrl-handlingerne `grind_stop` / `brew_stop` / `water_stop` (+ `steam_stop`, som før) og layout-navnene `grind_stop` / `brew_stop` / `water_stop` / `steam_stop` er nye.
+* **The button** is in the same place and has the same style as STOP STEAM: the red pill in the action
+  row (touch area 180 × 56 px, pill 160 × 44 px in F_S; the pill in v6.6–v6.12 was 150 px). The texts
+  are *STOP WATER / STOP BREW / STOP GRIND* and *STOP VAND / STOP BRYG / STOP KVÆRN*. The button is
+  shown while the activity's work_sta bits are set (`phase_main`). It is gone in the DONE view, and the
+  valve pulse after a brew (`0105`) gives no button.
+* **Two buttons:** if a main activity runs at the same time as latched steam (e.g. `5327` + word 24 =
+  1), there are two buttons side by side: left = the main activity, right = STOP STEAM. Each has a
+  touch area of 148 × 56 px and a pill of 136 × 44 px in F_XS. The wand/flush still has no STOP button.
+* **Feedback:** a tap (activated on release, like all buttons) immediately shows the toast *"STOPPING
+  WATER…"*. When the MCU has cleared the bits, *"WATER STOPPED"* (green) follows. If there is no ACK,
+  not even after a retransmit, *"STOP: NO REPLY · TRY AGAIN"* (red) is shown. If the bits have not
+  been cleared after 5 s, *"STOP NOT CONFIRMED · TRY AGAIN"* (yellow) is shown. An ACK alone does not
+  count as confirmation. A new tap while the stop frame is waiting for an ACK does not queue another
+  frame.
+* **The sub-line** keeps the auto-stop expectation: *"AUTO-STOP AT 40.0 G · OR STOP"*.
+* **Frame policy:** stop frames only contain zeros and go through the same gate and write queue as
+  everything else (CRC + ACK wait + one retransmit). They require no intent and cannot start anything.
+  `OURUI_READONLY=1` sends nothing, and the toast says why.
+* **SIM:** the state JSON has `stop: {btns, pending, last, req, ok, fail}`. The ctrl actions
+  `grind_stop` / `brew_stop` / `water_stop` (+ `steam_stop`, as before) and the layout names
+  `grind_stop` / `brew_stop` / `water_stop` / `steam_stop` are new.
 
-### 18.3 Verifikation
+### 18.3 Verification
 
-Lokalt (alt grønt, tal i [CHANGES-v6.13](#changes-v613) pkt. 6): 26 nye selftest-checks, previews og spec-afstemning, mutations-prøver, SIM og E2E (hurtig).
+Locally (all green, figures in [CHANGES-v6.13](dev/UI_v6.md#changes-v613) item 6): 26 new self-test
+checks, previews and spec alignment, mutation probes, SIM and E2E (quick).
 
-**On-device:** ikke kørt. Maskinen var offline under hele runden: `<display-ip>` svarede ikke på ping, ARP-opslaget var ufuldstændigt, og telnet-porten var lukket (2026-11-18 ca. 15:45). `verify_stop_v613.py` er klar til kørsel, når maskinen er tændt (§11, testplan S).
+**On-device:** not run. The machine was offline for the whole round: `<display-ip>` did not answer
+ping, the ARP lookup was incomplete, and the telnet port was closed (2026-11-18 around 15:45).
+`verify_stop_v613.py` is ready to run when the machine is switched on (§11, test plan S).
 
-## 19. Tænd/sluk-knappen (v6.14)
+## 19. The power button (v6.14)
 
-**Fejlen:** den fysiske tænd/sluk-knap gjorde intet, mens Meraki+ kørte. ourui åbnede kun touch-noden (`/dev/input/event0`, TECHWIN_TS). Knappen sidder på en anden input-node: `/dev/input/event1` = **k62091** (GPIO-key-driveren `k62091.ko`, "Handlers=kbd event1", EV=3 = SYN + KEY, én tast). Den node læste ourui aldrig.
+> On the tested hardware the power button behaves as a hardware power switch: see
+> [power.md](power.md). The section below describes the software implementation (which mirrors the
+> stock UI byte for byte).
 
-### 19.1 Stock-semantikken — reverset, med bevis
+**The bug:** the physical power button did nothing while Meraki+ was running. ourui only opened the
+touch node (`/dev/input/event0`, TECHWIN_TS). The button sits on a different input node:
+`/dev/input/event1` = **k62091** (the GPIO key driver `k62091.ko`, "Handlers=kbd event1", EV=3 = SYN +
+KEY, one key). ourui never read that node.
 
-| Hvad | Stock gør | Bevis (adresse) | ourui v6.14 |
+### 19.1 The stock semantics — reverse-engineered, with evidence
+
+| What | The stock UI does | Evidence (address) | ourui v6.14 |
 |---|---|---|---|
-| Hvilken node | `open("/dev/input/event1", O_RDWR)` i en egen tråd — **ingen EVIOCGRAB**. For hver `EV_KEY` (koden tjekkes ikke) gemmes `value` (1 = nede, 0 = sluppet) | `app_powerKey_thread` 0x140AB4 (streng 0x17BCEC); gemt i app+0x15A8 | k62091-noden, read-only, **uden grab**. Valg: `OURUI_KBD` → node hvis navn indeholder `k62091` → første node med EV_KEY og uden EV_ABS → `/dev/input/event1`. Alle EV_KEY-koder tæller som knappen |
-| Hvornår der slukkes | `SleepRefresh` (lv_timer 100 ms): kun når sekundet skifter, tælles e60 op, mens knappen er nede. `dealPowerState(1)` slukker, når e60 > 1 — dvs. knappen holdt hen over **to sekund-skift = 1,0–2,0 s**. Et kort tryk vækker kun stock's pauseskærm | `SleepRefresh` 0x149268 (timer 100 ms ved 0x1354A8), e60 = 0x1E0E60, `dealPowerState` 0x14911C | **HOLD 1,5 s** (midt i stock's vindue). Kort tryk: ingenting (talt på DIAGNOSE) |
-| Spærring | Mens `isExtractionOrSteamSwitchOn()` er sand, tælles der ikke, og der slukkes ikke: work_sta bit 12 (bryg) eller bit 14 (damp), spejl-ord 22 (bryg aktiv), 24 (damp) eller 6 (kværn). **Varmt vand spærrer ikke.** Stock stopper ALDRIG en aktivitet ved sluk | `isExtractionOrSteamSwitchOn` 0x1481E0 (`GetMaichinState(0x1000/0x4000)`, ord 22/24/6) | Samme prædikat (+ ourui's egen start på vej for de tre). Toast *STOP AKTIVITETEN FØRST · SÅ SLUK*. Når aktiviteten er slut, slukker et **nyt fuldt hold** (tælleren står stille, som e60). Varmt vand: sluk sendes, ingen stop-frame |
-| Ingen forbindelse | Slukker kun, hvis spejl-ord 0 ≠ 0 | 0x149210 | Kun hvis linket er oppe og controlleren har svaret med ord 0 ≠ 0. Ellers toast *INGEN FORBINDELSE · SLUKKER IKKE* — knappen vækker måske netop en sovende controller. READ-ONLY: intet |
-| Sluk-frames | `powerOff`: spejl-ord 0 = 0 → `performSleepActions` → `powerOffSend(0,0,0)` = **cmd8** (15 bytes) → `usleep(80000)` → `usart_send(6,0,2)` = **cmd6 sub0 len2 [ord 0 = 0, ord 1 = spejlet]** | `powerOff` 0x149074, `performSleepActions` 0x148324 (0x148F50, 0x14905C), `powerOffSend` 0x14700C, buffer `powerSendBuf` 0x1A6030 | Præcis det: `aa 55 08 <år lo> <år hi> <md 1-12> <dag> <t> <m> <s> 00 00 00 <crc>` (eksempel 2026-11-18 16:35:28: `aa 55 08 ea 07 0b 12 10 23 1c 00 00 00 cc df`), **≥ 80 ms** senere `aa 55 06 00 02 00 00 00 00 56 94` (ord 1 = 0 = vågen, som ourui's keep-awake holder det). cmd6-framen går gennem write-køen (CRC, ACK, én retransmit) og frame-politikken med den nye intent `I_POWEROFF` |
-| cmd8's indhold | år (u16), måned (+1), dag, time, minut, sekund, alarm dag/time/minut. Uden ugeplan = alarm 0/0/0 | 0x14703C–0x147148 (CRC_GetModbus16 over 13 bytes) | Systemets lokaltid + alarm 0/0/0 (ourui har ingen ugeplan). MCU'ens 0x88-kvittering tælles kun til DIAGNOSE — stock venter heller ikke på den |
-| MCU'en | Status-tasken ser ord 0 = 0 (hvert 500 ms) og starter `sleep`. Den sletter `boiler_heat`, `head_heat`, **`status`** (RX-parser + svar) og `run`, sætter work_sta = 0 og nulstiller udgangene. Den vågner kun ved et **hold på knappen** (egen GPIO PC.8, 8 × 100 ms lav efter et slip) eller alarmen → `reset muc` (CPU-reset) | MEM03 0x29D4/0x29D8, sleep-task 0x2F52 (0x2E1E sletter tasks; 0x2F0C udgange 0), alarm-sammenligning 0x2FE2–0x3036, reset 0x326 (SYS IPRST) | ourui sender intet mere: keep-awake står stille, og polls besvares ikke (linket går ned — forventet). cmd8-parseren 0x9C88 gemmer de 10 bytes i 0x20000E18 |
-| Skærm | Baggrundslys af (`blpwm_set_enable(2,0)` + duty 0), sluk-side. 1,5 s efter: fb lukkes, `killall dispinit`, GPIO'er frigives, **`echo mem > /sys/power/state`** (SoC-suspend). Efter resume: spejl-ord 0 = 1, `killall demo_v9` → watchdog'en genstarter stock → `PowerOn` | 0x1490C0–0x1490FC, 0x149494–0x14952C, `uikit_os_back_light_off` 0xC2278 | SLUKKER… straks, SLUKKET efter ACK. Lyset slukkes 1,5 s efter sluk-trykket: duty 99 (svageste) og så `pwm2/enable = 0` (ourui skriver ikke stock's duty 0 — med "polarity inversed" er det det kraftigste lys, hvis enable ikke slog igennem). **Ingen SoC-suspend og ingen killall** (bevidst afvigelse: net-vagt og telnet lever videre; ourui er ikke en genstart-bar app bag en watchdog i run.sh-tilstand) |
-| Tænd | SoC'en vågner af samme knap-tryk; stock genstarter og sender `PowerOn` (ord 0 = 1) ved opstart. MCU'en vågner af sig selv (reset; ord 0 starter som 1) | `app_init` 0xD9170 → `PowerOn` 0x146EF8 | Knap-tryk i SLUKKET → lyset tændes, *TÆNDER… · HOLD KNAPPEN INDE ET ØJEBLIK*. Når controlleren har svaret med ord 0 = 1 i 0,6 s → PowerOn `aa 55 06 00 01 01 00 c5 5f` + vågen `aa 55 06 01 01 00 00 c5 33` (samme to frames som ved opstart) → HJEM, toast *MASKINEN ER TÆNDT*, keep-awake kører igen. Uden svar i 10 s: tilbage til SLUKKET. Svarer controlleren af sig selv med ord 0 = 1, mens ourui står i SLUKKET (alarm, eller knappen blev holdt uden at ourui så det), tændes der på samme måde. Efter MCU-resettet står controlleren på sine startværdier — **ourui's re-push** (v6.6, 0x89-runden) lægger config'ens værdier tilbage |
-| Touch, mens der er slukket | (SoC'en sover — touch gør intet) | — | Tryk sluges (ingen navigation, ingen frames). SLUKKET-siden vises i 8 s; så slukkes lyset igen. Touch kan ikke tænde maskinen: controlleren kan ikke modtage noget, mens den sover |
+| Which node | `open("/dev/input/event1", O_RDWR)` in its own thread — **no EVIOCGRAB**. For every `EV_KEY` (the code is not checked) `value` is stored (1 = down, 0 = released) | `app_powerKey_thread` 0x140AB4 (string 0x17BCEC); stored in app+0x15A8 | the k62091 node, read-only, **without a grab**. Selection: `OURUI_KBD` → a node whose name contains `k62091` → the first node with EV_KEY and without EV_ABS → `/dev/input/event1`. All EV_KEY codes count as the button |
+| When it powers off | `SleepRefresh` (lv_timer 100 ms): only when the second changes, e60 is incremented while the button is down. `dealPowerState(1)` powers off when e60 > 1 — i.e. the button held across **two second boundaries = 1.0–2.0 s**. A short press only wakes the stock UI's screensaver | `SleepRefresh` 0x149268 (timer 100 ms at 0x1354A8), e60 = 0x1E0E60, `dealPowerState` 0x14911C | **HOLD 1.5 s** (in the middle of the stock UI's window). Short press: nothing (counted on DIAGNOSTICS) |
+| Blocking | While `isExtractionOrSteamSwitchOn()` is true, it does not count and does not power off: work_sta bit 12 (brew) or bit 14 (steam), mirror word 22 (brew active), 24 (steam) or 6 (grind). **Hot water does not block.** The stock UI NEVER stops an activity on power-off | `isExtractionOrSteamSwitchOn` 0x1481E0 (`GetMaichinState(0x1000/0x4000)`, words 22/24/6) | The same predicate (+ ourui's own start in progress for the three). Toast *STOP THE ACTIVITY FIRST · THEN OFF*. When the activity has ended, a **new full hold** powers off (the counter stands still, like e60). Hot water: power-off is sent, no stop frame |
+| No connection | Only powers off if mirror word 0 ≠ 0 | 0x149210 | Only if the link is up and the controller has replied with word 0 ≠ 0. Otherwise toast *NO CONNECTION · CANNOT TURN OFF* — the button may be what just woke a sleeping controller. READ-ONLY: nothing |
+| Power-off frames | `powerOff`: mirror word 0 = 0 → `performSleepActions` → `powerOffSend(0,0,0)` = **cmd8** (15 bytes) → `usleep(80000)` → `usart_send(6,0,2)` = **cmd6 sub0 len2 [word 0 = 0, word 1 = the mirror]** | `powerOff` 0x149074, `performSleepActions` 0x148324 (0x148F50, 0x14905C), `powerOffSend` 0x14700C, buffer `powerSendBuf` 0x1A6030 | Exactly that: `aa 55 08 <year lo> <year hi> <month 1-12> <day> <h> <m> <s> 00 00 00 <crc>` (example 2026-11-18 16:35:28: `aa 55 08 ea 07 0b 12 10 23 1c 00 00 00 cc df`), **≥ 80 ms** later `aa 55 06 00 02 00 00 00 00 56 94` (word 1 = 0 = awake, as ourui's keep-awake keeps it). The cmd6 frame goes through the write queue (CRC, ACK, one retransmit) and the frame policy with the new intent `I_POWEROFF` |
+| cmd8's contents | year (u16), month (+1), day, hour, minute, second, alarm day/hour/minute. Without a weekly schedule = alarm 0/0/0 | 0x14703C–0x147148 (CRC_GetModbus16 over 13 bytes) | The system's local time + alarm 0/0/0 (ourui has no weekly schedule). The MCU's 0x88 acknowledgement is only counted for DIAGNOSTICS — the stock UI does not wait for it either |
+| The MCU | The status task sees word 0 = 0 (every 500 ms) and starts `sleep`. It deletes `boiler_heat`, `head_heat`, **`status`** (RX parser + replies) and `run`, sets work_sta = 0 and resets the outputs. It only wakes on a **hold of the button** (its own GPIO PC.8, 8 × 100 ms low after a release) or the alarm → `reset muc` (CPU reset) | MEM03 0x29D4/0x29D8, sleep task 0x2F52 (0x2E1E deletes tasks; 0x2F0C outputs 0), alarm comparison 0x2FE2–0x3036, reset 0x326 (SYS IPRST) | ourui sends nothing more: keep-awake stands still, and polls are not answered (the link goes down — expected). The cmd8 parser 0x9C88 stores the 10 bytes in 0x20000E18 |
+| Screen | Backlight off (`blpwm_set_enable(2,0)` + duty 0), off page. 1.5 s later: fb closed, `killall dispinit`, GPIOs released, **`echo mem > /sys/power/state`** (SoC suspend). After resume: mirror word 0 = 1, `killall demo_v9` → the watchdog restarts the stock UI → `PowerOn` | 0x1490C0–0x1490FC, 0x149494–0x14952C, `uikit_os_back_light_off` 0xC2278 | TURNING OFF… immediately, OFF after the ACK. The backlight is switched off 1.5 s after the press: duty 99 (dimmest) and then `pwm2/enable = 0` (ourui does not write the stock UI's duty 0 — with "polarity inversed" that is the brightest light if the enable did not take effect). **No SoC suspend and no killall** (a deliberate deviation: the network guard and telnet stay alive; ourui is not a restartable app behind a watchdog in run.sh mode) |
+| Power on | The SoC wakes from the same button press; the stock UI restarts and sends `PowerOn` (word 0 = 1) at startup. The MCU wakes by itself (reset; word 0 starts as 1) | `app_init` 0xD9170 → `PowerOn` 0x146EF8 | A button press in OFF → backlight on, *TURNING ON… · KEEP HOLDING THE BUTTON A MOMENT*. When the controller has replied with word 0 = 1 for 0.6 s → PowerOn `aa 55 06 00 01 01 00 c5 5f` + awake `aa 55 06 01 01 00 00 c5 33` (the same two frames as at startup) → HOME, toast *MACHINE IS ON*, keep-awake runs again. Without a reply within 10 s: back to OFF. If the controller replies by itself with word 0 = 1 while ourui is in OFF (alarm, or the button was held without ourui seeing it), it powers on the same way. After the MCU reset the controller is on its startup values — **ourui's re-push** (v6.6, the 0x89 round) puts the config's values back |
+| Touch while off | (the SoC sleeps — touch does nothing) | — | Touches are swallowed (no navigation, no frames). The OFF page is shown for 8 s; then the backlight goes off again. Touch cannot switch the machine on: the controller cannot receive anything while it sleeps |
 
-### 19.2 UI'et
-* **SLUKKER… / SLUKKET / TÆNDER…** er en sort side med et tænd/sluk-symbol (ring + streg; crema under SLUKKER og TÆNDER, nedtonet under SLUKKET). Under SLUKKET: *HOLD KNAPPEN INDE FOR AT TÆNDE* og *SKÆRMEN SLUKKER · RØR FOR AT VISE*. En åben detalje lukkes uden GEM (lys- og sprog-preview fortrydes); efter TÆND står Meraki+ på HJEM, som stock (`navigator_popToHome`).
-* **DIAGNOSE → TÆND/SLUK-KNAP** (ny blok mellem RÅ TÆLLERE og OM): tilstand, *STRØM · ORD 0* (controllerens svar eller *INTET SVAR*), *TRYK · SLUK · TÆND*, *SIDSTE KNAP* (`kode = værdi · alder`), node (`/dev/input/event1 · k62091` eller *INGEN KNAP-NODE FUNDET*).
-* Ark: `power_states_en.png` · `power_states_da.png`.
+### 19.2 The UI
+* **TURNING OFF… / OFF / TURNING ON…** is a black page with a power symbol (ring + line; crema during
+  TURNING OFF and TURNING ON, dimmed during OFF). During OFF: *HOLD THE POWER BUTTON TO TURN ON* and
+  *THE SCREEN TURNS OFF · TOUCH TO SHOW*. An open detail is closed without SAVE (brightness and
+  language previews are reverted); after POWER ON Meraki+ is on HOME, like the stock UI
+  (`navigator_popToHome`).
+* **DIAGNOSTICS → POWER BUTTON** (a new block between RAW COUNTERS and ABOUT): state, *POWER · WORD 0*
+  (the controller's reply or *NO REPLY*), *PRESS · OFF · ON*, *LAST KEY* (`code = value · age`), node
+  (`/dev/input/event1 · k62091` or *NO BUTTON NODE FOUND*).
+* Sheets: `power_states_en.png` · `power_states_da.png`.
 
-### 19.3 Grænser
-* Kun baggrundslyset slukkes; SoC'en kører videre (strømforbrug: displayet tegner stadig 10 billeder/s i sort). Det er den eneste bevidste afvigelse fra stock.
-* Tryk på knappen, mens stock-UI'et kører (slot A), håndteres af stock som før. I run.sh-tilstand er stock SIGSTOP'et; dets egen kø på event1 får de samme tryk og læser dem efter SIGCONT — sidste værdi er "sluppet", så stock slukker ikke af den grund.
-* `mcu_sim.py` modellerer endnu ikke MCU'ens dvale (tavshed på ord 0 = 0, reset ved knap). SIM'en har en ctrl-handling `{"cmd":"key","value":1|0}` og `power` i state-JSON; se `SIM_HANDOFF`.
+### 19.3 Limits
+* Only the backlight is switched off; the SoC keeps running (power consumption: the display still
+  draws 10 frames/s in black). That is the only deliberate deviation from the stock UI.
+* A button press while the stock UI is running (slot A) is handled by the stock UI as before. In
+  run.sh mode the stock UI is SIGSTOPped; its own queue on event1 receives the same presses and reads
+  them after SIGCONT — the last value is "released", so the stock UI does not power off because of it.
+* `mcu_sim.py` does not yet model the MCU's sleep (silence on word 0 = 0, reset on the button). The SIM
+  has a ctrl action `{"cmd":"key","value":1|0}` and `power` in the state JSON; see `SIM_HANDOFF`.
 
-### 19.4 Verifikation
-Lokalt alt grønt (tal i [CHANGES-v6.14](#changes-v614) pkt. 5). On-device: **ikke kørt** i denne runde (installationen af v6.13 i slot B var i gang). `verify_power_v614.py` er klar (§11, testplan T).
+### 19.4 Verification
+Locally all green (figures in [CHANGES-v6.14](dev/UI_v6.md#changes-v614) item 5). On-device: **not
+run** in this round (the installation of v6.13 in slot B was in progress). `verify_power_v614.py` is
+ready (§11, test plan T). The later on-device run and its hardware findings are documented in
+[power.md](power.md).

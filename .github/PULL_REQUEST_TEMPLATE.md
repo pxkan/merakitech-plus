@@ -1,8 +1,8 @@
-## What / Hvad
+## What
 
 <!-- Short description of the change and why. -->
 
-## Tested / Testet
+## Tested
 
 - [ ] `./build.sh host` (0 warnings in new code)
 - [ ] `python3 sim/selftest.py`
@@ -10,7 +10,7 @@
 - [ ] `python3 tests/test_installer.py` (if tools/, install.sh or revert.sh changed)
 - [ ] On a real machine (model + what was verified): ...
 
-## Safety checklist / Sikkerhed
+## Safety checklist
 
 - [ ] No vendor firmware, binaries, libraries or scripts added
 - [ ] No credentials, IP/MAC addresses, serial numbers or personal paths added

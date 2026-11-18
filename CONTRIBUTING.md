@@ -1,93 +1,95 @@
-# Bidrag til Meraki+ / Contributing
+# Contributing to Meraki+
 
-Tak fordi du vil hjælpe! Issues og pull requests er velkomne på dansk eller engelsk.
-*Contributions are welcome in Danish or English.*
+Thank you for wanting to help! Issues and pull requests are welcome. Please write them in English
+(Danish is fine too if that is easier for you).
 
-## Sikkerhedsregler (ufravigelige)
+## Safety rules (non-negotiable)
 
-1. **Ingen skrivning til en maskine uden backup og revert.** Enhver ny device-handling skal tage
-   md5-verificeret backup først, være atomisk (tmp-fil på samme filsystem → md5 → `mv`), være
-   idempotent og kunne fortrydes af `./revert.sh`. Slot A (`/customer/demo_v9`, libs, `test.sh`)
-   må aldrig skrives. Ingen `reboot` fra værktøjer.
-2. **Ingen producent-filer i repoet** — ingen `demo_v9`, MCU-firmware (`MEM03_*.bin`), libs,
-   `config.bin`, OTA-pakker eller vendor-scripts (`demo.sh`, `test.sh`, `upgrade.sh`). Heller ikke
-   disassembly-dumps. Korte adresser/uddrag i dokumentation er ok (interoperabilitet).
-3. **Ingen credentials eller persondata** — ingen `config.json` fra en rigtig maskine (den indeholder
-   Wi-Fi-adgangskoden), ingen Wi-Fi-navne/-koder, IP-adresser, MAC-adresser, serienumre,
-   personlige stier (`/Users/<navn>/…`) eller md5 af filer, der indeholder hemmeligheder. Brug
-   pladsholdere (`<display-ip>`). CI og reviewere tjekker det.
-4. **UI'et må kun sende frames, som stock-UI'et også sender**, og kun gennem frame-politikken
-   (skrive-bånd, interval-tjek, CRC, ACK + én retransmit). Kalibrerings-, reboot-, drain- og
-   back-flush-ord sendes aldrig. Nye kommandoer kræver dokumentation i `docs/protocol.md` med bevis.
+1. **No writes to a machine without a backup and a revert path.** Every new device action must take
+   an md5-verified backup first, be atomic (temp file on the same file system → md5 → `mv`), be
+   idempotent and be undoable by `./revert.sh`. Slot A (`/customer/demo_v9`, libs, `test.sh`) must
+   never be written. No `reboot` from any tool.
+2. **No manufacturer files in the repository** — no `demo_v9`, MCU firmware (`MEM03_*.bin`), libs,
+   `config.bin`, OTA packages or vendor scripts (`demo.sh`, `test.sh`, `upgrade.sh`). No disassembly
+   dumps either. Short addresses/excerpts in documentation are fine (interoperability).
+3. **No credentials or personal data** — no `config.json` from a real machine (it contains the Wi-Fi
+   password), no Wi-Fi names/passwords, IP addresses, MAC addresses, serial numbers, personal paths
+   (`/Users/<name>/…`) or md5 sums of files that contain secrets. Use placeholders
+   (`<display-ip>`). CI and reviewers check this.
+4. **The UI may only send frames that the stock UI also sends**, and only through the frame policy
+   (write bands, range checks, CRC, ACK + one retransmit). Calibration, reboot, drain and back-flush
+   words are never sent. New commands require documentation in `docs/protocol.md` with evidence.
 
-## Udviklingsmiljø
+## Development environment
 
-| Værktøj | Hvorfor |
+| Tool | Why |
 |---|---|
-| [zig](https://ziglang.org/download/) **0.17.1** | eneste C-toolchain: cross-compile til `arm-linux-musleabihf` (Cortex-A7, statisk) + host-builds |
-| `python3` ≥ 3.8 | simulator, E2E-runner, installer og tests (kun standardbiblioteket) |
+| [zig](https://ziglang.org/download/) **0.17.1** | the only C toolchain: cross-compiles to `arm-linux-musleabihf` (Cortex-A7, static) + host builds |
+| `python3` ≥ 3.8 | simulator, E2E runner, installer and tests (standard library only) |
 | `bash`, `git` | scripts |
-| (valgfrit) Docker + `arm32v7/debian:bullseye-slim` | kør ARM-builds (32-bit `long`!) lokalt via qemu |
+| (optional) Docker + `arm32v7/debian:bullseye-slim` | run the ARM builds (32-bit `long`!) locally via qemu |
 
 ```sh
-./build.sh           # alt: enhed (ARM) + værktøjer + host-SIM + self-tests  -> build/
-./build.sh host      # kun det CI bruger: build/ourui_sim, switcher_host + self-tests
+./build.sh           # everything: device (ARM) + tools + host SIM + self-tests  -> build/
+./build.sh host      # only what CI uses: build/ourui_sim, switcher_host + self-tests
 ```
 
-## Test
+## Testing
 
-Hurtig løkke (kør før hver PR — ca. 1 minut):
+Quick loop (run before every PR — about 1 minute):
 
 ```sh
 ./build.sh host
-python3 sim/selftest.py                                   # simulatorens egen selvtest
-python3 sim/run_e2e.py --all --quick --parallel 4         # 5 kerne-scenarier mod det RIGTIGE UI (SIM-build)
-python3 tests/test_installer.py                           # install/revert/idempotens mod en mock-skærm
-python3 boot/test_switcher.py                             # gestus-skifteren end-to-end (fil-mode)
+python3 sim/selftest.py                                   # the simulator's own self-test
+python3 sim/run_e2e.py --all --quick --parallel 4         # 5 core scenarios against the REAL UI (SIM build)
+python3 tests/test_installer.py                           # install/revert/idempotency against a mock display
+python3 boot/test_switcher.py                             # the gesture switcher end-to-end (file mode)
 ```
 
-Den **fulde** E2E-suite (alle scenarier, begge sprog, replay af optagelser; > 30 min) køres ikke pr.
-iteration, men som CI-gate (`workflow_dispatch` / ugentligt) og før et release:
+The **full** E2E suite (all scenarios, both languages, replay of recordings; > 30 min) is not run per
+iteration, but as a CI gate (`workflow_dispatch` / weekly) and before a release:
 
 ```sh
 python3 sim/run_e2e.py --all --parallel 4
 python3 sim/run_e2e.py --all --parallel 4 --ui-lang da
 ```
 
-UI'ets indbyggede selftest (layout, strenge, frame-politik, mutations-prøver) — kræver preview-build:
+The UI's built-in self-test (layout, strings, frame policy, mutation probes) — requires the preview build:
 
 ```sh
 zig cc -DOURUI_PREVIEW -O2 -o build/ourui_preview src/ourui_v6.c -lm && ./build/ourui_preview --selftest sim/fixtures/config.json
 ```
 
-Simulatoren kan også spilles interaktivt i browseren: `python3 sim/play.py` (se `sim/PLAY.md`).
+The simulator can also be played interactively in the browser: `python3 sim/play.py` (see `sim/PLAY.md`).
 
-## Kodestil
+## Code style
 
-- **C (`src/`, `boot/`):** C11, ingen eksterne afhængigheder, statisk musl. Nye filer skal bygge
-  med `-Wall -Wextra -Werror` (UI-filen har et kendt, uændret sæt advarsler — tilføj ingen nye).
-  Hold ændringer små og lokale; sikkerheds-kritiske funktioner (write-kø, frame-politik, start-
-  /stop-recepter, boot-push) ændres kun med test, der beviser adfærden.
-- **Python:** standardbibliotek, ingen afhængigheder, Python 3.8-kompatibel.
-- **Strenge:** al synlig tekst findes på engelsk **og** dansk (streng-tabellen i `ourui_v6.c`).
-- Kommentarer på dansk eller engelsk; brugerrettede CLI-beskeder på engelsk.
+- **C (`src/`, `boot/`):** C11, no external dependencies, static musl. New files must build with
+  `-Wall -Wextra -Werror` (the UI file has a known, unchanged set of warnings — do not add new ones).
+  Keep changes small and local; safety-critical functions (write queue, frame policy, start/stop
+  recipes, boot push) are only changed together with a test that proves the behavior.
+- **Python:** standard library, no dependencies, Python 3.8 compatible.
+- **Strings:** all visible UI text exists in English **and** Danish (the string table in
+  `ourui_v6.c`). The bilingual UI is a feature — keep both columns in sync.
+- **Language:** documentation, user-facing CLI messages and new code comments are in English. Some
+  older code comments are still in Danish; translating them is a welcome contribution.
 
 ## Pull requests
 
-1. Fork → branch (`feat/…`, `fix/…`) → små, fokuserede commits.
-2. Kør den hurtige test-løkke ovenfor; beskriv i PR'en hvad du har kørt (og om det er testet på en
-   rigtig maskine — hvilken model/firmware).
-3. Ændrer du binærerne i `bin/`, så beskriv hvordan de er bygget og opdatér `bin/MD5SUMS` **og**
-   `BIN_MD5` i `tools/merakiplus.py` (CI tjekker, at de stemmer).
-4. Opdatér `CHANGELOG.md` og relevant dokumentation.
+1. Fork → branch (`feat/…`, `fix/…`) → small, focused commits.
+2. Run the quick test loop above; describe in the PR what you ran (and whether it was tested on a
+   real machine — which model/firmware).
+3. If you change the binaries in `bin/`, describe how they were built and update `bin/MD5SUMS`
+   **and** `BIN_MD5` in `tools/merakiplus.py` (CI checks that they match).
+4. Update `CHANGELOG.md` and the relevant documentation.
 
-## Fejlrapporter
+## Bug reports
 
-Brug issue-skabelonen "Bug report". Medtag: maskine (Gen 1/Gen 2), Meraki+-version (DIAGNOSE →
-VERSION), hvad du gjorde, hvad der skete, og gerne output fra
-`python3 tools/merakiplus.py status --ip ADDR` og loggen fra `logs/` — **fjern IP-adresser og andre
-personlige data først**.
+Use the "Bug report" issue template. Include: machine (Gen 1/Gen 2), Meraki+ version
+(DIAGNOSTICS → VERSION), what you did, what happened, and if possible the output of
+`python3 tools/merakiplus.py status --ip ADDR` and the log from `logs/` — **remove IP addresses and
+other personal data first**.
 
-## Sikkerhedsfejl
+## Security issues
 
-Ikke som offentlig issue — se [SECURITY.md](SECURITY.md).
+Not as a public issue — see [SECURITY.md](SECURITY.md).
