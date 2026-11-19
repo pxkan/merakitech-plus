@@ -12,7 +12,8 @@ All notable changes to Meraki+. Details (with evidence, frames and test figures)
   from the translated sources (new md5s in `bin/MD5SUMS`, see `bin/README.md`); `grab_shim.so` unchanged.
 ### Fixed
 - Full E2E gate: the replay scenarios now start the recording relative to the UI's clock instead of
-  the simulator's process start, so they no longer drift on a busy CI runner.
+  the simulator's process start, and the runner's event clock and the simulator's log times are
+  re-based on the UI's clock origin, so the timing windows no longer drift on a busy CI runner.
 
 ## [6.14] — 2026-11-18 — first public release
 ### Added

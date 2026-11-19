@@ -148,6 +148,15 @@ def circle_check(raw):
 # Serve replays run this many seconds ahead of the UI clock (scenario key replay.lead_s).
 # 0.2 s is the centre of the measured passing band (0.1-0.3 s) of all replay scenarios;
 # E2E_REPLAY_LEAD_S overrides it for experiments.
+# Clock alignment (align_clocks): all scenario times are relative to the UI clock's t_ms=0,
+# with these nominal offsets (medians measured on an idle 10-core machine with --parallel 4; the
+# actual values ranged up to ~0.2 s there and were ~0.3-0.6 s on the 4-vCPU CI runner):
+#   SIM_AT_UI0_NOM  the sim clock's value at UI t=0 (sim starts before the UI)
+#   RUNNER_T0_NOM   the runner's event clock starts this long after UI t=0
+# E2E_CLOCK_ALIGN=0 restores the old behaviour (each clock starts whenever its process did).
+CLOCK_ALIGN = os.environ.get("E2E_CLOCK_ALIGN", "1") != "0"
+SIM_AT_UI0_NOM = float(os.environ.get("E2E_SIM_AT_UI0", "0.03"))
+RUNNER_T0_NOM = float(os.environ.get("E2E_RUNNER_T0", "0.06"))
 REPLAY_LEAD_S = float(os.environ.get("E2E_REPLAY_LEAD_S", "0.2"))
 
 
@@ -219,6 +228,8 @@ class ScenarioRun:
         self.ui_exit = None
         self.client_kind = "reference"
         self.t0 = None
+        self.ui_origin = None      # monotonic time of the UI clock's t_ms=0
+        self.clock = {}            # measured clock offsets (see align_clocks)
         # AF_UNIX paths must be ≤104 bytes (macOS) — the scratch path is too long,
         # so ctrl sockets are placed in a short /tmp directory per run.
         import tempfile
@@ -341,18 +352,28 @@ class ScenarioRun:
         m_a = time.monotonic()
         resp = self.ui_ctrl.call({"cmd": "ping"})
         m_b = time.monotonic()
+        # UI clock origin (its t_ms=0) on our monotonic clock; fall back to the spawn time
+        ui_t = resp.get("t") if isinstance(resp, dict) else None
+        origin = (m_a + m_b) / 2 - float(ui_t) if isinstance(ui_t, (int, float)) else m_spawn
+        self.ui_origin = origin
+        # sim clock origin likewise (its t=0 is the sim's process start)
+        try:
+            m_c = time.monotonic()
+            sresp = self.sim_ctrl.call({"cmd": "ping"})
+            m_d = time.monotonic()
+            if isinstance(sresp.get("t"), (int, float)):
+                self.clock["sim_at_ui0"] = round(origin - ((m_c + m_d) / 2 - sresp["t"]), 4)
+        except Exception:
+            pass
         rp = self.scen.get("replay")
         if rp and rp.get("mode", "serve") == "serve":
-            # UI clock origin (its t_ms=0) on our monotonic clock; fall back to the spawn time
-            ui_t = resp.get("t") if isinstance(resp, dict) else None
-            origin = (m_a + m_b) / 2 - float(ui_t) if isinstance(ui_t, (int, float)) else m_spawn
             self.anchor_replay(origin, float(rp.get("lead_s", REPLAY_LEAD_S)))
 
     def anchor_replay(self, ui_origin, lead_s):
         """Serve replays: start the capture clock relative to the UI's clock origin instead of
         the sim's process start. Assertion times are UI timestamps, and the gap between sim
-        start and UI start varies with machine load (~0.2 s idle, ~0.5 s on a busy CI runner,
-        i.e. 2-4 s of capture time at 8x), which made the tight replay windows flaky."""
+        start and UI start varies with machine load (0.3-0.6 s on a busy CI runner, i.e. 2-5 s
+        of capture time at 8x), which made the tight replay windows flaky."""
         elapsed = time.monotonic() - ui_origin + lead_s
         self.replay_anchor = self.sim_ctrl.call({"cmd": "replay_anchor", "elapsed": elapsed})
 
@@ -482,7 +503,13 @@ class ScenarioRun:
         events = sorted(self.scen.get("events", []), key=lambda e: e.get("t", 0))
         ei = 0
         last_cfg = last_snap = -1e9
-        self.t0 = time.monotonic()
+        now_m = time.monotonic()
+        if self.ui_origin is not None:
+            self.clock["runner_t0_after_ui0"] = round(now_m - self.ui_origin, 4)
+        # align_clocks: event times count from a FIXED point of the UI clock, not from whenever
+        # startup happened to finish (startup takes longer on a loaded machine)
+        self.t0 = (self.ui_origin + RUNNER_T0_NOM
+                   if CLOCK_ALIGN and self.ui_origin is not None else now_m)
         while True:
             now = time.monotonic() - self.t0
             if now >= duration:
@@ -546,6 +573,21 @@ class ScenarioRun:
                             self.assert_path.read_text().splitlines() if l.strip()]
         except OSError:
             self.sim_log = []
+        self.align_clocks()
+
+    def align_clocks(self):
+        """Sim-log times count from the sim's process start, which precedes the UI start by a
+        load-dependent gap (a few 10 ms idle, 0.3-0.6 s on a busy CI runner). Re-base them so the sim
+        clock reads SIM_AT_UI0_NOM at the UI's t_ms=0 — the offset the scenario windows were
+        tuned with — instead of whatever the gap happened to be in this run."""
+        act = self.clock.get("sim_at_ui0")
+        if not CLOCK_ALIGN or act is None:
+            return
+        delta = SIM_AT_UI0_NOM - act
+        self.clock["sim_log_shift"] = round(delta, 4)
+        for e in self.sim_log:
+            if isinstance(e.get("t"), (int, float)):
+                e["t"] = round(e["t"] + delta, 4)
 
     # ------------------------------------------------------------ (f) assertions
     def add(self, name, ok, detail=""):
@@ -1030,6 +1072,7 @@ class ScenarioRun:
             "sim_stats": next((e.get("stats") for e in reversed(self.sim_log)
                                if e["kind"] == "sim_exit"), None),
             "gesture_results": self.gesture_results,
+            "clock": self.clock,
             "sandbox": str(self.sandbox),
             "sim_assertions_log": str(self.assert_path),
             "state_jsonl": str(self.state_path),
