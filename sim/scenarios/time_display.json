@@ -1,0 +1,217 @@
+{
+  "name": "time_display",
+  "description": "v6.16 clock: the UI clock = SoC UTC + config timeZone (#48 = UTC+01:00) + DST when sumtime=1 (EU rule), shown on HOME's top line in stock's update_time format (timemode 1 = 24 h, 0 = 12 h A.M./P.M.); a winter → summer clock jump; config gets only the deliberate timemode/sumtime saves (restored at the end)",
+  "duration_s": 40,
+  "ui_only": true,
+  "ui_env": {
+    "OURUI_SIM_CLOCK": "2026-11-18T15:35:10Z"
+  },
+  "events": [
+    {
+      "t": 4,
+      "target": "runner",
+      "op": "snapshot",
+      "label": "24h-winter"
+    },
+    {
+      "t": 6,
+      "target": "ui",
+      "cmd": "save",
+      "param": "timemode",
+      "value": 0
+    },
+    {
+      "t": 9,
+      "target": "runner",
+      "op": "snapshot",
+      "label": "12h-winter"
+    },
+    {
+      "t": 12,
+      "target": "ui",
+      "cmd": "save",
+      "param": "sumtime",
+      "value": 1
+    },
+    {
+      "t": 15,
+      "target": "ui",
+      "cmd": "clock",
+      "utc": "2026-07-01T10:00:05Z"
+    },
+    {
+      "t": 18,
+      "target": "runner",
+      "op": "snapshot",
+      "label": "12h-summer-dst"
+    },
+    {
+      "t": 21,
+      "target": "ui",
+      "cmd": "save",
+      "param": "sumtime",
+      "value": 0
+    },
+    {
+      "t": 26,
+      "target": "ui",
+      "cmd": "save",
+      "param": "timemode",
+      "value": 1
+    },
+    {
+      "t": 29,
+      "target": "ui",
+      "cmd": "page",
+      "name": "home"
+    },
+    {
+      "t": 31,
+      "target": "runner",
+      "op": "snapshot",
+      "label": "24h-summer-nodst"
+    },
+    {
+      "t": 33,
+      "target": "ui",
+      "cmd": "page",
+      "name": "diag"
+    },
+    {
+      "t": 36,
+      "target": "runner",
+      "op": "snapshot",
+      "label": "diag"
+    }
+  ],
+  "expect": [
+    {
+      "kind": "phase",
+      "t": 2,
+      "window": 1.5,
+      "value": "READY"
+    },
+    {
+      "kind": "state",
+      "path": "clock.valid",
+      "t": 3,
+      "window": 1.0,
+      "equals": true
+    },
+    {
+      "kind": "state",
+      "path": "clock.tz",
+      "t": 3,
+      "window": 1.0,
+      "equals": 48
+    },
+    {
+      "kind": "state",
+      "path": "clock.timemode",
+      "t": 3,
+      "window": 1.0,
+      "equals": 1
+    },
+    {
+      "kind": "state",
+      "path": "clock.shown",
+      "t": 4,
+      "window": 1.5,
+      "equals": "16:35"
+    },
+    {
+      "kind": "state",
+      "path": "clock.dst",
+      "t": 4,
+      "window": 1.5,
+      "equals": false
+    },
+    {
+      "kind": "config",
+      "t": 8,
+      "field": "timemode",
+      "value": 0
+    },
+    {
+      "kind": "state",
+      "path": "clock.shown",
+      "t": 9,
+      "window": 1.5,
+      "equals": "04:35 P.M."
+    },
+    {
+      "kind": "config",
+      "t": 14,
+      "field": "sumtime",
+      "value": 1
+    },
+    {
+      "kind": "state",
+      "path": "clock.dst",
+      "t": 13.5,
+      "window": 1.0,
+      "equals": false,
+      "label": "november-no-dst"
+    },
+    {
+      "kind": "state",
+      "path": "clock.shown",
+      "t": 18,
+      "window": 2,
+      "equals": "12:00 P.M."
+    },
+    {
+      "kind": "state",
+      "path": "clock.dst",
+      "t": 18,
+      "window": 2,
+      "equals": true
+    },
+    {
+      "kind": "config",
+      "t": 23,
+      "field": "sumtime",
+      "value": 0
+    },
+    {
+      "kind": "state",
+      "path": "clock.shown",
+      "t": 24,
+      "window": 1.5,
+      "equals": "11:00 A.M."
+    },
+    {
+      "kind": "config",
+      "t": 28,
+      "field": "timemode",
+      "value": 1
+    },
+    {
+      "kind": "state",
+      "path": "clock.shown",
+      "t": 31,
+      "window": 2,
+      "equals": "11:00"
+    },
+    {
+      "kind": "page",
+      "t": 36,
+      "window": 2,
+      "value": "diag"
+    },
+    {
+      "kind": "sim_log",
+      "assert": "time_sync_seen",
+      "count": 0,
+      "t0": 0,
+      "t1": 40
+    },
+    {
+      "kind": "power_hold",
+      "t0": 1,
+      "t1": 40,
+      "value": "on",
+      "min_ratio": 0.95
+    }
+  ]
+}

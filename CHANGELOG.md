@@ -3,6 +3,38 @@
 All notable changes to Meraki+. Details (with evidence, frames and test figures) are in
 [docs/dev/UI_v6.md](docs/dev/UI_v6.md) under *CHANGES-v6.x*. All dates are 2026.
 
+## [6.16] — 2026-11-19
+### Fixed
+- **TIME FORMAT was inverted relative to the stock UI.** The stock `update_time` (0xD5944) XORs the
+  `timemode` flag with 1 before testing it, which the v6.1 analysis missed: **`timemode = 1` is 24-hour,
+  `0` is 12-hour (A.M./P.M.)**. The row now shows 24-HOUR for 1, and SAVE writes the value the stock UI
+  expects. See [docs/time-scheduling.md](docs/time-scheduling.md).
+- The cmd8 frame's date/time is the stock UI's **local** time (UTC + time zone + DST); v6.14 sent the
+  display's UTC clock.
+### Added
+- **Clock**: HOME's top line shows the local time (the display's system clock + the stock UI's time zone
+  table + daylight saving when `sumtime` is on) in the stock format (`16:35` / `04:35 P.M.`); DIAGNOSTICS
+  has a new *TIME · SCHEDULE* block (local time, zone + DST, auto off, last alarm sent, next pre-heat).
+  Meraki+ never sets the clock; an unset clock shows the wordmark and arms no alarm.
+- **Planned pre-heat**: *SYSTEM → PRE-HEAT / PRE-HEAT AT / REPEAT* (once, every day, Mon–Fri, Sat–Sun).
+  The next occurrence is sent as the controller's wake alarm in the power-off cmd8 frame exactly as the
+  stock UI does (`performSleepActions` → `powerOffSend(day, hour, minute)`); the controller's sleep task
+  wakes and heats at that time. Additionally the alarm is pre-armed with the same frame while the machine
+  is on (so a power-off Meraki+ does not see still wakes it) and re-armed after every wake / MCU restart;
+  switching the schedule off sends 0/0/0. A one-time pre-heat switches itself off after use. HOME shows the
+  next pre-heat.
+- **Optional auto off** (*SYSTEM → AUTO OFF*: off / 15 / 20 / 30 / 60 min, default off): the stock power-off
+  sequence after that long without touch, button or activity, with a warning 30 s before.
+- The schedule and auto off are stored in Meraki+'s own file `/new_customer/ourui/schedule`; `config.json`
+  is written only by the existing TIME FORMAT / DAYLIGHT SAVING rows. TIME ZONE (still locked) shows the
+  stock label and place names.
+- Simulator: scenarios `time_display`, `timemode_stock_parity`, `schedule_prewarm` (alarm wake end to end),
+  scenario keys `ui_env` / `ui_only`, expect kind `state`, exact-alarm `time_sync_seen`; the sim's MCU now
+  clears the cmd8 alarm on a CPU reset (as the firmware's RAM does).
+### Changed
+- `bin/`: `ourui` is now **V6.16**; `ourui_sim_arm` and the host SIM builds rebuilt with it; `switcher`,
+  `tinj_hold`, `keyinj` and `grab_shim.so` unchanged. Not yet verified on a machine.
+
 ## [6.15] — 2026-11-19
 ### Fixed
 - **The HOME graph resets when an activity starts.** Starting a grind, brew or hot water tares the

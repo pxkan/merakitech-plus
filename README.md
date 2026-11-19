@@ -1,7 +1,7 @@
 # Meraki+ — a community UI for the round display of MerakiTech espresso machines
 
 [![CI](https://github.com/thomasgrastein/merakitech-plus/actions/workflows/ci.yml/badge.svg)](https://github.com/thomasgrastein/merakitech-plus/actions/workflows/ci.yml)
-![version](https://img.shields.io/badge/Meraki%2B-v6.15-c9955c)
+![version](https://img.shields.io/badge/Meraki%2B-v6.16-c9955c)
 ![license](https://img.shields.io/badge/license-MIT-blue)
 ![status](https://img.shields.io/badge/status-unofficial%20%C2%B7%20experimental-red)
 
@@ -114,7 +114,7 @@ available to go back to.
 - **Touch-first design for the round display** — built for the 480×480 circle: large gauge, large
   numbers, hold-to-start (650 ms) on GRIND / BREW / WATER / STEAM, so nothing starts by accident.
 - **Settings parity with the stock UI** — brew temperature, pre-infusion, auto weight, steam, hot
-  water, brightness, sound, language, time and more (24 config rows on 3 pages), with the same limits
+  water, brightness, sound, language, time and more (24 config rows on 3 pages, plus Meraki+'s own UI language, pre-heat and auto-off rows), with the same limits
   as stock, saved in the stock format (so the stock UI reads them afterwards) and with a backup
   before every change.
 - **Manual STOP** for **water, grind and brew** (and steam) — the red button during an activity.
@@ -126,6 +126,9 @@ available to go back to.
   screen for 5 seconds to switch to Meraki+ without a reboot (works from the first boot after
   installation). To go back: *Settings → SYSTEM → SWITCH TO ORIGINAL NOW*.
 - **The power button** is honored — but see the [hardware limitation](#the-power-button-hardware-limitation).
+- **Clock, planned pre-heat and auto off** — the time on HOME (12/24 h as in the stock UI), a daily /
+  weekday / one-time **pre-heat** that wakes the machine through the controller's own alarm, and an
+  optional **auto off** after 15–60 minutes without use. See [Clock and pre-heat](#clock-and-pre-heat).
 - **Boot selection in the UI** — *SYSTEM → BOOT UI* selects whether the machine starts Meraki+ or the
   original UI.
 - **DIAGNOSTICS page** — connection, error codes E1–E3, version, boot slot, network status, raw
@@ -216,6 +219,21 @@ requires a clone of the repository.
 | **Back to the original UI now** | *SYSTEM → SWITCH TO ORIGINAL NOW* (no reboot). |
 | **To Meraki+ from the original UI** | With `--gesture`: hold **one finger still in the middle of the screen for 5 s** and release (active from the first boot after installation, because the gesture switcher is started by `demo.sh`). Without it: run `./install.sh --ip ADDR` again. |
 | **What starts at boot** | *SYSTEM → BOOT UI* (takes effect at the next boot), or `--persist` / `./revert.sh`. |
+
+### Clock and pre-heat
+
+- **Clock:** HOME's top line shows the local time: the display's system clock (UTC) + the time zone set in
+  the stock UI + daylight saving if *SYSTEM → DAYLIGHT SAVING* is on. *TIME FORMAT* 24-HOUR / 12-HOUR
+  matches the stock UI's setting. Meraki+ does not set the clock itself; if it has never been set (no network
+  time sync in the stock UI yet), the wordmark is shown instead.
+- **Pre-heat:** *SYSTEM → PRE-HEAT* (on/off), *PRE-HEAT AT* (time) and *REPEAT* (once / every day / Mon–Fri /
+  Sat–Sun). When the machine is switched off, the next pre-heat is handed to the controller as its wake alarm —
+  the same way the stock UI does it — and the controller wakes and heats at that time. HOME shows the next
+  pre-heat while it is planned. Meraki+'s schedule is separate from the stock UI's schedules.
+- **Auto off:** *SYSTEM → AUTO OFF* (off / 15 / 20 / 30 / 60 min). After that long without a touch or an
+  activity the machine switches off (a warning appears 30 s before; touch the screen to stay on).
+
+Details: [docs/time-scheduling.md](docs/time-scheduling.md).
 
 ### The pressure estimate
 
@@ -350,6 +368,7 @@ description (including the gesture, the watchdog race and the OTA table) is in
 | [docs/boot.md](docs/boot.md) | A/B boot, watchdog, gesture switcher, OTA, manual revert |
 | [docs/gesture.md](docs/gesture.md) | The center-hold gesture and the grab bypass |
 | [docs/power.md](docs/power.md) | The power button: verification and hardware findings |
+| [docs/time-scheduling.md](docs/time-scheduling.md) | Clock, 12/24 h, planned pre-heat (the controller's wake alarm) and auto off — stock semantics with addresses |
 | [docs/calibration.md](docs/calibration.md) | Pressure estimate, graph and weight conditioning |
 | [docs/dev/](docs/dev/) | Developer notes (full UI spec with changelog, parity analysis) |
 | [sim/README.md](sim/README.md) | The simulator and the E2E tests |

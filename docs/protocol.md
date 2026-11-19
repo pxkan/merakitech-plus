@@ -84,7 +84,7 @@ The display replies with cmd 9 + its `softversion` ("1.1.1-69"). CRC over `AA 55
 ```
 AA 55 08 <10 bytes payload: u32, u32, u16> CRClo CRChi   (15 bytes)
 ```
-Payload = the display's machine time/status fields (year/month/day + hour/min/sec + flags). The MCU ACKs with cmd 0x88 and echoes the fields (parser @ `0x9C88`, log "new time: …").
+Payload (10 bytes) = `year lo, year hi, month 1-12, day, hour, minute, second, alarm day, alarm hour, alarm minute` — the display's **local** time and the wake alarm. The MCU echoes it as cmd 0x88, sets its RTC from the date/time bytes and keeps the alarm in RAM (0x20000E18; parser @ `0x9C88`, log "new time: …"). Its sleep task (0x2F52) resets the CPU — wakes the machine — when RTC day/hour/minute equal the alarm and day+hour+minute ≠ 0. The stock UI sends cmd8 only at power-off (`powerOffSend` 0x14700C) with the next scheduled pre-heat, or 0/0/0. See [time-scheduling.md](time-scheduling.md).
 
 ### 2.4 OTA frame (header `CC DD`) — see §7
 

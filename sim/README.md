@@ -128,6 +128,9 @@ For an interactive browser view of the simulator, see [PLAY.md](PLAY.md).
 | `power_off_wake` | 55 s | **v6.14:** HOLD 1.6 s → cmd8 (alarm 0/0/0) + sub0 len2 [0,0] ACK → **sleep** (silent UART, registers frozen, keep-awake paused for 34 s) → sim button hold → **reboot to factory defaults** (word11=920/word114=50) → 0x89 → **re-push** restores the config → PowerOn + HOME + READY |
 | `power_during_activity` | 42 s | **v6.14:** a power HOLD during a brew is **blocked** (toast, no frames — the stock UI never stops an activity on power-off); the brew auto-stops undisturbed; a new full hold after the brew powers off normally |
 | `graph_reset` | 46 s | **v6.15 (ourui):** a 250 g cup on the brew scale at rest → BREW (the MCU tares word 39) → wand flush during the extraction → `state.chart`: no reset at rest, ONE reset at the start, ring cleared (`buf` ≤ 35 at 2–3 s), kept during the flush (`buf` ≥ 90), weight axis relative to the brew (`w_top` ≤ 420, not 2700). The REF profile replaces the 6 `chart` checks 1:1 |
+| `time_display` | 40 s | **v6.16 (ourui-only):** HOME clock = SoC UTC + zone #48 (+ DST when sumtime=1): 16:35 (24 h) → 04:35 P.M. (timemode=0) → a summer clock jump: 12:00 P.M. with DST, 11:00 A.M. without → 11:00 (timemode=1); no cmd8 sent |
+| `timemode_stock_parity` | 30 s | **v6.16 (ourui-only):** config timemode=1 = 24-HOUR row + 24 h clock (stock `update_time` XORs with 1); SAVE 12-HOUR writes 0 + A.M./P.M. clock; SAVE 24-HOUR writes 1 |
+| `schedule_prewarm` | 80 s | **v6.16 (ourui-only):** PRE-HEAT daily 06:30 → pre-armed cmd8 alarm [18,6,30] → HOLD → power-off with the same alarm → deep sleep → the sim RTC reaches 06:30 → **alarm wake** (factory reset) → re-push → ON → re-armed [19,6,30]; PRE-HEAT OFF → 0/0/0 |
 | `fault_e1/e2/e3` | 12–16 s | error bits words 34/35/36 → error UI + safety stop of the activity |
 | `crc_garbage` | 12 s | garbage stream + CRC corruption → resync, the link is kept |
 | `no_ack` | 12 s | **SAVE is blocked** (retransmit→FAIL, config unchanged) → recovery with the normal profile |
@@ -375,7 +378,7 @@ Details: `sim/reports/v6.14-sim/SUMMARY.md` + CONTRACT.md ADDENDUM v6.14-sim.
 | `proto.py` | CRC/frame/parse/parity/evdev shared library |
 | `png.py` | dependency-free PNG + contact sheet |
 | `gen_scenarios.py` | reproducible generator for scenarios/*.json |
-| `scenarios/*.json` | 33 timelines (v6.14: + power_off_wake/power_during_activity; v6.15: + graph_reset) |
+| `scenarios/*.json` | 36 timelines (v6.14: + power_off_wake/power_during_activity; v6.15: + graph_reset; v6.16: + time_display/timemode_stock_parity/schedule_prewarm) |
 | `play.py`, `play_viewer.html`, `PLAY.md` | interactive browser simulator |
 | `CONTRACT.md` | the contract for the UI's SIM build |
 | `README.md` | this file |

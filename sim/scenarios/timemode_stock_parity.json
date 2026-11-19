@@ -1,0 +1,162 @@
+{
+  "name": "timemode_stock_parity",
+  "description": "v6.16 timemode = stock (update_time 0xD5944 XORs model[0x59] with 1): config timemode=1 → the TIME FORMAT row says 24-HOUR (DA 24-TIMERS) and the clock has no A.M./P.M.; SAVE 12-HOUR writes timemode=0 (the value stock reads as 12 h) and the clock shows A.M./P.M.; SAVE 24-HOUR writes 1 again",
+  "duration_s": 30,
+  "ui_only": true,
+  "ui_env": {
+    "OURUI_SIM_CLOCK": "2026-11-18T08:05:10Z"
+  },
+  "events": [
+    {
+      "t": 3,
+      "target": "ui",
+      "cmd": "page",
+      "name": "detail",
+      "param": "timemode"
+    },
+    {
+      "t": 5,
+      "target": "runner",
+      "op": "snapshot",
+      "label": "detail-24h"
+    },
+    {
+      "t": 7,
+      "target": "ui",
+      "cmd": "save",
+      "param": "timemode",
+      "value": 0
+    },
+    {
+      "t": 10,
+      "target": "ui",
+      "cmd": "page",
+      "name": "detail",
+      "param": "timemode"
+    },
+    {
+      "t": 12,
+      "target": "runner",
+      "op": "snapshot",
+      "label": "detail-12h"
+    },
+    {
+      "t": 14,
+      "target": "ui",
+      "cmd": "page",
+      "name": "home"
+    },
+    {
+      "t": 19,
+      "target": "ui",
+      "cmd": "save",
+      "param": "timemode",
+      "value": 1
+    },
+    {
+      "t": 22,
+      "target": "ui",
+      "cmd": "page",
+      "name": "detail",
+      "param": "timemode"
+    },
+    {
+      "t": 24,
+      "target": "runner",
+      "op": "snapshot",
+      "label": "detail-24h-again"
+    },
+    {
+      "t": 26,
+      "target": "ui",
+      "cmd": "page",
+      "name": "home"
+    }
+  ],
+  "expect": [
+    {
+      "kind": "config",
+      "t": 2,
+      "field": "timemode",
+      "value": 1
+    },
+    {
+      "kind": "state",
+      "path": "clock.shown",
+      "t": 2,
+      "window": 1,
+      "equals": "09:05"
+    },
+    {
+      "kind": "state",
+      "path": "shown.value",
+      "t": 5,
+      "window": 1.5,
+      "label": "row-24",
+      "contains": "24-"
+    },
+    {
+      "kind": "state",
+      "path": "shown.raw",
+      "t": 5,
+      "window": 1.5,
+      "equals": 1
+    },
+    {
+      "kind": "save",
+      "t": 7.5,
+      "window": 1.5,
+      "state": "ok",
+      "param": "timemode"
+    },
+    {
+      "kind": "config",
+      "t": 9,
+      "field": "timemode",
+      "value": 0
+    },
+    {
+      "kind": "state",
+      "path": "shown.value",
+      "t": 12,
+      "window": 1.5,
+      "label": "row-12",
+      "contains": "12-"
+    },
+    {
+      "kind": "state",
+      "path": "clock.shown",
+      "t": 16,
+      "window": 1.5,
+      "equals": "09:05 A.M."
+    },
+    {
+      "kind": "config",
+      "t": 21,
+      "field": "timemode",
+      "value": 1
+    },
+    {
+      "kind": "state",
+      "path": "shown.value",
+      "t": 24,
+      "window": 1.5,
+      "label": "row-24-again",
+      "contains": "24-"
+    },
+    {
+      "kind": "state",
+      "path": "clock.shown",
+      "t": 28,
+      "window": 1.5,
+      "equals": "09:05"
+    },
+    {
+      "kind": "sim_log",
+      "assert": "time_sync_seen",
+      "count": 0,
+      "t0": 0,
+      "t1": 30
+    }
+  ]
+}

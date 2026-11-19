@@ -2,7 +2,7 @@
 
 | File | What | Built from |
 |---|---|---|
-| `ourui` | **Meraki+ v6.15** device binary (static ARMv7, musl). Installed as `/new_customer/demo_v9`. | `src/ourui_v6.c` |
+| `ourui` | **Meraki+ v6.16** device binary (static ARMv7, musl). Installed as `/new_customer/demo_v9`. | `src/ourui_v6.c` |
 | `switcher` | gesture switcher daemon (center-hold 5 s → stock to Meraki+), only with `--gesture` | `boot/switcher.c` |
 | `grab_shim.so` | tiny LD_PRELOAD shim so the switcher can see touches while the stock UI runs (only with `--gesture`) | `boot/grab_shim.c` |
 | `tinj_hold` | touch injector used for on-device testing of the gesture | `boot/tinj_hold.c` |
@@ -14,6 +14,15 @@
 **No vendor firmware, libraries or scripts are included here or anywhere in this repository.**
 
 ## Provenance of the ARM binaries
+
+**v6.16 (2026-11-19, time & scheduling):** `ourui`, `ourui_sim_arm` and the two host SIM builds were
+rebuilt from the v6.16 source: the clock on HOME/DIAGNOSTICS, the corrected TIME FORMAT (`timemode` 1 =
+24 h, as the stock UI), the planned pre-heat (the stock cmd8 wake alarm, sent at power-off and pre-armed
+while on) and the optional auto off (see CHANGELOG / docs/time-scheduling.md). The only new UART frame is
+cmd8, which the stock UI and v6.14 already send. `switcher`, `tinj_hold`, `keyinj` and `grab_shim.so` are
+byte-identical to the previous build. **Not yet verified on a machine** (install deferred); covered by the
+UI self-test (EN + DA, also as a 32-bit ARM binary), the simulator quick E2E suite and the new
+`time_display`, `timemode_stock_parity` and `schedule_prewarm` scenarios.
 
 **v6.15 (2026-11-19, graph reset on activity start):** `ourui`, `ourui_sim_arm` and the two host SIM
 builds were rebuilt from the v6.15 source. The only code change since the build below is display-only:
@@ -34,13 +43,13 @@ self-test and the simulator E2E suite.
 
 | File | md5 (this repo) | Built with |
 |---|---|---|
-| `ourui` (V6.15) | `bada0a00a1983cad3bec947f9d2241e9` | `./build.sh` → `build/ourui` |
-| `ourui_sim_arm` (V6.15) | `929506b900881921558161122bbd92b1` | `./build.sh` → `build/ourui_sim_arm` |
+| `ourui` (V6.16) | `2d10173cffb99807d7144619099b49b7` | `./build.sh` → `build/ourui` |
+| `ourui_sim_arm` (V6.16) | `34e64f3b9705e5556e6e09bcbafa3909` | `./build.sh` → `build/ourui_sim_arm` |
 | `switcher` | `de0d4920e4e80be32e3a70798886a3c0` | `./build.sh` → `build/switcher` |
 | `tinj_hold` | `795e5d66bc22a724da89ccce6c9c95b1` | `./build.sh` → `build/tinj_hold` |
 | `keyinj` | `645d223205a66b20d16cb408f03a73a4` | `./build.sh` → `build/keyinj` |
-| `ourui_sim-linux-x86_64` (V6.15) | `f59accb0e58b2dc6931ec73d12a5c951` | `zig cc -target x86_64-linux-musl -DOURUI_SIM -O2 -static -s src/ourui_v6.c -lm` |
-| `ourui_sim-macos-arm64` (V6.15) | `1d7d832688150ca12b5fe93b697fc215` | `zig cc -DOURUI_SIM -O2 -s src/ourui_v6.c -lm` (Mach-O builds are not bit-reproducible) |
+| `ourui_sim-linux-x86_64` (V6.16) | `683c5bab7f61b7d15302308a79705771` | `zig cc -target x86_64-linux-musl -DOURUI_SIM -O2 -static -s src/ourui_v6.c -lm` |
+| `ourui_sim-macos-arm64` (V6.16) | `5c3ede145e1803b98f20a0bd0cd3a5cc` | `zig cc -DOURUI_SIM -O2 -s src/ourui_v6.c -lm` (Mach-O builds are not bit-reproducible) |
 
 The ARM builds above are reproducible: running `./build.sh` on the same sources with zig 0.17.1 gives
 the same md5, independent of the build directory.

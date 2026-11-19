@@ -714,6 +714,12 @@ class McuSim:
             self.regs[33] = WS_SLEEP
         self.alog.log(self.t, "reboot", factory=factory, cause=cause,
                       defaults=defaults)
+        # v6.16: the cmd8 alarm lives in MCU RAM (0x20000E18) — a CPU reset clears it; the RTC
+        # peripheral keeps counting. The host re-arms it (ourui: pre-arm after the wake).
+        if self.alarm is not None:
+            self.alog.log(self.t, "alarm_cleared", alarm=list(self.alarm), cause="reset")
+        self.alarm = None
+        self.alarm_fired = False
         self.ft = {w: float(self.regs[w]) for w in (40, 42, 47, 48, 68, 70)}
         self.ft_last = {w: self.regs[w] for w in self.ft}
         self.adc_base = {w: self.regs[w] for w in (49, 69, 71, 72)}

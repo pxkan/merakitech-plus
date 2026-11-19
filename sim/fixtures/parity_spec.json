@@ -728,7 +728,7 @@
       "persist": "config",
       "confidence": "H",
       "handler_addr": "0xfcb58",
-      "notes": "display-lokal. KORREKTION v6.1: update_time 0xd5978: 0=24t, 1=12t."
+      "notes": "display-local. v6.16: update_time 0xD5944 XORs model[0x59] with 1 -> 1 = 24 h, 0 = 12 h (the v6.1 note '0 = 24 h' was wrong)."
     },
     {
       "id": "automatically",

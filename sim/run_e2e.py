@@ -331,6 +331,9 @@ class ScenarioRun:
             "OURUI_NOBL": "1",
             "OURUI_SWITCH_DRY": "1",
         })
+        # v6.16 (additive): a scenario may set extra UI environment variables, e.g.
+        # OURUI_SIM_CLOCK (the UI's UTC wall clock). Not used by older scenarios.
+        env.update({str(k): str(v) for k, v in (self.scen.get("ui_env") or {}).items()})
         if self.ui_bin:
             self.client_kind = "sim-build"
             cmd = [str(self.ui_bin)]
@@ -719,6 +722,46 @@ class ScenarioRun:
                      f"{'(any)' if ex.get('mode') == 'any' else ''}[{ex['t0']},{ex['t1']}]",
                      ok, f"n={len(vals)} min={min(vals) if vals else '-'} "
                      f"max={max(vals) if vals else '-'}")
+        elif kind == "state":
+            # v6.16 (additive): a generic state field by dotted path (e.g. "clock.shown",
+            # "sched.armed"). Window: [t-window, t+window] or [t0, t1]. Tests: "equals",
+            # "contains" (substring), "min"/"max". mode "any" (default) / "all".
+            if "t0" in ex:
+                sts = self.states_in(ex["t0"], ex["t1"])
+                where = f"[{ex['t0']},{ex['t1']}]"
+            else:
+                sts = self.states_in(ex["t"] - win, ex["t"] + win)
+                where = f"@{ex['t']}"
+            vals = []
+            for st in sts:
+                v, okp = st, True
+                for part in ex["path"].split("."):
+                    if isinstance(v, dict) and part in v:
+                        v = v[part]
+                    else:
+                        okp = False
+                        break
+                if okp:
+                    vals.append(v)
+
+            def _one(v):
+                if "equals" in ex and v != ex["equals"]:
+                    return False
+                if "contains" in ex and ex["contains"] not in str(v):
+                    return False
+                if "not_contains" in ex and ex["not_contains"] in str(v):
+                    return False
+                if "min" in ex and not (isinstance(v, (int, float)) and v >= ex["min"]):
+                    return False
+                if "max" in ex and not (isinstance(v, (int, float)) and v <= ex["max"]):
+                    return False
+                return True
+            res = [_one(v) for v in vals]
+            ok = bool(vals) and (all(res) if ex.get("mode") == "all" else any(res))
+            test = ", ".join(f"{k}={json.dumps(ex[k], ensure_ascii=False)}"
+                             for k in ("equals", "contains", "not_contains", "min", "max") if k in ex)
+            self.add(f"state.{ex['path']} {test}{'(all)' if ex.get('mode') == 'all' else ''}{where}",
+                     ok, f"n={len(vals)} last={json.dumps(vals[-1], ensure_ascii=False) if vals else '-'}")
         elif kind == "page":
             sts = self.states_in(ex["t"] - win, ex["t"] + win)
             ok = any(s.get("page") == ex["value"] for s in sts)
@@ -983,9 +1026,17 @@ class ScenarioRun:
         elif a == "time_sync_seen":
             hits = [e for e in log if e["kind"] == "time_sync"
                     and t0 <= e["t"] <= t1
-                    and (not ex.get("alarm0") or e.get("alarm") == [0, 0, 0])]
+                    and (not ex.get("alarm0") or e.get("alarm") == [0, 0, 0])
+                    and ("alarm" not in ex or e.get("alarm") == ex["alarm"])]   # v6.16: exact alarm
+            nmax = ex.get("max_count")                                            # v6.16: at most N
+            ok = bool(hits) and (nmax is None or len(hits) <= nmax)
+            if ex.get("count") == 0:                                              # v6.16: none at all
+                ok = not hits
             self.add(f"sim: cmd8 time/alarm" + (" (0/0/0)" if ex.get("alarm0") else "")
-                     + f" in [{t0},{t1}]", bool(hits), f"n={len(hits)}")
+                     + (f" alarm={ex['alarm']}" if "alarm" in ex else "")
+                     + (" none" if ex.get("count") == 0 else "")
+                     + (f" ≤{nmax}" if nmax is not None else "")
+                     + f" in [{t0},{t1}]", ok, f"n={len(hits)} {json.dumps([e.get('alarm') for e in hits[:4]])}")
         elif a == "power_wake_seen":
             hits = [e for e in log if e["kind"] == "power_wake"
                     and t0 <= e["t"] <= t1
@@ -1266,6 +1317,16 @@ def main():
     def run_one(name):
         scen = scens[name]
         print(f"\n[e2e] === {name} ({scen.get('duration_s', '?')}s) ===", flush=True)
+        if scen.get("ui_only") and not ui_bin:
+            # v6.16 (additive): an ourui-only scenario (clock/schedule state, pre-armed alarm) has no
+            # oracle in the reference client — reported as skipped, not as a fake pass of its checks.
+            print(f"[e2e] {name}: SKIP (ourui-only scenario; reference client)", flush=True)
+            return {"name": name, "pass": True, "client": "reference", "skipped": True,
+                    "description": scen.get("description", ""),
+                    "checks": [{"name": "skipped: ourui-only scenario (no reference-client oracle)", "ok": True, "detail": ""}],
+                    "final_state": {}, "snapshots": [], "samples": 0, "contact_sheet": None,
+                    "sim_stats": None, "gesture_results": {}, "duration_s": 0, "ui_bin": None,
+                    "sandbox": "", "sim_assertions_log": "", "state_jsonl": ""}
         sr = ScenarioRun(scen, run_dir, ui_bin=ui_bin,
                          keep_sandbox=args.keep_sandbox,
                          ui_lang=args.ui_lang, ui_profile=profile)

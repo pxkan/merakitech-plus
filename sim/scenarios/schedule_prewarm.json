@@ -1,0 +1,307 @@
+{
+  "name": "schedule_prewarm",
+  "description": "v6.16 planned pre-heat: PRE-HEAT every day at 06:30 (local, zone #48) saved at 06:29 → pre-armed while on (cmd8 alarm [18,6,30]); HOLD → power-off carries the same alarm (stock performSleepActions) + cmd6 sub0 len2 [0,0] → deep sleep → the MCU RTC reaches 06:30 → alarm wake (CPU reset, factory defaults) → re-push restores the config → ourui ON again and RE-ARMS the next occurrence (tomorrow, [19,6,30]); then PRE-HEAT OFF disarms with 0/0/0",
+  "duration_s": 80,
+  "ui_only": true,
+  "ui_env": {
+    "OURUI_SIM_CLOCK": "2026-11-18T05:29:12Z"
+  },
+  "events": [
+    {
+      "t": 2,
+      "target": "ui",
+      "cmd": "save",
+      "param": "preheat_repeat",
+      "value": 1
+    },
+    {
+      "t": 3,
+      "target": "ui",
+      "cmd": "save",
+      "param": "preheat_at",
+      "value": 390
+    },
+    {
+      "t": 4,
+      "target": "ui",
+      "cmd": "save",
+      "param": "preheat",
+      "value": 1
+    },
+    {
+      "t": 6,
+      "target": "ui",
+      "cmd": "page",
+      "name": "home"
+    },
+    {
+      "t": 9,
+      "target": "runner",
+      "op": "snapshot",
+      "label": "armed-home"
+    },
+    {
+      "t": 12,
+      "target": "ui",
+      "cmd": "key",
+      "value": 1
+    },
+    {
+      "t": 13.6,
+      "target": "ui",
+      "cmd": "key",
+      "value": 0
+    },
+    {
+      "t": 16,
+      "target": "runner",
+      "op": "snapshot",
+      "label": "off"
+    },
+    {
+      "t": 56,
+      "target": "runner",
+      "op": "snapshot",
+      "label": "woken"
+    },
+    {
+      "t": 64,
+      "target": "ui",
+      "cmd": "page",
+      "name": "diag"
+    },
+    {
+      "t": 67,
+      "target": "runner",
+      "op": "snapshot",
+      "label": "diag-rearmed"
+    },
+    {
+      "t": 70,
+      "target": "ui",
+      "cmd": "save",
+      "param": "preheat",
+      "value": 0
+    },
+    {
+      "t": 73,
+      "target": "ui",
+      "cmd": "page",
+      "name": "home"
+    }
+  ],
+  "expect": [
+    {
+      "kind": "phase",
+      "t": 1.5,
+      "window": 1,
+      "value": "READY"
+    },
+    {
+      "kind": "state",
+      "path": "sched.preheat",
+      "t": 5,
+      "window": 1,
+      "equals": 1
+    },
+    {
+      "kind": "state",
+      "path": "sched.at",
+      "t": 5,
+      "window": 1,
+      "equals": "06:30"
+    },
+    {
+      "kind": "state",
+      "path": "sched.repeat",
+      "t": 5,
+      "window": 1,
+      "equals": "daily"
+    },
+    {
+      "kind": "state",
+      "path": "sched.alarm",
+      "t": 5,
+      "window": 1.5,
+      "equals": [
+        18,
+        6,
+        30
+      ]
+    },
+    {
+      "kind": "sim_log",
+      "assert": "time_sync_seen",
+      "alarm": [
+        18,
+        6,
+        30
+      ],
+      "t0": 3.5,
+      "t1": 11,
+      "max_count": 1
+    },
+    {
+      "kind": "state",
+      "path": "sched.armed",
+      "t": 10,
+      "window": 1.5,
+      "equals": [
+        18,
+        6,
+        30
+      ]
+    },
+    {
+      "kind": "state",
+      "path": "sched.home",
+      "t": 9,
+      "window": 2,
+      "contains": "06:30"
+    },
+    {
+      "kind": "power",
+      "t": 13.8,
+      "window": 0.5,
+      "value": "turning_off"
+    },
+    {
+      "kind": "sim_log",
+      "assert": "time_sync_seen",
+      "alarm": [
+        18,
+        6,
+        30
+      ],
+      "t0": 13.3,
+      "t1": 14.3
+    },
+    {
+      "kind": "sim_log",
+      "assert": "write_words",
+      "sub": 0,
+      "words": [
+        0,
+        0
+      ],
+      "t0": 13.3,
+      "t1": 14.5
+    },
+    {
+      "kind": "sim_log",
+      "assert": "dvale_seen",
+      "t0": 13.3,
+      "t1": 14.6
+    },
+    {
+      "kind": "power_hold",
+      "t0": 16,
+      "t1": 46,
+      "value": "off",
+      "min_ratio": 0.95
+    },
+    {
+      "kind": "sim_log",
+      "assert": "no_writes_between",
+      "t0": 16,
+      "t1": 46,
+      "except_subs": []
+    },
+    {
+      "kind": "sim_log",
+      "assert": "power_wake_seen",
+      "cause_contains": "alarm",
+      "t0": 46,
+      "t1": 51
+    },
+    {
+      "kind": "sim_log",
+      "assert": "reboot_seen",
+      "factory": true,
+      "t0": 46,
+      "t1": 51
+    },
+    {
+      "kind": "sim_log",
+      "assert": "boot_push",
+      "t0": 46.5
+    },
+    {
+      "kind": "word",
+      "word": 11,
+      "t": 58,
+      "window": 3,
+      "value": 870
+    },
+    {
+      "kind": "power",
+      "t": 56,
+      "window": 4,
+      "value": "on"
+    },
+    {
+      "kind": "state",
+      "path": "power.auto_on",
+      "t0": 46,
+      "t1": 62,
+      "min": 1
+    },
+    {
+      "kind": "sim_log",
+      "assert": "time_sync_seen",
+      "alarm": [
+        19,
+        6,
+        30
+      ],
+      "t0": 47,
+      "t1": 66
+    },
+    {
+      "kind": "state",
+      "path": "sched.armed",
+      "t": 67,
+      "window": 2,
+      "equals": [
+        19,
+        6,
+        30
+      ]
+    },
+    {
+      "kind": "page",
+      "t": 67,
+      "window": 2,
+      "value": "diag"
+    },
+    {
+      "kind": "sim_log",
+      "assert": "time_sync_seen",
+      "alarm": [
+        0,
+        0,
+        0
+      ],
+      "t0": 70,
+      "t1": 78
+    },
+    {
+      "kind": "state",
+      "path": "sched.preheat",
+      "t": 76,
+      "window": 2,
+      "equals": 0
+    },
+    {
+      "kind": "state",
+      "path": "sched.armed",
+      "t": 78,
+      "window": 2,
+      "equals": [
+        0,
+        0,
+        0
+      ]
+    }
+  ]
+}

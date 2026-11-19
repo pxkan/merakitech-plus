@@ -1,4 +1,4 @@
-# UI_v6 — Meraki+ (code name ourui) v6.15: graph reset on activity start + the physical power button + manual STOP for water / brew / grind + settings parity (spec-aligned) + boot slot integration + EN/DA + design for the round screen + SIM build/E2E + boot push and RX resync on the device + live-proven phase semantics, 64-bit clock and re-push after an MCU restart + Wi-Fi at startup and self-healing (network guard) + HOME without REVERT + calm graph and stable weight (display conditioning, weight latch, dead band) + pressure as a ≈bar estimate (anchor: pre-infusion = config pressure) + UX review (plain language, contrast, start hint, gear, close chevron, swipe guard, DIAGNOSTICS groups)
+# UI_v6 — Meraki+ (code name ourui) v6.16: clock + correct 24-hour flag + planned pre-heat and auto off + graph reset on activity start + the physical power button + manual STOP for water / brew / grind + settings parity (spec-aligned) + boot slot integration + EN/DA + design for the round screen + SIM build/E2E + boot push and RX resync on the device + live-proven phase semantics, 64-bit clock and re-push after an MCU restart + Wi-Fi at startup and self-healing (network guard) + HOME without REVERT + calm graph and stable weight (display conditioning, weight latch, dead band) + pressure as a ≈bar estimate (anchor: pre-infusion = config pressure) + UX review (plain language, contrast, start hint, gear, close chevron, swipe guard, DIAGNOSTICS groups)
 
 > **Note (public edition):** Development notes written during development. Paths such as
 > `artifacts/…`, `boot_install.py` steps and md5 tables refer to the author's working environment; as
@@ -10,7 +10,7 @@
 > `SESSION.md`, `HOTWATER.md`, `WRITETEST.md`, `FINDINGS` and `GROUND-TRUTH.md` are to the author's
 > capture/analysis notes.
 
-**Date:** 2026-11-19 · **Version:** v6.15 (v6.14 + **the graph resets when an activity starts** — user bug: the cup placed before a brew dominated the graph scale, so the 0 → 36 g curve looked flat; display only, §14.7 + [CHANGES-v6.15](#changes-v615)). v6.14 = (v6.13 + **the physical power button** — user bug: the button did not work in ourui; the k62091 node (event1) is now read, and the stock UI's power-off/power-on semantics have been reverse-engineered and mirrored, §19 + [CHANGES-v6.14](#changes-v614)). v6.13 = (v6.12 + **manual STOP for WATER, BREW and GRIND** — user bug: hot water could not be stopped from the screen; the stop words were reverse-engineered from the MCU firmware and cross-checked against the stock UI's own stop calls; auto-stop is unchanged — see [§18](#18-manual-stop-v613) and [CHANGES-v6.13](#changes-v613); v6.12 = the v6.11 UI + the boot work stream's gesture fix ([gesture.md](../gesture.md)), source kept as `ourui_v6_12.c`; v6.11 = v6.10 + **UX review**: a critical design pass over all pages and states — plain language instead of word numbers and raw codes, raised contrast, a start hint in the empty chart field, a visible gear for the settings, a close chevron + swipe-down in the details, a swipe guard with axis lock, short stat labels and DIAGNOSTICS in sections; control logic and protocol are unchanged — see [§17](#17-ux-review-v611) and [CHANGES-v6.11](#changes-v611); v6.10 = v6.9 + **pressure estimate**: "PRESSURE\* UNCALIBRATED" has been replaced by **≈BAR · EST.** with a single linear anchor — the pre-infusion plateau of 358 raw in the recording = config `preInfusionPressure` (4 bar) — and a pulse limit of 20 bar; display only — see [§16](#16-pressure-estimate-v610) and [CHANGES-v6.10](#changes-v610); v6.9 = v6.8 + **display conditioning** of the graph and hero — median-3 + EMA, a robust scale, pulse gate, pressure curve only during brew/water —, a **stable weight source** (a latch instead of the phase per sample: the user's periodic weight spikes) and a **weight dead band** < 0.25 g; display only, all control logic reads raw values — see [§14](#14-display-conditioning-and-stable-weight-v69) and [CHANGES-v6.9](#changes-v69); v6.8 = v6.7 without the REVERT button on HOME — see [CHANGES-v6.8](#changes-v68); v6.7 = v6.6 + **network guard**: Wi-Fi at startup (a slot B boot had no network) and self-healing of the Wi-Fi stack, plus word 113 in the boot push as the stock UI's recorded value — see [CHANGES-v6.7](#changes-v67); v6.6 = v6.5 + phase semantics after the live session — two steam paths and concurrent phases —, a **64-bit clock** (v6.5's clock wrapped after 24.86 days on the device) and a **re-push of the boot push after an MCU restart** — see [CHANGES-v6.6](#changes-v66); v6.5 = v6.4 + a boot push from the config at startup **also on the device**, with an activity guard, and a resync watchdog in the RX parser — see [CHANGES-v6.5](#changes-v65); v6.4 = v6.3 + a SIM build against the simulated test environment — see [§13](#13-sim-build-and-e2e-v64) and [CHANGES-v6.4](#changes-v64); v6.3 = v6.2 + the product name **Meraki+** and two UI languages, English default / Danish — see [CHANGES-v6.3](#changes-v63); v6.2 = v6.1 + BOOT UI, runtime switch to the stock UI, exit reminder — see [CHANGES-v6.2](#changes-v62)) · **Status:** implemented, cross-compiled and **only verified locally** (offline previews + self-test + automated spec alignment). **Nothing has been run on the machine, and no network device has been contacted.** The on-device work belongs to the integration engineer (§11).
+**Date:** 2026-11-19 · **Version:** v6.16 (v6.15 + **time & scheduling** — user bugs: the 24-hour flag was inverted relative to the stock UI, ourui showed no clock, and there was no planned pre-heat; the clock, the fixed TIME FORMAT, a pre-heat schedule sent as the stock cmd8 alarm and an optional auto off, see [CHANGES-v6.16](#changes-v616) + [time-scheduling.md](../time-scheduling.md)). v6.15 = (v6.14 + **the graph resets when an activity starts** — user bug: the cup placed before a brew dominated the graph scale, so the 0 → 36 g curve looked flat; display only, §14.7 + [CHANGES-v6.15](#changes-v615)). v6.14 = (v6.13 + **the physical power button** — user bug: the button did not work in ourui; the k62091 node (event1) is now read, and the stock UI's power-off/power-on semantics have been reverse-engineered and mirrored, §19 + [CHANGES-v6.14](#changes-v614)). v6.13 = (v6.12 + **manual STOP for WATER, BREW and GRIND** — user bug: hot water could not be stopped from the screen; the stop words were reverse-engineered from the MCU firmware and cross-checked against the stock UI's own stop calls; auto-stop is unchanged — see [§18](#18-manual-stop-v613) and [CHANGES-v6.13](#changes-v613); v6.12 = the v6.11 UI + the boot work stream's gesture fix ([gesture.md](../gesture.md)), source kept as `ourui_v6_12.c`; v6.11 = v6.10 + **UX review**: a critical design pass over all pages and states — plain language instead of word numbers and raw codes, raised contrast, a start hint in the empty chart field, a visible gear for the settings, a close chevron + swipe-down in the details, a swipe guard with axis lock, short stat labels and DIAGNOSTICS in sections; control logic and protocol are unchanged — see [§17](#17-ux-review-v611) and [CHANGES-v6.11](#changes-v611); v6.10 = v6.9 + **pressure estimate**: "PRESSURE\* UNCALIBRATED" has been replaced by **≈BAR · EST.** with a single linear anchor — the pre-infusion plateau of 358 raw in the recording = config `preInfusionPressure` (4 bar) — and a pulse limit of 20 bar; display only — see [§16](#16-pressure-estimate-v610) and [CHANGES-v6.10](#changes-v610); v6.9 = v6.8 + **display conditioning** of the graph and hero — median-3 + EMA, a robust scale, pulse gate, pressure curve only during brew/water —, a **stable weight source** (a latch instead of the phase per sample: the user's periodic weight spikes) and a **weight dead band** < 0.25 g; display only, all control logic reads raw values — see [§14](#14-display-conditioning-and-stable-weight-v69) and [CHANGES-v6.9](#changes-v69); v6.8 = v6.7 without the REVERT button on HOME — see [CHANGES-v6.8](#changes-v68); v6.7 = v6.6 + **network guard**: Wi-Fi at startup (a slot B boot had no network) and self-healing of the Wi-Fi stack, plus word 113 in the boot push as the stock UI's recorded value — see [CHANGES-v6.7](#changes-v67); v6.6 = v6.5 + phase semantics after the live session — two steam paths and concurrent phases —, a **64-bit clock** (v6.5's clock wrapped after 24.86 days on the device) and a **re-push of the boot push after an MCU restart** — see [CHANGES-v6.6](#changes-v66); v6.5 = v6.4 + a boot push from the config at startup **also on the device**, with an activity guard, and a resync watchdog in the RX parser — see [CHANGES-v6.5](#changes-v65); v6.4 = v6.3 + a SIM build against the simulated test environment — see [§13](#13-sim-build-and-e2e-v64) and [CHANGES-v6.4](#changes-v64); v6.3 = v6.2 + the product name **Meraki+** and two UI languages, English default / Danish — see [CHANGES-v6.3](#changes-v63); v6.2 = v6.1 + BOOT UI, runtime switch to the stock UI, exit reminder — see [CHANGES-v6.2](#changes-v62)) · **Status:** implemented, cross-compiled and **only verified locally** (offline previews + self-test + automated spec alignment). **Nothing has been run on the machine, and no network device has been contacted.** The on-device work belongs to the integration engineer (§11).
 **Source:** `ourui_v6.c` (one file, plain C, no new dependencies) · **Binary:** `ourui_v6` (static ARMv7 EABI5 musl) · **Previews:** `round_v6/` (English; contact sheet) + `round_v6/da/` (Danish; contact sheet) · `EN | DA side by side` · **Revert:** `REVERT.md` · **Boot integration:** `boot/BOOT.md` (the boot work stream's; §9 = the UI requirements for v6.2) · **Spec:** [PARITY.md](PARITY.md) / `parity_spec.json` · **Predecessor:** `ROUNDUI.md` (v4)
 
 > **Status of the caveat in v6:** the spec was missing when v6 was written, and all limits were assumptions. v6.1 has replaced them with the spec's proven ranges. The alignment is automated: `parity_check.py` compares `SET[]` in the binary with `parity_spec.json` and fails on any unjustified deviation (`round_v6/parity_check.txt`: **41 spec parameters → 24 rows, 17 left out with a rationale, ALL ALIGNED**). What is still estimated or locked is in §4.4. All changes are listed in [CHANGES-v6.1](#changes-v61).
@@ -170,9 +170,13 @@ estimate · **LOCKED** = shown without an editor · **SENSOR** = read-only measu
 | WATER SHORTCUT | `hotWaterShortcut` | 0..1 | OFF / ON | 2 | **PROVEN** |
 | DAYLIGHT SAVING | `sumtime` | 0..1 | OFF / ON | 2 | **PROVEN** |
 | CLEANING REMINDER | `clearTip` | 0..1 | OFF / ON | 2 | **PROVEN** |
-| TIME FORMAT | `timemode` | 0..1 | **0 = 24-HOUR / 1 = 12-HOUR** | 3 | **PROVEN** [`update_time` 0xd5978] |
+| TIME FORMAT | `timemode` | 0..1 | **0 = 12-HOUR / 1 = 24-HOUR** (corrected in v6.16) | 3 | **PROVEN** [`update_time` 0xD5944: `eor model[0x59], #1` at 0xD5970] |
 | AUTO TIME | `Automatically` | 0..1 | OFF / ON | 3 | **PROVEN** |
-| TIME ZONE | `timeZone` | — | 48 | 3 | **LOCKED** (the spec has no index table) |
+| TIME ZONE | `timeZone` | — | `UTC+01:00` (v6.16: the stock label; the detail shows the place names) | 3 | **LOCKED** (set in the stock UI; table 0x1A5890 copied in v6.16) |
+| **PRE-HEAT** (v6.16) | *(none — `/new_customer/ourui/schedule`)* | 0..1 | OFF / ON | — | ourui's own; the alarm goes out as the stock cmd8 alarm ([time-scheduling.md](../time-scheduling.md)) |
+| **PRE-HEAT AT** (v6.16) | *(same file)* | 00:00..23:55, step 5 min | per TIME FORMAT | — | ourui's own |
+| **REPEAT** (v6.16) | *(same file)* | 0..3 | ONCE / EVERY DAY / MON-FRI / SAT-SUN | — | ourui's own (stock: Never / Everyday / Workday / Weekend) |
+| **AUTO OFF** (v6.16) | *(same file)* | 0..4 | OFF / 15 / 20 / 30 / 60 MIN | — | ourui's own (stock: fixed 30 min; `sleepModeSetting`'s table is 15/20/30/60) |
 
 ### 4.4 What is still estimated or locked
 | Row | What is uncertain | How the UI shows it | Why it is justifiable |
@@ -233,9 +237,10 @@ VALUE"*), and the first tap on −/+ brings it into range.
 | 12 | Volume: slider + discrete selector | hint (§4.4) |
 
 **Two findings beyond the spec** (both verifiable in `demo_v9.dis`):
-* **`timemode` was inverted in v6.** `model_data_init` stores `timemode != 0` in model+0x59, and
-  `update_time` [0xd5978] formats with `"%02d:%02d"` when it is 0 and with `A.M./P.M.` otherwise. So
-  **0 = 24 h, 1 = 12 h**. The current config has 1, so the stock UI shows a 12-hour clock.
+* **`timemode`: 1 = 24 h, 0 = 12 h** (corrected in v6.16 — the v6.1 finding "0 = 24 h" was wrong). `model_data_init`
+  stores `timemode != 0` in model+0x59, and `update_time` [0xD5944] XORs that byte with 1 (0xD5970) before the
+  test: `timemode = 1` → `"%02d:%02d"`, `timemode = 0` → `A.M./P.M.`. The stock switch is labelled "24-Hour
+  Format" and is ON for 1. The factory config has 1 = a 24-hour clock. Details in [time-scheduling.md](../time-scheduling.md).
 * **`sumtime` is daylight saving time**, not "timer display" as the spec's label guesses: the accessor
   is called `getSumerTimeSwitchValue` [0xd2804]. v6's label DAYLIGHT SAVING (SOMMERTID) is kept.
 
@@ -460,7 +465,7 @@ None of this has been carried out. The order goes from harmless to running actua
 - [ ] DIAGNOSTICS: LINK OK, RX OK increases, RX CRC / RESYNC = 0 / 0, CMD6 = 0/0/0/0, **FRAME MS MAX < 30**; scroll one row: BOOT PUSH = OFF / OFF (read-only sends nothing).
 - [ ] The values in the three lists match `config.json`; no row is red (out of spec); `MIRROR 112-114` shows `0104 0605 70` (or `0104 0606 70` if there has been a brew since the stock UI's boot — see L).
 - [ ] WATER SENSOR (STEAM · WATER) follows the BREW BOILER number on HOME; the row has no −/+.
-- [ ] TIME FORMAT shows **12-HOUR** (config `timemode=1`), and the stock UI's clock is 12-hour with A.M./P.M. If not, the finding in §4a is wrong: report back.
+- [ ] TIME FORMAT shows **24-HOUR** (config `timemode=1`), HOME's top line shows a 24-hour clock, and the stock UI's clock is 24-hour (v6.16). If not, the finding in §4a is wrong: report back.
 - [ ] Swipe + edge tap change the page; SYSTEM → *SWITCH TO ORIGINAL NOW* → SWITCH NOW (v6.8; before: REVERT) → demo_v9 SIGCONT, the stock UI redraws itself.
 
 **C. Write round without actuators**
@@ -1116,7 +1121,7 @@ KEY, one key). ourui never read that node.
 | Blocking | While `isExtractionOrSteamSwitchOn()` is true, it does not count and does not power off: work_sta bit 12 (brew) or bit 14 (steam), mirror word 22 (brew active), 24 (steam) or 6 (grind). **Hot water does not block.** The stock UI NEVER stops an activity on power-off | `isExtractionOrSteamSwitchOn` 0x1481E0 (`GetMaichinState(0x1000/0x4000)`, words 22/24/6) | The same predicate (+ ourui's own start in progress for the three). Toast *STOP THE ACTIVITY FIRST · THEN OFF*. When the activity has ended, a **new full hold** powers off (the counter stands still, like e60). Hot water: power-off is sent, no stop frame |
 | No connection | Only powers off if mirror word 0 ≠ 0 | 0x149210 | Only if the link is up and the controller has replied with word 0 ≠ 0. Otherwise toast *NO CONNECTION · CANNOT TURN OFF* — the button may be what just woke a sleeping controller. READ-ONLY: nothing |
 | Power-off frames | `powerOff`: mirror word 0 = 0 → `performSleepActions` → `powerOffSend(0,0,0)` = **cmd8** (15 bytes) → `usleep(80000)` → `usart_send(6,0,2)` = **cmd6 sub0 len2 [word 0 = 0, word 1 = the mirror]** | `powerOff` 0x149074, `performSleepActions` 0x148324 (0x148F50, 0x14905C), `powerOffSend` 0x14700C, buffer `powerSendBuf` 0x1A6030 | Exactly that: `aa 55 08 <year lo> <year hi> <month 1-12> <day> <h> <m> <s> 00 00 00 <crc>` (example 2026-11-18 16:35:28: `aa 55 08 ea 07 0b 12 10 23 1c 00 00 00 cc df`), **≥ 80 ms** later `aa 55 06 00 02 00 00 00 00 56 94` (word 1 = 0 = awake, as ourui's keep-awake keeps it). The cmd6 frame goes through the write queue (CRC, ACK, one retransmit) and the frame policy with the new intent `I_POWEROFF` |
-| cmd8's contents | year (u16), month (+1), day, hour, minute, second, alarm day/hour/minute. Without a weekly schedule = alarm 0/0/0 | 0x14703C–0x147148 (CRC_GetModbus16 over 13 bytes) | The system's local time + alarm 0/0/0 (ourui has no weekly schedule). The MCU's 0x88 acknowledgement is only counted for DIAGNOSTICS — the stock UI does not wait for it either |
+| cmd8's contents | year (u16), month (+1), day, hour, minute, second, alarm day/hour/minute = the next scheduled pre-heat (`performSleepActions`); no schedule = alarm 0/0/0 | 0x14703C–0x147148 (CRC_GetModbus16 over 13 bytes) | v6.16: stock's local time (UTC + zone + DST; v6.14 sent UTC) + the next pre-heat occurrence, or 0/0/0 without a schedule ([time-scheduling.md](../time-scheduling.md)). The MCU's 0x88 acknowledgement is only counted for DIAGNOSTICS — the stock UI does not wait for it either |
 | The MCU | The status task sees word 0 = 0 (every 500 ms) and starts `sleep`. It deletes `boiler_heat`, `head_heat`, **`status`** (RX parser + replies) and `run`, sets work_sta = 0 and resets the outputs. It only wakes on a **hold of the button** (its own GPIO PC.8, 8 × 100 ms low after a release) or the alarm → `reset muc` (CPU reset) | MEM03 0x29D4/0x29D8, sleep task 0x2F52 (0x2E1E deletes tasks; 0x2F0C outputs 0), alarm comparison 0x2FE2–0x3036, reset 0x326 (SYS IPRST) | ourui sends nothing more: keep-awake stands still, and polls are not answered (the link goes down — expected). The cmd8 parser 0x9C88 stores the 10 bytes in 0x20000E18 |
 | Screen | Backlight off (`blpwm_set_enable(2,0)` + duty 0), off page. 1.5 s later: fb closed, `killall dispinit`, GPIOs released, **`echo mem > /sys/power/state`** (SoC suspend). After resume: mirror word 0 = 1, `killall demo_v9` → the watchdog restarts the stock UI → `PowerOn` | 0x1490C0–0x1490FC, 0x149494–0x14952C, `uikit_os_back_light_off` 0xC2278 | TURNING OFF… immediately, OFF after the ACK. The backlight is switched off 1.5 s after the press: duty 99 (dimmest) and then `pwm2/enable = 0` (ourui does not write the stock UI's duty 0 — with "polarity inversed" that is the brightest light if the enable did not take effect). **No SoC suspend and no killall** (a deliberate deviation: the network guard and telnet stay alive; ourui is not a restartable app behind a watchdog in run.sh mode) |
 | Power on | The SoC wakes from the same button press; the stock UI restarts and sends `PowerOn` (word 0 = 1) at startup. The MCU wakes by itself (reset; word 0 starts as 1) | `app_init` 0xD9170 → `PowerOn` 0x146EF8 | A button press in OFF → backlight on, *TURNING ON… · KEEP HOLDING THE BUTTON A MOMENT*. When the controller has replied with word 0 = 1 for 0.6 s → PowerOn `aa 55 06 00 01 01 00 c5 5f` + awake `aa 55 06 01 01 00 00 c5 33` (the same two frames as at startup) → HOME, toast *MACHINE IS ON*, keep-awake runs again. Without a reply within 10 s: back to OFF. If the controller replies by itself with word 0 = 1 while ourui is in OFF (alarm, or the button was held without ourui seeing it), it powers on the same way. After the MCU reset the controller is on its startup values — **ourui's re-push** (v6.6, the 0x89 round) puts the config's values back |
@@ -1168,7 +1173,7 @@ Every alignment delta, numbered after the task's items. *(UI texts of the time a
 | GROUP TEMP | 30..90 / 10 | **30..80 / 10**, marked ESTIMATE, ceiling 100 |
 | GRIND MODE | 0 manual / 1 auto | **1 WEIGHT / 2 TIME** |
 | WATER MODE | 0 manual / 1 auto | **1 AUTO / 2 MANUAL** |
-| TIME FORMAT | 0 = 12 h / 1 = 24 h | **0 = 24 h / 1 = 12 h** (proven from `update_time`) |
+| TIME FORMAT | 0 = 12 h / 1 = 24 h | **0 = 24 h / 1 = 12 h** (from `update_time`) — *wrong: the `eor` at 0xD5970 was missed; corrected back to 0 = 12 h / 1 = 24 h in v6.16* |
 | BRIGHTNESS | 1..10 (assumed) | 1..10 — the spec says 0..10; 0 deliberately left out |
 | the `def` column | current config values | the stock UI's `getNumber` defaults |
 
@@ -1198,7 +1203,7 @@ Every alignment delta, numbered after the task's items. *(UI texts of the time a
 
 **Fixes found along the way (not in the task):**
 * **Out-of-array lookup:** v6's extend rule could give an enum range larger than the name table (`grindMode=2` → `OPT_GRINDM[2]`). Gone together with the rule; an enum outside the table is now shown as `(number)`.
-* The `timemode` mapping was inverted (see item 1).
+* The `timemode` mapping was inverted (see item 1). *(v6.16: this "fix" was itself wrong — see CHANGES-v6.16.)*
 * A tap on −/+ in a locked row gave a ripple without effect; locked rows now only have BACK.
 
 **Unchanged:** the run.sh contract, all 6 observed frame vectors, keep-awake, phase detection, design system, rendering, `EVIOCGRAB`, environment variables.
@@ -2212,11 +2217,39 @@ In addition: the RX counters are `uint32_t` (wrap around in a well-defined way),
 
 6. **Files:** `src/ourui_v6.c`, `sim/scenarios/graph_reset.json`, `sim/run_e2e.py` (expect kind `chart`, additive), `sim/sim_ui_profile-ref.json` (6 overrides), `bin/` (`ourui`, `ourui_sim_arm`, host SIM builds; md5 in `bin/MD5SUMS`).
 
+## CHANGES-v6.16
+
+**Time & scheduling.** Three user reports: (1) the 24-hour flag was inverted relative to the stock UI, (2) ourui showed no clock, (3) there was no planned pre-heat / scheduled wake. The stock semantics (addresses, frame layout, MCU behaviour) are in [time-scheduling.md](../time-scheduling.md). Power semantics of v6.14 are unchanged (the button's kernel cut, cmd8 → 80 ms → cmd6 sub0 len2 `[0,0]`); the stop, gesture and graph-reset paths are untouched.
+
+1. **TIME FORMAT fixed:** stock `update_time` 0xD5944 XORs `model[0x59]` (= `timemode != 0`) with 1 before the test (0xD5970) — `timemode = 1` is **24 h**, `0` is 12 h with A.M./P.M.; the stock switch "24-Hour Format" is ON for 1. v6.1 missed the `eor`; `OPT_TIME` is now `{12-HOUR, 24-HOUR}`, so SAVE writes what stock expects (config path unchanged).
+2. **Clock:** HOME's top line (`W_CLOCK`, replaces the wordmark while the clock is valid) and DIAGNOSE → TIME · SCHEDULE. Local time = SoC UTC + stock zone table 0x1A5890 (136 entries, copied) + 1 h when `sumtime` and the region's DST window (EU / US / Levant / AU / NZ rules; stock's window is date-only and only exists after its HTTP sync). Format byte-identical to `update_time`. A clock before 2025 = not set: wordmark, NOT SET, no alarm. ourui never sets the clock. TIME ZONE (locked) shows the stock label and the place names.
+3. **Planned pre-heat:** SYSTEM rows PRE-HEAT, PRE-HEAT AT (5-min steps), REPEAT (once / every day / Mon–Fri / Sat–Sun) in ourui's own file `/new_customer/ourui/schedule`. **Power-off** sends the next occurrence as the cmd8 alarm exactly like stock `performSleepActions` 0x148324 → `powerOffSend(day, hour, minute)`; no schedule → 0/0/0 (v6.14). **Pre-arm** (documented addition): while ON the same frame is sent when the alarm differs from what the current MCU session holds (start, MCU restart / wake, schedule change, daily roll-over); disarm = 0/0/0 once; never while turning off / off; no schedule = no new traffic. A one-shot switches itself off a minute after its time. HOME's swipe hint shows `⏰ PRE-HEAT · THU 06:30` while planned.
+4. **Auto off (optional, default off):** 15 / 20 / 30 / 60 min without touch, button or an active phase → the same power-off as the button (with the alarm); a 30-s warning toast (a touch dismisses it). Stock: a fixed 30 min (`SleepRefresh` 0x149268); `sleepMode`/`sleepModeSetting` are never read by stock and are not written by ourui.
+5. **cmd8 time = stock local time** (v6.14 sent the SoC's UTC).
+6. **SIM:** state JSON `clock` + `sched`; env `OURUI_SIM_CLOCK`, `OURUI_SCHEDFILE`; ctrl `clock`; `save` accepts `preheat`, `preheat_at`, `preheat_repeat`, `auto_off`. `run_e2e.py` (additive): scenario keys `ui_env` / `ui_only`, expect kind `state`, `time_sync_seen` with `alarm` / `max_count` / `count: 0`. `mcu_sim.py`: a CPU reset clears the cmd8 alarm (MCU RAM).
+7. **Verification (local dev iteration, §15):**
+
+| What | Result |
+|---|---|
+| Self-test | **487 / 0** EN and DA (repo fixture config), **488 / 0** with the device's config. New section "v6.16 time & scheduling" **33/33**: timemode semantics + 8 format vectors, zone table, 11 DST vectors, 11 next-occurrence vectors (month/year/leap wrap, strictly-after, weekday masks), alarm frame `aa 55 08 ea 07 0b 12 10 23 1c 13 06 1e be b2` (CRC computed independently), no alarm with an unset clock, schedule file round trip without config writes / cmd6, bad values → defaults, pre-arm once / no repeat / re-arm after an MCU restart / none in read-only / disarm 0/0/0, power-off carries the alarm, no pre-arm while off, re-arm after the wake, one-shot use, auto off (quiet, warning, touch reset, activity, power-off sequence), HOME clock 12/24 h, pre-heat hint |
+| Self-test as a 32-bit ARM binary | **487 / 0** EN + DA (ARMv7 container, non-root) |
+| Mutation probes | **8/8**: `inverted`, `ampm`, `alarm0`, `norearm`, `norestart`, `prearmoff`, `nodst`, `onceforever` |
+| Builds | device, SIM ARM, SIM host, preview: **0 warnings** (fresh zig cache); `-Wall -Wextra`: + 4 × missing field initializer (the 4 new table rows, same pattern as before), nothing else new |
+| Previews | 90 scenarios × 2 languages; **circle 0 violations**. Vs. v6.15: 66 byte-identical; the changed ones differ only in HOME's top line (wordmark → clock), the scroll indicator, or are SYSTEM/DIAGNOSE frames shifted by the new rows/block and the TIME ZONE label (listed in `v615_compare.txt`). New: `84_home_clock12_preheat`, `85_list_system_time`, `86_detail_preheat_at`, `87_detail_timezone`, `88_diag_time`, `89_home_autooff_warn` |
+| Spec alignment | **ALL ALIGNED** |
+| `sim/selftest.py` | **187 / 0** |
+| `run_e2e.py --all --quick --parallel 4` (EN) | **5/5, 97/97** |
+| New scenarios | `time_display` **30/30**, `timemode_stock_parity` **23/23**, `schedule_prewarm` **37/37** (pre-arm → power-off alarm → deep sleep → **RTC alarm wake** → re-push → ON → re-armed for tomorrow → disarm), EN and DA; reference client: SKIP (`ui_only`) |
+| Regression (targeted) | `power_off_wake` 38/38, `power_during_activity` 29/29, `graph_reset` 21/21, `settings_save_matrix` 188/188, `language` 16/16 |
+| On-device | **not run** (install deferred) |
+
+8. **Files:** `src/ourui_v6.c`, `docs/time-scheduling.md` (new), `sim/scenarios/{time_display,timemode_stock_parity,schedule_prewarm}.json`, `sim/run_e2e.py`, `sim/mcu_sim.py`, `sim/CONTRACT.md`, `bin/` (`ourui`, `ourui_sim_arm`, host SIM builds; md5 in `bin/MD5SUMS`), `tools/merakiplus.py` (VERSION 6.16 + md5).
+
 ## Appendix A — string table (id / EN / DA)
 
 <!-- I18N-APPENDIX:BEGIN (generated by i18n_appendix.py — edit STR_TABLE in ourui_v6.c, not here) -->
 
-**403 string ids × 2 languages** (43 are the same in EN and DA: units, proper names, technical words and commands). Class = the field the string is shown in; the self-test measures every classified string in both languages against the field's pixel budget (`-` = measured in its context by the layout tests). `%s`/`%d` are placeholders for numbers and names; text in `code font` inside a string is shown in lower case (paths, commands). Source: `round_v6/strings.tsv` (`--dump-strings`). The EN and DA columns are the UI's actual strings and are deliberately kept in both languages.
+**449 string ids × 2 languages** (50 are the same in EN and DA: units, proper names, technical words and commands). Class = the field the string is shown in; the self-test measures every classified string in both languages against the field's pixel budget (`-` = measured in its context by the layout tests). `%s`/`%d` are placeholders for numbers and names; text in `code font` inside a string is shown in lower case (paths, commands). Source: `round_v6/strings.tsv` (`--dump-strings`). The EN and DA columns are the UI's actual strings and are deliberately kept in both languages.
 
 
 **Units (identical in both languages)**
@@ -2456,6 +2489,7 @@ In addition: the RX counters are `uint32_t` (wrap around in a well-defined way),
 | `TX_ST_MILK` | - | `MILK` | `MÆLK` |
 | `TX_C_HINT` | - | `HOLD AN ICON TO START` | `HOLD ET IKON FOR AT STARTE` |
 | `TX_C_HINT2` | - | `SWIPE FOR SETTINGS` | `STRYG FOR INDSTILLINGER` |
+| `TX_C_PREHEAT` | - | `{icon11} PRE-HEAT · %s %s` | `{icon11} FORVARMNING · %s %s` |
 | `TX_C_ERRCODE` | - | `CODE %s · SEE DIAGNOSTICS` | `KODE %s · SE DIAGNOSE` |
 | `TX_C_DIAGREF` | - | `DETAILS IN DIAGNOSTICS` | `DETALJER UNDER DIAGNOSE` |
 | `TX_C_PRESS` | - | `PRESSURE` | `TRYK` |
@@ -2610,8 +2644,8 @@ In addition: the RX counters are `uint32_t` (wrap around in a well-defined way),
 | `TX_DV_YES` | diag-value | `YES` | `JA` |
 | `TX_DV_NO` | diag-value | `NO` | `NEJ` |
 | `TX_DV_MAINS` | - | `%u V · %u HZ` | `%u V · %u HZ` |
-| `TX_DV_VERSION` | - | `MERAKI+ V6.15` | `MERAKI+ V6.15` |
-| `TX_DV_VERSION_RO` | - | `MERAKI+ V6.15 RO` | `MERAKI+ V6.15 RO` |
+| `TX_DV_VERSION` | - | `MERAKI+ V6.16` | `MERAKI+ V6.16` |
+| `TX_DV_VERSION_RO` | - | `MERAKI+ V6.16 RO` | `MERAKI+ V6.16 RO` |
 | `TX_DV_MISSING` | diag-value | `MISSING` | `MANGLER` |
 | `TX_DV_FLAG_YES` | diag-value | `EXISTS` | `FINDES` |
 | `TX_DV_FLAG_NO` | diag-value | `NOT PRESENT` | `FINDES IKKE` |
@@ -2681,6 +2715,81 @@ In addition: the RX counters are `uint32_t` (wrap around in a well-defined way),
 | `TX_DV_PW_KEY` | - | `%d = %d · %ld S` | `%d = %d · %ld S` |
 | `TX_DV_PW_NOKEY` | diag-value | `NO PRESS YET` | `INGEN TRYK` |
 | `TX_DV_PW_NONODE` | full-line | `NO BUTTON NODE FOUND` | `INGEN KNAP-NODE FUNDET` |
+
+**Settings: row labels (SL), notes (SN) and hints (SH)**
+
+| id | class | EN | DA |
+|---|---|---|---|
+| `TX_SL_PREHEAT` | - | `PRE-HEAT` | `FORVARMNING` |
+| `TX_SL_PHAT` | - | `PRE-HEAT AT` | `FORVARM KL.` |
+| `TX_SL_PHREP` | - | `REPEAT` | `GENTAG` |
+| `TX_SL_AUTOOFF` | - | `AUTO OFF` | `AUTO-SLUK` |
+| `TX_SN_PREHEAT` | note | `THE CONTROLLER ALARM WAKES + HEATS` | `CONTROLLERENS ALARM VÆKKER + VARMER` |
+| `TX_SN_PHAT` | note | `LOCAL TIME · SENT AS THE CMD8 ALARM` | `LOKAL TID · SENDES SOM CMD8-ALARM` |
+| `TX_SN_PHREP` | note | `ONCE = SWITCHES ITSELF OFF AFTER USE` | `EN GANG = SLÅR SIG SELV FRA BAGEFTER` |
+| `TX_SN_AUTOOFF` | note | `NO TOUCH OR ACTIVITY · THEN OFF` | `INGEN BERØRING ELLER AKTIVITET · SÅ SLUK` |
+| `TX_SN_TIMEFMT` | note | `HOME CLOCK + STOCK UI CLOCK` | `UR PÅ HJEM + STOCK-UI'ETS UR` |
+
+**Enum names**
+
+| id | class | EN | DA |
+|---|---|---|---|
+| `TX_E_ONCE` | - | `ONCE` | `EN GANG` |
+| `TX_E_DAILY` | - | `EVERY DAY` | `HVER DAG` |
+| `TX_E_WORKDAYS` | - | `MON-FRI` | `MAN-FRE` |
+| `TX_E_WEEKEND` | - | `SAT-SUN` | `LØR-SØN` |
+| `TX_E_MIN15` | - | `15 MIN` | `15 MIN` |
+| `TX_E_MIN20` | - | `20 MIN` | `20 MIN` |
+| `TX_E_MIN30` | - | `30 MIN` | `30 MIN` |
+| `TX_E_MIN60` | - | `60 MIN` | `60 MIN` |
+
+**Stepper detail**
+
+| id | class | EN | DA |
+|---|---|---|---|
+| `TX_D_OWN_L1` | foot-1 | MERAKI+ ONLY · `ourui/schedule` | KUN MERAKI+ · `ourui/schedule` |
+| `TX_D_OWN_L2` | foot-2 | `STOCK SCHEDULES UNCHANGED` | `STOCK-PLANER UÆNDREDE` |
+
+**Guards and toasts**
+
+| id | class | EN | DA |
+|---|---|---|---|
+| `TX_T_OWN_SAVED` | toast | `SAVED · MERAKI+ SCHEDULE` | `GEMT · MERAKI+-PLAN` |
+| `TX_T_OWN_NOFILE` | toast | `ACTIVE · FILE NOT SAVED` | `AKTIV · FIL IKKE GEMT` |
+| `TX_T_AUTOOFF_SOON` | toast | `AUTO OFF IN 30 S · TOUCH TO STAY ON` | `AUTO-SLUK OM 30 S · RØR SKÆRMEN` |
+| `TX_T_ONCE_USED` | toast | `ONE-TIME PRE-HEAT USED · NOW OFF` | `FORVARMNING BRUGT · NU FRA` |
+| `TX_T_NOCLOCK` | toast | `CLOCK NOT SET · NO PRE-HEAT ALARM` | `UR IKKE SAT · INGEN FORVARM-ALARM` |
+
+**Other**
+
+| id | class | EN | DA |
+|---|---|---|---|
+| `TX_AM` | - | `A.M.` | `A.M.` |
+| `TX_PM` | - | `P.M.` | `P.M.` |
+| `TX_WD_SUN` | - | `SUN` | `SØN` |
+| `TX_WD_MON` | - | `MON` | `MAN` |
+| `TX_WD_TUE` | - | `TUE` | `TIR` |
+| `TX_WD_WED` | - | `WED` | `ONS` |
+| `TX_WD_THU` | - | `THU` | `TOR` |
+| `TX_WD_FRI` | - | `FRI` | `FRE` |
+| `TX_WD_SAT` | - | `SAT` | `LØR` |
+
+**DIAGNOSTICS (labels, values, full-width lines, ABOUT block)**
+
+| id | class | EN | DA |
+|---|---|---|---|
+| `TX_DG_TCAP` | full-line | `TIME · SCHEDULE` | `TID · PLAN` |
+| `TX_DL_T_CLOCK` | diag-label | `LOCAL TIME` | `LOKAL TID` |
+| `TX_DL_T_ZONE` | diag-label | `ZONE · DST` | `ZONE · SOMMERTID` |
+| `TX_DL_T_AUTOOFF` | diag-label | `AUTO OFF · IDLE` | `AUTO-SLUK · HVILE` |
+| `TX_DL_T_ALARM` | diag-label | `ALARM SENT · D H:M` | `ALARM SENDT · D T:M` |
+| `TX_DG_L_NEXT` | full-line | `NEXT PRE-HEAT · CONTROLLER ALARM` | `NÆSTE FORVARMNING · ALARM` |
+| `TX_DV_T_NOTSET` | diag-value | `NOT SET` | `IKKE SAT` |
+| `TX_DV_T_NONE` | diag-value | `NONE` | `INGEN` |
+| `TX_DV_T_NOSCHED` | full-line | `NO PRE-HEAT PLANNED` | `INGEN FORVARMNING PLANLAGT` |
+| `TX_DV_T_DST` | - | `%s · DST` | `%s · SOMMERTID` |
+| `TX_DV_T_STD` | - | `%s · STANDARD` | `%s · NORMALTID` |
+| `TX_DV_T_IDLE` | - | `%s · %d:%02d` | `%s · %d:%02d` |
 
 **Console (stdout on exit; ASCII)**
 

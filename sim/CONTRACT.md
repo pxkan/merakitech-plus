@@ -457,3 +457,17 @@ The contract and ADDENDUM v6.4/v6.5/v6.6 (UI work stream) are unchanged. Full do
 * **REF profile:** the reference client has no HOME graph, so `sim_ui_profile-ref.json` replaces the 6 `chart` expectations 1:1 with phase/word checks for the same windows (`phase` READY/PRE/STEAM, `phase_hold` EXT, `word_hold`/`word_min_seen` 39). Green against the reference client (21/21).
 * `--quick` is unchanged (run `--scenario graph_reset` or `--all`).
 
+
+---
+
+## ADDENDUM v6.16 — clock, planned pre-heat and auto off (state.clock / state.sched, `ui_env`, expect kind `state`)
+
+**Date:** 2026-11-19 · **Applies to:** `sim/run_e2e.py`, `sim/mcu_sim.py`, `sim/scenarios/{time_display,timemode_stock_parity,schedule_prewarm}.json`. The contract above is **unchanged**; everything here is additive.
+
+* **ourui SIM build, state JSON:** `clock` = `{utc, valid, local "YYYY-MM-DDTHH:MM:SS", wday, timemode, tz, dst, shown}` (`shown` = HOME's top line, stock `update_time` format) and `sched` = `{preheat, at "HH:MM", repeat once|daily|mon-fri|sat-sun, auto_off (min), once_at, file, alarm [d,h,m] (what a power-off would send now), next_utc, armed [d,h,m]|null (last pre-arm sent), arm_sent, arm_ack, idle_s, auto_offs, home (HOME's pre-heat line)|null}`.
+* **ourui SIM build, environment:** `OURUI_SIM_CLOCK=YYYY-MM-DDTHH:MM:SSZ` sets the UI's UTC wall clock at start (it then runs in real time); `OURUI_SCHEDFILE` overrides the schedule file (default `<sandbox>/new_customer/ourui/schedule`). **ctrl:** `{"cmd":"clock","utc":"…Z"}` jumps the clock, `{"cmd":"clock","advance_s":N}` moves it; `save` accepts `preheat`, `preheat_at` (minutes after midnight, step 5), `preheat_repeat` (0 once, 1 daily, 2 Mon–Fri, 3 Sat–Sun), `auto_off` (0..4 = off/15/20/30/60 min).
+* **Scenario key `ui_env`** (`run_e2e.py`): extra UI environment variables (e.g. `OURUI_SIM_CLOCK`). **Scenario key `ui_only`:** the scenario has no reference-client oracle; with the reference client it is reported as SKIP (one informational check), never as a fake pass of its checks.
+* **Expect kind `state`:** `{"kind":"state","path":"clock.shown","t":…,"window":…|"t0":…,"t1":…,"equals"|"contains"|"not_contains"|"min"|"max":…,"mode":"any"|"all"}` — a dotted path into the state JSON. **`sim_log` `time_sync_seen`** additionally accepts `"alarm":[d,h,m]` (exact), `"max_count":N` and `"count":0` (none in the window).
+* **`mcu_sim.py`:** a CPU reset (`do_reboot`, incl. the alarm/button wake) clears the cmd8 alarm (it lives in MCU RAM 0x20000E18; the RTC keeps counting) and logs `alarm_cleared` — the host has to re-arm it. All existing scenarios are unaffected (`sim/selftest.py` 187/0).
+* **Scenarios** (all `ui_only`): `time_display` (40 s; 24 h → 12 h → summer clock with/without DST → back), `timemode_stock_parity` (30 s; the TIME FORMAT row and the clock vs. config `timemode` 1/0/1), `schedule_prewarm` (80 s; pre-arm [18,6,30] → power-off with the same alarm → deep sleep → RTC 06:30 → **alarm wake** → factory reset → re-push → ON → re-arm [19,6,30] → PRE-HEAT OFF disarms with 0/0/0).
+* `--quick` is unchanged.

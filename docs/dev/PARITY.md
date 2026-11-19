@@ -152,7 +152,7 @@ Confidence: **H**=high (unambiguous code + live), **M**=medium (code, not live-v
 | # | Parameter | UI label | Page / handler | config field (cur.) | Unit | word | write | persist | Conf. |
 |---|---|---|---|---|---|---|---|---|---|
 | 25 | **timeZone** | "Date & Time"→zone | page_time_zone (mode 0) [0xeb238], time_sync_thread | `timeZone`=48 | UTC offset index | — | cmd8 (time) | config | H |
-| 26 | **timemode** | 12/24 h | page_dateAndtime [0xfcb58→0xfcdec] | `timemode`=1 | 0/1 | — | no MCU | config | H |
+| 26 | **timemode** | 12/24 h (v6.16: **1 = 24 h, 0 = 12 h**, `update_time` 0xD5944 XORs with 1) | page_dateAndtime [0xfcb58→0xfcdec] | `timemode`=1 | 0/1 | — | no MCU | config | H |
 | 27 | **Automatically** | automatic time sync | page_dateAndtime [0xfcb58→0xfccd0] | `Automatically`=1 | bool | — | no MCU | config | H |
 | 28 | **Date/time** | "Date & Time" | page_time_select [0xdded4], page_date_select [0xe6074] | `datetime` (string) | — | — | cmd8 + `biz_set_system_time` | config+system | H |
 | 29 | **brewMode** | (none) | **0 callers — vestigial** | `brewMode`=0 | — | — | none | config (unused) | H |

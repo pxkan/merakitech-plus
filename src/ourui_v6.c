@@ -1,7 +1,16 @@
 /* ourui_v6.c — Meraki+ (internal code name: ourui): a custom display UI for the round
- * 480x480 screen, v6.15: feature parity (settings + activity control), its own visual
+ * 480x480 screen, v6.16: feature parity (settings + activity control), its own visual
  * design system, boot-slot integration, product name + two languages — and from v6.4 a SIM build.
  *
+ * v6.16 = v6.15 + TIME & SCHEDULING (UI_v6.md "CHANGES-v6.16", docs/time-scheduling.md). User bugs: (1) TIME FORMAT was inverted —
+ *  stock update_time 0xD5944 XORs model[0x59] with 1 before the test (missed in v6.1): timemode 1 = 24 h, 0 = 12 h A.M./P.M.; (2) no clock —
+ *  HOME's top line now shows the local time (SoC UTC + stock zone table 0x1A5890 + DST when sumtime is on), DIAGNOSE a TIME · SCHEDULE
+ *  block; (3) no planned pre-heat — a schedule (on/off, hh:mm, once / every day / Mon-Fri / Sat-Sun) whose next occurrence goes out as
+ *  the cmd8 alarm with the power-off frame exactly as stock (performSleepActions 0x148324 -> powerOffSend 0x14700C(day, hour, minute))
+ *  and is pre-armed while on; the MCU's sleep task wakes on it (reset -> heating; the display cold-boots -> boot push). Plus optional
+ *  AUTO OFF after 15/20/30/60 min without touch or activity (stock: fixed 30 min, SleepRefresh 0x149268). Schedule + auto off live in
+ *  ourui's own file /new_customer/ourui/schedule; config.json gets only timemode/sumtime as before. The cmd8 date/time is now stock's
+ *  local time (v6.14 sent the SoC's UTC).
  * v6.15 = v6.14 + the HOME graph RESETS WHEN AN ACTIVITY STARTS (UI_v6.md "CHANGES-v6.15" + §14.7). User bug: grind/brew/water start
  *  tares the weight to 0 (MCU), but the graph's 40 s window still held the pre-start history (e.g. a 200-300 g cup placed on the
  *  scale), so the autoscale was dominated by the cup step and the 0 -> 36 g curve was a flat line at the bottom. Now graph_push()
@@ -280,7 +289,7 @@ static int  sim_net_on=1;
 #define KBD_NAME "k62091"
 #define BL_SYSFS "/sys/class/pwm/pwmchip0/pwm2/duty_cycle"
 #define BL_EN_SYSFS "/sys/class/pwm/pwmchip0/pwm2/enable"   /* v6.14: stock uikit_os_back_light_off/on 0xC2278 = blpwm_set_enable(2,0/1) */
-#define OURUI_VERSION "V6.15"
+#define OURUI_VERSION "V6.16"
 
 /* ---- v6.10: pressure estimate (UI_v6.md §16) ----
  * Word 51 (SPI2 ADC channel 0xA, REGISTERMAP: pressure OR pump-drive candidate) -> bar with ONE linear anchor:
@@ -1215,6 +1224,7 @@ static void net_start(ms_t now,int enable){
 #define IC_MOON "\x07"
 #define IC_WARN "\x08"
 #define IC_BOLT "\x09"
+#define IC_CLOCK "\x0b"   /* v6.16: clock face (pre-heat); 0x0A is the line break */
 
 /* boot paths (used in the strings below; the logic is in the BOOT-SLOT section) */
 #define BOOT_FLAG  "/customer/new"
@@ -1436,6 +1446,7 @@ enum { K0=0, KT, KSUB, KLAB, KCHIP, KBTN, KBTNS, KTITLE, KPSUB, KSPL, KDL, KDV, 
  X(TX_ST_MILK, K0, "MILK", "MÆLK") \
  X(TX_C_HINT, K0, "HOLD AN ICON TO START", "HOLD ET IKON FOR AT STARTE") \
  X(TX_C_HINT2, K0, "SWIPE FOR SETTINGS", "STRYG FOR INDSTILLINGER") \
+ X(TX_C_PREHEAT, K0, IC_CLOCK " PRE-HEAT · %s %s", IC_CLOCK " FORVARMNING · %s %s") \
  X(TX_C_ERRCODE, K0, "CODE %s · SEE DIAGNOSTICS", "KODE %s · SE DIAGNOSE") \
  X(TX_C_DIAGREF, K0, "DETAILS IN DIAGNOSTICS", "DETALJER UNDER DIAGNOSE") \
  X(TX_C_PRESS, K0, "PRESSURE", "TRYK") \
@@ -1631,6 +1642,51 @@ enum { K0=0, KT, KSUB, KLAB, KCHIP, KBTN, KBTNS, KTITLE, KPSUB, KSPL, KDL, KDV, 
  X(TX_DV_PW_KEY, K0, "%d = %d · %ld S", "%d = %d · %ld S") \
  X(TX_DV_PW_NOKEY, KDV, "NO PRESS YET", "INGEN TRYK") \
  X(TX_DV_PW_NONODE, KDF, "NO BUTTON NODE FOUND", "INGEN KNAP-NODE FUNDET") \
+ X(TX_SL_PREHEAT, K0, "PRE-HEAT", "FORVARMNING") \
+ X(TX_SL_PHAT, K0, "PRE-HEAT AT", "FORVARM KL.") \
+ X(TX_SL_PHREP, K0, "REPEAT", "GENTAG") \
+ X(TX_SL_AUTOOFF, K0, "AUTO OFF", "AUTO-SLUK") \
+ X(TX_SN_PREHEAT, KNOTE, "THE CONTROLLER ALARM WAKES + HEATS", "CONTROLLERENS ALARM VÆKKER + VARMER") \
+ X(TX_SN_PHAT, KNOTE, "LOCAL TIME · SENT AS THE CMD8 ALARM", "LOKAL TID · SENDES SOM CMD8-ALARM") \
+ X(TX_SN_PHREP, KNOTE, "ONCE = SWITCHES ITSELF OFF AFTER USE", "EN GANG = SLÅR SIG SELV FRA BAGEFTER") \
+ X(TX_SN_AUTOOFF, KNOTE, "NO TOUCH OR ACTIVITY · THEN OFF", "INGEN BERØRING ELLER AKTIVITET · SÅ SLUK") \
+ X(TX_SN_TIMEFMT, KNOTE, "HOME CLOCK + STOCK UI CLOCK", "UR PÅ HJEM + STOCK-UI'ETS UR") \
+ X(TX_E_ONCE, K0, "ONCE", "EN GANG") \
+ X(TX_E_DAILY, K0, "EVERY DAY", "HVER DAG") \
+ X(TX_E_WORKDAYS, K0, "MON-FRI", "MAN-FRE") \
+ X(TX_E_WEEKEND, K0, "SAT-SUN", "LØR-SØN") \
+ X(TX_E_MIN15, K0, "15 MIN", "15 MIN") \
+ X(TX_E_MIN20, K0, "20 MIN", "20 MIN") \
+ X(TX_E_MIN30, K0, "30 MIN", "30 MIN") \
+ X(TX_E_MIN60, K0, "60 MIN", "60 MIN") \
+ X(TX_D_OWN_L1, KF1, PRODUCT " ONLY · " LC "ourui/schedule", "KUN " PRODUCT " · " LC "ourui/schedule") \
+ X(TX_D_OWN_L2, KF2, "STOCK SCHEDULES UNCHANGED", "STOCK-PLANER UÆNDREDE") \
+ X(TX_T_OWN_SAVED, KT, "SAVED · " PRODUCT " SCHEDULE", "GEMT · " PRODUCT "-PLAN") \
+ X(TX_T_OWN_NOFILE, KT, "ACTIVE · FILE NOT SAVED", "AKTIV · FIL IKKE GEMT") \
+ X(TX_T_AUTOOFF_SOON, KT, "AUTO OFF IN 30 S · TOUCH TO STAY ON", "AUTO-SLUK OM 30 S · RØR SKÆRMEN") \
+ X(TX_T_ONCE_USED, KT, "ONE-TIME PRE-HEAT USED · NOW OFF", "FORVARMNING BRUGT · NU FRA") \
+ X(TX_T_NOCLOCK, KT, "CLOCK NOT SET · NO PRE-HEAT ALARM", "UR IKKE SAT · INGEN FORVARM-ALARM") \
+ X(TX_AM, K0, "A.M.", "A.M.") \
+ X(TX_PM, K0, "P.M.", "P.M.") \
+ X(TX_WD_SUN, K0, "SUN", "SØN") \
+ X(TX_WD_MON, K0, "MON", "MAN") \
+ X(TX_WD_TUE, K0, "TUE", "TIR") \
+ X(TX_WD_WED, K0, "WED", "ONS") \
+ X(TX_WD_THU, K0, "THU", "TOR") \
+ X(TX_WD_FRI, K0, "FRI", "FRE") \
+ X(TX_WD_SAT, K0, "SAT", "LØR") \
+ X(TX_DG_TCAP, KDF, "TIME · SCHEDULE", "TID · PLAN") \
+ X(TX_DL_T_CLOCK, KDL, "LOCAL TIME", "LOKAL TID") \
+ X(TX_DL_T_ZONE, KDL, "ZONE · DST", "ZONE · SOMMERTID") \
+ X(TX_DL_T_AUTOOFF, KDL, "AUTO OFF · IDLE", "AUTO-SLUK · HVILE") \
+ X(TX_DL_T_ALARM, KDL, "ALARM SENT · D H:M", "ALARM SENDT · D T:M") \
+ X(TX_DG_L_NEXT, KDF, "NEXT PRE-HEAT · CONTROLLER ALARM", "NÆSTE FORVARMNING · ALARM") \
+ X(TX_DV_T_NOTSET, KDV, "NOT SET", "IKKE SAT") \
+ X(TX_DV_T_NONE, KDV, "NONE", "INGEN") \
+ X(TX_DV_T_NOSCHED, KDF, "NO PRE-HEAT PLANNED", "INGEN FORVARMNING PLANLAGT") \
+ X(TX_DV_T_DST, K0, "%s · DST", "%s · SOMMERTID") \
+ X(TX_DV_T_STD, K0, "%s · STANDARD", "%s · NORMALTID") \
+ X(TX_DV_T_IDLE, K0, "%s · %d:%02d", "%s · %d:%02d") \
  X(TX_O_SWITCHED, KCON, "== ourui: runtime switch B->A (user button): stock UI pid %d started from " SLOT_A_EXE "; ourui exits\n", "== ourui: runtime-skift B->A (bruger-knap): stock-UI pid %d startet fra " SLOT_A_EXE "; ourui afslutter\n") \
  X(TX_O_RESTART, KCON, "== ourui: STOCK UI NEEDS A RESTART OF demo_v9 FOR NEW VALUES:   kill $(pidof demo_v9)\n==        (config.json changed by ourui; the watchdog restarts it, the boot push syncs the controller)\n", "== ourui: STOCK-UI KRAEVER GENSTART AF demo_v9 FOR NYE VAERDIER:   kill $(pidof demo_v9)\n==        (config.json aendret af ourui; watchdog genstarter, boot-push synker controlleren)\n") \
  X(TX_O_CFGCHANGED, KCON, "== ourui: config.json changed %d time(s) - no paused stock UI is waiting; the next stock start reads it itself\n", "== ourui: config.json aendret %d gang(e) - intet pauset stock-UI venter; naeste stock-start laeser den selv\n") \
@@ -1956,6 +2012,8 @@ static int switch_launch(char*err,size_t en){
  *   SF_SENSOR: read-only measured value from reg[def] — no config key, no write.
  *   SF_LOCAL (v6.3): ourui's OWN setting (UI language) — no config key, no MCU word,
  *           not a spec parameter (left out of --dump-table); saved in its own file.
+ *   SF_OWN (v6.16): ourui's OWN time settings (pre-heat schedule + auto off) — like SF_LOCAL, saved in
+ *           /new_customer/ourui/schedule (sched_save); SF_HHMM: the value is minutes after midnight, shown as a clock time.
  * label/unit/note/hint and enum names are string ids (TX_*), never text — see STR_TABLE. */
 enum { K_NUM=0, K_ENUM };
 enum { M_NONE=0, M_W4, M_W23, M_W11, M_W112, M_W113, M_W114, M_W25, M_W14, M_W17, M_W2 };
@@ -1966,6 +2024,8 @@ enum { M_NONE=0, M_W4, M_W23, M_W11, M_W112, M_W113, M_W114, M_W25, M_W14, M_W17
 #define SF_EST    16
 #define SF_SENSOR 32
 #define SF_LOCAL  64
+#define SF_OWN    128 /* v6.16: own file (schedule) */
+#define SF_HHMM   256 /* v6.16: minutes after midnight, shown as hh:mm (12/24 h per timemode) */
 typedef struct {
     const char *key; short label, unit;
     int tier, ptier, min, max, step, dec, kind;
@@ -1978,14 +2038,20 @@ static const short OPT_OFFON[]={TX_E_OFF,TX_E_ON};
 static const short OPT_GRINDM[]={TX_E_WEIGHT,TX_E_TIME};                /* 1=weight auto, 2=time [PARITY #12] */
 static const short OPT_HOTM[]={TX_E_AUTO,TX_E_MANUAL};                  /* 1=auto, 2=manual     [PARITY #13] */
 static const short OPT_GEAR[]={TX_E_GENTLE,TX_E_MILD,TX_E_MEDIUM,TX_E_STRONG};   /* Gentle/Mild/Medium/Strong = 1..4 [0xdd028] */
-static const short OPT_TIME[]={TX_E_24H,TX_E_12H};                      /* 0 -> "%02d:%02d", !=0 -> A.M./P.M. [update_time 0xd5978] */
+/* v6.16: FIXED (inverted since v6.1). Stock update_time 0xD5944: r3 = model[0x59] ^ 1 (0xD5970); r3 == 0 (timemode 1) -> "%02d:%02d"
+ * (0x165D94), else (timemode 0) -> "%02d:%02d A.M./P.M." (0x165D84/0x165D74). model_data_init 0xCEF94: model[0x59] = timemode != 0;
+ * the stock switch "24-Hour Format" (0x171F60) is ON when model[0x59] = 1 (onClick 0xFCD60 toggles it, setTimeMode 0xFCDEC). */
+static const short OPT_TIME[]={TX_E_12H,TX_E_24H};                      /* 0 = 12-hour (A.M./P.M.), 1 = 24-hour */
+static const short OPT_REPEAT[]={TX_E_ONCE,TX_E_DAILY,TX_E_WORKDAYS,TX_E_WEEKEND};   /* v6.16: stock repeat Never / Everyday / Workday / Weekend */
+static const short OPT_AUTOOFF[]={TX_E_OFF,TX_E_MIN15,TX_E_MIN20,TX_E_MIN30,TX_E_MIN60};   /* v6.16: stock "%dmin" table 0x1A02D0 = 15/20/30/60 */
 static const short OPT_TUNIT[]={TX_U_F,TX_U_C};                         /* 0=°F, 1=°C           [PARITY #17] */
 static const short OPT_LANG[]={TX_LG_EN,TX_LG_DE,TX_LG_FR,TX_LG_IT,TX_LG_ES,TX_LG_PL,TX_LG_AR,TX_LG_ZHS,TX_LG_ZHT,TX_LG_KO,TX_LG_JA};   /* stock: index 0..10 [strings @0x166d84] */
 static const short OPT_UILANG[]={TX_UL_EN,TX_UL_DA};                    /* v6.3: = LANG_EN, LANG_DA */
 _Static_assert(TX_UL_DA==TX_UL_EN+LANG_DA,"TX_UL_* must follow LANG_*");
 enum { S_GRINDW=0, S_GRINDMODE, S_BREWW, S_BREWT, S_PISW, S_PITIME, S_PIPRESS, S_BREAK, S_HEADT,
        S_STEAMT, S_STEAMG, S_HOTW, S_HOTMODE, S_HOTT,
-       S_UILANG, S_BL, S_VOL, S_TUNIT, S_LANG, S_HOTSC, S_DST, S_CLEARTIP, S_TIMEMODE, S_AUTOTIME, S_TZ, NSET };
+       S_UILANG, S_BL, S_VOL, S_TUNIT, S_LANG, S_HOTSC, S_DST, S_CLEARTIP, S_TIMEMODE, S_AUTOTIME, S_TZ,
+       S_PREHEAT, S_PHAT, S_PHREP, S_AUTOOFF, NSET };   /* v6.16: + the time rows (ourui's own file) */
 static Setting SET[NSET]={
  /*              key                   label            unit    page,spec-tier  min   max step dec kind   opts        mcu    flags                    def hard  note, hint */
  /* ---- page BREW (spec tier 1) ---- */
@@ -2012,11 +2078,16 @@ static Setting SET[NSET]={
  [S_TUNIT]    ={"Temperature",        TX_SL_TUNIT,     TX_NONE,  2,2,    0,   1,  1, 0,K_ENUM,OPT_TUNIT, M_NONE,0,                        0,   1,TX_SN_TUNIT,0},
  [S_LANG]     ={"language",           TX_SL_LANG,      TX_NONE,  2,2,    0,  10,  1, 0,K_ENUM,OPT_LANG,  M_NONE,0,                        0,  10,TX_SN_LANG,0},
  [S_HOTSC]    ={"hotWaterShortcut",   TX_SL_HOTSC,     TX_NONE,  2,2,    0,   1,  1, 0,K_ENUM,OPT_OFFON, M_NONE,0,                        0,   1,TX_SN_HOTSC,0},
- [S_DST]      ={"sumtime",            TX_SL_DST,       TX_NONE,  2,2,    0,   1,  1, 0,K_ENUM,OPT_OFFON, M_NONE,0,                        0,   1,TX_SN_CLOCK,0},
+ [S_DST]      ={"sumtime",            TX_SL_DST,       TX_NONE,  2,2,    0,   1,  1, 0,K_ENUM,OPT_OFFON, M_NONE,0,                        0,   1,TX_SN_TIMEFMT,0},
  [S_CLEARTIP] ={"clearTip",           TX_SL_CLEARTIP,  TX_NONE,  2,2,    0,   1,  1, 0,K_ENUM,OPT_OFFON, M_NONE,0,                        0,   1,TX_SN_CLEARTIP,0},
- [S_TIMEMODE] ={"timemode",           TX_SL_TIMEMODE,  TX_NONE,  2,3,    0,   1,  1, 0,K_ENUM,OPT_TIME,  M_NONE,0,                        1,   1,TX_SN_CLOCK,0},
+ [S_TIMEMODE] ={"timemode",           TX_SL_TIMEMODE,  TX_NONE,  2,3,    0,   1,  1, 0,K_ENUM,OPT_TIME,  M_NONE,0,                        1,   1,TX_SN_TIMEFMT,0},
  [S_AUTOTIME] ={"Automatically",      TX_SL_AUTOTIME,  TX_NONE,  2,3,    0,   1,  1, 0,K_ENUM,OPT_OFFON, M_NONE,0,                        1,   1,TX_SN_AUTOTIME,0},
  [S_TZ]       ={"timeZone",           TX_SL_TZ,        TX_NONE,  2,3,    0,   0,  1, 0,K_NUM, 0,         M_NONE,SF_LOCK,                 44,   0,TX_SN_TZ,0},
+ /* ---- v6.16: pre-heat schedule + auto off — ourui's OWN file (/new_customer/ourui/schedule), not config.json, no MCU word ---- */
+ [S_PREHEAT]  ={0,                    TX_SL_PREHEAT,   TX_NONE,  2,0,    0,   1,  1, 0,K_ENUM,OPT_OFFON, M_NONE,SF_OWN,                   0,   1,TX_SN_PREHEAT,0},
+ [S_PHAT]     ={0,                    TX_SL_PHAT,      TX_NONE,  2,0,    0,1435,  5, 0,K_NUM, 0,         M_NONE,SF_OWN|SF_HHMM,         390,1435,TX_SN_PHAT,0},
+ [S_PHREP]    ={0,                    TX_SL_PHREP,     TX_NONE,  2,0,    0,   3,  1, 0,K_ENUM,OPT_REPEAT,M_NONE,SF_OWN,                   1,   3,TX_SN_PHREP,0},
+ [S_AUTOOFF]  ={0,                    TX_SL_AUTOOFF,   TX_NONE,  2,0,    0,   4,  1, 0,K_ENUM,OPT_AUTOOFF,M_NONE,SF_OWN,                  0,   4,TX_SN_AUTOOFF,0},
 };
 static const short TIER_NAME[3]={TX_PG_BREW,TX_PG_STEAM,TX_PG_SYSTEM};
 static const short TIER_SUB[3]={TX_PS_BREW,TX_PS_STEAM,TX_PS_SYSTEM};
@@ -2032,16 +2103,297 @@ static int set_valid(const Setting*s,int v){ return v>=s->lo && v<=s->hi; }
 /* loaded value outside the spec interval (only possible if config was changed behind the stock UI's back) */
 static int set_oor(const Setting*s){ return s->loaded && !(s->flags&SF_SENSOR) && !set_valid(s,s->val); }
 
+/* ================= v6.16: TIME & SCHEDULING (docs/time-scheduling.md + UI_v6.md "CHANGES-v6.16") =================
+ * Reversed from the stock UI demo_v9 (symbols kept) and the MCU firmware:
+ *  - TIME SOURCE: the SoC system clock, kept in UTC. Stock sets it only via an HTTP query (time_sync_thread 0x13FDEC, gated by
+ *    config "Automatically") -> biz_set_system_time 0x1359B0 = `date -s <UTC>` + `hwclock -w`; no NTP, nothing from the MCU.
+ *    ourui does NOT sync the clock (no network calls): it reads the same SoC clock. Before 2025 = "not set" -> "--:--", no alarm.
+ *  - LOCAL TIME: _refresh_systime 0x135548 = UTC + the time zone table entry 0x1A5890[timeZone].offset (136 entries x 12 bytes:
+ *    offset s, "UTC±hh:mm", name; copied below verbatim, incl. two stock quirks: #30 Newfoundland -2:30 under the label -03:30
+ *    and #135 Kiritimati +14:00 under the label +13:00) + 3600 if sumtime and is_dst 0x1354D4. Stock's DST window is date-only,
+ *    comes from the HTTP answer (model+0x15B8..0x15CC, RAM only) and is never computed offline; ourui computes the window from the
+ *    region's rule (the rules stock's calc_dst_dates_for_timezone 0x13BB14 uses: EU last Sun Mar -> last Sun Oct at 01:00 UTC;
+ *    US/CA 2nd Sun Mar -> 1st Sun Nov; Levant last Fri Mar -> last Fri Oct; AU 1st Sun Oct -> 1st Sun Apr; NZ last Sun Sep ->
+ *    1st Sun Apr; others none) — config "sumtime" stays the user's on/off switch (deliberate, documented deviation).
+ *  - DISPLAY: update_time 0xD5944 — timemode 1 = "%02d:%02d", timemode 0 = "%02d:%02d A.M./P.M." with 0 -> 12 A.M., 12 -> 12 P.M.,
+ *    13..23 -> 1..11 P.M. (0xD5990..0xD5A6C).
+ *  - SCHEDULED PRE-HEAT: stock keeps up to 30 entries of 20 bytes at model+0x74 (saved in the binary /customer/config.bin:
+ *    data_save 0xD091C copies model+0x70, 0xF78 bytes): [0] exists, [1] enabled, [2] hour, [3] minute, [4..10] Sun..Sat repeat
+ *    flags (judgeWeek 0x14955C / judgeWeekEqual 0x1495E0; all 0 = one-shot). Nothing is sent while the machine is on: only
+ *    powerOff 0x149074 -> performSleepActions 0x148324 computes the NEXT enabled occurrence (minute resolution, strictly after
+ *    now: today if the weekday matches and hh:mm > now, else the next matching weekday, one-shot -> today or tomorrow) and sends it
+ *    as the cmd8 alarm via powerOffSend 0x14700C(mday of the target day, hour, minute) — day wrapped with biz_days_in_month
+ *    0x135AE8; no entry -> 0/0/0. A one-shot entry is remembered (model+0x1758..0x176C) and switched off at the next start once
+ *    its time has passed (deal_preheat_data 0xCF49C).
+ *  - AUTO OFF: SleepRefresh 0x149268 counts a 1800 s idle counter down once per second (reset by every touch, touch_feedback_cb ->
+ *    sleepTimeUpfdate 0x14818C, and every second while isExtractionOrSteamSwitchOn); at 0 updateSleepState 0x14827C calls powerOff
+ *    (the same alarm frame as above). config sleepMode/sleepModeSetting are loaded (model+0x54/0x55) but never read in this
+ *    firmware; the setting's own table (0x1A02D0) is 15/20/30/60 min.
+ *  - MCU (MEM03): cmd8 handler 0x9C88 copies the 10 bytes to 0x20000E18, echoes 0x88 and sets its RTC from them (0x9DCE -> 0x7494);
+ *    the sleep task 0x2F52 compares RTC day/hour/minute with the alarm once per second and, if day+hour+minute != 0 and they match,
+ *    resets the CPU (0x326) = wake: word 0 starts as 1 (heating), and on this hardware the display gets power again = cold boot.
+ * ourui: the clock on HOME + DIAGNOSE (SoC UTC + zone + DST, 12/24 h per timemode), a pre-heat schedule (one entry: on/off, time,
+ * once / every day / Mon-Fri / Sat-Sun) and auto off (off / 15 / 20 / 30 / 60 min) in ourui's own file; the alarm goes out with
+ * the power-off frame exactly as stock (pw_off_begin), and — a documented addition — is PRE-ARMED with the same frame while the
+ * machine is on, so a power-off ourui does not see (the button's kernel cut, §19) still wakes it. Never while off/turning off. */
+enum { DR_NONE=0, DR_US, DR_EU, DR_LEV, DR_AU, DR_NZ };
+static void idle_kick(ms_t now);     /* auto off: every touch/button/SAVE restarts the idle timer (sched_step) */
+#define TZ_N 136
+static const struct { int off; const char*utc,*name; unsigned char rule; } TZT[TZ_N]={   /* stock 0x1A5890 (offset, label, name) + DST rule */
+ {-43200,"UTC-12:00","DATELINE STANDARD TIME",DR_US},  /* 0 */
+ {-39600,"UTC-11:00","UTC-11",DR_US},  /* 1 */
+ {-36000,"UTC-10:00","DATELINE STANDARD TIME",DR_US},  /* 2 */
+ {-36000,"UTC-11:00","UTC-10:00",DR_US},  /* 3 */
+ {-34200," UTC-09:30","MARQUESAS ISLANDS",DR_US},  /* 4 */
+ {-32400,"UTC-09:00","ALASKA",DR_US},  /* 5 */
+ {-32400,"UTC-09:00","COORDINATED UNIVERSAL TIME-09",DR_US},  /* 6 */
+ {-28800,"UTC-08:00","BAJA CALIFORNIA",DR_US},  /* 7 */
+ {-28800,"UTC-08:00","COORDINATED UNIVERSAL TIME-08",DR_US},  /* 8 */
+ {-28800,"UTC-08:00","PACIFIC TIME (US + CANADA)",DR_US},  /* 9 */
+ {-25200,"UTC-07:00","ARIZONA",DR_US},  /* 10 */
+ {-25200,"UTC-07:00","CHIHUAHUA, LA PAZ, MAZATLAN",DR_US},  /* 11 */
+ {-21600,"UTC-06:00","CENTRAL AMERICA",DR_US},  /* 12 */
+ {-21600,"UTC-06:00","CENTRAL TIME (US + CANADA)",DR_US},  /* 13 */
+ {-21600,"UTC-06:00","EASTER ISLAND",DR_US},  /* 14 */
+ {-21600,"UTC-06:00","GUADALAJARA, MEXICO CITY, MONTERREY",DR_US},  /* 15 */
+ {-21600,"UTC-06:00","SASKATCHEWAN",DR_US},  /* 16 */
+ {-18000,"UTC-05:00","BOGOTA, LIMA, QUITO, RIO BRANCO",DR_US},  /* 17 */
+ {-18000,"UTC-05:00","CHETUMAL",DR_US},  /* 18 */
+ {-18000,"UTC-05:00","EASTERN TIME (US + CANADA)",DR_US},  /* 19 */
+ {-18000,"UTC-05:00","HAITI",DR_US},  /* 20 */
+ {-18000,"UTC-05:00","HAVANA",DR_US},  /* 21 */
+ {-18000,"UTC-05:00","INDIANA (EAST)",DR_US},  /* 22 */
+ {-18000,"UTC-05:00","TURKS AND CAICOS",DR_US},  /* 23 */
+ {-14400,"UTC-04:00","ASUNCION",DR_US},  /* 24 */
+ {-14400,"UTC-04:00","ATLANTIC TIME (CANADA)",DR_US},  /* 25 */
+ {-14400,"UTC-04:00","CARACAS",DR_US},  /* 26 */
+ {-14400,"UTC-04:00","CUIABA",DR_US},  /* 27 */
+ {-14400,"UTC-04:00","GEORGETOWN, LA PAZ, MANAUS, SAN JUAN",DR_US},  /* 28 */
+ {-14400,"UTC-04:00","SANTIAGO",DR_NONE},  /* 29 */
+ { -9000,"UTC-03:30","NEWFOUNDLAND",DR_US},  /* 30 */
+ {-10800,"UTC-03:00","ARAGUAINA",DR_NONE},  /* 31 */
+ {-10800,"UTC-03:00","BRASILIA",DR_NONE},  /* 32 */
+ {-10800,"UTC-03:00","CAYENNE, FORTALEZA",DR_NONE},  /* 33 */
+ {-10800,"UTC-03:00","CITY OF BUENOS AIRES",DR_NONE},  /* 34 */
+ {-10800,"UTC-03:00","GREENLAND",DR_US},  /* 35 */
+ {-10800,"UTC-03:00","MONTEVIDEO",DR_NONE},  /* 36 */
+ {-10800,"UTC-03:00","PUNTA ARENAS",DR_NONE},  /* 37 */
+ {-10800,"UTC-03:00","SAINT PIERRE AND MIQUELON",DR_US},  /* 38 */
+ {-10800,"UTC-03:00","SALVADOR",DR_NONE},  /* 39 */
+ { -7200,"UTC-02:00","COORDINATED UNIVERSAL TIME-02",DR_NONE},  /* 40 */
+ { -3600,"UTC-01:00","AZORES",DR_EU},  /* 41 */
+ { -3600,"UTC-01:00","CABO VERDE IS.",DR_EU},  /* 42 */
+ {     0,"UTC","COORDINATED UNIVERSAL TIME",DR_NONE},  /* 43 */
+ {     0,"UTC+00:00","DUBLIN, EDINBURGH, LISBON, LONDON",DR_EU},  /* 44 */
+ {     0,"UTC+00:00","MONROVIA, REYKJAVIK",DR_EU},  /* 45 */
+ {     0,"UTC+00:00","SAO TOME",DR_EU},  /* 46 */
+ {  3600,"UTC+01:00","CASABLANCA",DR_EU},  /* 47 */
+ {  3600,"UTC+01:00","AMSTERDAM, BERLIN, BERN, ROME, STOCKHOLM, VIENNA",DR_EU},  /* 48 */
+ {  3600,"UTC+01:00","BELGRADE, BRATISLAVA, BUDAPEST, LJUBLJANA, PRAGUE",DR_EU},  /* 49 */
+ {  3600,"UTC+01:00","BRUSSELS, COPENHAGEN, MADRID, PARIS",DR_EU},  /* 50 */
+ {  3600,"UTC+01:00","SARAJEVO, SKOPJE, WARSAW, ZAGREB",DR_EU},  /* 51 */
+ {  3600,"UTC+01:00","WEST CENTRAL AFRICA",DR_EU},  /* 52 */
+ {  7200,"UTC+02:00","AMMAN",DR_LEV},  /* 53 */
+ {  7200,"UTC+02:00","ATHENS, BUCHAREST",DR_EU},  /* 54 */
+ {  7200,"UTC+02:00","BEIRUT",DR_LEV},  /* 55 */
+ {  7200,"UTC+02:00","CAIRO",DR_EU},  /* 56 */
+ {  7200,"UTC+02:00","CHISINAU",DR_EU},  /* 57 */
+ {  7200,"UTC+02:00","DAMASCUS",DR_LEV},  /* 58 */
+ {  7200,"UTC+02:00","GAZA, HEBRON",DR_LEV},  /* 59 */
+ {  7200,"UTC+02:00","HARARE, PRETORIA",DR_EU},  /* 60 */
+ {  7200,"UTC+02:00","HELSINKI, KYIV, RIGA, SOFIA, TALLINN, VILNIUS",DR_EU},  /* 61 */
+ {  7200,"UTC+02:00","JERUSALEM",DR_LEV},  /* 62 */
+ {  7200,"UTC+02:00","KALININGRAD",DR_EU},  /* 63 */
+ {  7200,"UTC+02:00","KHARTOUM",DR_EU},  /* 64 */
+ {  7200,"UTC+02:00","TRIPOLI",DR_EU},  /* 65 */
+ {  7200,"UTC+02:00","WINDHOEK",DR_EU},  /* 66 */
+ { 10800,"UTC+03:00","BAGHDAD",DR_EU},  /* 67 */
+ { 10800,"UTC+03:00","ISTANBUL",DR_EU},  /* 68 */
+ { 10800,"UTC+03:00","KUWAIT, RIYADH",DR_EU},  /* 69 */
+ { 10800,"UTC+03:00","MINSK",DR_EU},  /* 70 */
+ { 10800,"UTC+03:00","MOSCOW, ST. PETERSBURG",DR_EU},  /* 71 */
+ { 10800,"UTC+03:00","NAIROBI",DR_NONE},  /* 72 */
+ { 10800,"UTC+03:00","TEHRAN",DR_NONE},  /* 73 */
+ { 14400,"UTC+04:00","ABU DHABI, MUSCAT",DR_NONE},  /* 74 */
+ { 14400,"UTC+04:00","ASTRAKHAN, ULYANOVSK",DR_NONE},  /* 75 */
+ { 14400,"UTC+04:00","BAKU",DR_NONE},  /* 76 */
+ { 14400,"UTC+04:00","IZHEVSK, SAMARA",DR_NONE},  /* 77 */
+ { 14400,"UTC+04:00","PORT LOUIS",DR_NONE},  /* 78 */
+ { 14400,"UTC+04:00","SARATOV",DR_NONE},  /* 79 */
+ { 14400,"UTC+04:00","TBILISI",DR_NONE},  /* 80 */
+ { 14400,"UTC+04:00","VOLGOGRAD",DR_NONE},  /* 81 */
+ { 14400,"UTC+04:00","YEREVAN",DR_NONE},  /* 82 */
+ { 16200,"UTC+04:30","KABUL",DR_NONE},  /* 83 */
+ { 18000,"UTC+05:00","ASHGABAT, TASHKENT",DR_NONE},  /* 84 */
+ { 18000,"UTC+05:00","EKATERINBURG",DR_NONE},  /* 85 */
+ { 18000,"UTC+05:00","ISLAMABAD, KARACHI",DR_NONE},  /* 86 */
+ { 18000,"UTC+05:00","QYZYLORDA",DR_NONE},  /* 87 */
+ { 19800,"UTC+05:30","CHENNAI, KOLKATA, MUMBAI, NEW DELHI",DR_NONE},  /* 88 */
+ { 19800,"UTC+05:30","SRI JAYAWARDENEPURA",DR_NONE},  /* 89 */
+ { 20700,"UTC+05:45","KATHMANDU",DR_NONE},  /* 90 */
+ { 21600,"UTC+06:00","ASTANA",DR_NONE},  /* 91 */
+ { 21600,"UTC+06:00","DHAKA",DR_NONE},  /* 92 */
+ { 21600,"UTC+06:00","OMSK",DR_NONE},  /* 93 */
+ { 23400,"UTC+06:30","YANGON (RANGOON)",DR_NONE},  /* 94 */
+ { 25200,"UTC+07:00","BANGKOK, HANOI, JAKARTA",DR_NONE},  /* 95 */
+ { 25200,"UTC+07:00","BARNAUL, GORNO-ALTAYSK",DR_NONE},  /* 96 */
+ { 25200,"UTC+07:00","HOVD",DR_NONE},  /* 97 */
+ { 25200,"UTC+07:00","KRASNOYARSK",DR_NONE},  /* 98 */
+ { 25200,"UTC+07:00","NOVOSIBIRSK",DR_NONE},  /* 99 */
+ { 25200,"UTC+07:00","TOMSK",DR_NONE},  /* 100 */
+ { 28800,"UTC+08:00","BEIJING, CHONGQING, HONG KONG, URUMQI",DR_NONE},  /* 101 */
+ { 28800,"UTC+08:00","IRKUTSK",DR_NONE},  /* 102 */
+ { 28800,"UTC+08:00","KUALA LUMPUR, SINGAPORE",DR_NONE},  /* 103 */
+ { 28800,"UTC+08:00","PERTH",DR_NONE},  /* 104 */
+ { 28800,"UTC+08:00","TAIPEI",DR_NONE},  /* 105 */
+ { 28800,"UTC+08:00","ULAANBAATAR",DR_NONE},  /* 106 */
+ { 31500,"UTC+08:45","EUCLA",DR_NONE},  /* 107 */
+ { 32400,"UTC+09:00","CHITA",DR_NONE},  /* 108 */
+ { 32400,"UTC+09:00","OSAKA, SAPPORO, TOKYO",DR_NONE},  /* 109 */
+ { 32400,"UTC+09:00","PYONGYANG",DR_NONE},  /* 110 */
+ { 32400,"UTC+09:00","SEOUL",DR_NONE},  /* 111 */
+ { 32400,"UTC+09:00","YAKUTSK",DR_NONE},  /* 112 */
+ { 34200,"UTC+09:30","ADELAIDE",DR_AU},  /* 113 */
+ { 34200,"UTC+09:30","DARWIN",DR_AU},  /* 114 */
+ { 36000,"UTC+10:00","BRISBANE",DR_AU},  /* 115 */
+ { 36000,"UTC+10:00","CANBERRA, MELBOURNE, SYDNEY",DR_AU},  /* 116 */
+ { 36000,"UTC+10:00","GUAM, PORT MORESBY",DR_AU},  /* 117 */
+ { 36000,"UTC+10:00","HOBART",DR_AU},  /* 118 */
+ { 36000,"UTC+10:00","VLADIVOSTOK",DR_AU},  /* 119 */
+ { 37800,"UTC+10:30","LORD HOWE ISLAND",DR_AU},  /* 120 */
+ { 39600,"UTC+11:00","BOUGAINVILLE ISLAND",DR_NONE},  /* 121 */
+ { 39600,"UTC+11:00","CHOKURDAKH",DR_NONE},  /* 122 */
+ { 39600,"UTC+11:00","MAGADAN",DR_NONE},  /* 123 */
+ { 39600,"UTC+11:00","NORFOLK ISLAND",DR_NONE},  /* 124 */
+ { 39600,"UTC+11:00","SAKHALIN",DR_NONE},  /* 125 */
+ { 39600,"UTC+11:00","SOLOMON IS., NEW CALEDONIA",DR_NONE},  /* 126 */
+ { 43200,"UTC+12:00","ANADYR, PETROPAVLOVSK-KAMCHATSKY",DR_NZ},  /* 127 */
+ { 43200,"UTC+12:00","AUCKLAND, WELLINGTON",DR_NZ},  /* 128 */
+ { 43200,"UTC+12:00","COORDINATED UNIVERSAL TIME+12",DR_NZ},  /* 129 */
+ { 43200,"UTC+12:00","FIJI",DR_NZ},  /* 130 */
+ { 45900,"UTC+12:45","CHATHAM ISLANDS",DR_NZ},  /* 131 */
+ { 46800,"UTC+13:00","COORDINATED UNIVERSAL TIME+13",DR_NONE},  /* 132 */
+ { 46800,"UTC+13:00","NUKU'ALOFA",DR_NONE},  /* 133 */
+ { 46800,"UTC+13:00","SAMOA",DR_NONE},  /* 134 */
+ { 50400,"UTC+13:00","KIRITIMATI ISLAND",DR_NONE},  /* 135 */
+};
+_Static_assert(sizeof TZT/sizeof TZT[0]==TZ_N,"TZT must have the stock table's 136 entries");
+#define CLK_MIN_VALID 1735689600LL          /* 2025-01-01 00:00 UTC: before this the SoC clock has never been set */
+static int64_t clk_fake=-1;                 /* PREVIEW/selftest: a fixed UTC time */
+static int64_t clk_off=0;                   /* SIM: offset to time(NULL) (OURUI_SIM_CLOCK / ctrl "clock") */
+static int64_t clk_utc(void){ return clk_fake>=0?clk_fake:(int64_t)time(NULL)+clk_off; }
+static int clk_valid(int64_t u){ return u>=CLK_MIN_VALID; }
+static int tz_idx(void){ int i=SET[S_TZ].val; return (i>=0&&i<TZ_N)?i:43; }      /* outside the table: #43 = UTC */
+/* civil date <-> days since 1970-01-01 (proleptic Gregorian) */
+static int64_t days_civil(int y,int m,int d){ y-=m<=2; int64_t era=(y>=0?y:y-399)/400; int yoe=(int)(y-era*400); int doy=(153*(m+(m>2?-3:9))+2)/5+d-1; int doe=yoe*365+yoe/4-yoe/100+doy; return era*146097+doe-719468; }
+static int dow_civil(int y,int m,int d){ int64_t z=days_civil(y,m,d); return (int)((z%7+11)%7); }   /* 0 = Sunday (1970-01-01 = Thursday) */
+static int dim_civil(int y,int m){ static const int D[12]={31,28,31,30,31,30,31,31,30,31,30,31}; return m==2&&((y%4==0&&y%100)||y%400==0)?29:D[m-1]; }
+/* the n-th (n >= 1) or the last (n = -1) weekday `dow` of a month -> day of month */
+static int nth_dow(int y,int m,int dow,int n){
+    if(n>0){ int d1=dow_civil(y,m,1); return 1+(dow-d1+7)%7+(n-1)*7; }
+    int dl=dim_civil(y,m), w=dow_civil(y,m,dl); return dl-(w-dow+7)%7;
+}
+static int64_t utc_of(int y,int m,int d,int h){ return days_civil(y,m,d)*86400+h*3600LL; }
+/* is DST in effect at UTC time u in zone i (standard offset `off`)? Transitions: EU 01:00 UTC; the others 02:00 local standard time */
+static int dst_on(int i,int64_t u){
+    int off=TZT[i].off; time_t t=(time_t)(u+off); struct tm lt; gmtime_r(&t,&lt); int y=lt.tm_year+1900; int64_t a,b;
+    switch(TZT[i].rule){
+    case DR_EU:  a=utc_of(y,3,nth_dow(y,3,0,-1),1); b=utc_of(y,10,nth_dow(y,10,0,-1),1); return u>=a&&u<b;
+    case DR_US:  a=utc_of(y,3,nth_dow(y,3,0,2),2)-off; b=utc_of(y,11,nth_dow(y,11,0,1),1)-off; return u>=a&&u<b;
+    case DR_LEV: a=utc_of(y,3,nth_dow(y,3,5,-1),2)-off; b=utc_of(y,10,nth_dow(y,10,5,-1),1)-off; return u>=a&&u<b;
+    case DR_AU:  a=utc_of(y,10,nth_dow(y,10,0,1),2)-off; b=utc_of(y,4,nth_dow(y,4,0,1),2)-off; return u>=a||u<b;   /* southern hemisphere */
+    case DR_NZ:  a=utc_of(y,9,nth_dow(y,9,0,-1),2)-off; b=utc_of(y,4,nth_dow(y,4,0,1),2)-off; return u>=a||u<b;
+    default: return 0;
+    }
+}
+/* local time like stock's _refresh_systime: UTC + zone offset + (sumtime && DST ? 1 h : 0). Returns 1 if DST was applied. */
+static int clk_local_at(int64_t u,struct tm*tm){
+    int i=tz_idx(), d=SET[S_DST].val&&dst_on(i,u); time_t t=(time_t)(u+TZT[i].off+(d?3600:0)); gmtime_r(&t,tm); return d;
+}
+static int clk_now(struct tm*tm){ int64_t u=clk_utc(); clk_local_at(u,tm); return clk_valid(u); }
+/* "HH:MM" (timemode 1) or "HH:MM A.M./P.M." (timemode 0) exactly as stock's update_time; ampm=0 drops the A.M./P.M. suffix */
+static void fmt_hm(char*b,size_t n,int h,int m,int ampm){
+    if(SET[S_TIMEMODE].val){ snprintf(b,n,"%02d:%02d",h,m); return; }
+    int pm=h>=12, hh=h>12?h-12:(h==0?12:h);
+    if(ampm) snprintf(b,n,"%02d:%02d %s",hh,m,TR(pm?TX_PM:TX_AM)); else snprintf(b,n,"%02d:%02d",hh,m);
+}
+static const short WD_TX[7]={TX_WD_SUN,TX_WD_MON,TX_WD_TUE,TX_WD_WED,TX_WD_THU,TX_WD_FRI,TX_WD_SAT};
+
+/* ---- the schedule file: ourui's OWN settings (not config.json, not the stock UI's /customer/config.bin) ----
+ * Text, one "key=value" per line: preheat=0|1, at=HH:MM, repeat=once|daily|mon-fri|sat-sun, autooff=0|15|20|30|60,
+ * once_at=<UTC seconds of the one-shot occurrence, 0 = none>. Unknown lines are ignored, a bad value -> its default.
+ * Written atomically like the language file (tmp + fsync + re-read/compare + rename + fsync of the directory). */
+static char sched_path[256]="/new_customer/ourui/schedule";
+static const char*const REP_KEY[4]={"once","daily","mon-fri","sat-sun"};
+static const unsigned char REP_MASK[4]={0x00,0x7F,0x3E,0x41};   /* bit k = weekday k (0 = Sunday), stock's Sun..Sat flags; 0 = one-shot */
+static const int AO_MIN[5]={0,15,20,30,60};
+enum { SCS_DEFAULT=0, SCS_FILE, SCS_SESSION };
+static struct { int on,hm,rep,ao,src; int64_t once_at; } sch={0,390,1,0,SCS_DEFAULT,0};
+static int sched_val(int i){ return i==S_PREHEAT?sch.on:(i==S_PHAT?sch.hm:(i==S_PHREP?sch.rep:sch.ao)); }
+static void sched_load(void){
+    sch.on=0; sch.hm=390; sch.rep=1; sch.ao=0; sch.once_at=0; sch.src=SCS_DEFAULT;
+    char b[512]; int fd=open(sched_path,O_RDONLY); if(fd<0) return;
+    int n=(int)read(fd,b,sizeof b-1); close(fd); if(n<=0) return; b[n]=0; sch.src=SCS_FILE;
+    for(char*l=strtok(b,"\r\n");l;l=strtok(NULL,"\r\n")){
+        char*e=strchr(l,'='); if(!e) continue; *e++=0;
+        if(!strcmp(l,"preheat")) sch.on=atoi(e)==1;
+        else if(!strcmp(l,"at")){ int h,m; if(sscanf(e,"%d:%d",&h,&m)==2&&h>=0&&h<24&&m>=0&&m<60&&m%5==0) sch.hm=h*60+m; }
+        else if(!strcmp(l,"repeat")){ for(int k=0;k<4;k++) if(!strcmp(e,REP_KEY[k])) sch.rep=k; }
+        else if(!strcmp(l,"autooff")){ int v=atoi(e); for(int k=0;k<5;k++) if(v==AO_MIN[k]) sch.ao=k; }
+        else if(!strcmp(l,"once_at")) sch.once_at=strtoll(e,NULL,10);
+    }
+    if(sch.once_at<0) sch.once_at=0;
+}
+static int sched_save(void){
+    char d[192],chk[192],tmp[280]; int n=snprintf(d,sizeof d,"preheat=%d\nat=%02d:%02d\nrepeat=%s\nautooff=%d\nonce_at=%lld\n",
+        sch.on,sch.hm/60,sch.hm%60,REP_KEY[sch.rep],AO_MIN[sch.ao],(long long)sch.once_at);
+    snprintf(tmp,sizeof tmp,"%s.tmp",sched_path);
+    if(!write_all(tmp,d,n,0)){ unlink(tmp); sch.src=SCS_SESSION; return 0; }
+    int fd=open(tmp,O_RDONLY); int cn=fd>=0?(int)read(fd,chk,sizeof chk):-1; if(fd>=0) close(fd);
+    if(cn!=n||memcmp(chk,d,n)||rename(tmp,sched_path)!=0){ unlink(tmp); sch.src=SCS_SESSION; return 0; }
+    fsync_dir(sched_path); sch.src=SCS_FILE; return 1;
+}
+/* stock performSleepActions 0x148324 for ONE entry (hm = minutes after midnight, mask = REP_MASK): the next occurrence strictly after
+ * `now` (minute resolution). Returns the days ahead (0..7); *ad = the day of month (wrapped like stock w. the month's length). */
+static int sched_next(const struct tm*now,int hm,int mask,int*ad){
+    int nowm=now->tm_hour*60+now->tm_min, wd=now->tm_wday, k;
+    if(!mask) k=hm>nowm?0:1;                                          /* one-shot: today if later, else tomorrow */
+    else if((mask>>wd&1)&&hm>nowm) k=0;                               /* judgeWeekEqual: today, later than now */
+    else { for(k=1;k<=7;k++) if(mask>>((wd+k)%7)&1) break; }          /* getLastWeek 0x1496C0: the next flagged weekday (7 = same day next week) */
+    int y=now->tm_year+1900, m=now->tm_mon+1, d=now->tm_mday+k, dm=dim_civil(y,m);
+    *ad=d>dm?d-dm:d; return k;
+}
+/* the alarm to send now: 1 + (d,h,m), or 0 = none (0/0/0). A one-shot uses the occurrence it was saved for (once_at). */
+static int sched_alarm(int64_t u,int*ad,int*ah,int*am,int64_t*at){
+    *ad=*ah=*am=0; if(at) *at=0;
+    if(!sch.on||!clk_valid(u)) return 0;
+    struct tm lt; clk_local_at(u,&lt);
+    if(!REP_MASK[sch.rep]){
+        if(sch.once_at<=u) return 0;
+        struct tm ot; clk_local_at(sch.once_at,&ot); *ad=ot.tm_mday; *ah=ot.tm_hour; *am=ot.tm_min; if(at) *at=sch.once_at; return 1;
+    }
+    int k=sched_next(&lt,sch.hm,REP_MASK[sch.rep],ad); *ah=sch.hm/60; *am=sch.hm%60;
+    if(at) *at=u-(lt.tm_hour*3600+lt.tm_min*60+lt.tm_sec)+k*86400LL+sch.hm*60LL;   /* approx. UTC of the occurrence (for display) */
+    return 1;
+}
+/* a one-shot: the UTC time of the next occurrence of hh:mm after u (stored when the schedule is saved) */
+static int64_t sched_once_target(int64_t u){
+    if(!clk_valid(u)) return 0;
+    struct tm lt; int dst=clk_local_at(u,&lt); int ad, k=sched_next(&lt,sch.hm,0,&ad);
+    int64_t mid=u-(lt.tm_hour*3600+lt.tm_min*60+lt.tm_sec);
+    int64_t t=mid+k*86400LL+sch.hm*60LL; struct tm ct; int dst2=clk_local_at(t,&ct); return t+(dst-dst2)*3600LL;   /* across a DST switch */
+}
 /* load all settings from config.json. The interval is NEVER widened for proven limits:
  * a value outside spec is shown as it is, marked, and blocks activity start
  * until the user has chosen a valid value. */
 static void settings_load(void){
-    cfg_read();
+    cfg_read(); sched_load();
     for(int i=0;i<NSET;i++){
         Setting*s=&SET[i]; int v;
         s->lo=s->min; s->hi=s->max;
         if(s->flags&SF_SENSOR){ s->val=0; s->loaded=0; continue; }
         if(s->flags&SF_LOCAL){ s->val=ui_lang; s->loaded=1; continue; }      /* v6.3: the UI language comes from the lang file, not config.json */
+        if(s->flags&SF_OWN){ s->val=sched_val(i); s->loaded=1; continue; }   /* v6.16: the schedule file (sched_load) */
         if(cfg_get_int(s->key,&v)){ s->val=v; s->loaded=1; }
         else { s->val=s->def; s->loaded=0; }
         if(s->flags&SF_LOCK){ s->lo=s->hi=s->val; continue; }
@@ -2629,7 +2981,7 @@ static void bg_build(void){
  * deliberately all-caps w. letter spacing. */
 #define NG 160
 #define G_LC 128            /* a..z in code spans (paths/commands): G_LC + (c - 'a') */
-enum { G_AE=96, G_OE, G_AA, G_DEG, G_MDOT, G_BEAN, G_CUP, G_DROP, G_STEAM, G_CHECK, G_CROSS, G_MOON, G_WARN, G_APPROX, G_BOLT, G_ELL, G_SECT };
+enum { G_AE=96, G_OE, G_AA, G_DEG, G_MDOT, G_BEAN, G_CUP, G_DROP, G_STEAM, G_CHECK, G_CROSS, G_MOON, G_WARN, G_APPROX, G_BOLT, G_ELL, G_SECT, G_CLOCK };
 typedef struct { float adv; const char*path; } GDef;
 static const GDef GD[NG]={
  [' ']={2.8f,""},
@@ -2703,6 +3055,7 @@ static const GDef GD[NG]={
  [G_BOLT]={6,"M4,0 L0.4,5.6 L3.2,5.6 L2,10 L5.6,4.2 L2.9,4.2 L4,0"},
  [G_ELL]={5.6f,"M0,9.9 L0,10 M2.8,9.9 L2.8,10 M5.6,9.9 L5.6,10"},
  ['$']={6,"E3,2.55,2.8,2.55,90,325 E3,7.45,3,2.55,270,505 M3,-1.3 L3,11.3"},
+ [G_CLOCK]={10,"E5,5,4.8,4.8,0,360 M5,1.9 L5,5 L7.3,6.4"},   /* v6.16 */
  [G_SECT]={5.6f,"E2.8,1.8,2.4,1.8,95,325 E2.8,5,2.7,1.6,0,360 E2.8,8.2,2.4,1.8,275,505"},
  ['\'']={0,"M0,0 L0,2.6"},
  /* lowercase letters (x-height 3.6..10, descender to 12.8) — ONLY in code spans (LC ... UC):
@@ -2813,6 +3166,7 @@ static int glyph_next(const unsigned char**pp){
         if(c==0x0F){ g_lc=0; return -1; }
         if(c>='a'&&c<='z'){ if(g_lc) return G_LC+(c-'a'); c-=32; }
         if(c>=1&&c<=9){ static const int ic[10]={0,G_BEAN,G_CUP,G_DROP,G_STEAM,G_CHECK,G_CROSS,G_MOON,G_WARN,G_BOLT}; return ic[c]; }
+        if(c==0x0B) return G_CLOCK;                       /* v6.16 */
         if(c<32||c>95) return '?';
         return c;
     }
@@ -3244,7 +3598,8 @@ static int row_y0(int pg,int k){ return LIST_Y0+k*ROW_P+(k>=tier_count(tier_of_p
 #define DG_PRESS (DG_BOOT+8*DG_P+6)        /* v6.10: heading of the PRESSURE · ESTIMATE block (anchor, current value, 2 note lines) — where ABOUT was in v6.9 */
 #define DG_RAW (DG_PRESS+28+2*DG_P+52)      /* v6.11: the RAW COUNTERS heading (where ABOUT was in v6.10); 4 rows below it */
 #define DG_PWR (DG_RAW+28+4*DG_P+10)        /* v6.14: POWER BUTTON (state, word 0, press, last button, node) — where ABOUT was in v6.13 */
-#define DG_ABOUT (DG_PWR+28+3*DG_P+10)      /* v6.14: + POWER BUTTON. v6.11: + RAW COUNTERS. v6.3: heading of the ABOUT block (UI language, wordmark, tagline); v6.7: + the NET line; v6.9: + the GRAPH row; v6.10: + PRESSURE · ESTIMATE */
+#define DG_TIME (DG_PWR+28+3*DG_P+10)       /* v6.16: TIME · SCHEDULE (clock, zone/DST, auto off, last alarm sent, next pre-heat) — where ABOUT was in v6.15 */
+#define DG_ABOUT (DG_TIME+28+3*DG_P+10)      /* v6.14: + POWER BUTTON. v6.11: + RAW COUNTERS. v6.3: heading of the ABOUT block (UI language, wordmark, tagline); v6.7: + the NET line; v6.9: + the GRAPH row; v6.10: + PRESSURE · ESTIMATE */
 #define DG_BOTTOM (DG_ABOUT+76+24+11+22)
 static float scroll_max(int pg){
     if(pg==PG_DIAG) return DG_BOTTOM-(LIST_VY1-14);
@@ -3268,6 +3623,8 @@ static void set_fmt(int i,int v,char*b,size_t n){
     const Setting*s=&SET[i];
     if((s->flags&SF_SENSOR)&&!s->loaded){ snprintf(b,n,"--"); return; }
     if(s->kind==K_ENUM){ if(v>=s->min&&v<=s->max) snprintf(b,n,"%s",TR(s->opts[v-s->min])); else snprintf(b,n,"(%d)",v); return; }
+    if(s->flags&SF_HHMM){ fmt_hm(b,n,v/60,v%60,1); return; }                               /* v6.16 */
+    if(i==S_TZ&&v>=0&&v<TZ_N){ snprintf(b,n,"%s",TZT[v].utc); return; }                 /* v6.16: the stock label "UTC+01:00" */
     if(s->flags&SF_TEMP10){ fmt_t10(b,n,v,1); return; }
     if(s->flags&SF_TEMP1){ fmt_t10(b,n,v*10,0); return; }
     fmt_fix(b,n,v,s->dec);
@@ -3316,6 +3673,15 @@ static void save_begin(ms_t now){
         int ok=lang_save(edit_val);
         s->val=edit_val; lang_set(edit_val); if(!ok) lang_src=LS_SESSION;      /* the language applies now in any case */
         toast_show(TR(ok?TX_T_LANG_SAVED:TX_T_LANG_NOFILE),ok?C_OK:C_WARN,now); /* confirmation in the NEW language */
+        detail_close(now); return;
+    }
+    if(s->flags&SF_OWN){     /* v6.16: pre-heat schedule / auto off — ourui's own file; no MCU write, no config.json */
+        s->val=edit_val;
+        if(sel==S_PREHEAT) sch.on=edit_val; else if(sel==S_PHAT) sch.hm=edit_val; else if(sel==S_PHREP) sch.rep=edit_val; else sch.ao=edit_val;
+        sch.once_at=(sch.on&&!REP_MASK[sch.rep])?sched_once_target(clk_utc()):0;   /* a one-shot is for the next hh:mm after now */
+        int ok=sched_save(); idle_kick(now);
+        if(sch.on&&!clk_valid(clk_utc())) toast_show(TR(TX_T_NOCLOCK),C_WARN,now);
+        else toast_show(TR(ok?TX_T_OWN_SAVED:TX_T_OWN_NOFILE),ok?C_OK:C_WARN,now);
         detail_close(now); return;
     }
     if(!cfg_ok||!s->loaded){ toast_show(TR(TX_T_CFG_UNAVAIL),C_ERR,now); return; }
@@ -3622,14 +3988,13 @@ static int pw_cmd8(uint8_t b[15],const struct tm*tm,int ad,int ah,int am){
     b[7]=(uint8_t)tm->tm_hour; b[8]=(uint8_t)tm->tm_min; b[9]=(uint8_t)tm->tm_sec; b[10]=(uint8_t)ad; b[11]=(uint8_t)ah; b[12]=(uint8_t)am;
     uint16_t c=crc16(b,13); b[13]=c&0xFF; b[14]=c>>8; return 15;
 }
-static void pw_now_tm(struct tm*tm){
-#ifdef OURUI_PREVIEW
-    memset(tm,0,sizeof *tm); tm->tm_year=126; tm->tm_mon=10; tm->tm_mday=18; tm->tm_hour=16; tm->tm_min=35; tm->tm_sec=28;   /* fixed in the selftest */
-#else
-    time_t t=time(NULL); localtime_r(&t,tm);
-#endif
-}
-static void pw_ack8(const uint8_t*p){ if(pw.f8_ok&&!memcmp(p,pw.f8+3,10)) pw.n_ack8++; }
+/* v6.16: the cmd8 date/time is stock's model time (_refresh_systime: SoC UTC + zone + DST) — v6.14 used localtime() of the SoC,
+ * i.e. UTC on the device (no TZ). The MCU sets its RTC from these bytes, so the alarm below is compared against the same local time.
+ * PREVIEW/selftest: clk_fake (default 2026-11-18 15:35:28 UTC = 16:35:28 in zone #48 without DST). */
+static void pw_now_tm(struct tm*tm){ clk_now(tm); }
+/* v6.16: pre-arm state (the cmd8 alarm while on) — see sched_step() */
+static struct { int sent,ad,ah,am,f8_ok,src; long n_sent,n_ack,mcu_rs; ms_t t_sent; uint8_t f8[15]; } arm;
+static void pw_ack8(const uint8_t*p){ if(pw.f8_ok&&!memcmp(p,pw.f8+3,10)) pw.n_ack8++; if(arm.f8_ok&&!memcmp(p,arm.f8+3,10)) arm.n_ack++; }
 /* for the OFF view: an open detail is reverted (light/language preview back), no transition, no ripple, no held start */
 static void pw_view(int v){
     if(view==V_DETAIL&&sel>=0){ if(SET[sel].flags&SF_BL) bl_set(SET[sel].val); if(SET[sel].flags&SF_LOCAL) lang_set(SET[sel].val); }
@@ -3638,7 +4003,10 @@ static void pw_view(int v){
     static_dirty=1; force_all=1; ui_kick=1;
 }
 static void pw_off_begin(ms_t now){
-    struct tm tm; pw_now_tm(&tm); pw_cmd8(pw.f8,&tm,0,0,0); pw.f8_ok=1; uart_send(pw.f8,15);
+    /* v6.16: the alarm = the next pre-heat occurrence, exactly as stock's performSleepActions -> powerOffSend(day, hour, minute);
+     * no schedule (or no valid clock) -> 0/0/0 as in v6.14 */
+    struct tm tm; int ad,ah,am; pw_now_tm(&tm); sched_alarm(clk_utc(),&ad,&ah,&am,NULL);
+    pw_cmd8(pw.f8,&tm,ad,ah,am); pw.f8_ok=1; uart_send(pw.f8,15); arm.sent=0;   /* the off frame supersedes any pre-arm */
     pw.state=PW_OFFING; pw.t_req=pw.t_state=now; pw.push_set=0; pw.t_peek=0; pw.t_on1=0; pw.n_off++;
     toast.dur=0; pw_view(V_OFF);
 }
@@ -3647,6 +4015,7 @@ static void pw_fail(ms_t now){   /* PowerOff did not get through: back to ON (th
 }
 static void pw_on(ms_t now){
     pw.state=PW_ON; pw.t_state=now; pw.t_on1=0; pw.t_peek=0; pw.n_on++;
+    arm.sent=0;                          /* v6.16: the MCU woke = CPU reset (0x326): its RAM alarm is gone -> sched_step re-arms */
     if(bl_is_off) bl_power(1);
     proto_keepawake(now,1);              /* PowerOn (sub0=[1]) + awake (sub1=[0]) — the same two frames as at startup (stock: app_init PowerOn) */
     pw_view(V_MAIN); toast_show(TR(TX_T_PW_ON),C_OK,now);
@@ -3655,6 +4024,7 @@ static void pw_wake(ms_t now){ pw.state=PW_WAKING; pw.t_state=now; pw.t_on1=0; p
 /* button event from the k62091 node (all EV_KEY codes, like stock); value 2 (autorepeat) does not exist on the node and is ignored */
 static void pw_key(int code,int val,ms_t now){
     pw.n_ev++; pw.key_code=code; pw.key_val=val; pw.t_key=now; ui_kick=1;
+    idle_kick(now);                      /* v6.16 */
     if(val==1&&!pw.key_down){
         pw.key_down=1; pw.t_press=pw.t_down=now; pw.key_fired=0; pw.blk_shown=0; pw.n_press++;
         if(pw.state==PW_OFF){ pw.key_fired=1; pw_wake(now); }
@@ -3704,8 +4074,47 @@ static void pw_step(ms_t now){
         break;
     }
 }
+/* ================= v6.16: pre-arm + one-shot use + auto off (the stock semantics are at "TIME & SCHEDULING") =================
+ * PRE-ARM: while ON (link, word 0 = 1, boot push done, write queue idle, not read-only) the alarm stock would send at power-off
+ * (sched_alarm) is sent ahead with the same 15-byte cmd8 whenever it differs from what this MCU session last got: after a start,
+ * after an MCU restart/wake (its RAM alarm is gone), after a schedule change, and once a day when the occurrence moves on.
+ * Never while turning off/off (the power-off frame carries the alarm itself). No schedule and nothing armed -> nothing is sent
+ * (v6.15 traffic unchanged); disarming sends alarm 0/0/0 once. At most one cmd8 per ARM_GAP_MS.
+ * ONE-SHOT: once its occurrence (once_at) is a minute in the past it is switched off and saved (stock: deal_preheat_data at start).
+ * AUTO OFF: no touch, no button and no activity (any active phase, not only brew/steam/grind) for N minutes -> the same power-off as
+ * the button (pw_off_begin: cmd8 w. the alarm, 80 ms, cmd6 sub0 len2 [0,0]); a toast warns 30 s before. Only when the power-off
+ * itself would be allowed (link, word 0 = 1, not read-only, no SAVE in flight). Stock: fixed 30 min (SleepRefresh 0x149268). */
+#define ARM_GAP_MS   5000
+#define AO_WARN_MS  30000
+static ms_t idle_t0=0; static int ao_warned=0; static long ao_n=0;
+static void idle_kick(ms_t now){ idle_t0=now; if(ao_warned){ ao_warned=0; toast.dur=0; } }   /* a touch also dismisses the 30 s warning */
+static int sched_ok_to_send(ms_t now){
+    return pw.state==PW_ON&&!ro_mode&&link_up(now)&&reg_seen[0]&&reg[0]==1&&(bp.state==BP_DONE||bp.state==BP_OFF)&&!wq_busy()&&view!=V_SPLASH&&view!=V_BYE;
+}
+static void sched_step(ms_t now){
+    int64_t u=clk_utc();
+    if(!idle_t0) idle_kick(now);                                                   /* first call: the idle timer starts now */
+    if(sch.on&&!REP_MASK[sch.rep]&&sch.once_at>0&&clk_valid(u)&&u>=sch.once_at+60){   /* one-shot used */
+        sch.on=0; sch.once_at=0; SET[S_PREHEAT].val=0; sched_save(); toast_show(TR(TX_T_ONCE_USED),C_OK,now); ui_kick=1;
+    }
+    if(arm.mcu_rs!=repush_count()){ arm.mcu_rs=repush_count(); arm.sent=0; }        /* MCU restart: the alarm in its RAM is gone */
+    int ad,ah,am; int want=sched_alarm(u,&ad,&ah,&am,NULL);
+    int need=arm.sent?(ad!=arm.ad||ah!=arm.ah||am!=arm.am):want;
+    if(need&&sched_ok_to_send(now)&&(!arm.n_sent||now-arm.t_sent>=ARM_GAP_MS)){
+        struct tm tm; pw_now_tm(&tm); pw_cmd8(arm.f8,&tm,ad,ah,am); arm.f8_ok=1; uart_send(arm.f8,15);
+        arm.sent=want; arm.ad=ad; arm.ah=ah; arm.am=am; arm.t_sent=now; arm.n_sent++;
+    }
+    /* auto off */
+    if(pw.state!=PW_ON||pw_busy()||phase_active(phase_raw(now))||act.pending!=ACT_NONE||pw.key_down){ idle_kick(now); return; }
+    int mins=AO_MIN[SET[S_AUTOOFF].val>=0&&SET[S_AUTOOFF].val<5?SET[S_AUTOOFF].val:0];
+    if(!mins||view==V_SPLASH||view==V_BYE||sav.active||ro_mode||!link_up(now)||!reg_seen[0]||reg[0]!=1){ if(!mins) ao_warned=0; return; }
+    ms_t left=(ms_t)mins*60000-(now-idle_t0);
+    if(left<=AO_WARN_MS&&!ao_warned){ ao_warned=1; toast_show(TR(TX_T_AUTOOFF_SOON),C_WARN,now); toast.dur=AO_WARN_MS; ui_kick=1; }
+    if(left<=0){ ao_n++; idle_kick(now); pw_off_begin(now); }
+}
 static void ui_touch(int ev,int x,int y,ms_t now){
     ui_kick=1;
+    idle_kick(now);                                                  /* v6.16: every touch restarts the auto-off timer (stock touch_feedback_cb) */
     if(pw_touch(ev,now)) return;                                     /* v6.14: off — the screen shows only the OFF page */
     if(ev==TE_DOWN){
         memset(&tch,0,sizeof tch); tch.down=1; tch.x0=tch.x=x; tch.y0=tch.y=y; tch.t0=now;
@@ -3736,7 +4145,7 @@ static int pressed(int t){ return tch.down&&!tch.moved&&tch.target==t; }
 static int gauge_kind(int ph){ switch(ph){ case PH_GRIND: case PH_WATER: return 1; case PH_PRE: case PH_EXT: return 2; case PH_STEAM: return 3; default: return 0; } }
 typedef struct { int ph,eff; uint32_t hi,lo; char hero[16]; const char*unit; char label[64],sub[80]; const char*sl[3]; char svv[3][16]; float gf,gmark,pf; int pvis;
                  int sk,conc; const char*chip,*badge;
-                 char hint1[72]; const char*hint2; uint32_t hc1; } HomeM;   /* v6.11: empty-state hint in the chart area (only when the chart is inactive) */   /* v6.6: steam class, concurrent steam, chip text, steam marker (NULL = none) */
+                 char hint1[72]; const char*hint2; uint32_t hc1; char hint2b[72]; } HomeM;   /* v6.11: empty-state hint in the chart area (only when the chart is inactive) */   /* v6.6: steam class, concurrent steam, chip text, steam marker (NULL = none) */
 /* the three stat labels per HOME state (the selftest measures each trio against the columns, in both languages) */
 enum { SS_IDLE=0, SS_BREW, SS_GRIND, SS_WATER, SS_STEAM, SS_BREW_M, SS_GRIND_M, SS_WATER_M, NSS };   /* _M: concurrent steam — the 3rd field is the milk temperature */
 _Static_assert(SS_GRIND_M-SS_GRIND==SS_BREW_M-SS_BREW&&SS_WATER_M-SS_WATER==SS_BREW_M-SS_BREW,"SS_*_M must be at the same offset from SS_*");
@@ -3768,6 +4177,17 @@ static int hero_v(int key,int raw,int set,ms_t now){
         if(abs(hf.f.m-(int)lroundf(hf.f.y))>CD_HERO_JUMP){ cond_snap(&hf.f,hf.f.m); hf.n_snap++; }   /* real step (the median has moved far): no gliding */
     }
     return (int)lroundf(hf.f.y);
+}
+/* v6.16: HOME texts — the top line (local clock as stock's update_time; wordmark while the clock is not set) and the planned pre-heat */
+#define HOME_BRAND_Y 54
+static int home_clock_text(char*b,size_t n){
+    struct tm lt; if(!clk_now(&lt)) return 0;
+    fmt_hm(b,n,lt.tm_hour,lt.tm_min,1); return 1;
+}
+static int home_preheat_text(char*b,size_t n){
+    int ad,ah,am; int64_t at; if(!sched_alarm(clk_utc(),&ad,&ah,&am,&at)) return 0;
+    struct tm lt; clk_local_at(at,&lt); char t[24]; fmt_hm(t,sizeof t,ah,am,1);
+    snprintf(b,n,TR(TX_C_PREHEAT),TR(WD_TX[lt.tm_wday]),t); return 1;
 }
 static void home_model(ms_t now){
     HomeM*m=&hm; memset(m,0,sizeof *m);
@@ -3846,6 +4266,7 @@ static void home_model(ms_t now){
      * If a start is possible: "HOLD AN ICON TO START"; otherwise the reason (the guard's text) — and on error/offline a pointer to DIAGNOSE,
      * where the raw code (E1/E2/E3) and the link counters are. Line 2 points to the settings (swipe + the gear). */
     { const char*g=act_guard(ACT_BREW,now); m->hint2=TR(TX_C_HINT2); m->hc1=C_TXT2;
+      if(home_preheat_text(m->hint2b,sizeof m->hint2b)) m->hint2=m->hint2b;    /* v6.16: a planned pre-heat replaces the swipe hint (the gear is visible) */
       if(!g) snprintf(m->hint1,sizeof m->hint1,"%s",TR(TX_C_HINT));
       else if(ph==PH_ERROR) snprintf(m->hint1,sizeof m->hint1,TR(TX_C_ERRCODE),err_code());
       else if(ph==PH_OFFLINE) snprintf(m->hint1,sizeof m->hint1,"%s",TR(TX_C_DIAGREF));
@@ -4018,7 +4439,7 @@ static void overlays_draw(ms_t now){
 }
 
 /* ================= page: HOME ================= */
-enum { W_CHIP=1, W_LABEL, W_HERO, W_SUB, W_CHART, W_STATS, W_ACT, W_FOOT, W_LIST, W_SCROLL, W_DHERO, W_DCHG, W_MINUS, W_PLUS, W_CANCEL, W_SAVE, W_DIAG, W_SPL, W_XNOTE, W_XFOOT, W_BYE, W_GEAR, W_BACKCH, W_OFF };
+enum { W_CHIP=1, W_LABEL, W_HERO, W_SUB, W_CHART, W_STATS, W_ACT, W_FOOT, W_LIST, W_SCROLL, W_DHERO, W_DCHG, W_MINUS, W_PLUS, W_CANCEL, W_SAVE, W_DIAG, W_SPL, W_XNOTE, W_XFOOT, W_BYE, W_GEAR, W_BACKCH, W_OFF, W_CLOCK };   /* v6.16: W_CLOCK = HOME's top line (clock / wordmark) */
 /* v6.9: latest chart scale (state JSON "chart" + selftest) */
 static struct { int mode,active,full,top,raw_max,disp_max,ticks,bticks,n,clip,na,wmax,wtop; } cst;   /* v6.15: + wmax/wtop (weight line, mode 0) */
 static int cmp_int(const void*a,const void*b){ int x=*(const int*)a,y=*(const int*)b; return (x>y)-(x<y); }
@@ -4110,6 +4531,10 @@ static void draw_gear(float cx,float cy,float r,uint32_t c,uint32_t hole){
 }
 static void draw_home(ms_t now){
     const HomeM*m=&hm; uint32_t h; char b[64];
+    { char c[24]; int ok=home_clock_text(c,sizeof c);                  /* v6.16: the clock (stock update_time format) instead of the wordmark */
+      if(W_begin(W_CLOCK,R(CX-70,HOME_BRAND_Y-6,140,24),hs(hi(H0,ok),ok?c:""))){
+          if(ok) text_c(CX,HOME_BRAND_Y-2,c,F_S,C_TXT2,255); else brand_c(CX,HOME_BRAND_Y,F_XS,C_TXT3,255);
+          W_end(); } }
     /* phase chip (+ CRC warning) */
     int crc=now-last_bad_ms<10000&&rx_bad>0;
     h=hi(hs(H0,m->chip),crc?(int)rx_bad:0);
@@ -4186,8 +4611,7 @@ static void draw_home(ms_t now){
 
 /* ================= page: SETTINGS LIST ================= */
 /* HOME: discreet title line at the top inside the gauge ring — the wordmark w/ "+" badge */
-#define HOME_BRAND_Y 54
-static void static_home(void){ brand_c(CX,HOME_BRAND_Y,F_XS,C_TXT3,255); }
+static void static_home(void){ }   /* v6.16: the wordmark is drawn by W_CLOCK (draw_home) — it gives way to the clock */
 static void static_list(void){
     int t=tier_of_page(page);
     text_c(CX,38,TR(TIER_NAME[t]),F_M,C_TXT,255);
@@ -4265,7 +4689,7 @@ static void draw_list(ms_t now){
             int xr=lock?388:372;
             if(*u&&s->kind==K_NUM){ int uw=text_w(u,F_XS); text_r(xr,y+21,u,F_XS,C_TXT3,255); xr-=uw+6; }
             int vf=F_M, room=0;
-            if(s->kind==K_ENUM){ vf=row_val_font(lab,b,xr,&room); if(vf==F_XS) fit_text(b,F_XS,room); }   /* long enum names: M -> S -> XS -> … */
+            if(s->kind==K_ENUM||(s->flags&SF_HHMM)||i==S_TZ){ vf=row_val_font(lab,b,xr,&room); if(vf==F_XS) fit_text(b,F_XS,room); }   /* v6.16: + clock times, zone label */   /* long enum names: M -> S -> XS -> … */
             text_r(xr,y+(vf==F_M?16:(vf==F_S?18:20)),b,vf,oor?C_ERR:(lock?C_TXT3:C_ACC),255); xr-=text_w(b,vf);
             if(s->hint&&!lock&&!oor) text_r(xr-7,y+21,"≈",F_XS,C_WARN,255);                   /* estimate marker */
             if(!lock) text_at(380,y+19,">",F_XS,C_TXT3,255);
@@ -4307,6 +4731,7 @@ static void detail_text(int i,char*l,size_t n,const char**l1,const char**l2){
     if(sens){ *l1=TR(TX_D_LIVE); *l2=TR(TX_D_SAMESENSOR); }
     else if(lock){ *l1=TR(TX_D_FROMCFG); *l2=TR(TX_D_STOCKEDIT); }
     else if(s->flags&SF_LOCAL){ *l1=TR(TX_D_LANG_L1); *l2=TR(TX_D_LANG_L2); }           /* v6.3: own file; the stock UI's language is a different field */
+    else if(s->flags&SF_OWN){ *l1=TR(TX_D_OWN_L1); *l2=TR(TX_D_OWN_L2); }               /* v6.16: own file; stock's schedules live in /customer/config.bin */
     else { *l1=TR(s->mcu!=M_NONE?TX_D_MCU_CFG:TX_D_CFGONLY); *l2=TR(TX_D_STOCK_RESTART); }
 }
 static void static_detail(void){
@@ -4352,6 +4777,7 @@ static void draw_detail(ms_t now){
         if(sav.active) text_c(CX,228,TR(TX_D_SAVING),F_XS,C_ACC,255);
         else if(eoor) text_c(CX,228,TR(TX_D_OOR),F_XS,C_ERR,255);
         else if(chg){ set_fmt(sel,edit_orig,o,sizeof o); snprintf(l,sizeof l,TR(TX_D_CHANGED),o,s->kind==K_NUM?u:""); text_c(CX,228,l,F_XS,C_ACC,255); }
+        else if(sel==S_TZ&&edit_val>=0&&edit_val<TZ_N){ snprintf(l,sizeof l,"%s",TZT[edit_val].name); fit_text(l,F_XS,276); text_c(CX,228,l,F_XS,C_TXT2,255); }   /* v6.16: the zone's place names */
         else text_c(CX,228,TR((s->flags&SF_SENSOR)?TX_D_SENSOR_LIVE:(lock?TX_D_LOCKED:TX_D_SAVEDVAL)),F_XS,C_TXT3,255);
         W_end();
     }
@@ -4607,15 +5033,27 @@ static void diag_pw_text(char st[28],uint32_t*stc,char w0[28],char cnt[28],char 
     if(pw.n_ev) snprintf(key,40,TR(TX_DV_PW_KEY),pw.key_code,pw.key_val,(long)((now-pw.t_key)/1000)); else snprintf(key,40,"%s",TR(TX_DV_PW_NOKEY));
     if(pw.kbd_ok) snprintf(node,nn,LC "%s",pw.node); else snprintf(node,nn,"%s",TR(TX_DV_PW_NONODE));   /* the path as a code span (lower case) */
 }
+/* v6.16: the TIME · SCHEDULE block's texts (shared w/ the selftest) */
+static void diag_time_text(char clk[28],uint32_t*cc,char zone[40],char ao[28],char al[40],char nx[72],ms_t now){
+    struct tm lt; int64_t u=clk_utc(); int ok=clk_now(&lt), d=ok&&SET[S_DST].val&&dst_on(tz_idx(),u);
+    if(ok){ fmt_hm(clk,28,lt.tm_hour,lt.tm_min,1); *cc=C_TXT; } else { snprintf(clk,28,"%s",TR(TX_DV_T_NOTSET)); *cc=C_WARN; }
+    snprintf(zone,40,TR(d?TX_DV_T_DST:TX_DV_T_STD),TZT[tz_idx()].utc);
+    int a=SET[S_AUTOOFF].val; if(a>0&&a<5){ ms_t id=now-idle_t0; if(id<0) id=0; snprintf(ao,28,TR(TX_DV_T_IDLE),TR(OPT_AUTOOFF[a]),(int)(id/60000),(int)(id/1000%60)); }
+    else snprintf(ao,28,"%s",TR(TX_E_OFF));
+    if(arm.n_sent) snprintf(al,40,"%d %02d:%02d · %ld/%ld",arm.ad,arm.ah,arm.am,arm.n_sent,arm.n_ack); else snprintf(al,40,"%s",TR(TX_DV_T_NONE));
+    if(!home_preheat_text(nx,72)) snprintf(nx,72,"%s",TR(sch.on&&!ok?TX_T_NOCLOCK:TX_DV_T_NOSCHED));
+}
 static void draw_diag(ms_t now){
     char v[DG_N+DG_NB][28]; uint32_t col[DG_N+DG_NB]; char exe[160],evt[128],pids[48],lng[96],nets[64],panc[64],pnow[64],pn2[64]; uint32_t netc,pcol;
     diag_top_text(v,col,now); diag_net_text(nets,sizeof nets,&netc); diag_press_text(panc,sizeof panc,pnow,sizeof pnow,&pcol,pn2,sizeof pn2);
     diag_boot_text(v+DG_N,col+DG_N,exe,sizeof exe,evt,sizeof evt,pids,sizeof pids);
     diag_lang_text(lng,sizeof lng);
     char pst[28],pw0[28],pcnt[28],pkey[40],pnode[80]; uint32_t pstc; diag_pw_text(pst,&pstc,pw0,pcnt,pkey,pnode,sizeof pnode,now);   /* v6.14 */
+    char tck[28],tzn[40],tao[28],tal[40],tnx[72]; uint32_t tcc; diag_time_text(tck,&tcc,tzn,tao,tal,tnx,now);   /* v6.16 */
     int sc=(int)lroundf(scroll[PG_DIAG]); float mx=scroll_max(PG_DIAG);
     uint32_t h=hi(hi(hi(hi(hi(H0,sc),ui_lang),repush_count()),cd.raw),pressed(T_GRAPH)); for(int i=0;i<DG_N+DG_NB;i++) h=hi(hs(h,v[i]),(int)col[i]); h=hs(hs(hs(hs(h,exe),evt),pids),lng); h=hi(hs(h,nets),(int)netc); h=hi(hs(hs(h,panc),pnow),(int)pcol);
     h=hi(hs(hs(hs(hs(hs(h,pst),pw0),pcnt),pkey),pnode),(int)pstc);
+    h=hi(hs(hs(hs(hs(hs(h,tck),tzn),tao),tal),tnx),(int)tcc);
     Rect vr=R(40,LIST_VY0,400,LIST_VY1-LIST_VY0);
     if(W_begin(W_DIAG,vr,h)){
         for(int i=0;i<DG_N+DG_NB;i++){
@@ -4653,6 +5091,13 @@ static void draw_diag(ms_t now){
               text_c(cx,y,TR(L[k]),F_XS,C_TXT3,255); text_c(cx,y+16,vv[k],k==3?F_XS:F_S,k==0?pstc:C_TXT,255); }
           int y=DG_PWR+28+2*DG_P-sc;
           if(y+30>=vr.y0&&y<=vr.y1){ text_c(CX,y,TR(TX_DG_L_PWNODE),F_XS,C_TXT3,255); text_c(CX,y+16,pnode,F_XS,pw.kbd_ok?C_TXT:C_WARN,255); } }
+        /* v6.16: TIME · SCHEDULE — local clock, zone + DST, auto off + idle time, last cmd8 alarm sent (day h:m · sent/acked), next pre-heat */
+        dg_caption(DG_TIME-sc,TR(TX_DG_TCAP),vr);
+        { static const short L[4]={TX_DL_T_CLOCK,TX_DL_T_ZONE,TX_DL_T_AUTOOFF,TX_DL_T_ALARM}; const char*vv[4]={tck,tzn,tao,tal};
+          for(int k=0;k<4;k++){ int cx=(k&1)?DG_COL_R:DG_COL_L, y=DG_TIME+28+(k/2)*DG_P-sc; if(y+30<vr.y0||y>vr.y1) continue;
+              text_c(cx,y,TR(L[k]),F_XS,C_TXT3,255); text_c(cx,y+16,vv[k],k==0?F_S:F_XS,k==0?tcc:C_TXT,255); }
+          int y=DG_TIME+28+2*DG_P-sc;
+          if(y+30>=vr.y0&&y<=vr.y1){ text_c(CX,y,TR(TX_DG_L_NEXT),F_XS,C_TXT3,255); text_c(CX,y+16,tnx,F_XS,sch.on?C_TXT:C_TXT2,255); } }
         /* v6.3: ABOUT — UI language (+ source), wordmark w/ version, tagline */
         dg_caption(DG_ABOUT-sc,TR(TX_DG_ABOUT),vr);
         { int y=DG_ABOUT+28-sc;
@@ -4999,6 +5444,11 @@ static void sim_env_path(const char*name,char*dst,size_t n,int required){
     if(strlen(e)>=n) sim_die(2,"%s is too long (%d chars, max %d)",name,(int)strlen(e),(int)n-1);
     snprintf(dst,n,"%s",e);
 }
+/* v6.16: "YYYY-MM-DDTHH:MM:SSZ" (UTC) -> seconds; -1 = malformed */
+static int64_t sim_parse_utc(const char*e){
+    int Y,M,D,h,m,sec; if(sscanf(e,"%d-%d-%dT%d:%d:%d",&Y,&M,&D,&h,&m,&sec)!=6||M<1||M>12||D<1||D>31||h<0||h>23||m<0||m>59||sec<0||sec>59) return -1;
+    return days_civil(Y,M,D)*86400+h*3600LL+m*60LL+sec;
+}
 static void sim_env(void){
     const char*e; struct stat st;
     sim_t0=now_ms();
@@ -5012,6 +5462,9 @@ static void sim_env(void){
     if((e=getenv("OURUI_CONFIG"))){ if(strlen(e)>=sizeof cfg_path) sim_die(2,"OURUI_CONFIG is too long"); } else snprintf(cfg_path,sizeof cfg_path,"%s/customer/config.json",sysroot);
     if((e=getenv("OURUI_BAKDIR"))){ if(strlen(e)>=sizeof cfg_bakdir) sim_die(2,"OURUI_BAKDIR is too long"); } else snprintf(cfg_bakdir,sizeof cfg_bakdir,"%s/new_customer/ourui/cfgbak",sysroot);
     if((e=getenv("OURUI_LANGFILE"))){ if(strlen(e)>=sizeof lang_path) sim_die(2,"OURUI_LANGFILE is too long"); } else snprintf(lang_path,sizeof lang_path,"%s/new_customer/ourui/lang",sysroot);
+    if((e=getenv("OURUI_SCHEDFILE"))){ if(strlen(e)>=sizeof sched_path) sim_die(2,"OURUI_SCHEDFILE is too long"); snprintf(sched_path,sizeof sched_path,"%s",e); }
+    else snprintf(sched_path,sizeof sched_path,"%s/new_customer/ourui/schedule",sysroot);   /* v6.16 */
+    if((e=getenv("OURUI_SIM_CLOCK"))&&*e){ int64_t u=sim_parse_utc(e); if(u<0) sim_die(2,"OURUI_SIM_CLOCK: expected YYYY-MM-DDTHH:MM:SSZ"); clk_off=u-(int64_t)time(NULL); }   /* v6.16: the wall clock (UTC) */
     sim_env_path("OURUI_SIM_TTY",sim_tty,sizeof sim_tty,1);
     sim_env_path("OURUI_SIM_FB",sim_fb_path,sizeof sim_fb_path-8,1);
     sim_env_path("OURUI_SIM_STATE",sim_state_path,sizeof sim_state_path,1);
@@ -5116,7 +5569,8 @@ static const struct { const char*id; int idx; } SIM_PARAM[]={
  {"head_temp",S_HEADT},{"steam_milk_target",S_STEAMT},{"steam_gear",S_STEAMG},{"hotwater_weight",S_HOTW},
  {"hotwater_mode",S_HOTMODE},{"hotwater_temp",S_HOTT},{"ui_language",S_UILANG},{"backlight",S_BL},{"volume",S_VOL},
  {"temp_unit",S_TUNIT},{"language",S_LANG},{"hotwater_shortcut",S_HOTSC},{"sumtime",S_DST},{"cleartip",S_CLEARTIP},
- {"timemode",S_TIMEMODE},{"automatically",S_AUTOTIME},{"timezone",S_TZ}};
+ {"timemode",S_TIMEMODE},{"automatically",S_AUTOTIME},{"timezone",S_TZ},
+ {"preheat",S_PREHEAT},{"preheat_at",S_PHAT},{"preheat_repeat",S_PHREP},{"auto_off",S_AUTOOFF}};   /* v6.16: ourui's own (schedule file) */
 #define SIM_NPARAM ((int)(sizeof SIM_PARAM/sizeof SIM_PARAM[0]))
 static int sim_param_idx(const char*id){
     for(int k=0;k<SIM_NPARAM;k++) if(!strcmp(SIM_PARAM[k].id,id)) return SIM_PARAM[k].idx;
@@ -5247,6 +5701,15 @@ static void sim_state_emit(ms_t now,int force){   /* force=0: only if the line's
     jb(&j,",\"repush\":{\"count\":%d,\"ver\":%d,\"defaults\":%d,\"last\":\"%s\",\"armed\":%s,\"ver_reqs\":%u,\"defaults_sig\":%s}",repush_count(),rps.n_ver,rps.n_def,
        rps.last==RPC_VER?"ver":(rps.last==RPC_DEF?"defaults":"none"),rps.armed?"true":"false",ver_n,mcu_defaults_sig()?"true":"false");
     jb(&j,",\"ka_hold\":%s,\"backlight_preview\":%d",sim_ka_hold?"true":"false",sim_bl);
+    { struct tm lt; int64_t u=clk_utc(); int ok=clk_now(&lt), d=ok&&SET[S_DST].val&&dst_on(tz_idx(),u); char c[24]="", st[72]="";   /* v6.16: clock + schedule */
+      if(ok) fmt_hm(c,sizeof c,lt.tm_hour,lt.tm_min,1);
+      jb(&j,",\"clock\":{\"utc\":%lld,\"valid\":%s,\"local\":\"%04d-%02d-%02dT%02d:%02d:%02d\",\"wday\":%d,\"timemode\":%d,\"tz\":%d,\"dst\":%s,\"shown\":",
+         (long long)u,ok?"true":"false",lt.tm_year+1900,lt.tm_mon+1,lt.tm_mday,lt.tm_hour,lt.tm_min,lt.tm_sec,lt.tm_wday,SET[S_TIMEMODE].val,tz_idx(),d?"true":"false"); jb_s(&j,c); jb(&j,"}");
+      int ad,ah,am; int64_t at; int w=sched_alarm(u,&ad,&ah,&am,&at); int hp=home_preheat_text(st,sizeof st);
+      jb(&j,",\"sched\":{\"preheat\":%d,\"at\":\"%02d:%02d\",\"repeat\":\"%s\",\"auto_off\":%d,\"once_at\":%lld,\"file\":\"%s\",\"alarm\":[%d,%d,%d],\"next_utc\":%lld",
+         sch.on,sch.hm/60,sch.hm%60,REP_KEY[sch.rep],AO_MIN[sch.ao],(long long)sch.once_at,sch.src==SCS_FILE?"file":(sch.src==SCS_SESSION?"session":"default"),ad,ah,am,(long long)(w?at:0));
+      jb(&j,",\"armed\":"); if(arm.n_sent) jb(&j,"[%d,%d,%d]",arm.ad,arm.ah,arm.am); else jb(&j,"null");
+      jb(&j,",\"arm_sent\":%ld,\"arm_ack\":%ld,\"idle_s\":%d,\"auto_offs\":%ld,\"home\":",arm.n_sent,arm.n_ack,(int)((now-idle_t0)/1000),ao_n); if(hp) jb_s(&j,st); else jb(&j,"null"); jb(&j,"}"); }
     { static const char*const PWS[]={"on","turning_off","off","turning_on"};   /* v6.14: the power button */
       jb(&j,",\"power\":{\"state\":\"%s\",\"backlight_off\":%s,\"presses\":%ld,\"short\":%ld,\"offs\":%ld,\"ons\":%ld,\"blocked\":%ld,\"fails\":%ld,\"ack8\":%ld,\"auto_on\":%ld,\"wake_timeouts\":%ld}",
          PWS[pw.state],bl_is_off?"true":"false",pw.n_press,pw.n_short,pw.n_off,pw.n_on,pw.n_blk,pw.n_fail,pw.n_ack8,pw.n_auto,pw.n_wto); }
@@ -5348,7 +5811,7 @@ static int sim_save_now(int idx,int val,const char*param,ms_t now){
     save_begin(now);
     if(sav.active){ ssave.state=SSV_PENDING; return 1; }
     if(was==val){ ssave.state=SSV_UNCHANGED; return 1; }    /* SAVE without a change just closes the editor */
-    if(s->flags&SF_LOCAL){ ssave.state=SSV_OK; return 1; }
+    if(s->flags&(SF_LOCAL|SF_OWN)){ ssave.state=SSV_OK; return 1; }
     ssave.state=SSV_REJECTED; if(view==V_DETAIL) detail_close(now);   /* a guard rejected it (toast shown): the user cancels */
     return 0;
 }
@@ -5455,6 +5918,12 @@ static void sim_dispatch(const char*line,char*out,size_t on,ms_t now){
         sim_go_main(); lang_load(); settings_load(); if(bp_on) boot_push_start(sim_bp_guard);
         int oor=0; for(int i=0;i<NSET;i++) oor+=set_oor(&SET[i]);
         jb(&j,"{\"ok\":%s,\"oor\":%d",cfg_ok?"true":"false",oor);
+    }
+    else if(!strcmp(cmd,"clock")){                          /* v6.16: the wall clock — {"utc":"YYYY-MM-DDTHH:MM:SSZ"} and/or {"advance_s":N} */
+        char u[40]=""; js_str(kv,n,"utc",u,sizeof u); int adv=js_int(kv,n,"advance_s",0), ok=1;
+        if(u[0]){ int64_t t=sim_parse_utc(u); if(t<0) ok=0; else clk_off=t-(int64_t)time(NULL); }
+        if(ok) clk_off+=adv; ui_kick=1; static_dirty=1;
+        jb(&j,"{\"ok\":%s,\"utc\":%lld",ok?"true":"false",(long long)clk_utc());
     }
     else if(!strcmp(cmd,"cond")){                           /* v6.9: display conditioning — all fields optional; without fields = read */
         char sc[8]=""; js_str(kv,n,"scale",sc,sizeof sc);
@@ -5651,6 +6120,7 @@ int main(int argc,char**argv){
     if(getenv("OURUI_READONLY")) ro_mode=1;
     if((e=getenv("OURUI_ROOT"))) snprintf(sysroot,sizeof sysroot,"%s",e);
     if((e=getenv("OURUI_LANGFILE"))) snprintf(lang_path,sizeof lang_path,"%s",e);
+    if((e=getenv("OURUI_SCHEDFILE"))) snprintf(sched_path,sizeof sched_path,"%s",e);   /* v6.16 */
     if(getenv("OURUI_SWITCH_DRY")) sw_dry=1;
     if(getenv("OURUI_NOBOOTPUSH")) bp_on=0;
     SIM_ENV
@@ -5685,6 +6155,7 @@ int main(int argc,char**argv){
         kbd_poll(now);                     /* v6.14: the power button */
 #endif
         pw_step(now);                      /* v6.14: hold -> off frames / OFF / TURNING ON… */
+        sched_step(now);                   /* v6.16: pre-arm the pre-heat alarm, one-shot use, auto off */
         net_step(now);                     /* v6.7: non-blocking; does nothing between two probes */
 #ifdef DEVICE_RT
         boot_push_step(now);
@@ -5726,6 +6197,7 @@ int main(int argc,char**argv){
 /* ================= PREVIEW: synthetic scenarios -> raw fb files (no device) ================= */
 static ms_t sim_now=200000, sim_t0=0; static int sim_link=1;
 static int pv_lang=LANG_EN;                /* --lang en|da: the language previews/selftest run in */
+static int pv_sched=0;                     /* v6.16: run sched_step() in sim_run() */
 static void (*sim_tick)(ms_t)=NULL;
 static const uint32_t* sim_last=NULL;
 static void sim_base(void){
@@ -5744,10 +6216,13 @@ static void sim_run(ms_t ms){
         if(sim_now-lg>=100){ lg=sim_now; graph_push(sim_now,reg[51],wsrc_tick(sim_now)); }
         wq_step(sim_now);
         pw_step(sim_now);                  /* v6.14 */
+        if(pv_sched) sched_step(sim_now);  /* v6.16 (only where a scenario/selftest switches it on) */
         sim_last=ui_frame(sim_now);
     }
 }
+#define PV_CLK (days_civil(2026,11,18)*86400+15*3600+35*60+28)   /* v6.16: preview clock = 2026-11-18 15:35:28 UTC (16:35:28 in zone #48) */
 static void sim_reset(void){
+    clk_fake=PV_CLK; idle_t0=0; ao_warned=0; memset(&arm,0,sizeof arm);
     view=V_MAIN; page=PG_HOME; sel=-1; memset(scroll,0,sizeof scroll); memset(&tch,0,sizeof tch);
     toast.dur=0; rip.on=0; tr.type=0; memset(&sav,0,sizeof sav); memset(ov_prev,0,sizeof ov_prev);
     xsel=-1; x_from_switch=0; x_pending=0; bye_mode=0; run=1; bs.t=-100000; lang_set(pv_lang);
@@ -7150,6 +7625,144 @@ static ms_t st_pw_loop(ms_t t,ms_t dur,int link,int ack){
     ui_frame(t); return t;
 }
 static ms_t st_pw_home(void){ ms_t t=st_home(); ka_next=t+30000; return t; }   /* keep-awake: next deadline in 30 s (as after startup) */
+/* ================= v6.16: TIME & SCHEDULING selftest ================= */
+#define TM_V_ARM "aa 55 08 ea 07 0b 12 10 23 1c 13 06 1e be b2"   /* 2026-11-18 16:35:28 local, alarm day 19 06:30 (CRC computed independently) */
+#define TM_V_OFF0 PW_V_CMD8                                       /* the same time, alarm 0/0/0 */
+static ms_t st_tm_loop(ms_t t,ms_t dur,int link){
+    ms_t end=t+dur;
+    for(;t<end;t+=10){
+        if(link) last_rx_ms=t;
+        wq_step(t);
+        if(wq.n&&wq.state==WQ_WAIT&&t-wq.sent_ms>=20) st_ack_last(t);
+        pw_step(t); sched_step(t); proto_keepawake(t,0);
+    }
+    ui_frame(t); return t;
+}
+static int st_cmd8_frames(char fr[][96],int max,char only[][96]){   /* only the cmd8 frames in the TX queue, in order */
+    char all[64][96]; int n=st_txq_frames(all,64), k=0;
+    for(int i=0;i<n&&k<max;i++) if(!strncmp(all[i],"aa 55 08",8)) strcpy(only[k++],all[i]);
+    (void)fr; return k;
+}
+static int st_own_save(int i,int val,ms_t t){ detail_open(i,t); edit_val=val; save_begin(t); return view==V_MAIN&&SET[i].val==val; }
+static int64_t st_utc(int y,int mo,int d,int h,int mi,int s){ return days_civil(y,mo,d)*86400+h*3600LL+mi*60LL+s; }
+static void st_time(const char*dir){
+    printf("== selftest: v6.16 time & scheduling (stock update_time 0xD5944, _refresh_systime 0x135548, performSleepActions 0x148324, powerOffSend 0x14700C; MCU 0x9C88 + sleep task 0x2F52) ==\n");
+    char b[64], fr[16][96]; int n; ms_t t;
+    int keep_tm=SET[S_TIMEMODE].val, keep_tz=SET[S_TZ].val, keep_dst=SET[S_DST].val;
+    char keep_sp[256]; snprintf(keep_sp,sizeof keep_sp,"%s",sched_path); snprintf(sched_path,sizeof sched_path,"%s/schedule",dir); unlink(sched_path);
+    /* ---- (1) TIME FORMAT = stock ---- */
+    st_check("timemode semantics = stock: OPT_TIME[0] = 12-HOUR, OPT_TIME[1] = 24-HOUR (update_time XORs model[0x59] = timemode != 0 with 1: 1 -> \"%02d:%02d\", 0 -> A.M./P.M.)",
+             OPT_TIME[0]==TX_E_12H&&OPT_TIME[1]==TX_E_24H&&SET[S_TIMEMODE].min==0&&SET[S_TIMEMODE].max==1&&!strcmp(SET[S_TIMEMODE].key,"timemode"));
+    { SET[S_TIMEMODE].val=1; set_fmt(S_TIMEMODE,1,b,sizeof b); int a=!strcmp(b,TR(TX_E_24H)); set_fmt(S_TIMEMODE,0,b,sizeof b); a&=!strcmp(b,TR(TX_E_12H));
+      st_check("the TIME FORMAT row shows 24-HOUR for config timemode = 1 (the stock switch \"24-Hour Format\" is ON) and 12-HOUR for 0",a); }
+    { static const struct { int mode,h,m; const char*want; } V[]={{1,0,5,"00:05"},{1,13,7,"13:07"},{1,23,59,"23:59"},{0,0,5,"12:05 A.M."},{0,11,59,"11:59 A.M."},
+          {0,12,0,"12:00 P.M."},{0,13,7,"01:07 P.M."},{0,23,59,"11:59 P.M."}}; int ok=1;
+      for(unsigned k=0;k<sizeof V/sizeof V[0];k++){ SET[S_TIMEMODE].val=V[k].mode; fmt_hm(b,sizeof b,V[k].h,V[k].m,1); if(strcmp(b,V[k].want)){ ok=0; printf("     timemode %d %02d:%02d -> '%s' (want '%s')\n",V[k].mode,V[k].h,V[k].m,b,V[k].want); } }
+      st_check("clock format = stock update_time byte for byte: 24 h \"%02d:%02d\"; 12 h 0 -> 12 A.M., 1..11 A.M., 12 -> 12 P.M., 13..23 -> 1..11 P.M. (8 vectors)",ok); }
+    /* ---- (2) local time + DST ---- */
+    { int ok=TZ_N==136&&TZT[48].off==3600&&!strcmp(TZT[48].utc,"UTC+01:00")&&TZT[43].off==0&&TZT[0].off==-43200&&TZT[135].off==50400&&TZT[30].off==-9000;
+      st_check("zone table = stock 0x1A5890: 136 entries (#0 UTC-12, #43 UTC, #48 UTC+01:00 Amsterdam/Berlin, the stock quirks #30 = -2:30 and #135 = +14:00 kept)",ok); }
+    { SET[S_TZ].val=48; SET[S_DST].val=0; clk_fake=PV_CLK; struct tm lt; int v=clk_now(&lt);
+      st_check("local = SoC UTC + zone offset (+ DST): 15:35:28 UTC in zone #48 = 16:35:28 Wednesday 2026-11-18",v&&lt.tm_hour==16&&lt.tm_min==35&&lt.tm_sec==28&&lt.tm_wday==3&&lt.tm_mday==18); }
+    { static const struct { int tz; int64_t u; int want; const char*what; } D[]={
+        {48,0,0,"EU 2026-03-29 00:59:59 UTC: standard"},{48,1,1,"EU 01:00:00 UTC: DST"},{48,2,1,"EU 2026-10-25 00:59:59 UTC: DST"},{48,3,0,"EU 01:00:00 UTC: standard"},
+        {13,4,0,"US Central 2026-03-08 07:59:59 UTC: standard"},{13,5,1,"US 08:00 UTC (02:00 CST): DST"},{13,6,1,"US 2026-11-01 06:59:59 UTC: DST"},{13,7,0,"US 07:00 UTC: standard"},
+        {116,8,1,"AU Sydney January: DST (southern)"},{116,9,0,"AU July: standard"},{101,10,0,"Beijing (no rule): never"}};
+      int64_t U[11]={st_utc(2026,3,29,0,59,59),st_utc(2026,3,29,1,0,0),st_utc(2026,10,25,0,59,59),st_utc(2026,10,25,1,0,0),
+                     st_utc(2026,3,8,7,59,59),st_utc(2026,3,8,8,0,0),st_utc(2026,11,1,6,59,59),st_utc(2026,11,1,7,0,0),
+                     st_utc(2026,1,15,12,0,0),st_utc(2026,7,15,12,0,0),st_utc(2026,7,15,12,0,0)}; int ok=1;
+      for(unsigned k=0;k<sizeof D/sizeof D[0];k++){ int g=dst_on(D[k].tz,U[D[k].u]); if(g!=D[k].want){ ok=0; printf("     %s: got %d\n",D[k].what,g); } }
+      SET[S_TZ].val=48; SET[S_DST].val=1; struct tm lt; clk_local_at(U[1],&lt); int a=lt.tm_hour==3&&lt.tm_min==0; SET[S_DST].val=0; clk_local_at(U[1],&lt); a&=lt.tm_hour==2;
+      st_check("DST windows (sumtime = 1): EU last Sun Mar/Oct 01:00 UTC, US 2nd Sun Mar / 1st Sun Nov 02:00 local, AU southern; zones without a rule never (11 vectors); sumtime = 0 -> never +1 h",ok&&a); }
+    /* ---- (3) stock's next-occurrence algorithm (performSleepActions, one entry) ---- */
+    { struct V { int y,mo,d,h,mi,hm,mask,k,ad; const char*what; };
+      static const struct V V[]={
+        {2026,11,18,16,35,390,0x7F,1,19,"daily 06:30 at Wed 16:35 -> tomorrow 19"},{2026,11,18,16,35,1020,0x7F,0,18,"daily 17:00 at 16:35 -> today"},
+        {2026,11,18,6,30,390,0x7F,1,19,"daily 06:30 at 06:30 -> strictly after now: tomorrow"},{2026,11,20,16,35,390,0x3E,3,23,"Mon-Fri at Fri 16:35 -> Mon 23"},
+        {2026,11,18,16,35,480,0x41,3,21,"Sat-Sun 08:00 at Wed -> Sat 21"},{2026,11,18,16,35,390,0x00,1,19,"once 06:30 at 16:35 -> tomorrow"},
+        {2026,11,18,16,35,1020,0x00,0,18,"once 17:00 at 16:35 -> today"},{2026,11,30,20,0,390,0x7F,1,1,"Nov 30 -> Dec 1 (month wrap, stock biz_days_in_month)"},
+        {2026,12,31,20,0,390,0x7F,1,1,"Dec 31 -> Jan 1"},{2028,2,28,20,0,390,0x7F,1,29,"2028-02-28 -> 29 (leap year)"},{2026,11,18,16,35,390,0x08,7,25,"Wed-only 06:30 at Wed 16:35 -> next Wed 25"}};
+      int ok=1; for(unsigned k=0;k<sizeof V/sizeof V[0];k++){ struct tm tm; memset(&tm,0,sizeof tm); tm.tm_year=V[k].y-1900; tm.tm_mon=V[k].mo-1; tm.tm_mday=V[k].d; tm.tm_hour=V[k].h; tm.tm_min=V[k].mi; tm.tm_wday=dow_civil(V[k].y,V[k].mo,V[k].d);
+          int ad; int kk=sched_next(&tm,V[k].hm,V[k].mask,&ad); if(kk!=V[k].k||ad!=V[k].ad){ ok=0; printf("     %s: got +%d day %d\n",V[k].what,kk,ad); } }
+      st_check("next occurrence = stock performSleepActions (today if the weekday matches and hh:mm > now, else the next flagged weekday; one-shot today/tomorrow; day wrapped by the month's length) — 11 vectors",ok); }
+    /* ---- (4) the alarm frame byte for byte ---- */
+    t=st_pw_home(); SET[S_TIMEMODE].val=1;
+    { sch.on=1; sch.hm=390; sch.rep=1; sch.once_at=0; struct tm tm; int ad,ah,am; pw_now_tm(&tm); int w=sched_alarm(clk_utc(),&ad,&ah,&am,NULL); uint8_t f[15]; pw_cmd8(f,&tm,ad,ah,am);
+      st_check("pre-heat daily 06:30 at Wed 16:35:28 -> cmd8 = " TM_V_ARM " (= stock powerOffSend(19, 6, 30): alarm day = day of month, hour, minute)",w&&hexeq(f,15,TM_V_ARM));
+      sch.on=0; w=sched_alarm(clk_utc(),&ad,&ah,&am,NULL); pw_cmd8(f,&tm,ad,ah,am);
+      st_check("no pre-heat -> alarm 0/0/0 = " TM_V_OFF0 " (stock: no entry -> powerOffSend(0, 0, 0); the MCU skips day+hour+minute = 0)",!w&&hexeq(f,15,TM_V_OFF0));
+      sch.on=1; clk_fake=10000; w=sched_alarm(clk_utc(),&ad,&ah,&am,NULL); clk_fake=PV_CLK;
+      st_check("SoC clock not set (before 2025): no alarm (0/0/0) — a garbage alarm would wake the machine at a random time",!w&&!ad&&!ah&&!am); sch.on=0; }
+    /* ---- (5) the schedule file + SAVE path (no config.json write, no MCU word) ---- */
+    { cfg_read(); char m0[33]; strcpy(m0,cfg_md5); int w0=cfg_writes; t=st_pw_home(); txq_len=0;
+      int a=st_own_save(S_PREHEAT,1,t)&&st_own_save(S_PHAT,395,t)&&st_own_save(S_PHREP,2,t)&&st_own_save(S_AUTOOFF,3,t);
+      char rb[256]; int fd=open(sched_path,O_RDONLY); int rn=fd>=0?(int)read(fd,rb,sizeof rb-1):-1; if(fd>=0) close(fd); if(rn<0) rn=0; rb[rn]=0;
+      cfg_read(); char tp[300]; snprintf(tp,sizeof tp,"%s.tmp",sched_path);
+      st_check("SAVE of the 4 time rows -> " LC "ourui/schedule" UC " = preheat=1, at=06:35, repeat=mon-fri, autooff=30; atomic (no tmp left); toast SAVED · MERAKI+ SCHEDULE",
+               a&&!strcmp(rb,"preheat=1\nat=06:35\nrepeat=mon-fri\nautooff=30\nonce_at=0\n")&&access(tp,F_OK)!=0&&!strcmp(toast.msg,TR(TX_T_OWN_SAVED)));
+      st_check("... and config.json is NOT written (md5 unchanged, 0 config writes) and no cmd6 frame was queued for it",!strcmp(cfg_md5,m0)&&cfg_writes==w0&&wq.n==0);
+      sch.on=0; sch.hm=0; sch.rep=0; sch.ao=0; settings_load();
+      st_check("reload: the file gives the rows back (PRE-HEAT ON, 06:35, MON-FRI, 30 MIN)",sch.on==1&&sch.hm==395&&sch.rep==2&&sch.ao==3&&SET[S_PHAT].val==395&&SET[S_AUTOOFF].val==3&&sch.src==SCS_FILE);
+      put_bytes(sched_path,"preheat=7\nat=25:99\nrepeat=hourly\nautooff=45\n",44); settings_load();
+      st_check("bad values -> defaults (pre-heat OFF, 06:30, EVERY DAY, auto off OFF) — never a surprise alarm",sch.on==0&&sch.hm==390&&sch.rep==1&&sch.ao==0);
+      unlink(sched_path); settings_load(); st_check("no file -> defaults, source DEFAULT",sch.on==0&&sch.src==SCS_DEFAULT);
+      st_check("the 4 time rows are ourui's own (SF_OWN): no config key, no MCU word, not in --dump-table; the stepper for PRE-HEAT AT is 5 min, 00:00..23:55",
+               !SET[S_PREHEAT].key&&!SET[S_PHAT].key&&SET[S_PHAT].mcu==M_NONE&&(SET[S_PHAT].flags&SF_OWN)&&SET[S_PHAT].step==5&&SET[S_PHAT].max==1435); }
+    /* ---- (6) pre-arm while on ---- */
+    t=st_pw_home(); txq_len=0; t=st_tm_loop(t,8000,1); n=st_cmd8_frames(NULL,16,fr);
+    st_check("no schedule: nothing is sent while on (v6.15 traffic unchanged)",n==0&&arm.n_sent==0);
+    st_own_save(S_PHREP,1,t); st_own_save(S_PREHEAT,1,t); txq_len=0; t=st_tm_loop(t,200,1); n=st_cmd8_frames(NULL,16,fr);
+    st_check("schedule ON (every day 06:30): ONE cmd8 pre-arm = " TM_V_ARM,n==1&&!strcmp(fr[0],TM_V_ARM)&&arm.sent&&arm.ad==19&&arm.ah==6&&arm.am==30);
+    { uint8_t a[15]; memcpy(a,arm.f8,15); a[2]=0x88; uint16_t c=crc16(a,13); a[13]=c&0xFF; a[14]=c>>8; rx_feed(a,15,t); }
+    t=st_tm_loop(t,20000,1); n=st_cmd8_frames(NULL,16,fr);
+    st_check("... no repeat while the alarm is unchanged (20 s); the 0x88 echo is counted",n==1&&arm.n_ack==1);
+    rps.n_ver++; t=st_tm_loop(t,6000,1); n=st_cmd8_frames(NULL,16,fr);
+    st_check("MCU restart (re-push counter): the RAM alarm is gone -> re-armed once",n==2&&!strcmp(fr[1],TM_V_ARM));
+    ro_mode=1; arm.sent=0; t=st_tm_loop(t,6000,1); n=st_cmd8_frames(NULL,16,fr); ro_mode=0;
+    st_check("read-only mode: no pre-arm",n==2);
+    t=st_tm_loop(t,6000,1); n=st_cmd8_frames(NULL,16,fr);
+    st_own_save(S_PREHEAT,0,t); t=st_tm_loop(t,6000,1); int n2=st_cmd8_frames(NULL,16,fr); t=st_tm_loop(t,8000,1); int n3=st_cmd8_frames(NULL,16,fr);
+    st_check("schedule OFF: ONE disarm frame with alarm 0/0/0, then nothing",n2==n+1&&!strcmp(fr[n2-1],TM_V_OFF0)&&n3==n2&&!arm.sent);
+    /* ---- (7) power-off carries the alarm (stock), no pre-arm while off, re-arm after the wake ---- */
+    t=st_pw_home(); st_own_save(S_PREHEAT,1,t); t=st_tm_loop(t,300,1); txq_len=0;
+    pw_key(116,1,t); t=st_tm_loop(t,1510,1); pw_key(116,0,t); t=st_tm_loop(t,200,1);
+    { char all[16][96]; int na=st_txq_frames(all,16);
+      st_check("power-off with a schedule: cmd8 = " TM_V_ARM " (alarm 19 06:30, stock performSleepActions) -> cmd6 sub0 len2 " PW_V_OFF " — nothing else",na==2&&!strcmp(all[0],TM_V_ARM)&&!strcmp(all[1],PW_V_OFF)&&pw.state==PW_OFF); }
+    txq_len=0; t=st_tm_loop(t,12000,0); n=st_cmd8_frames(NULL,16,fr);
+    st_check("OFF: no pre-arm (the power-off frame carries the alarm; the MCU does not listen while asleep)",n==0&&pw.state==PW_OFF);
+    reg[0]=1; t=st_tm_loop(t,1000,1); n=st_cmd8_frames(NULL,16,fr);   /* the controller answers again (alarm wake, word 0 = 1) -> pw_on */
+    t=st_tm_loop(t,6000,1); n=st_cmd8_frames(NULL,16,fr);
+    st_check("wake (word 0 = 1 again = MCU reset): PowerOn + the alarm is re-armed for the NEXT occurrence",pw.state==PW_ON&&n==1&&!strcmp(fr[0],TM_V_ARM));
+    /* ---- (8) one-shot ---- */
+    t=st_pw_home(); st_own_save(S_PHREP,0,t); st_own_save(S_PREHEAT,1,t);
+    { int64_t want=st_utc(2026,11,19,5,30,0); int ad,ah,am; sched_alarm(clk_utc(),&ad,&ah,&am,NULL);
+      st_check("ONCE 06:30 saved at Wed 16:35: once_at = Thu 19 05:30 UTC (06:30 local) -> alarm 19 06:30; the file has once_at",sch.once_at==want&&ad==19&&ah==6&&am==30);
+      clk_fake=want+30; t=st_tm_loop(t,100,1); int still=sch.on;
+      clk_fake=want+61; t=st_tm_loop(t,100,1); settings_load();
+      st_check("ONCE: still ON within its minute; a minute later it switches itself OFF and saves it (stock deal_preheat_data), toast ONE-TIME PRE-HEAT USED",still&&!sch.on&&!SET[S_PREHEAT].val&&!strcmp(toast.msg,TR(TX_T_ONCE_USED)));
+      clk_fake=PV_CLK; }
+    /* ---- (9) auto off ---- */
+    t=st_pw_home(); st_own_save(S_PREHEAT,0,t); st_own_save(S_AUTOOFF,1,t); txq_len=0; toast.dur=0; idle_kick(t);
+    t=st_tm_loop(t,14*60000+29000,1); int quiet=pw.state==PW_ON&&!toast.dur;
+    t=st_tm_loop(t,2000,1); int warn=toast.dur&&!strcmp(toast.msg,TR(TX_T_AUTOOFF_SOON));
+    ui_touch(TE_DOWN,240,240,t); ui_touch(TE_UP,240,240,t+50); t=st_tm_loop(t,60000,1); int reset=pw.state==PW_ON&&!toast.dur;
+    reg[33]=0x0101|0x1000; reg[22]=1; t=st_tm_loop(t,16*60000,1); int busy=pw.state==PW_ON; reg[33]=0x0101; reg[22]=0;
+    txq_len=0; t=st_tm_loop(t,15*60000+500,1); static char all[64][96]; int na=st_txq_frames(all,64);
+    st_check("AUTO OFF 15 MIN: quiet until 14:29; the warning toast 30 s before; a touch restarts the timer and dismisses it",quiet&&warn&&reset);
+    st_check("... an activity (brew bits) keeps it on (stock isExtractionOrSteamSwitchOn -> recodeTime)",busy);
+    st_check("... after 15 min idle: the stock power-off sequence (cmd8 w. alarm 0/0/0 -> cmd6 sub0 len2 " PW_V_OFF ")",pw.state!=PW_ON&&ao_n>=1&&na>=2&&!strcmp(all[na-2],TM_V_OFF0)&&!strcmp(all[na-1],PW_V_OFF));
+    st_own_save(S_AUTOOFF,0,st_pw_home());
+    /* ---- (10) HOME clock ---- */
+    { t=st_pw_home(); SET[S_TIMEMODE].val=1; char c[24]; int v=home_clock_text(c,sizeof c); int a=v&&!strcmp(c,"16:35");
+      SET[S_TIMEMODE].val=0; v=home_clock_text(c,sizeof c); a&=v&&!strcmp(c,"04:35 P.M."); SET[S_TIMEMODE].val=1;
+      clk_fake=10000; v=home_clock_text(c,sizeof c); clk_fake=PV_CLK;
+      st_check("HOME top line: \"16:35\" (timemode 1) / \"04:35 P.M.\" (timemode 0); clock not set -> the wordmark",a&&!v); }
+    { t=st_pw_home(); sch.on=1; sch.rep=1; sch.hm=390; sch.once_at=0; char h[72]; int v=home_preheat_text(h,sizeof h); char want[72]; snprintf(want,sizeof want,TR(TX_C_PREHEAT),TR(TX_WD_THU),"06:30");
+      home_model(t); st_check("HOME hint: a planned pre-heat replaces SWIPE FOR SETTINGS with \"{clock} PRE-HEAT · THU 06:30\" (the next occurrence)",v&&!strcmp(h,want)&&!strcmp(hm.hint2,want));
+      sch.on=0; home_model(t); st_check("... no pre-heat: the swipe hint as before",hm.hint2==TR(TX_C_HINT2)); }
+    unlink(sched_path); snprintf(sched_path,sizeof sched_path,"%s",keep_sp);
+    SET[S_TIMEMODE].val=keep_tm; SET[S_TZ].val=keep_tz; SET[S_DST].val=keep_dst; clk_fake=PV_CLK; settings_load();
+}
 static void st_power(void){
     printf("== selftest: v6.14 the power button (k62091 / event1; stock app_powerKey_thread 0x140AB4 + dealPowerState 0x14911C + powerOff 0x149074; MCU sleep-task 0x2F52) ==\n");
     char fr[16][96]; int nf; ms_t t, t0; uint8_t b[16];
@@ -7592,7 +8205,7 @@ static int selftest(const char*cfgsrc){
     st_check("brewTemper 880 -> 870 (revert)",cfg_set_int("brewTemper",870));
     st_check("md5 after revert == baseline",!strcmp(cfg_md5,m0));
     /* the whole table: every editable field is saved as min, max and back */
-    { int ok=1,nf=0; for(int i=0;i<NSET;i++){ Setting*s=&SET[i]; if(s->flags&(SF_LOCK|SF_SENSOR|SF_LOCAL)) continue; int o; nf++;
+    { int ok=1,nf=0; for(int i=0;i<NSET;i++){ Setting*s=&SET[i]; if(s->flags&(SF_LOCK|SF_SENSOR|SF_LOCAL|SF_OWN)) continue; int o; nf++;
           if(!cfg_get_int(s->key,&o)||!cfg_set_int(s->key,s->min)||!cfg_set_int(s->key,s->max)||!cfg_set_int(s->key,o)){ ok=0; printf("     %s: %s\n",s->key,cfg_err); } }
       char nm[120]; snprintf(nm,sizeof nm,"all %d editable fields: save min -> max -> original",nf); st_check(nm,ok&&nf==21);
       st_check("md5 after a full table round trip == baseline",!strcmp(cfg_md5,m0)&&cfglen==on&&!memcmp(cfgbuf,orig,on)); }
@@ -7805,7 +8418,7 @@ static int selftest(const char*cfgsrc){
         st_check("v6.8 HOME: no touch zone where the REVERT pill used to be (the area 150..329 x 404..479 gives T_NONE — idle and during a brew — except v6.11's gear, which only changes page); no UI string (EN/DA) mentions REVERT",z&&nr); }
       mock_boot_b(root); page=PG_T2; scroll[PG_T2]=scroll_max(PG_T2);
       int yb=(int)(row_y0(PG_T2,ns+X_BOOTUI)-scroll[PG_T2])+25, ys=(int)(row_y0(PG_T2,ns+X_SWITCH)-scroll[PG_T2])+25;
-      st_check("SYSTEM list: BOOT UI and SWITCH TO ORIGINAL NOW are rows 12 and 13 (after UI LANGUAGE + 10 config rows) — both hittable at the bottom of the list",ns==11&&hit_test(240,yb,tn)==T_ROW0+ns&&hit_test(240,ys,tn)==T_ROW0+ns+1&&ys+25<LIST_VY1&&hit_test(240,(int)(row_y0(PG_T2,0)-scroll[PG_T2])+25,tn)!=T_ROW0);
+      st_check("SYSTEM list: BOOT UI and SWITCH TO ORIGINAL NOW are rows 16 and 17 (after UI LANGUAGE + 10 config rows + v6.16's 4 time rows) — both hittable at the bottom of the list",ns==15&&hit_test(240,yb,tn)==T_ROW0+ns&&hit_test(240,ys,tn)==T_ROW0+ns+1&&ys+25<LIST_VY1&&hit_test(240,(int)(row_y0(PG_T2,0)-scroll[PG_T2])+25,tn)!=T_ROW0);
       activate(T_ROW0+ns,tn); tr.type=0;
       st_check("BOOT UI opens with the current choice (flag set -> OURUI)",view==V_SYS&&xsel==X_BOOTUI&&x_edit==1&&x_orig==1);
       ui_touch(TE_DOWN,84,184,tn); ui_touch(TE_UP,84,184,tn);
@@ -8018,6 +8631,7 @@ static int selftest(const char*cfgsrc){
     st_phases();
     st_stop();                         /* v6.13 */
     st_power();                        /* v6.14 */
+    st_time(dir);                      /* v6.16 */
     st_wrap();
     st_repush(cfgsrc);
     lang_set(base_lang);
@@ -8038,7 +8652,7 @@ static void dump_table(void){
     printf("#key\tlabel\tpage\tspec_tier\tmin\tmax\tstep\tdefault\thard\tlock\test\tsensor\tmcu\thint\n");
     static const char*const MW[]={"-","4","23","11","112","113","114","25","14","17","2"};
     for(int i=0;i<NSET;i++){ const Setting*s=&SET[i];
-        if(s->flags&SF_LOCAL) continue;        /* ourui's own settings (UI language) are not spec parameters */
+        if(s->flags&(SF_LOCAL|SF_OWN)) continue;   /* ourui's own settings (UI language, v6.16 schedule) are not spec parameters */
         printf("%s\t%s\t%s\t%d\t%d\t%d\t%d\t%d\t%d\t%d\t%d\t%d\t%s\t%s\n",s->key?s->key:"-",TR(s->label),TR(TIER_NAME[s->tier]),s->ptier,s->min,s->max,s->step,s->def,s->hard,
                !!(s->flags&SF_LOCK),!!(s->flags&SF_EST),!!(s->flags&SF_SENSOR),MW[s->mcu],s->hint?TR(s->hint):"-"); }
 }
@@ -8076,7 +8690,8 @@ int main(int argc,char**argv){
     const char*out=argc>ai?argv[ai]:"/tmp/ourui_v6_preview_out";
     const char*cfgsrc=argc>ai+1?argv[ai+1]:"artifacts/config.json";
     gfx_init(); lang_set(pv_lang);
-    if(!strcmp(out,"--selftest")) return selftest(cfgsrc);
+    snprintf(sched_path,sizeof sched_path,"%s/_preview_schedule",out);   /* v6.16: never the host's /new_customer (the selftest uses its work dir) */
+    if(!strcmp(out,"--selftest")){ snprintf(sched_path,sizeof sched_path,"/nonexistent/ourui_preview_schedule"); return selftest(cfgsrc); }
     if(!strcmp(out,"--dump-table")){ dump_table(); return 0; }
     if(!strcmp(out,"--dump-strings")){ dump_strings(); return 0; }
     if(!strcmp(out,"--textw")){ for(int i=ai+1;i<argc;i++) printf("%4d %4d %4d %4d %4d  %s\n",text_w(argv[i],F_XS),text_w(argv[i],F_S),text_w(argv[i],F_M),text_w(argv[i],F_L),text_w(argv[i],F_XL),argv[i]); return 0; }
@@ -8242,6 +8857,14 @@ int main(int argc,char**argv){
     sim_reset(); page=PG_DIAG; scroll[PG_DIAG]=DG_PWR-LIST_VY0-12; pw.n_ev=6; pw.n_press=3; pw.n_off=1; pw.n_on=1; pw.key_code=116; pw.key_val=0; pw.t_key=sim_now-4000; sim_run(600); dump(out,"82_diag_power");
     /* v6.15: 250 g cup at rest, then a brew — the graph starts from the tare (0 -> 36 g fills the weight axis) */
     sim_reset(); cb_late=0; cb_flush0=cb_flush1=0; sim_tick=tick_cupbrew; sim_t0=sim_now; sim_run(43800); dump(out,"83_home_brew_after_cup");
+    /* v6.16: time & scheduling — the preview clock is 2026-11-18 16:35 local (Wednesday), zone #48 */
+#define PV_SCHED(a_,b_,c_,d_) do{ sch.on=(a_); sch.hm=(b_); sch.rep=(c_); sch.ao=(d_); sch.once_at=0; SET[S_PREHEAT].val=sch.on; SET[S_PHAT].val=sch.hm; SET[S_PHREP].val=sch.rep; SET[S_AUTOOFF].val=sch.ao; }while(0)
+    sim_reset(); SET[S_TIMEMODE].val=0; PV_SCHED(1,390,1,0); sim_run(1500); dump(out,"84_home_clock12_preheat");
+    sim_reset(); PV_SCHED(1,390,2,3); page=PG_T2; scroll[PG_T2]=scroll_max(PG_T2); static_dirty=1; sim_run(600); dump(out,"85_list_system_time");
+    sim_reset(); PV_SCHED(1,390,1,0); page=PG_T2; static_dirty=1; sim_run(300); detail_open(S_PHAT,sim_now); sim_run(400); edit_val=405; sim_run(200); dump(out,"86_detail_preheat_at");
+    sim_reset(); page=PG_T2; static_dirty=1; sim_run(300); detail_open(S_TZ,sim_now); sim_run(400); dump(out,"87_detail_timezone");
+    sim_reset(); PV_SCHED(1,390,2,3); arm.n_sent=2; arm.n_ack=2; arm.ad=19; arm.ah=6; arm.am=30; idle_t0=sim_now-754000; page=PG_DIAG; scroll[PG_DIAG]=DG_TIME-LIST_VY0-12; sim_run(600); dump(out,"88_diag_time");
+    sim_reset(); PV_SCHED(0,390,1,1); pv_sched=1; idle_t0=sim_now-(15*60000-20000); sim_run(1200); dump(out,"89_home_autooff_warn"); pv_sched=0;
     return 0;
 }
 #endif
