@@ -307,7 +307,18 @@ class ScenarioRun:
             time.sleep(0.05)
         self.pty_path = pf.read_text().strip()
         self.sim_ctrl = Ctrl(self.sim_ctrl_path)
-        self.sim_ctrl.call({"cmd": "ping"})
+        # the sim writes pty_path before it binds the ctrl socket: on a cold, busy runner the
+        # first ping could hit a socket that does not exist yet (v6.16 full-E2E: 4 runner errors)
+        for _ in range(100):
+            try:
+                self.sim_ctrl.call({"cmd": "ping"})
+                break
+            except (FileNotFoundError, ConnectionRefusedError):
+                if self.sim_proc.poll() is not None:
+                    raise RuntimeError("mcu_sim died at startup: " + (self.sim_proc.stderr.read() or ""))
+                time.sleep(0.05)
+        else:
+            self.sim_ctrl.call({"cmd": "ping"})
 
     # ------------------------------------------------------------ (c) UI client
     def start_ui(self):
