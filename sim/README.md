@@ -131,6 +131,9 @@ For an interactive browser view of the simulator, see [PLAY.md](PLAY.md).
 | `time_display` | 40 s | **v6.16 (merakiplus-only):** HOME clock = SoC UTC + zone #48 (+ DST when sumtime=1): 16:35 (24 h) → 04:35 P.M. (timemode=0) → a summer clock jump: 12:00 P.M. with DST, 11:00 A.M. without → 11:00 (timemode=1); no cmd8 sent |
 | `timemode_stock_parity` | 30 s | **v6.16 (merakiplus-only):** config timemode=1 = 24-HOUR row + 24 h clock (stock `update_time` XORs with 1); SAVE 12-HOUR writes 0 + A.M./P.M. clock; SAVE 24-HOUR writes 1 |
 | `schedule_prewarm` | 80 s | **v6.16 (merakiplus-only):** PRE-HEAT daily 06:30 → pre-armed cmd8 alarm [18,6,30] → HOLD → power-off with the same alarm → deep sleep → the sim RTC reaches 06:30 → **alarm wake** (factory reset) → re-push → ON → re-armed [19,6,30]; PRE-HEAT OFF → 0/0/0 |
+| `ia_navigation` | 34 s | **v6.17 (merakiplus-only):** the new IA with REAL taps (layout targets): cup icon → BREW page (6 rows, live line) → BREW TEMP editor → CANCEL → header chevron → HOME; gear → SYSTEM (closed: 5 rows) → SCHEDULE opens/closes → PRE-HEAT AT editor; DIAGNOSTICS row → DIAGNOSTICS → back to SYSTEM → HOME. No frame, no config write (45 checks) |
+| `feature_page_start` | 43 s | **v6.17 (merakiplus-only):** a brew started from the BREW page (tap the icon, then HOLD TO START 0.8 s): the UI returns to HOME with STOP BREW and the brew runs to its auto-stop — the `brew` scenario's expectations, shifted by 2.15 s |
+| `activity_takes_home` | 22 s | **v6.17 (merakiplus-only):** the GRIND page is open when the wand starts steam on the machine → the UI slides to HOME (the live view); SYSTEM opened during the steam stays; afterwards the WATER page opens normally |
 | `fault_e1/e2/e3` | 12–16 s | error bits words 34/35/36 → error UI + safety stop of the activity |
 | `crc_garbage` | 12 s | garbage stream + CRC corruption → resync, the link is kept |
 | `no_ack` | 12 s | **SAVE is blocked** (retransmit→FAIL, config unchanged) → recovery with the normal profile |
@@ -378,7 +381,7 @@ Details: `sim/reports/v6.14-sim/SUMMARY.md` + CONTRACT.md ADDENDUM v6.14-sim.
 | `proto.py` | CRC/frame/parse/parity/evdev shared library |
 | `png.py` | dependency-free PNG + contact sheet |
 | `gen_scenarios.py` | reproducible generator for scenarios/*.json |
-| `scenarios/*.json` | 36 timelines (v6.14: + power_off_wake/power_during_activity; v6.15: + graph_reset; v6.16: + time_display/timemode_stock_parity/schedule_prewarm) |
+| `scenarios/*.json` | 39 timelines (v6.14: + power_off_wake/power_during_activity; v6.15: + graph_reset; v6.16: + time_display/timemode_stock_parity/schedule_prewarm; v6.17: + ia_navigation/feature_page_start/activity_takes_home) |
 | `play.py`, `play_viewer.html`, `PLAY.md` | interactive browser simulator |
 | `CONTRACT.md` | the contract for the UI's SIM build |
 | `README.md` | this file |

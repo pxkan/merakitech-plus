@@ -41,13 +41,13 @@ import time
 import urllib.request
 from concurrent.futures import ThreadPoolExecutor
 
-VERSION = "6.16"
+VERSION = "6.17"
 REPO = "thomasgrastein/merakitech-plus"
 RAW_BASE = "https://raw.githubusercontent.com/" + REPO + "/{ref}/bin/{name}"
 
 # md5 of the shipped device binaries in bin/ (kept in sync with bin/MD5SUMS by CI).
 BIN_MD5 = {
-    "merakiplus": "737db9b97dcea27764c682381b70dff2",
+    "merakiplus": "532e4bd5aa06e625e3b2c80ace5921f4",
     "switcher": "a5e0128bdd77ff5697df2100e889604a",
     "grab_shim.so": "c42076c807c54d477a5868977404186d",
 }
@@ -763,7 +763,7 @@ def cmd_install(dev, o, args):
         o.ok("slot A untouched, slot B verified")
     o.say("")
     o.say(f"Done. Meraki+ {VERSION} is {'installed (dry-run: nothing was changed)' if dev.dry else 'running'}.")
-    o.say("  Check on the screen: settings (gear) -> DIAGNOSE -> VERSION shows 'MERAKI+ V" + VERSION + "'.")
+    o.say("  Check on the screen: the gear on HOME -> SYSTEM shows 'MERAKI+ V" + VERSION + "' under its title.")
     o.say(f"  Undo everything:     ./revert.sh --ip {args.ip}")
 
 

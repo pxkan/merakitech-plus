@@ -364,7 +364,8 @@ class Play:
 
     def inject_swipe(self, x0, y0, x1, y1, ms=260):
         """Drag/swipe: down at (x0,y0) → interpolated MOVE records → up at (x1,y1).
-        merakiplus switches page on horizontal >= 60 px (the state contract's 'swipe')."""
+        Since v6.17 merakiplus has no page carousel: a horizontal drag to the RIGHT (>= 60 px) is
+        'back' on every page/editor but HOME; a vertical drag scrolls lists/DIAGNOSE."""
         x0 = max(0, min(W - 1, int(x0))); y0 = max(0, min(H - 1, int(y0)))
         x1 = max(0, min(W - 1, int(x1))); y1 = max(0, min(H - 1, int(y1)))
         ms = max(60, min(2000, int(ms)))

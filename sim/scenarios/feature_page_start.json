@@ -1,0 +1,184 @@
+{
+  "name": "feature_page_start",
+  "description": "v6.17: brew started from the BREW page — tap the cup icon (the page opens, nothing is sent), HOLD TO START for 0.8 s (the same frames as the icon hold) → the UI returns to HOME (the live view with STOP BREW) and the brew runs to its auto-stop exactly like the 'brew' scenario (its expectations, shifted by the 2.15 s the page detour takes)",
+  "duration_s": 43,
+  "ui_only": true,
+  "events": [
+    {
+      "t": 2,
+      "target": "ui",
+      "cmd": "touch",
+      "layout": "brew",
+      "ms": 90
+    },
+    {
+      "t": 3,
+      "target": "runner",
+      "op": "snapshot",
+      "label": "brew-page"
+    },
+    {
+      "t": 3.5,
+      "target": "ui",
+      "cmd": "touch",
+      "layout": "start",
+      "ms": 800
+    },
+    {
+      "t": 7,
+      "target": "runner",
+      "op": "snapshot",
+      "label": "preinfusion"
+    },
+    {
+      "t": 17,
+      "target": "runner",
+      "op": "snapshot",
+      "label": "extraction"
+    },
+    {
+      "t": 36,
+      "target": "runner",
+      "op": "snapshot",
+      "label": "stop"
+    }
+  ],
+  "expect": [
+    {
+      "kind": "state",
+      "path": "tab",
+      "t": 3,
+      "window": 0.4,
+      "equals": "brew"
+    },
+    {
+      "kind": "page",
+      "t": 3,
+      "window": 0.4,
+      "value": "settings"
+    },
+    {
+      "kind": "sim_log",
+      "assert": "no_writes_between",
+      "t0": 1,
+      "t1": 3.45,
+      "except_subs": [
+        0,
+        1,
+        112
+      ]
+    },
+    {
+      "kind": "state",
+      "path": "tab",
+      "t": 6,
+      "window": 1,
+      "equals": "home"
+    },
+    {
+      "kind": "page",
+      "t": 6,
+      "window": 1,
+      "value": "home"
+    },
+    {
+      "kind": "state",
+      "path": "stop.btns",
+      "t": 7,
+      "window": 1.5,
+      "equals": [
+        "brew"
+      ]
+    },
+    {
+      "kind": "phase_seq",
+      "t0": 0,
+      "t1": 43,
+      "values": [
+        "READY",
+        "PRE",
+        "EXT",
+        "READY"
+      ]
+    },
+    {
+      "kind": "phase",
+      "t": 6.15,
+      "window": 1.5,
+      "value": "PRE"
+    },
+    {
+      "kind": "phase",
+      "t": 14.15,
+      "window": 2,
+      "value": "EXT"
+    },
+    {
+      "kind": "word_hold",
+      "word": 51,
+      "t0": 5.35,
+      "t1": 10.35,
+      "min": 330,
+      "max": 395
+    },
+    {
+      "kind": "word_hold",
+      "word": 51,
+      "t0": 12.65,
+      "t1": 31.65,
+      "min": 1250,
+      "max": 1500
+    },
+    {
+      "kind": "word_hold",
+      "word": 39,
+      "t0": 14.15,
+      "t1": 33.15,
+      "min": -10,
+      "max": 365,
+      "signed": true
+    },
+    {
+      "kind": "work_sta_seen",
+      "t0": 11.15,
+      "t1": 33.15,
+      "value": "0x1307"
+    },
+    {
+      "kind": "work_sta_seen",
+      "t0": 31.65,
+      "t1": 34.75,
+      "value": "0x0105"
+    },
+    {
+      "kind": "word",
+      "word": 22,
+      "t": 35.15,
+      "window": 1.5,
+      "value": 0
+    },
+    {
+      "kind": "word_hold",
+      "word": 39,
+      "t0": 35.65,
+      "t1": 38.65,
+      "min": 356,
+      "max": 376,
+      "signed": true
+    },
+    {
+      "kind": "sim_log",
+      "assert": "activity_stop",
+      "activity": "brew",
+      "reason_contains": "weight",
+      "t0": 31.15,
+      "t1": 36.15
+    },
+    {
+      "kind": "phase",
+      "t": 37.15,
+      "window": 2,
+      "value": "READY"
+    }
+  ]
+}

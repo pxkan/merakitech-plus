@@ -1,4 +1,4 @@
-# UI_v6 — Meraki+ (identifier merakiplus) v6.16: clock + correct 24-hour flag + planned pre-heat and auto off + graph reset on activity start + the physical power button + manual STOP for water / brew / grind + settings parity (spec-aligned) + boot slot integration + EN/DA + design for the round screen + SIM build/E2E + boot push and RX resync on the device + live-proven phase semantics, 64-bit clock and re-push after an MCU restart + Wi-Fi at startup and self-healing (network guard) + HOME without REVERT + calm graph and stable weight (display conditioning, weight latch, dead band) + pressure as a ≈bar estimate (anchor: pre-infusion = config pressure) + UX review (plain language, contrast, start hint, gear, close chevron, swipe guard, DIAGNOSTICS groups)
+# UI_v6 — Meraki+ (identifier merakiplus) v6.17: one page per feature + SYSTEM in sections + DIAGNOSTICS behind SYSTEM (UX audit) + clock + correct 24-hour flag + planned pre-heat and auto off + graph reset on activity start + the physical power button + manual STOP for water / brew / grind + settings parity (spec-aligned) + boot slot integration + EN/DA + design for the round screen + SIM build/E2E + boot push and RX resync on the device + live-proven phase semantics, 64-bit clock and re-push after an MCU restart + Wi-Fi at startup and self-healing (network guard) + HOME without REVERT + calm graph and stable weight (display conditioning, weight latch, dead band) + pressure as a ≈bar estimate (anchor: pre-infusion = config pressure) + UX review (plain language, contrast, start hint, gear, close chevron, swipe guard, DIAGNOSTICS groups)
 
 > **Note (public edition):** Development notes written during development. Paths such as
 > `artifacts/…`, `boot_install.py` steps and md5 tables refer to the author's working environment; as
@@ -10,7 +10,7 @@
 > `SESSION.md`, `HOTWATER.md`, `WRITETEST.md`, `FINDINGS` and `GROUND-TRUTH.md` are to the author's
 > capture/analysis notes.
 
-**Date:** 2026-11-19 · **Version:** v6.16 (v6.15 + **time & scheduling** — user bugs: the 24-hour flag was inverted relative to the stock UI, merakiplus showed no clock, and there was no planned pre-heat; the clock, the fixed TIME FORMAT, a pre-heat schedule sent as the stock cmd8 alarm and an optional auto off, see [CHANGES-v6.16](#changes-v616) + [time-scheduling.md](../time-scheduling.md)). v6.15 = (v6.14 + **the graph resets when an activity starts** — user bug: the cup placed before a brew dominated the graph scale, so the 0 → 36 g curve looked flat; display only, §14.7 + [CHANGES-v6.15](#changes-v615)). v6.14 = (v6.13 + **the physical power button** — user bug: the button did not work in merakiplus; the k62091 node (event1) is now read, and the stock UI's power-off/power-on semantics have been reverse-engineered and mirrored, §19 + [CHANGES-v6.14](#changes-v614)). v6.13 = (v6.12 + **manual STOP for WATER, BREW and GRIND** — user bug: hot water could not be stopped from the screen; the stop words were reverse-engineered from the MCU firmware and cross-checked against the stock UI's own stop calls; auto-stop is unchanged — see [§18](#18-manual-stop-v613) and [CHANGES-v6.13](#changes-v613); v6.12 = the v6.11 UI + the boot work stream's gesture fix ([gesture.md](../gesture.md)), source kept as `merakiplus_v6_12.c`; v6.11 = v6.10 + **UX review**: a critical design pass over all pages and states — plain language instead of word numbers and raw codes, raised contrast, a start hint in the empty chart field, a visible gear for the settings, a close chevron + swipe-down in the details, a swipe guard with axis lock, short stat labels and DIAGNOSTICS in sections; control logic and protocol are unchanged — see [§17](#17-ux-review-v611) and [CHANGES-v6.11](#changes-v611); v6.10 = v6.9 + **pressure estimate**: "PRESSURE\* UNCALIBRATED" has been replaced by **≈BAR · EST.** with a single linear anchor — the pre-infusion plateau of 358 raw in the recording = config `preInfusionPressure` (4 bar) — and a pulse limit of 20 bar; display only — see [§16](#16-pressure-estimate-v610) and [CHANGES-v6.10](#changes-v610); v6.9 = v6.8 + **display conditioning** of the graph and hero — median-3 + EMA, a robust scale, pulse gate, pressure curve only during brew/water —, a **stable weight source** (a latch instead of the phase per sample: the user's periodic weight spikes) and a **weight dead band** < 0.25 g; display only, all control logic reads raw values — see [§14](#14-display-conditioning-and-stable-weight-v69) and [CHANGES-v6.9](#changes-v69); v6.8 = v6.7 without the REVERT button on HOME — see [CHANGES-v6.8](#changes-v68); v6.7 = v6.6 + **network guard**: Wi-Fi at startup (a slot B boot had no network) and self-healing of the Wi-Fi stack, plus word 113 in the boot push as the stock UI's recorded value — see [CHANGES-v6.7](#changes-v67); v6.6 = v6.5 + phase semantics after the live session — two steam paths and concurrent phases —, a **64-bit clock** (v6.5's clock wrapped after 24.86 days on the device) and a **re-push of the boot push after an MCU restart** — see [CHANGES-v6.6](#changes-v66); v6.5 = v6.4 + a boot push from the config at startup **also on the device**, with an activity guard, and a resync watchdog in the RX parser — see [CHANGES-v6.5](#changes-v65); v6.4 = v6.3 + a SIM build against the simulated test environment — see [§13](#13-sim-build-and-e2e-v64) and [CHANGES-v6.4](#changes-v64); v6.3 = v6.2 + the product name **Meraki+** and two UI languages, English default / Danish — see [CHANGES-v6.3](#changes-v63); v6.2 = v6.1 + BOOT UI, runtime switch to the stock UI, exit reminder — see [CHANGES-v6.2](#changes-v62)) · **Status:** implemented, cross-compiled and **only verified locally** (offline previews + self-test + automated spec alignment). **Nothing has been run on the machine, and no network device has been contacted.** The on-device work belongs to the integration engineer (§11).
+**Date:** 2026-11-20 · **Version:** v6.17 (v6.16 + **UX audit / IA consolidation** — display and navigation only: HOME is the root, each feature has its own page with its settings and HOLD TO START, SYSTEM has four sections, DIAGNOSTICS sits behind SYSTEM, the STOP button is larger, the texts are shorter; see [CHANGES-v6.17](#changes-v617) and [ux-audit-v617.md](../ux-audit-v617.md). §3 below describes v6.17; older sections and CHANGES-v6.x describe the UI as it was at the time). v6.16 = v6.15 + **time & scheduling** — user bugs: the 24-hour flag was inverted relative to the stock UI, merakiplus showed no clock, and there was no planned pre-heat; the clock, the fixed TIME FORMAT, a pre-heat schedule sent as the stock cmd8 alarm and an optional auto off, see [CHANGES-v6.16](#changes-v616) + [time-scheduling.md](../time-scheduling.md)). v6.15 = (v6.14 + **the graph resets when an activity starts** — user bug: the cup placed before a brew dominated the graph scale, so the 0 → 36 g curve looked flat; display only, §14.7 + [CHANGES-v6.15](#changes-v615)). v6.14 = (v6.13 + **the physical power button** — user bug: the button did not work in merakiplus; the k62091 node (event1) is now read, and the stock UI's power-off/power-on semantics have been reverse-engineered and mirrored, §19 + [CHANGES-v6.14](#changes-v614)). v6.13 = (v6.12 + **manual STOP for WATER, BREW and GRIND** — user bug: hot water could not be stopped from the screen; the stop words were reverse-engineered from the MCU firmware and cross-checked against the stock UI's own stop calls; auto-stop is unchanged — see [§18](#18-manual-stop-v613) and [CHANGES-v6.13](#changes-v613); v6.12 = the v6.11 UI + the boot work stream's gesture fix ([gesture.md](../gesture.md)), source kept as `merakiplus_v6_12.c`; v6.11 = v6.10 + **UX review**: a critical design pass over all pages and states — plain language instead of word numbers and raw codes, raised contrast, a start hint in the empty chart field, a visible gear for the settings, a close chevron + swipe-down in the details, a swipe guard with axis lock, short stat labels and DIAGNOSTICS in sections; control logic and protocol are unchanged — see [§17](#17-ux-review-v611) and [CHANGES-v6.11](#changes-v611); v6.10 = v6.9 + **pressure estimate**: "PRESSURE\* UNCALIBRATED" has been replaced by **≈BAR · EST.** with a single linear anchor — the pre-infusion plateau of 358 raw in the recording = config `preInfusionPressure` (4 bar) — and a pulse limit of 20 bar; display only — see [§16](#16-pressure-estimate-v610) and [CHANGES-v6.10](#changes-v610); v6.9 = v6.8 + **display conditioning** of the graph and hero — median-3 + EMA, a robust scale, pulse gate, pressure curve only during brew/water —, a **stable weight source** (a latch instead of the phase per sample: the user's periodic weight spikes) and a **weight dead band** < 0.25 g; display only, all control logic reads raw values — see [§14](#14-display-conditioning-and-stable-weight-v69) and [CHANGES-v6.9](#changes-v69); v6.8 = v6.7 without the REVERT button on HOME — see [CHANGES-v6.8](#changes-v68); v6.7 = v6.6 + **network guard**: Wi-Fi at startup (a slot B boot had no network) and self-healing of the Wi-Fi stack, plus word 113 in the boot push as the stock UI's recorded value — see [CHANGES-v6.7](#changes-v67); v6.6 = v6.5 + phase semantics after the live session — two steam paths and concurrent phases —, a **64-bit clock** (v6.5's clock wrapped after 24.86 days on the device) and a **re-push of the boot push after an MCU restart** — see [CHANGES-v6.6](#changes-v66); v6.5 = v6.4 + a boot push from the config at startup **also on the device**, with an activity guard, and a resync watchdog in the RX parser — see [CHANGES-v6.5](#changes-v65); v6.4 = v6.3 + a SIM build against the simulated test environment — see [§13](#13-sim-build-and-e2e-v64) and [CHANGES-v6.4](#changes-v64); v6.3 = v6.2 + the product name **Meraki+** and two UI languages, English default / Danish — see [CHANGES-v6.3](#changes-v63); v6.2 = v6.1 + BOOT UI, runtime switch to the stock UI, exit reminder — see [CHANGES-v6.2](#changes-v62)) · **Status:** implemented, cross-compiled and **only verified locally** (offline previews + self-test + automated spec alignment). **Nothing has been run on the machine, and no network device has been contacted.** The on-device work belongs to the integration engineer (§11).
 **Source:** `merakiplus.c` (one file, plain C, no new dependencies) · **Binary:** `merakiplus_v6` (static ARMv7 EABI5 musl) · **Previews:** `round_v6/` (English; contact sheet) + `round_v6/da/` (Danish; contact sheet) · `EN | DA side by side` · **Revert:** `REVERT.md` · **Boot integration:** `boot/BOOT.md` (the boot work stream's; §9 = the UI requirements for v6.2) · **Spec:** [PARITY.md](PARITY.md) / `parity_spec.json` · **Predecessor:** `ROUNDUI.md` (v4)
 
 > **Status of the caveat in v6:** the spec was missing when v6 was written, and all limits were assumptions. v6.1 has replaced them with the spec's proven ranges. The alignment is automated: `parity_check.py` compares `SET[]` in the binary with `parity_spec.json` and fails on any unjustified deviation (`round_v6/parity_check.txt`: **41 spec parameters → 24 rows, 17 left out with a rationale, ALL ALIGNED**). What is still estimated or locked is in §4.4. All changes are listed in [CHANGES-v6.1](#changes-v61).
@@ -72,37 +72,56 @@ Semantic phase colors (used consistently on the gauge fill, lit ticks, phase chi
 
 ## 3. Page map and touch
 
-Five pages in a ring; **a horizontal swipe** changes page (v6.11: the gesture must *start* horizontally
-— axis lock during the first 14 px — be ≥ 60 px long and at most ~30° from horizontal,
-|dx| ≥ 1.7·|dy|; v6.10: |dx| ≥ 60, |dy| ≤ 50). Page dots at the bottom; on HOME there is also a
-**gear** (v6.11) that opens BREW.
+**v6.17** replaced the five-page carousel (HOME · BREW · STEAM·WATER · SYSTEM · DIAGNOSTICS, changed by
+swiping) with one root and sheets — the reasoning is in [ux-audit-v617.md](../ux-audit-v617.md) and CHANGES-v6.17 below:
 
-| # | Page | Contents |
+```
+HOME ─ icon, tap ─► GRIND / BREW / WATER / STEAM   (live line · that feature's settings · HOLD TO START)
+     ─ icon, hold ► starts the activity (650 ms)
+     ─ gear ──────► SYSTEM ─ DISPLAY · CLOCK · SCHEDULE · STOCK UI (sections, one open at a time)
+     │                     └ DIAGNOSTICS ─► DIAGNOSTICS
+     └ error / offline hint, tap ─► DIAGNOSTICS
+```
+
+**Open** by tapping the thing; **go back** with the chevron at the top of every page and editor (the
+whole header is the target), or swipe right. There are no page dots, no edge zones and no page swipes.
+
+| Page | Opened by | Contents |
 |---|---|---|
-| 0 | **HOME** | **v6.3:** the title line *MERAKI+* at the top inside the ring · gauge, phase chip, hero number, auto-stop line, chart (40 s), 3 stats, 4 activity buttons, page dots. **v6.8:** no REVERT button |
-| 1 | **BREW** | 9 rows — espresso core (spec tier 1) |
-| 2 | **STEAM · WATER** | 5 rows — milk, steam, hot water + the water temperature **sensor** (spec tier 1) |
-| 3 | **SYSTEM** | 11 rows — **v6.3: UI LANGUAGE at the top** (merakiplus's own setting), then screen, sound, stock language, time (spec tier 2 + the tier 3 fields that are pure config flags) + **v6.2:** *STARTUP · UI CHOICE* with **BOOT UI** and **SWITCH TO ORIGINAL NOW** |
-| 4 | **DIAGNOSTICS** | link, RX OK / CRC errors, work_sta, E1–E3, cmd6 OK/retx/errors/**blocked**, awake, network, frame ms, mirror 112–114, config md5 + **v6.2:** boot block (flag, next boot, exe slot, slot B, switcher, stock process, PIDs, last switch) + **v6.3:** *ABOUT* block (UI language and where it comes from, wordmark with version, tagline) — the page scrolls vertically |
+| **HOME** | — (root) | clock (or the wordmark while the clock is not set) · phase chip · gauge · hero number · sub-line · chart (40 s) / one hint line · 3 stats · the 4 activity icons **with their targets underneath** (grind dose, brew weight, water amount, milk temperature) — or the STOP button(s) while something runs · the gear |
+| **GRIND** | tap the bean icon | live line *ON THE SCALE 0.0 G* · GRIND DOSE, GRIND MODE · HOLD TO START |
+| **BREW** | tap the cup icon | live line *BOILER 92.4° · GROUP 70°* · BREW WEIGHT, BREW TEMP, PRE-INFUSION, PRE-INF. TIME, PRE-INF. PRESSURE, GROUP HEAD (4 in view, the list scrolls) · HOLD TO START |
+| **WATER** | tap the drop icon | live line *WATER 99.9°* (word 40 — the "water sensor") · HOT WATER, WATER MODE · HOLD TO START |
+| **STEAM** | tap the steam icon | live line *BOILER 130° · MILK 22.6°* · MILK TEMP, STEAM LEVEL · HOLD TO START |
+| **SYSTEM** | the gear | *MERAKI+ V6.17* · four section headers with a summary (**DISPLAY** *ENGLISH* · **CLOCK** *16:35* · **SCHEDULE** *06:30 / OFF* · **STOCK UI**) + the **DIAGNOSTICS** row (*OK* / the error code / *DOWN*). Closed: 5 rows, no scrolling. A tap on a header opens it (and closes the other) |
+| **DIAGNOSTICS** | SYSTEM's last row, or a tap on HOME's error / offline hint | STATUS, BOOT · SLOT · SWITCHER, NET, GRAPH (smooth / raw), PRESSURE · ESTIMATE, RAW COUNTERS, POWER BUTTON, TIME · SCHEDULE, ABOUT — scrolls vertically. Its chevron returns to where it was opened from |
 
-Modal views: **splash** (boot), **stepper detail** (from a list row) and — from v6.2 — the **system
+A feature page's live line turns **amber and names the reason** when a start is not possible (*NO
+CONNECTION*, *ERROR ACTIVE · START BLOCKED*, *GRIND = TIME · USE STOCK UI*, *CONFIG OUT OF SPEC · FIX
+FIRST*, …); HOLD TO START is then dimmed. **While an activity runs, no feature page is shown**: started
+from the page, on the machine or by the wand, the UI is on HOME, where the STOP button is. SYSTEM,
+DIAGNOSTICS and an open editor stay.
+
+Modal views: **splash** (boot), **stepper detail** (from a row) and — from v6.2 — the **system
 action** (BOOT UI, switch confirmation, exit reminder; same geometry and button zones as the stepper
-detail) as well as the last frame before a runtime switch.
+detail) as well as the last frame before a runtime switch. From v6.17 the stepper detail has no
+footer lines; its status line shows *CHANGED · WAS …*, *SAVING…*, the zone's place names, or — on an
+untouched editor with ≥ 20 steps — *HOLD - OR + TO GO FAST*.
 
 **HOME per phase** — the hero number and the gauge change meaning, so the most important value is
 always the largest:
 
 | Phase | Hero | Gauge | Stats |
 |---|---|---|---|
-| READY / HEATING UP / ASLEEP / ERROR | brew boiler temp (word 40) | 20–120 °C, marker = brew setpoint | group (42), steam (47), weight (39) |
+| READY / HEATING UP / ASLEEP / ERROR | brew boiler temp (word 40), label *BREW BOILER*, sub-line *TARGET 87.0°* | 20–120 °C, marker = brew setpoint | group (42), steam (47), weight (39) |
 | GRINDING | dose weight (word 38) | weight / target, marker = target | time, current (58), grinder step (37) |
-| PRE-INFUSION / EXTRACTION | weight in the cup (word 39) | **raw pressure** (word 51, 0–1600) + inner ring = weight/target | time, ≈bar · est., flow (52) |
+| PRE-INFUSION / EXTRACTION | weight in the cup (word 39), label *IN THE CUP*, sub-line *STOPS AT 36.0 G* (v6.17: the target is stated once) | **raw pressure** (word 51, 0–1600) + inner ring = weight/target | time, ≈bar, flow (52) |
 | HOT WATER | weight (39) | weight / target | time, flow, boiler |
 | STEAM | milk temp (word 48) | 20–80 °C, marker = target | time, boiler (word 47), level |
 | DONE (8 s) | final value | as for the activity | "DONE IN x S" |
 
-**Pressure labelling (v6.10; v6.11: shorter texts):** the gauge still shows the raw scale. The bar
-value is labelled `≈BAR EST.` (v6.10: `≈BAR · EST.`) and the chart `PRESSURE` (v6.10:
+**Pressure labelling (v6.10; v6.11: shorter texts; v6.17: `≈BAR`):** the gauge still shows the raw scale. The bar
+value is labelled `≈BAR` (v6.11–v6.16: `≈BAR EST.`; v6.10: `≈BAR · EST.`) and the chart `PRESSURE` (v6.10:
 `PRESS. ≈BAR · EST.`; the estimate is in the field right below). The conversion is a single linear
 anchor: the pre-infusion plateau in the recording (358 raw) = config `preInfusionPressure` (4 bar),
 i.e. k = 4/358 = 0.01117 bar per raw unit. Above 20 bar no number is shown (*PULSE*). Basis and
@@ -113,17 +132,19 @@ caveats: [§16](#16-pressure-estimate-v610). (Up to and including v6.9:
 
 | Element | Zone | Gesture |
 |---|---|---|
-| GRIND / BREW / WATER / STEAM | circles r=30 around (150 / 210 / 270 / 330, 372) | **hold ≥ 650 ms**; a short tap only gives a help toast |
-| STOP STEAM (only during steam) | 150..330 × 344..400 | tap |
-| ~~REVERT~~ | — | **removed in v6.8** (CHANGES-v6.8): no touch zone left in 150..330 × 404..480. The same way out: SYSTEM → *SWITCH TO ORIGINAL NOW* (in run.sh mode a clean exit) |
-| Edge tap (HOME + DIAGNOSTICS; **v6.11 also the lists**: x<64 / x≥416) | x<70 / x>410, y 150..330 | tap = previous / next page |
-| **v6.11** gear (HOME only) | 208..271 × 426..471 (64 × 46 px) | tap = the BREW list (no frame) |
-| **v6.11** close chevron (detail + system view) | 196..283 × 34..79 (88 × 46 px) | tap = CANCEL / BACK |
-| **v6.11** swipe down (detail + system view) | anywhere, not started on −/+ | ≥ 70 px vertical, ≤ ~30° skew = CANCEL / BACK |
-| List row k | x 64..416, y center 121 + 58·k − scroll | tap opens the detail; vertical drag scrolls |
-| **v6.2** BOOT UI / SWITCH TO ORIGINAL NOW | SYSTEM row 12 / 13 (v6.3: one row further down because of UI LANGUAGE): y center 121 + 58·k + 30 − scroll (k = 11 / 12; max scroll 488 → y 301 / 359 — the same screen position as in v6.2) | tap opens the system action |
-| **v6.2** DIAGNOSTICS | the whole field y 86..394 | vertical drag scrolls (v6.3: max 431; the boot block is at the top of the field at scroll 280, the ABOUT block at max; v6.10: PRESSURE · ESTIMATE between GRAPH and ABOUT) |
-| **v6.10** the chart / the BAR field | the chart 118..362 × 240..294 when it shows pressure; the BAR field 193..287 × 298..338 during brewing | tap = toast with the basis (*PRE-INF. 4 BAR = RAW 358 · LINEAR*) — no frames |
+| GRIND / BREW / WATER / STEAM (HOME, idle) | circles r=30 around (150 / 210 / 270 / 330, 372); the target text is at y 405 | **tap** = open the feature's page · **hold ≥ 650 ms** = start (a ring fills around the icon) |
+| STOP (HOME, while something runs) | one button: 124..356 × 342..402 (232 × 60 px; pill 216 × 54) · two buttons (main activity + latched steam): 80..240 and 240..400 × 342..402 (pills 152 × 54) | tap |
+| Gear (HOME) | 208..271 × 426..471 (64 × 46 px) | tap = SYSTEM (no frame) |
+| Error / offline hint (HOME, only in those two states) | 88..392 × 236..294 | tap = DIAGNOSTICS |
+| The chart / the BAR field (v6.10) | the chart 118..362 × 240..294 when it shows pressure; the BAR field 193..287 × 298..338 during brewing | tap = toast with the basis (*PRE-INF. 4 BAR = RAW 358 · LINEAR*) — no frames |
+| **Page header** (every page but HOME) | 160..319 × 14..79 (160 × 66 px: chevron + title) | tap = back · pull down ≥ 70 px = back |
+| Swipe right (every page and editor but HOME) | anywhere, not started on −/+; ≥ 60 px, started horizontally (axis lock in the first 14 px), ≤ ~30° skew | back. A swipe left does nothing; HOME reacts to no swipe |
+| List row k | x 64..416, y center 121 + 58·k − scroll (feature pages: the list ends at y 342, SYSTEM at 394) | tap = the editor / open-close the section / the system action / DIAGNOSTICS; vertical drag scrolls |
+| HOLD TO START (feature pages) | 116..363 × 344..403 (248 × 60 px; pill 232 × 48) | **hold ≥ 650 ms** = start (the pill fills, the UI returns to HOME) · a short tap = toast *KEEP HOLDING TO START* or the reason it is blocked |
+| BOOT UI / SWITCH TO ORIGINAL NOW | the first two rows of SYSTEM › STOCK UI | tap opens the system action |
+| DIAGNOSTICS | the whole field y 86..394; the GRAPH pill 90..390 × 44 px high | vertical drag scrolls; tap on the pill = smooth / raw |
+| Close chevron (detail + system view) | 196..283 × 34..79 (88 × 46 px) | tap = CANCEL / BACK |
+| Swipe down (detail + system view) | anywhere, not started on −/+ | ≥ 70 px vertical, ≤ ~30° skew = CANCEL / BACK |
 | − / + | circles r=42 around (84,184) / (396,184) | tap = one step; hold = repeat (170 → 90 → 45 ms, ×5 steps after ~28 repeats) |
 | CANCEL / SAVE | 100..236 / 244..380 × 284..348 | tap |
 | BACK (locked row / sensor) | 170..310 × 284..348 | tap; −/+ do not exist |
@@ -137,7 +158,15 @@ status. All numbers are **raw config units** and inclusive. The **Status** colum
 range and step are address-proven in PARITY.md §2 · **ESTIMATE** = min and step are proven, max is an
 estimate · **LOCKED** = shown without an editor · **SENSOR** = read-only measured value.
 
-### 4.1 BREW page (spec tier 1)
+The tables below keep the grouping of the spec (tier 1 espresso, tier 1 steam/water, config-only). **Where
+a row is shown since v6.17:** GRIND DOSE, GRIND MODE → **GRIND** · BREW WEIGHT, BREW TEMP, PRE-INFUSION,
+PRE-INF. TIME, PRE-INF. PRESSURE, GROUP HEAD → **BREW** · HOT WATER, WATER MODE → **WATER** (the WATER SENSOR
+is that page's live line, not a row) · MILK TEMP, STEAM LEVEL → **STEAM** · UI LANGUAGE, BRIGHTNESS, TEMP UNIT →
+**SYSTEM › DISPLAY** · TIME FORMAT, DAYLIGHT SAVING, TIME ZONE → **SYSTEM › CLOCK** · PRE-HEAT, PRE-HEAT AT,
+REPEAT, AUTO OFF → **SYSTEM › SCHEDULE** · BOOT UI, SWITCH TO ORIGINAL NOW, VOLUME, STOCK LANG., WATER SHORTCUT,
+CLEANING REMINDER, AUTO TIME, PAUSE TIME → **SYSTEM › STOCK UI** (what only the stock UI reads).
+
+### 4.1 Espresso (spec tier 1) — the GRIND and BREW pages
 | Label | config field | Word | Write on SAVE | Min..max / step | Shown as | Status |
 |---|---|---|---|---|---|---|
 | GRIND DOSE | `autoGrindWeight` | 4 | sub4 len1 | 10..309 / 1 | 1.0–30.9 g | **PROVEN** [0xf4984] |
@@ -150,7 +179,7 @@ estimate · **LOCKED** = shown without an editor · **SENSOR** = read-only measu
 | PAUSE TIME | `breakTime` | 113 low byte | — (no editor) | — | 5 s | **LOCKED** (no effect, §4.5) |
 | GROUP HEAD | `headTemper` | 114 | sub114 len1 | 30..80 / 10 (ceiling 100) | 30–80 °C | **ESTIMATE** (max) |
 
-### 4.2 STEAM · WATER page (spec tier 1)
+### 4.2 Steam and hot water (spec tier 1) — the STEAM and WATER pages
 | Label | config field | Word | Write on SAVE | Min..max / step | Shown as | Status |
 |---|---|---|---|---|---|---|
 | MILK TEMP | `AtuoSteamTarge` | 25 | sub25 len1 | 450..700 / 10 | 45.0–70.0 °C | **PROVEN** [0x12bf80] |
@@ -159,7 +188,7 @@ estimate · **LOCKED** = shown without an editor · **SENSOR** = read-only measu
 | WATER MODE | `hotWaterMode` | (16/19 in the start block) | — config only | 1..2 | 1 AUTO / 2 MANUAL | **PROVEN** [0x11344c] |
 | WATER SENSOR | *(none)* | 40 (read-only) | — no write exists | — | live, e.g. 99.9 °C | **SENSOR** [0x112c9c] |
 
-### 4.3 SYSTEM page (config only — no MCU write)
+### 4.3 SYSTEM (config only — no MCU write)
 | Label | config field | Min..max | Shown as | Spec tier | Status |
 |---|---|---|---|---|---|
 | **UI LANGUAGE** (v6.3) | *(none — its own file `/new_customer/merakiplus/lang`)* | 0..1 | ENGLISH / DANSK (endonyms) | — | merakiplus's own setting; **not** a spec parameter and not in `--dump-table` (CHANGES-v6.3 item 2) |
@@ -197,7 +226,7 @@ in the stock UI, and correct `max` in the two SF_EST rows.
 ### 4.5 Deliberately removed, locked or not exposed
 | Field | Decision | Rationale (spec) |
 |---|---|---|
-| hot water **temperature** | **sensor row**, not a setting | The stock UI has no setpoint: the temperature shown is the e-boiler's measured value (word 40, `hotWaterTemperUpdate` 0x112c9c). The row sits on STEAM · WATER, where you would look for the setting, and says *"NO SETPOINT EXISTS"* |
+| hot water **temperature** | **live line on the WATER page** (v6.1–v6.16: a read-only sensor row), not a setting | The stock UI has no setpoint: the temperature shown is the e-boiler's measured value (word 40, `hotWaterTemperUpdate` 0x112c9c). The row sits on STEAM · WATER, where you would look for the setting, and says *"NO SETPOINT EXISTS"* |
 | `breakTime` | **locked**, the value is shown | The MCU recipe 0x1E10 copies `preInfusionTime` into the low byte of word113 before the timing `word13 + word113_lo` is computed — the separate pause value is always replaced. An editor would be a button with no effect. The value is still packed into word113 lo, so the frames are identical to the stock UI's |
 | `brewMode` | **removed** | vestigial: `get/setExtractModeValue` has 0 callers |
 | `sleepMode`, `sleepModeSetting` | **removed** | no editor in the stock UI (the setters have 0 callers); sleep timing is hard-coded (~600 s screensaver / ~1800 s power-off). merakiplus keeps the machine awake itself (§7.1) |
@@ -1071,20 +1100,23 @@ as *"STOP NOT CONFIRMED · TRY AGAIN"* after 5 s. This path has never been seen 
 ### 18.2 The UI
 
 * **The button** is in the same place and has the same style as STOP STEAM: the red pill in the action
-  row (touch area 180 × 56 px, pill 160 × 44 px in F_S; the pill in v6.6–v6.12 was 150 px). The texts
+  row. **v6.17:** touch area 232 × 60 px, pill 216 × 54 px in F_M, bright red with white text (≥ 4.5 : 1;
+  the red is 4.0 : 1 against the background). v6.13–v6.16: 180 × 56 / 160 × 44 px in F_S and a dark red
+  (1.9 : 1 against the background); the pill in v6.6–v6.12 was 150 px. The texts
   are *STOP WATER / STOP BREW / STOP GRIND* and *STOP VAND / STOP BRYG / STOP KVÆRN*. The button is
   shown while the activity's work_sta bits are set (`phase_main`). It is gone in the DONE view, and the
   valve pulse after a brew (`0105`) gives no button.
 * **Two buttons:** if a main activity runs at the same time as latched steam (e.g. `5327` + word 24 =
   1), there are two buttons side by side: left = the main activity, right = STOP STEAM. Each has a
-  touch area of 148 × 56 px and a pill of 136 × 44 px in F_XS. The wand/flush still has no STOP button.
+  touch area of 160 × 60 px and a pill of 152 × 54 px in F_S (v6.13–v6.16: 148 × 56 / 136 × 44 px in F_XS). The wand/flush still has no STOP button.
 * **Feedback:** a tap (activated on release, like all buttons) immediately shows the toast *"STOPPING
   WATER…"*. When the MCU has cleared the bits, *"WATER STOPPED"* (green) follows. If there is no ACK,
   not even after a retransmit, *"STOP: NO REPLY · TRY AGAIN"* (red) is shown. If the bits have not
   been cleared after 5 s, *"STOP NOT CONFIRMED · TRY AGAIN"* (yellow) is shown. An ACK alone does not
   count as confirmation. A new tap while the stop frame is waiting for an ACK does not queue another
   frame.
-* **The sub-line** keeps the auto-stop expectation: *"AUTO-STOP AT 40.0 G · OR STOP"*.
+* **The sub-line** is the auto-stop expectation: *"STOPS AT 40.0 G"* (v6.13–v6.16: *"AUTO-STOP AT 40.0 G ·
+  OR STOP"* — the button is right below it).
 * **Frame policy:** stop frames only contain zeros and go through the same gate and write queue as
   everything else (CRC + ACK wait + one retransmit). They require no intent and cannot start anything.
   `MERAKIPLUS_READONLY=1` sends nothing, and the toast says why.
@@ -2245,11 +2277,44 @@ In addition: the RX counters are `uint32_t` (wrap around in a well-defined way),
 
 8. **Files:** `src/merakiplus.c`, `docs/time-scheduling.md` (new), `sim/scenarios/{time_display,timemode_stock_parity,schedule_prewarm}.json`, `sim/run_e2e.py`, `sim/mcu_sim.py`, `sim/CONTRACT.md`, `bin/` (`merakiplus`, `merakiplus_sim_arm`, host SIM builds; md5 in `bin/MD5SUMS`), `tools/merakiplus.py` (VERSION 6.16 + md5).
 
+## CHANGES-v6.17
+
+**UX audit + IA consolidation.** The owner asked five questions about v6.16 — is there unnecessary text, does the experience make sense, is hold-to-start coherent while every setting is hidden, why so many settings pages, and would one page per feature with its settings be better. The audit, its evidence and the rejected alternatives are in [ux-audit-v617.md](../ux-audit-v617.md); this section records what changed in the code and how it was verified. **Display and navigation only:** `act_push`, `act_guard`, `frame_policy`, `save_begin`/`save_step`, the STOP path, the power button, the schedule and every limit are untouched.
+
+1. **Pages** (`enum PG_*`): `HOME, GRIND, BREW, WATER, STEAM, SYS, DIAG` (v6.16: `HOME, T0, T1, T2, DIAG` in a ring). HOME is the root; `nav_open()` slides a page in, `nav_back()` returns to `page_parent()` (DIAGNOSTICS → where it was opened from, everything else → HOME). No carousel: `T_EDGE_L/R`, the page dots and the page swipes are removed. `SET[].tier` is now the page index (0 GRIND · 1 BREW · 2 WATER · 3 STEAM · 4 SYSTEM).
+2. **The row model** (`FEAT_ROWS`, `SEC_ROWS`, `rows_get()`): one list of rows per page with one pitch; a row is a setting (`RK_SET`), a SYSTEM section header (`RK_SEC`), a system action (`RK_X`: BOOT UI / SWITCH TO ORIGINAL NOW) or the DIAGNOSTICS entry (`RK_DIAG`). `hit_test`, `draw_list`, the SIM `layout` hook and the self-test all walk `rows_get()`. Sections: DISPLAY (UI LANGUAGE, BRIGHTNESS, TEMP UNIT) · CLOCK (TIME FORMAT, DAYLIGHT SAVING, TIME ZONE) · SCHEDULE (PRE-HEAT, PRE-HEAT AT, REPEAT, AUTO OFF) · STOCK UI (BOOT UI, SWITCH TO ORIGINAL NOW, VOLUME, STOCK LANG., WATER SHORTCUT, CLEANING REMINDER, AUTO TIME, PAUSE TIME); one open at a time (`sec_open`), the opened header scrolls to the top, SYSTEM opens closed when entered from HOME. The read-only WATER SENSOR (`S_HOTT`) is in no list: it is the WATER page's live line.
+3. **Feature pages:** header = close chevron (y 22) + icon and name (y 44) + live line (y 70; `page_live_text()`: the guard's text in amber when a start is blocked — `TX_G_WAIT` excepted, it is transient — otherwise the live values); list y 86..342 (4 rows in view); **HOLD TO START** (`T_START`, pill 232 × 48, touch 248 × 60) with the same `HOLD_MS` and the same `act_request()` as the icon, then `go_page(PG_HOME)`. In `ui_update()`: a feature page on screen while `phase_active(phase_main())` → HOME (level-triggered; SYSTEM, DIAGNOSTICS and editors are exempt).
+4. **HOME:** a tap on an icon opens its page (`activate`: v6.16 showed a toast); each icon has its target under it (`HomeM.alab`, y 405); one hint line (`TX_C_HINT`; the planned pre-heat is the second line when there is one); the error/offline hint is a tap target (`T_DIAG`, only while it is on screen) that opens DIAGNOSTICS; the gear opens SYSTEM; no dots. Activity texts: label = what the number is (`DOSE`, `IN THE CUP`, `MILK`), sub-line = the target once, in F_S (`STOPS AT %s G`).
+5. **STOP:** `stop_pill()` 216 × 54 (two: 152 × 54), `stop_hit()` 232 × 60 (two: 160 × 60), `C_STOP_T/B` = rgb(214,58,62) → rgb(182,42,50) with white text, F_M (two: F_S).
+6. **Editors:** `detail_text()` no longer returns footer lines; `detail_status()` (new, shared with the self-test) = SAVING… / out of spec / CHANGED · WAS … / the zone's place names / `TX_D_HOLDFAST` when `detail_holdable()` (a number editor with ≥ 20 steps, untouched) / empty. Swipe right closes an editor like swipe down does. The system views (BOOT UI / SWITCH / exit reminder) keep their footers — they state consequences — but lose the "SAVED CHOICE" status.
+7. **DIAGNOSTICS:** title only; the two caveat lines under PRESSURE · ESTIMATE are gone (`DG_RAW` −32 px; the text is in [calibration.md §16.3](../calibration.md)). Otherwise unchanged, including the GRAPH smooth/raw pill.
+8. **Strings:** 449 → 435 ids (25 removed, 11 added); user-facing EN text 5 811 → 5 184 characters. The table of changes is in the audit, §6; Appendix A below is regenerated.
+9. **SIM (additive, [CONTRACT.md](../../sim/CONTRACT.md) ADDENDUM v6.17):** `tab` values, `shown.live` / `shown.section`, `page` by name (+ `section`), `layout` targets (`gear`, `back`, `start`, `sec_*`, `diag`, `graph`; no `edge_*`). The §3 `page` keys are unchanged, so no existing scenario needed a change.
+10. **Verification (local dev iteration, §15):**
+
+| What | Result |
+|---|---|
+| Self-test | **510 / 0** EN and DA (repo fixture config), **511 / 0** with the device's config. New section "v6.17 IA consolidation" **23/23**: the row model (every parameter on exactly one page), reachability by real taps (every editor ≤ 3 taps from HOME, back by the chevron, no frame), SYSTEM sections, tap vs hold on the icons, HOLD TO START = the icon hold's frames byte for byte (4 activities), touch areas, the live line (values / guard text / no flicker / offline), an activity starting while a page is open, the back gestures, the error hint as the DIAGNOSTICS entry, STOP size + contrast, nothing drawn below an editor's buttons, the editor status line, banned words in user-facing strings, HOME texts, icon targets, header summaries. The older checks that asserted v6.16's texts or geometry were rewritten for the new ones (swipe guard, gear, STOP hit area, `≈BAR`, sub-lines, the UI LANGUAGE row, the SYSTEM rows); none was dropped |
+| Self-test as a 32-bit ARM binary | **510 / 0** EN + DA (ARMv7 container, non-root) |
+| Mutation probes | **11/11**: `taptoast`, `nobounce`, `startframe`, `orphan`, `footers`, `stopdim`, `sysopen`, `diagback`, `waitflicker`, `blindicon` (all caught in the v6.17 section) and `swipeleft` (caught by v6.11's swipe guard) |
+| Builds | device, SIM ARM, SIM host, preview: **0 warnings** (fresh zig cache); `-Wall -Wextra`: 29 × missing field initializer (the settings table, as before) and nothing else — one fewer than v6.16 (`fill_rect` is used again) |
+| Previews | 100 scenarios × 2 languages (v6.16: 90); **circle 0 violations**. No byte comparison against v6.16 — almost every screen changed on purpose; before/after pairs are in the audit |
+| Spec alignment | **ALL ALIGNED** (41 spec parameters; the table's limits, steps and words are untouched) |
+| `sim/selftest.py` | **187 / 0** |
+| `run_e2e.py --all --quick --parallel 4` (EN) | **5/5, 97/97** |
+| New scenarios | `ia_navigation` **45/45**, `feature_page_start` **29/29**, `activity_takes_home` **20/20**, EN and DA; reference client: SKIP (`ui_only`) |
+| `run_e2e.py --all --parallel 4`, EN and DA (local, 5 min per language) | **39/39 scenarios, 1030/1030 checks** in each language — including `settings_save_matrix` 188/188, the STOP, power, schedule and replay scenarios, none of which needed a change |
+| `boot/test_switcher.py`, `tests/test_installer.py`, `tests/hygiene.py` | green |
+| On-device | **not run** (install deferred) |
+
+11. **Not done / open** (also §7 of the audit): no on-device run; a page left open stays open (no idle return to HOME); the editor's lower third is empty now that the footers are gone; DIAGNOSTICS was moved, not redesigned.
+12. **Files:** `src/merakiplus.c`, `docs/ux-audit-v617.md` + `docs/img/ux-audit-v617/` (new), `docs/ui-guide.md`, `README.md`, `screenshots/`, `sim/scenarios/{ia_navigation,feature_page_start,activity_takes_home}.json` (new), `sim/CONTRACT.md`, `sim/README.md`, `sim/PLAY.md`, `sim/play.py`, `sim/play_viewer.html`, `bin/` (`merakiplus`, `merakiplus_sim_arm`, host SIM builds; md5 in `bin/MD5SUMS`), `tools/merakiplus.py` (VERSION 6.17 + md5).
+
 ## Appendix A — string table (id / EN / DA)
 
 <!-- I18N-APPENDIX:BEGIN (generated by i18n_appendix.py — edit STR_TABLE in merakiplus.c, not here) -->
 
-**449 string ids × 2 languages** (50 are the same in EN and DA: units, proper names, technical words and commands). Class = the field the string is shown in; the self-test measures every classified string in both languages against the field's pixel budget (`-` = measured in its context by the layout tests). `%s`/`%d` are placeholders for numbers and names; text in `code font` inside a string is shown in lower case (paths, commands). Source: `round_v6/strings.tsv` (`--dump-strings`). The EN and DA columns are the UI's actual strings and are deliberately kept in both languages.
+**435 string ids × 2 languages** (49 are the same in EN and DA: units, proper names, technical words and commands). Class = the field the string is shown in; the self-test measures every classified string in both languages against the field's pixel budget (`-` = measured in its context by the layout tests). `%s`/`%d` are placeholders for numbers and names; text in `code font` inside a string is shown in lower case (paths, commands). Source: `round_v6/strings.tsv` (`--dump-strings`). The EN and DA columns are the UI's actual strings and are deliberately kept in both languages.
 
 
 **Units (identical in both languages)**
@@ -2269,14 +2334,16 @@ In addition: the RX counters are `uint32_t` (wrap around in a well-defined way),
 | `TX_TAGLINE` | tagline | `ADVANCED BREWING INTERFACE` | `AVANCERET BRYGGE-INTERFACE` |
 | `TX_SPL_CFG_OK` | - | `CONFIG LOADED` | `CONFIG INDLÆST` |
 | `TX_SPL_CFG_MISSING` | - | `CONFIG MISSING` | `CONFIG MANGLER` |
-| `TX_PG_BREW` | page-title | `BREW` | `BRYG` |
-| `TX_PG_STEAM` | page-title | `STEAM · WATER` | `DAMP · VAND` |
 | `TX_PG_SYSTEM` | page-title | `SYSTEM` | `SYSTEM` |
 | `TX_PG_DIAG` | page-title | `DIAGNOSTICS` | `DIAGNOSE` |
-| `TX_PS_BREW` | page-sub | `ESPRESSO · CORE PARAMETERS` | `ESPRESSO · KERNE-PARAMETRE` |
-| `TX_PS_STEAM` | page-sub | `MILK · HOT WATER` | `MÆLK · VARMT VAND` |
-| `TX_PS_SYSTEM` | page-sub | `DISPLAY · SOUND · LANGUAGE · TIME` | `SKÆRM · LYD · SPROG · TID` |
-| `TX_PS_DIAG` | page-sub | `LINK · SENSORS · CONFIG · BOOT` | `LINK · SENSORER · CONFIG · BOOT` |
+| `TX_SEC_DISPLAY` | - | `DISPLAY` | `SKÆRM` |
+| `TX_SEC_CLOCK` | - | `CLOCK` | `UR` |
+| `TX_SEC_SCHED` | - | `SCHEDULE` | `TIDSPLAN` |
+| `TX_SEC_STOCK` | - | `STOCK UI` | `STOCK-UI` |
+| `TX_LV_GRIND` | - | `ON THE SCALE %s G` | `PÅ VÆGTEN %s G` |
+| `TX_LV_BREW` | - | `BOILER %s° · GROUP %s°` | `KEDEL %s° · GRUPPE %s°` |
+| `TX_LV_WATER` | - | `WATER %s°` | `VAND %s°` |
+| `TX_LV_STEAM` | - | `BOILER %s° · MILK %s°` | `KEDEL %s° · MÆLK %s°` |
 
 **Settings: row labels (SL), notes (SN) and hints (SH)**
 
@@ -2307,31 +2374,30 @@ In addition: the RX counters are `uint32_t` (wrap around in a well-defined way),
 | `TX_SL_HOTW` | - | `HOT WATER` | `VARMT VAND` |
 | `TX_SN_HOTW` | note | `STOPS AUTOMATICALLY AT THIS WEIGHT` | `STOPPER AUTOMATISK VED DENNE VÆGT` |
 | `TX_SL_HOTMODE` | - | `WATER MODE` | `VAND-TILSTAND` |
-| `TX_SN_HOTMODE` | note | `CONFIG ONLY · MERAKI+ STARTS AUTO ONLY` | `KUN CONFIG · MERAKI+ STARTER KUN AUTO` |
+| `TX_SN_HOTMODE` | note | `MERAKI+ STARTS AUTO ONLY` | `MERAKI+ STARTER KUN AUTO` |
 | `TX_SL_HOTT` | - | `WATER SENSOR` | `VAND-SENSOR` |
 | `TX_SN_HOTT` | note | `MEASURED ONLY · NO TARGET EXISTS` | `KUN MÅLT · INTET MÅL FINDES` |
 | `TX_SL_UILANG` | - | `UI LANGUAGE` | `UI-SPROG` |
 | `TX_SN_UILANG` | note | `LIVE PREVIEW · SAVE TO KEEP` | `LIVE PREVIEW · GEM FOR AT BEHOLDE` |
 | `TX_SL_BL` | - | `BRIGHTNESS` | `LYSSTYRKE` |
-| `TX_SN_BL` | note | `LIVE PREVIEW · 0 OMITTED (DARK SCREEN)` | `LIVE PREVIEW · 0 UDELADT (MØRK SKÆRM)` |
+| `TX_SN_BL` | note | `LIVE PREVIEW` | `LIVE PREVIEW` |
 | `TX_SL_VOL` | - | `VOLUME` | `LYDSTYRKE` |
-| `TX_SN_VOL` | note | `CONFIG ONLY · STOCK UI SOUND · 0-100 SLIDER` | `KUN CONFIG · STOCK-UI LYD · SLIDER 0-100` |
+| `TX_SN_VOL` | note | `STOCK UI SOUND` | `STOCK-UI LYD` |
 | `TX_SH_VOL` | - | `STEPS = ESTIMATE` | `TRIN = SKØN` |
 | `TX_SL_TUNIT` | - | `TEMP UNIT` | `TEMP-ENHED` |
 | `TX_SN_TUNIT` | note | `ALSO APPLIES IN MERAKI+` | `GÆLDER OGSÅ I MERAKI+` |
 | `TX_SL_LANG` | - | `STOCK LANG.` | `STOCK-SPROG` |
-| `TX_SN_LANG` | note | `STOCK UI ONLY · MERAKI+: SEE UI LANGUAGE` | `KUN STOCK-UI · MERAKI+: SE UI-SPROG` |
+| `TX_SN_LANG` | note | `STOCK UI ONLY` | `KUN STOCK-UI` |
 | `TX_SL_HOTSC` | - | `WATER SHORTCUT` | `VAND-GENVEJ` |
-| `TX_SN_HOTSC` | note | `CONFIG ONLY · STOCK UI HOME SHORTCUT` | `KUN CONFIG · STOCK-UI HJEM-GENVEJ` |
+| `TX_SN_HOTSC` | note | `STOCK UI HOME SHORTCUT` | `STOCK-UI HJEM-GENVEJ` |
 | `TX_SL_DST` | - | `DAYLIGHT SAVING` | `SOMMERTID` |
-| `TX_SN_CLOCK` | note | `CONFIG ONLY · STOCK UI CLOCK` | `KUN CONFIG · STOCK-UI UR` |
 | `TX_SL_CLEARTIP` | - | `CLEANING REMINDER` | `RENSE-PÅMINDELSE` |
-| `TX_SN_CLEARTIP` | note | `CONFIG ONLY · STOCK UI TIP` | `KUN CONFIG · STOCK-UI TIP` |
+| `TX_SN_CLEARTIP` | note | `STOCK UI TIP` | `STOCK-UI TIP` |
 | `TX_SL_TIMEMODE` | - | `TIME FORMAT` | `TIDSFORMAT` |
 | `TX_SL_AUTOTIME` | - | `AUTO TIME` | `AUTO-TID` |
-| `TX_SN_AUTOTIME` | note | `CONFIG ONLY · NETWORK TIME` | `KUN CONFIG · NETVÆRKSTID` |
+| `TX_SN_AUTOTIME` | note | `STOCK UI NETWORK TIME` | `STOCK-UI NETVÆRKSTID` |
 | `TX_SL_TZ` | - | `TIME ZONE` | `TIDSZONE` |
-| `TX_SN_TZ` | note | `LOCKED · SET IT IN THE STOCK UI` | `LÅST · SÆTTES I STOCK-UI'ET` |
+| `TX_SN_TZ` | note | `SET IT IN THE STOCK UI` | `SÆTTES I STOCK-UI'ET` |
 | `TX_SH_EST` | - | `MAX = ESTIMATE` | `MAX = SKØN` |
 
 **Enum names**
@@ -2417,8 +2483,8 @@ In addition: the RX counters are `uint32_t` (wrap around in a well-defined way),
 | `TX_T_WAIT_ACT` | toast | `WAIT UNTIL THE ACTIVITY ENDS` | `VENT TIL AKTIVITET ER SLUT` |
 | `TX_T_WRITE_REJ` | toast | `NOT ACCEPTED · NOT SAVED` | `IKKE ACCEPTERET · INTET GEMT` |
 | `TX_T_NOACK_SAVE` | toast | `SAVE FAILED · NO REPLY` | `GEM FEJLET · INTET SVAR` |
-| `TX_T_SAVED_MCU` | toast | `SAVED · CONTROLLER + CONFIG` | `GEMT · CONTROLLER + CONFIG` |
-| `TX_T_SAVED_CFG` | toast | `SAVED · STOCK UI: AFTER RESTART` | `GEMT · STOCK-UI: EFTER GENSTART` |
+| `TX_T_SAVED_MCU` | toast | `SAVED · ACTIVE NOW` | `GEMT · AKTIV NU` |
+| `TX_T_SAVED_CFG` | toast | `SAVED` | `GEMT` |
 | `TX_T_CFG_ERR` | toast | `CONFIG ERROR · NOT SAVED` | `CONFIG-FEJL · INTET GEMT` |
 | `TX_T_LANG_SAVED` | toast | `LANGUAGE SAVED · ENGLISH` | `SPROG GEMT · DANSK` |
 | `TX_T_LANG_NOFILE` | toast | `LANGUAGE ACTIVE · FILE NOT SAVED` | `SPROG AKTIVT · FIL IKKE GEMT` |
@@ -2445,7 +2511,7 @@ In addition: the RX counters are `uint32_t` (wrap around in a well-defined way),
 | `TX_T_PW_NOLINK` | toast | `NO CONNECTION · CANNOT TURN OFF` | `INGEN FORBINDELSE · SLUKKER IKKE` |
 | `TX_T_PW_NOACK` | toast | `POWER OFF: NO REPLY · TRY AGAIN` | `SLUK: INTET SVAR · PRØV IGEN` |
 | `TX_T_PW_ON` | toast | `MACHINE IS ON` | `MASKINEN ER TÆNDT` |
-| `TX_T_HOLD_HINT` | toast | `HOLD THE BUTTON TO START` | `HOLD KNAPPEN NEDE FOR START` |
+| `TX_T_HOLD_HINT` | toast | `KEEP HOLDING TO START` | `BLIV VED AT HOLDE FOR START` |
 | `TX_T_PINFO` | - | `PRE-INF. %d BAR = RAW %d · LINEAR` | `PRÆ-INF. %d BAR = RÅ %d · LINEÆR` |
 | `TX_T_NOACK` | toast | `THE MACHINE DID NOT ANSWER` | `MASKINEN SVAREDE IKKE` |
 | `TX_T_NOSTART` | toast | `NO START · CHECK THE MACHINE` | `INGEN START · TJEK MASKINEN` |
@@ -2454,16 +2520,17 @@ In addition: the RX counters are `uint32_t` (wrap around in a well-defined way),
 
 | id | class | EN | DA |
 |---|---|---|---|
-| `TX_H_DOSE_TGT` | home-label | `DOSE · TARGET %s G` | `DOSIS · MÅL %s G` |
-| `TX_H_CUP_TGT` | home-label | `IN THE CUP · TARGET %s G` | `I KOPPEN · MÅL %s G` |
+| `TX_H_DOSE` | home-label | `DOSE` | `DOSIS` |
+| `TX_H_CUP` | home-label | `IN THE CUP` | `I KOPPEN` |
 | `TX_H_MILK_TGT` | home-label | `MILK · TARGET %s°` | `MÆLK · MÅL %s°` |
-| `TX_H_MILK_PROBE` | home-label | `MILK PROBE · NO TARGET` | `MÆLKEPROBE · INTET MÅL` |
-| `TX_H_BOILER` | home-label | `BREW BOILER · NOW` | `BRYGKEDEL · NU` |
+| `TX_H_MILK` | home-label | `MILK` | `MÆLK` |
+| `TX_H_MILK_PROBE` | home-label | `MILK PROBE` | `MÆLKEPROBE` |
+| `TX_H_BOILER` | home-label | `BREW BOILER` | `BRYGKEDEL` |
 | `TX_H_CRC` | - | `CRC %u` | `CRC %u` |
 | `TX_H_DONE_IN` | home-sub | `DONE IN %s` | `FÆRDIG PÅ %s` |
-| `TX_H_AUTOSTOP_G` | home-sub | `AUTO-STOP AT %s G · OR STOP` | `AUTO-STOP VED %s G · ELLER STOP` |
-| `TX_H_AUTOSTOP_T` | home-sub | `AUTO-STOP AT %s° · OR STOP` | `AUTO-STOP VED %s° · ELLER STOP` |
-| `TX_H_WAND_NOSTOP` | home-sub | `NO AUTO-STOP · RELEASE WAND` | `INGEN AUTO-STOP · SLIP WAND` |
+| `TX_H_AUTOSTOP_G` | home-sub | `STOPS AT %s G` | `STOPPER VED %s G` |
+| `TX_H_AUTOSTOP_T` | home-sub | `STOPS AT %s°` | `STOPPER VED %s°` |
+| `TX_H_WAND_NOSTOP` | home-sub | `RELEASE THE WAND TO STOP` | `SLIP WAND FOR AT STOPPE` |
 | `TX_H_DONE_RISE` | home-sub | `DONE IN %s · RISES ≈%s° MORE` | `FÆRDIG PÅ %s · STIGER ≈%s° TIL` |
 | `TX_H_NORESP` | home-sub | `NO CONNECTION TO THE MACHINE` | `INGEN FORBINDELSE TIL MASKINEN` |
 | `TX_H_WAKING` | home-sub | `WAKING UP…` | `VÅGNER…` |
@@ -2475,7 +2542,7 @@ In addition: the RX counters are `uint32_t` (wrap around in a well-defined way),
 | `TX_H_HOLD_WATER` | home-sub | `HOLD · HOT WATER %s G` | `HOLD · VARMT VAND %s G` |
 | `TX_H_HOLD_STEAM` | home-sub | `HOLD · STEAM TO %s°` | `HOLD · DAMP TIL %s°` |
 | `TX_ST_TIME` | - | `TIME` | `TID` |
-| `TX_ST_BAR` | - | `≈BAR EST.` | `≈BAR EST.` |
+| `TX_ST_BAR` | - | `≈BAR` | `≈BAR` |
 | `TX_ST_PRAW` | - | `RAW` | `RÅ` |
 | `TX_ST_PULSE` | - | `PULSE` | `PULS` |
 | `TX_ST_FLOW` | - | `FLOW` | `FLOW` |
@@ -2487,11 +2554,10 @@ In addition: the RX counters are `uint32_t` (wrap around in a well-defined way),
 | `TX_ST_GROUP` | - | `GROUP` | `GRUPPE` |
 | `TX_ST_WEIGHT` | - | `WEIGHT` | `VÆGT` |
 | `TX_ST_MILK` | - | `MILK` | `MÆLK` |
-| `TX_C_HINT` | - | `HOLD AN ICON TO START` | `HOLD ET IKON FOR AT STARTE` |
-| `TX_C_HINT2` | - | `SWIPE FOR SETTINGS` | `STRYG FOR INDSTILLINGER` |
+| `TX_C_HINT` | - | `HOLD = START · TAP = SETTINGS` | `HOLD = START · TRYK = INDSTIL` |
 | `TX_C_PREHEAT` | - | `{icon11} PRE-HEAT · %s %s` | `{icon11} FORVARMNING · %s %s` |
-| `TX_C_ERRCODE` | - | `CODE %s · SEE DIAGNOSTICS` | `KODE %s · SE DIAGNOSE` |
-| `TX_C_DIAGREF` | - | `DETAILS IN DIAGNOSTICS` | `DETALJER UNDER DIAGNOSE` |
+| `TX_C_ERRCODE` | - | `CODE %s · TAP FOR DETAILS` | `KODE %s · TRYK FOR DETALJER` |
+| `TX_C_DIAGREF` | - | `TAP FOR DETAILS` | `TRYK FOR DETALJER` |
 | `TX_C_PRESS` | - | `PRESSURE` | `TRYK` |
 | `TX_C_WEIGHT` | - | `WEIGHT` | `VÆGT` |
 | `TX_C_MILK` | - | `MILK TEMP` | `MÆLKETEMP` |
@@ -2506,6 +2572,7 @@ In addition: the RX counters are `uint32_t` (wrap around in a well-defined way),
 
 | id | class | EN | DA |
 |---|---|---|---|
+| `TX_B_START` | - | `HOLD TO START` | `HOLD FOR START` |
 | `TX_B_BACK` | button | `BACK` | `TILBAGE` |
 | `TX_B_CANCEL` | button | `CANCEL` | `ANNULLER` |
 | `TX_B_SAVE` | button | `SAVE` | `GEM` |
@@ -2517,7 +2584,6 @@ In addition: the RX counters are `uint32_t` (wrap around in a well-defined way),
 
 | id | class | EN | DA |
 |---|---|---|---|
-| `TX_X_CAP` | full-line | `STARTUP · UI CHOICE` | `OPSTART · UI-VALG` |
 | `TX_X_BOOTUI` | - | `BOOT UI` | `BOOT-UI` |
 | `TX_X_SWITCH` | - | `SWITCH TO ORIGINAL NOW` | `SKIFT TIL ORIGINAL NU` |
 | `TX_X_SWITCH_SUB` | row-sub | `IMMEDIATE · NO RESTART` | `STRAKS · UDEN GENSTART` |
@@ -2546,28 +2612,17 @@ In addition: the RX counters are `uint32_t` (wrap around in a well-defined way),
 | `TX_D_MEASURED` | - | `MEASURED VALUE · NOT A SETTING` | `MÅLT VÆRDI · INGEN INDSTILLING` |
 | `TX_D_NOEDIT` | - | `CANNOT BE CHANGED HERE` | `KAN IKKE ÆNDRES HER` |
 | `TX_D_NOPTS` | - | `%d OPTIONS` | `%d VALG` |
-| `TX_D_LIVE` | foot-1 | `LIVE FROM CONTROLLER` | `LIVE FRA CONTROLLER` |
-| `TX_D_SAMESENSOR` | foot-2 | `SAME SENSOR AS STOCK UI` | `SAMME SENSOR SOM STOCK-UI` |
-| `TX_D_FROMCFG` | foot-1 | `SHOWN FROM CONFIG.JSON` | `VISES FRA CONFIG.JSON` |
-| `TX_D_STOCKEDIT` | foot-2 | `EDITOR ONLY IN STOCK UI` | `EDITOR KUN I STOCK-UI` |
-| `TX_D_MCU_CFG` | foot-1 | `CONTROLLER NOW + CONFIG` | `CONTROLLER STRAKS + CONFIG` |
-| `TX_D_CFGONLY` | foot-1 | `CONFIG.JSON ONLY` | `KUN CONFIG.JSON` |
-| `TX_D_STOCK_RESTART` | foot-2 | `STOCK UI: AFTER RESTART` | `STOCK-UI: EFTER GENSTART` |
-| `TX_D_LANG_L1` | foot-1 | MERAKI+ ONLY · `merakiplus/lang` | KUN MERAKI+ · `merakiplus/lang` |
-| `TX_D_LANG_L2` | foot-2 | `STOCK UI LANGUAGE UNCHANGED` | `STOCK-UI-SPROG UÆNDRET` |
 | `TX_D_SAVING` | status | `SAVING…` | `GEMMER…` |
 | `TX_D_OOR` | status | `OUT OF SPEC · PICK A NEW VALUE` | `UDEN FOR SPEC · VÆLG NY VÆRDI` |
+| `TX_D_HOLDFAST` | status | `HOLD - OR + TO GO FAST` | `HOLD - ELLER + FOR HURTIGT` |
 | `TX_D_CHANGED` | - | `CHANGED · WAS %s %s` | `ÆNDRET · FØR %s %s` |
-| `TX_D_SENSOR_LIVE` | status | `SENSOR · LIVE` | `SENSOR · LIVE` |
 | `TX_D_LOCKED` | status | `LOCKED` | `LÅST` |
-| `TX_D_SAVEDVAL` | status | `SAVED VALUE` | `GEMT VÆRDI` |
 
 **System actions: switch confirmation, exit reminder, goodbye screen**
 
 | id | class | EN | DA |
 |---|---|---|---|
 | `TX_Y_CHANGED` | - | `CHANGED · WAS %s` | `ÆNDRET · FØR %s` |
-| `TX_Y_SAVEDCHOICE` | status | `SAVED CHOICE` | `GEMT VALG` |
 | `TX_Y_FLAG_YES` | foot-1 | FLAG `/customer/new` EXISTS | FLAG `/customer/new` FINDES |
 | `TX_Y_FLAG_NO` | foot-1 | NO FLAG `/customer/new` | INTET FLAG `/customer/new` |
 | `TX_Y_FLAG_HANDSOFF` | foot-2 | `FLAG IS NOT TOUCHED HERE` | `FLAGET RØRES IKKE HERFRA` |
@@ -2644,8 +2699,8 @@ In addition: the RX counters are `uint32_t` (wrap around in a well-defined way),
 | `TX_DV_YES` | diag-value | `YES` | `JA` |
 | `TX_DV_NO` | diag-value | `NO` | `NEJ` |
 | `TX_DV_MAINS` | - | `%u V · %u HZ` | `%u V · %u HZ` |
-| `TX_DV_VERSION` | - | `MERAKI+ V6.16` | `MERAKI+ V6.16` |
-| `TX_DV_VERSION_RO` | - | `MERAKI+ V6.16 RO` | `MERAKI+ V6.16 RO` |
+| `TX_DV_VERSION` | - | `MERAKI+ V6.17` | `MERAKI+ V6.17` |
+| `TX_DV_VERSION_RO` | - | `MERAKI+ V6.17 RO` | `MERAKI+ V6.17 RO` |
 | `TX_DV_MISSING` | diag-value | `MISSING` | `MANGLER` |
 | `TX_DV_FLAG_YES` | diag-value | `EXISTS` | `FINDES` |
 | `TX_DV_FLAG_NO` | diag-value | `NOT PRESENT` | `FINDES IKKE` |
@@ -2692,8 +2747,6 @@ In addition: the RX counters are `uint32_t` (wrap around in a well-defined way),
 | `TX_DV_PNOW` | - | `RAW %d = ≈%.1f BAR` | `RÅ %d = ≈%.1f BAR` |
 | `TX_DV_PPULSE` | - | `RAW %d · PULSE, NO PRESSURE` | `RÅ %d · PULS, IKKE TRYK` |
 | `TX_DV_PMAINT` | - | `RAW %d · MAINTENANCE PULSE` | `RÅ %d · VEDLIGEHOLD-PULS` |
-| `TX_DG_PNOTE1` | full-line | `ESTIMATE · PUMP SIDE · NOT AT THE PUCK` | `ESTIMAT · PUMPE-SIDE · IKKE VED PUCKEN` |
-| `TX_DG_PNOTE2` | - | `> %d BAR = PULSE · RAW: GRAPH PILL` | `> %d BAR = PULS · RÅ: GRAF-PILLEN` |
 | `TX_DG_ABOUT` | full-line | `ABOUT` | `OM` |
 | `TX_DG_RAWCAP` | full-line | `RAW COUNTERS · SERVICE` | `RÅ TÆLLERE · SERVICE` |
 | `TX_DG_L_LANG` | full-line | UI LANGUAGE · `merakiplus/lang` | UI-SPROG · `merakiplus/lang` |
@@ -2724,8 +2777,8 @@ In addition: the RX counters are `uint32_t` (wrap around in a well-defined way),
 | `TX_SL_PHAT` | - | `PRE-HEAT AT` | `FORVARM KL.` |
 | `TX_SL_PHREP` | - | `REPEAT` | `GENTAG` |
 | `TX_SL_AUTOOFF` | - | `AUTO OFF` | `AUTO-SLUK` |
-| `TX_SN_PREHEAT` | note | `THE CONTROLLER ALARM WAKES + HEATS` | `CONTROLLERENS ALARM VÆKKER + VARMER` |
-| `TX_SN_PHAT` | note | `LOCAL TIME · SENT AS THE CMD8 ALARM` | `LOKAL TID · SENDES SOM CMD8-ALARM` |
+| `TX_SN_PREHEAT` | note | `THE MACHINE WAKES + HEATS ITSELF` | `MASKINEN VÅGNER + VARMER SELV` |
+| `TX_SN_PHAT` | note | `LOCAL TIME` | `LOKAL TID` |
 | `TX_SN_PHREP` | note | `ONCE = SWITCHES ITSELF OFF AFTER USE` | `EN GANG = SLÅR SIG SELV FRA BAGEFTER` |
 | `TX_SN_AUTOOFF` | note | `NO TOUCH OR ACTIVITY · THEN OFF` | `INGEN BERØRING ELLER AKTIVITET · SÅ SLUK` |
 | `TX_SN_TIMEFMT` | note | `HOME CLOCK + STOCK UI CLOCK` | `UR PÅ HJEM + STOCK-UI'ETS UR` |
@@ -2743,18 +2796,11 @@ In addition: the RX counters are `uint32_t` (wrap around in a well-defined way),
 | `TX_E_MIN30` | - | `30 MIN` | `30 MIN` |
 | `TX_E_MIN60` | - | `60 MIN` | `60 MIN` |
 
-**Stepper detail**
-
-| id | class | EN | DA |
-|---|---|---|---|
-| `TX_D_OWN_L1` | foot-1 | MERAKI+ · `merakiplus/schedule` | MERAKI+ · `merakiplus/schedule` |
-| `TX_D_OWN_L2` | foot-2 | `STOCK SCHEDULES UNCHANGED` | `STOCK-PLANER UÆNDREDE` |
-
 **Guards and toasts**
 
 | id | class | EN | DA |
 |---|---|---|---|
-| `TX_T_OWN_SAVED` | toast | `SAVED · MERAKI+ SCHEDULE` | `GEMT · MERAKI+-PLAN` |
+| `TX_T_OWN_SAVED` | toast | `SCHEDULE SAVED` | `TIDSPLAN GEMT` |
 | `TX_T_OWN_NOFILE` | toast | `ACTIVE · FILE NOT SAVED` | `AKTIV · FIL IKKE GEMT` |
 | `TX_T_AUTOOFF_SOON` | toast | `AUTO OFF IN 30 S · TOUCH TO STAY ON` | `AUTO-SLUK OM 30 S · RØR SKÆRMEN` |
 | `TX_T_ONCE_USED` | toast | `ONE-TIME PRE-HEAT USED · NOW OFF` | `FORVARMNING BRUGT · NU FRA` |

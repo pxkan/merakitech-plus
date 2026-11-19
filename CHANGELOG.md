@@ -3,6 +3,55 @@
 All notable changes to Meraki+. Details (with evidence, frames and test figures) are in
 [docs/dev/UI_v6.md](docs/dev/UI_v6.md) under *CHANGES-v6.x*. All dates are 2026.
 
+## [6.17] — 2026-11-20
+A UX audit of v6.16 and the redesign it led to: [docs/ux-audit-v617.md](docs/ux-audit-v617.md).
+**Display and navigation only** — no UART frame, guard, limit or timing changed.
+### Changed
+- **One page per function instead of settings lists.** Tap the grind / brew / water / steam icon on HOME
+  to open that function's page: a live line (*BOILER 92.4° · GROUP 70°*, *ON THE SCALE 0.0 G*, …), **its own
+  settings** as rows, and a labelled **HOLD TO START**. The three flat lists (BREW · STEAM·WATER · SYSTEM,
+  31 rows) and the five-page swipe carousel are gone. Holding an icon still starts directly.
+- **The icons say what they will do:** each carries its target underneath (*18.5 G · 36 G · 40 G · 65°*).
+  A tap used to answer "HOLD THE BUTTON TO START"; now it opens the page that shows the hold.
+- **SYSTEM (the gear) is five rows:** four sections — DISPLAY, CLOCK, SCHEDULE, STOCK UI — that open in
+  place (one at a time, with a summary on the closed header: language, time, next pre-heat) and the
+  **DIAGNOSTICS** entry with the machine's status. Everything that only matters to the stock UI (BOOT UI,
+  SWITCH TO ORIGINAL NOW, VOLUME, STOCK LANG., WATER SHORTCUT, CLEANING REMINDER, AUTO TIME, PAUSE TIME) is
+  together under STOCK UI.
+- **DIAGNOSTICS is no longer a top-level page.** It opens from SYSTEM — or by tapping HOME's error /
+  offline line, which now reads *CODE E2 · TAP FOR DETAILS*.
+- **One way back:** the chevron at the top of every page and editor (the whole header is the target), or
+  swipe right. No page dots, no invisible edge zones; HOME reacts to no swipe.
+- **STOP is the biggest thing under the numbers:** 216 × 54 px (was 160 × 44), bright red with white text
+  (4.0 : 1 against the background, was 1.9 : 1); two buttons 152 px wide in the larger font.
+- **While something runs, the UI is on HOME.** A function's page is never left on screen during an
+  activity (started there, on the machine or by the wand) — HOME is the one live view, where STOP is.
+- **Less text.** No footer lines under the editors (*CONTROLLER NOW + CONFIG*, *STOCK UI: AFTER RESTART*,
+  file paths); no *SAVED VALUE*; the target during an activity is said once and larger (*STOPS AT 36.0 G*
+  instead of *IN THE CUP · TARGET 36.0 G* + *AUTO-STOP AT 36.0 G · OR STOP*); *≈BAR* instead of *≈BAR EST.*;
+  one hint line on HOME instead of two; *SAVED · ACTIVE NOW* / *SAVED* instead of the config-file toasts; the
+  notes no longer say *CONFIG ONLY* / *CMD8*. 25 string ids removed, 11 added; user-facing text −11 %.
+- The read-only WATER SENSOR row is now the WATER page's live line.
+### Added
+- Editors with a long range show *HOLD - OR + TO GO FAST* while the value is untouched.
+- A page's live line turns amber and names the reason when a start is blocked (*NO CONNECTION*,
+  *GRIND = TIME · USE STOCK UI*, *CONFIG OUT OF SPEC · FIX FIRST*, …).
+- Self-test section *v6.17 IA consolidation* (23 checks): every one of the 29 parameters is on exactly one
+  page and its editor opens by real taps from HOME (≤ 3 taps) and closes the same way; HOLD TO START
+  queues byte for byte the same frames as the icon hold; an activity started while a page is open brings
+  HOME back; STOP size and contrast; no text below an editor's buttons; no *CONFIG ONLY* / *CMD8* /
+  *· OR STOP* / *EST.* in any user-facing string.
+- E2E scenarios `ia_navigation` (real taps through every level, no frame and no config write),
+  `feature_page_start` (a brew started from the BREW page runs exactly like the `brew` scenario) and
+  `activity_takes_home`.
+- SIM contract (additive, `sim/CONTRACT.md` ADDENDUM v6.17): `tab` = home | grind | brew | water | steam |
+  system | diag; `shown.live` / `shown.section`; `page` by those names; `layout` targets `gear`, `back`,
+  `start`, `sec_*`, `diag` (the `edge_left` / `edge_right` targets are gone). The `page` keys are unchanged.
+### Notes
+- `bin/`: `merakiplus` `532e4bd5…`, `merakiplus_sim_arm` `dcb74a94…` and the host SIM builds rebuilt;
+  `switcher`, `grab_shim.so`, `tinj_hold` and `keyinj` are byte-identical. **Not yet verified on a
+  machine** (install deferred). What that leaves open is listed in §7 of the audit.
+
 ## [6.16, rebrand] — 2026-11-19
 Same UI version (V6.16); rebuilt binaries. Pure rename + migration: control logic, UART frames,
 thresholds and the EN/DA UI texts are unchanged except for the displayed file paths.

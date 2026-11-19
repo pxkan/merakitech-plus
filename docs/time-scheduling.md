@@ -146,7 +146,8 @@ next start once that time has passed.
   and is saved (toast ONE-TIME PRE-HEAT USED).
 * **After a wake**: Meraki+ cold-boots (or, if it stayed on, sees word 0 = 1 again and powers on), runs the boot
   push and re-arms the next occurrence (e.g. tomorrow) once the link is up.
-* **Display**: HOME's swipe hint becomes `⏰ PRE-HEAT · THU 06:30` while a pre-heat is planned; DIAGNOSE →
+* **Display**: HOME shows a second hint line `⏰ PRE-HEAT · THU 06:30` while a pre-heat is planned (v6.17: the rows are under
+  *SYSTEM › SCHEDULE*, whose closed header shows the time or OFF); DIAGNOSE →
   TIME · SCHEDULE shows local time, zone + DST state, auto off + idle time, the last alarm sent (day h:m ·
   sent/acknowledged) and the next pre-heat.
 

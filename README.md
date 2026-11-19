@@ -1,7 +1,7 @@
 # Meraki+ — a community UI for the round display of MerakiTech espresso machines
 
 [![CI](https://github.com/thomasgrastein/merakitech-plus/actions/workflows/ci.yml/badge.svg)](https://github.com/thomasgrastein/merakitech-plus/actions/workflows/ci.yml)
-![version](https://img.shields.io/badge/Meraki%2B-v6.16-c9955c)
+![version](https://img.shields.io/badge/Meraki%2B-v6.17-c9955c)
 ![license](https://img.shields.io/badge/license-MIT-blue)
 ![status](https://img.shields.io/badge/status-unofficial%20%C2%B7%20experimental-red)
 
@@ -120,20 +120,22 @@ available to go back to.
 - **Manual STOP** for **water, grind and brew** (and steam) — the red button during an activity.
   The stop commands are the same as the controller's own, with confirmation once the controller
   reports the stop.
-- **Live brew view** — weight in the cup, time, flow and a **pressure estimate** (≈bar · EST.); a
+- **One page per function** — tap the grind / brew / water / steam icon to see that function's live values
+  and settings and a labelled **HOLD TO START**; the icons on HOME show what they will do (*18.5 G*, *36 G*, …).
+- **Live brew view** — weight in the cup, time, flow and a **pressure estimate** (≈bar); a
   calm graph (median + EMA) and a weight dead band, so the numbers do not flicker.
 - **Center-hold gesture (optional, `--gesture`)** — hold one finger in the middle of the stock UI's
   screen for 5 seconds to switch to Meraki+ without a reboot (works from the first boot after
-  installation). To go back: *Settings → SYSTEM → SWITCH TO ORIGINAL NOW*.
+  installation). To go back: *gear → SYSTEM → STOCK UI → SWITCH TO ORIGINAL NOW*.
 - **The power button** is honored — but see the [hardware limitation](#the-power-button-hardware-limitation).
 - **Clock, planned pre-heat and auto off** — the time on HOME (12/24 h as in the stock UI), a daily /
   weekday / one-time **pre-heat** that wakes the machine through the controller's own alarm, and an
   optional **auto off** after 15–60 minutes without use. See [Clock and pre-heat](#clock-and-pre-heat).
-- **Boot selection in the UI** — *SYSTEM → BOOT UI* selects whether the machine starts Meraki+ or the
+- **Boot selection in the UI** — *SYSTEM → STOCK UI → BOOT UI* selects whether the machine starts Meraki+ or the
   original UI.
-- **DIAGNOSTICS page** — connection, error codes E1–E3, version, boot slot, network status, raw
-  counters.
-- **English and Danish** (switch under *SYSTEM → UI LANGUAGE*).
+- **DIAGNOSTICS** (advanced, behind SYSTEM — or one tap on HOME's error line) — connection, error codes
+  E1–E3, version, boot slot, network status, raw counters.
+- **English and Danish** (switch under *SYSTEM → DISPLAY → UI LANGUAGE*).
 - **Simulator + E2E tests** — the whole UI can run without a machine against a simulated controller
   (`sim/`), and CI runs the tests on every change.
 
@@ -217,26 +219,27 @@ requires a clone of the repository.
 
 | What | How |
 |---|---|
-| **Start an activity** | **Hold** one of the four icons (grind · brew · water · steam) for ~0.7 s. A short tap only shows a hint. |
-| **Stop an activity** | Tap the red **STOP** button (*STOP WATER / STOP BREW / STOP GRIND / STOP STEAM*). Green message = the controller has confirmed the stop. Yellow/red message = try again. Auto-stop at the target weight works as in the stock UI. |
-| **Change page** | Swipe horizontally, or tap the left/right edge. Pages: HOME · BREW · STEAM·WATER · SYSTEM · DIAGNOSTICS. The gear icon on HOME opens the settings. |
-| **Change a setting** | Tap the row → `−`/`+` (hold to go fast) → **SAVE**. Swipe down or tap the arrow at the top to cancel. |
-| **Language** | *SYSTEM → UI LANGUAGE* (English/Danish). The stock UI's language is set separately (*STOCK LANG.*). |
-| **Back to the original UI now** | *SYSTEM → SWITCH TO ORIGINAL NOW* (no reboot). |
+| **Start an activity** | **Hold** one of the four icons (grind · brew · water · steam) for ~0.7 s — the number under the icon is what it will do. Or **tap** the icon to open its page and hold **HOLD TO START** there. |
+| **Stop an activity** | Tap the big red **STOP** button (*STOP WATER / STOP BREW / STOP GRIND / STOP STEAM*). Green message = the controller has confirmed the stop. Yellow/red message = try again. Auto-stop at the target weight works as in the stock UI. |
+| **Get around** | **Tap an icon** = that function's page (GRIND · BREW · WATER · STEAM: live values + its settings). **Tap the gear** = SYSTEM (DISPLAY · CLOCK · SCHEDULE · STOCK UI · DIAGNOSTICS; tap a section to open it). **Back** = the arrow at the top of every page, or swipe right. |
+| **Change a setting** | Open the function's page (or SYSTEM) → tap the row → `−`/`+` (hold to go fast) → **SAVE**. Swipe down or tap the arrow at the top to cancel. |
+| **Language** | *gear → DISPLAY → UI LANGUAGE* (English/Danish; the DISPLAY row shows the current language). The stock UI's language is set separately (*STOCK UI → STOCK LANG.*). |
+| **Back to the original UI now** | *gear → STOCK UI → SWITCH TO ORIGINAL NOW* (no reboot). |
 | **To Meraki+ from the original UI** | With `--gesture`: hold **one finger still in the middle of the screen for 5 s** and release (active from the first boot after installation, because the gesture switcher is started by `demo.sh`). Without it: run `./install.sh --ip ADDR` again. |
-| **What starts at boot** | *SYSTEM → BOOT UI* (takes effect at the next boot), or `--persist` / `./revert.sh`. |
+| **What starts at boot** | *gear → STOCK UI → BOOT UI* (takes effect at the next boot), or `--persist` / `./revert.sh`. |
+| **Something is wrong** | HOME says what (*BREW BOILER SENSOR FAULT*, *NO CONNECTION TO THE MACHINE*); tap the line under it (*TAP FOR DETAILS*) for DIAGNOSTICS. |
 
 ### Clock and pre-heat
 
 - **Clock:** HOME's top line shows the local time: the display's system clock (UTC) + the time zone set in
-  the stock UI + daylight saving if *SYSTEM → DAYLIGHT SAVING* is on. *TIME FORMAT* 24-HOUR / 12-HOUR
+  the stock UI + daylight saving if *SYSTEM → CLOCK → DAYLIGHT SAVING* is on. *TIME FORMAT* 24-HOUR / 12-HOUR
   matches the stock UI's setting. Meraki+ does not set the clock itself; if it has never been set (no network
   time sync in the stock UI yet), the wordmark is shown instead.
-- **Pre-heat:** *SYSTEM → PRE-HEAT* (on/off), *PRE-HEAT AT* (time) and *REPEAT* (once / every day / Mon–Fri /
+- **Pre-heat:** *SYSTEM → SCHEDULE → PRE-HEAT* (on/off), *PRE-HEAT AT* (time) and *REPEAT* (once / every day / Mon–Fri /
   Sat–Sun). When the machine is switched off, the next pre-heat is handed to the controller as its wake alarm —
   the same way the stock UI does it — and the controller wakes and heats at that time. HOME shows the next
   pre-heat while it is planned. Meraki+'s schedule is separate from the stock UI's schedules.
-- **Auto off:** *SYSTEM → AUTO OFF* (off / 15 / 20 / 30 / 60 min). After that long without a touch or an
+- **Auto off:** *SYSTEM → SCHEDULE → AUTO OFF* (off / 15 / 20 / 30 / 60 min). After that long without a touch or an
   activity the machine switches off (a warning appears 30 s before; touch the screen to stay on).
 
 Details: [docs/time-scheduling.md](docs/time-scheduling.md).
@@ -246,7 +249,7 @@ Details: [docs/time-scheduling.md](docs/time-scheduling.md).
 The machine's protocol does not provide a calibrated pressure value. Meraki+ therefore shows
 pressure as an **estimate**: the raw value from the controller is scaled linearly so that the
 pre-infusion level matches the pre-infusion pressure set in the settings (default 4 bar). The value
-is labelled *≈BAR EST.*; tap the graph to see the basis. Use it as a trend, not as a measurement.
+is labelled *≈BAR*; tap the graph to see the basis. Use it as a trend, not as a measurement.
 Details: [docs/calibration.md](docs/calibration.md).
 
 ### The power button (hardware limitation)
@@ -334,8 +337,9 @@ photo of the DIAGNOSTICS page.
 
 <details><summary><b>An activity will not start</b></summary>
 
-Hold the icon for ~0.7 s (a short tap does not start anything). If it says *OUT OF SPEC*, a setting
-is outside the stock UI's allowed range — fix it under BREW / STEAM · WATER.
+Hold the icon for ~0.7 s (a short tap opens the function's page instead). The line under the page's
+title says why a start is blocked. If it says *OUT OF SPEC*, a setting is outside the stock UI's
+allowed range — the row is marked red on that page; open it and pick a value.
 </details>
 
 <details><summary><b>Can I break the coffee machine?</b></summary>
@@ -385,8 +389,10 @@ From the simulator (the same code as on the machine):
 
 | | | |
 |---|---|---|
-| ![](screenshots/home-ready-en.png) | ![](screenshots/steam.png) | ![](screenshots/settings-system.png) |
-| HOME, ready (English) | Steam | SYSTEM settings |
+| ![](screenshots/home-ready-en.png) | ![](screenshots/page-brew.png) | ![](screenshots/brew-extraction.png) |
+| HOME, ready (English) | The BREW page (tap the cup icon) | Brewing |
+| ![](screenshots/steam.png) | ![](screenshots/settings-system.png) | ![](screenshots/system-schedule.png) |
+| Steam | SYSTEM (the gear) | SYSTEM › SCHEDULE |
 | ![](screenshots/setting-brew-temp.png) | ![](screenshots/diagnostics.png) | ![](screenshots/home-ready-da.png) |
 | Brew temperature | DIAGNOSTICS | HOME (Danish UI) |
 

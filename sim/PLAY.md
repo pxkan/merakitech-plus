@@ -73,8 +73,9 @@ reference mode is still available with `--force-reference`.
   where you hit. Mapping: `raw = px*4096/480` (inverse: `px = raw*480/4096`), the same formula as
   `tinj_hold`/CONTRACT §4.
 * **"Show touch targets (layout)"** overlays the actual touch targets on the fb: against the SIM build
-  they are fetched live from the build's ctrl `layout` hook (the hit_test geometry: grind 150,372 ·
-  brew 210,372 · water 270,372 · steam 330,372 · revert + swipe edges); against the reference client
+  they are fetched live from the build's ctrl `layout` hook (the hit_test geometry — HOME: grind 150,372 ·
+  brew 210,372 · water 270,372 · steam 330,372 · gear 240,449; on a page: `back` = the header, one target
+  per row, `start` = HOLD TO START); against the reference client
   its known button layout is used (grind 130,160 · brew 350,160 · water 130,330 · steam 350,330 ·
   settings 240,430). The gesture zone is always shown.
 
@@ -90,7 +91,7 @@ last toast, **config md5** (updated live and logged on every change), MCU mode/t
 | Group | Controls |
 |---|---|
 | **Activities** | Grind/Brew/Water/Steam + Stop steam. **Simulated touch hold (750 ms)** on the button's touch target — the reference layout against ref_client, the SIM build's ctrl `layout` against the real UI. Ctrl `action` (contract hook) as a fallback if the target is not found, and always for `steam_stop`. You can also click/hold directly on the fb. |
-| **Page** | ctrl `page` home/settings/detail/sys/diag |
+| **Page** | ctrl `page` home/grind/brew/water/steam/system/detail/sys/diag (v6.17: one page per feature + SYSTEM) |
 | **Settings SAVE** | choose a parameter (brew_temp, grind_weight, …) + value → ctrl `save` (parity write + config persistence). See the `save` state, toast, config md5 and the protocol log's `WRITE sub11=[880]` + `CONFIG md5 …`. |
 | **Faults & link** | Fault cycle (none→E1→E2→E3→none), CRC garbage (2 s), Offline (link silent)/Back online, Close pty (closed → a new pty on reopen + automatic UI restart). Wand on/off (v6.6: the flush path, also during a brew) + legacy "require wand for steam" (no-op). |
 | **ACK profile** | normal/observed_v3/slow/lossy/no_ack — switched **live** (mcu_sim ctrl `ack_profile`). `no_ack` blocks SAVE (retransmit→FAIL, config unchanged). |

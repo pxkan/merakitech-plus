@@ -103,8 +103,9 @@
         <div id="coord">x=– y=–</div>
       </div>
       <div class="hint">
-        Click = tap · <b>hold ≥650 ms</b> on an activity button = start ·
-        <b>swipe</b> = drag horizontally ≥60 px (switches page) ·
+        Click = tap (an activity icon → that feature's page, the gear → SYSTEM) ·
+        <b>hold ≥650 ms</b> on an activity icon or on HOLD TO START = start ·
+        <b>back</b> = click the page header (chevron) or drag right ≥60 px ·
         <b>scroll</b> = drag vertically in lists/DIAGNOSE (or mouse wheel) ·
         right-click = gesture test (3× hold in the corner)<br>
         <label><input type="checkbox" id="zones"> show touch targets (layout)</label>
@@ -152,7 +153,8 @@
         <div class="row">
           <span class="lbl">Page</span>
           <select id="page">
-            <option>home</option><option>settings</option><option>detail</option>
+            <option>home</option><option>grind</option><option>brew</option><option>water</option>
+            <option>steam</option><option>system</option><option>detail</option>
             <option>sys</option><option>diag</option>
           </select>
           <span class="lbl" style="min-width:auto">via ctrl</span>
@@ -250,7 +252,7 @@
     <tr><td><kbd>?</kbd> / <kbd>Esc</kbd></td><td>show / close this help</td></tr>
   </table>
   <p style="color:var(--dim)">Touch (1:1 like the machine): tap = press, hold ≥650 ms = start,
-  horizontal drag = swipe/page switch, vertical drag = scroll in lists/DIAGNOSE.
+  drag right = back (v6.17: no page carousel), vertical drag = scroll in lists/DIAGNOSE.
   Mouse (desktop): same via drag; right-click = gesture test.
   <span id="touchmode" style="color:var(--dim)"></span></p>
   <button onclick="document.getElementById('help').style.display='none'">Close</button>

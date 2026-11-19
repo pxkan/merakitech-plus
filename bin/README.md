@@ -2,7 +2,7 @@
 
 | File | What | Built from |
 |---|---|---|
-| `merakiplus` | **Meraki+ v6.16** device binary (static ARMv7, musl). Installed as `/new_customer/demo_v9`. | `src/merakiplus.c` |
+| `merakiplus` | **Meraki+ v6.17** device binary (static ARMv7, musl). Installed as `/new_customer/demo_v9`. | `src/merakiplus.c` |
 | `switcher` | gesture switcher daemon (center-hold 5 s → stock to Meraki+), only with `--gesture` | `boot/switcher.c` |
 | `grab_shim.so` | tiny LD_PRELOAD shim so the switcher can see touches while the stock UI runs (only with `--gesture`) | `boot/grab_shim.c` |
 | `tinj_hold` | touch injector used for on-device testing of the gesture | `boot/tinj_hold.c` |
@@ -14,6 +14,16 @@
 **No vendor firmware, libraries or scripts are included here or anywhere in this repository.**
 
 ## Provenance of the ARM binaries
+
+**v6.17 (2026-11-20, UX audit + IA consolidation):** `merakiplus`, `merakiplus_sim_arm` and the two host SIM
+builds were rebuilt from the v6.17 source. The change is display and navigation only — one page per function
+behind its HOME icon, SYSTEM in sections, DIAGNOSTICS behind SYSTEM, shorter texts, a larger STOP button (see
+CHANGELOG / docs/ux-audit-v617.md). No UART frame, guard, limit or timing changed: the self-test proves that
+HOLD TO START on a page queues byte for byte the same frames as the icon hold, and the frame-vector, policy,
+boot-push, STOP, power and scheduling sections of the self-test are unchanged and green. `switcher`,
+`tinj_hold`, `keyinj` and `grab_shim.so` are byte-identical to the previous build. **Not yet verified on a
+machine** (install deferred); covered by the UI self-test (EN + DA, also as a 32-bit ARM binary), the
+simulator quick E2E suite and the new `ia_navigation`, `feature_page_start` and `activity_takes_home` scenarios.
 
 **Rebrand (2026-11-19, still V6.16):** the files were renamed (`merakiplus*`, formerly named after the
 internal code name) and `merakiplus`, `merakiplus_sim_arm`, `switcher` and the two host SIM builds were
@@ -52,13 +62,13 @@ self-test and the simulator E2E suite.
 
 | File | md5 (this repo) | Built with |
 |---|---|---|
-| `merakiplus` (V6.16) | `737db9b97dcea27764c682381b70dff2` | `./build.sh` → `build/merakiplus` |
-| `merakiplus_sim_arm` (V6.16) | `9c3f1fdb3692283a4c9e1cbaebc05a56` | `./build.sh` → `build/merakiplus_sim_arm` |
+| `merakiplus` (V6.17) | `532e4bd5aa06e625e3b2c80ace5921f4` | `./build.sh` → `build/merakiplus` |
+| `merakiplus_sim_arm` (V6.17) | `dcb74a9407f2989b995527c75784ad7f` | `./build.sh` → `build/merakiplus_sim_arm` |
 | `switcher` | `a5e0128bdd77ff5697df2100e889604a` | `./build.sh` → `build/switcher` |
 | `tinj_hold` | `795e5d66bc22a724da89ccce6c9c95b1` | `./build.sh` → `build/tinj_hold` |
 | `keyinj` | `645d223205a66b20d16cb408f03a73a4` | `./build.sh` → `build/keyinj` |
-| `merakiplus_sim-linux-x86_64` (V6.16) | `6f267d1604e2e0359c4200873d9bc30e` | `zig cc -target x86_64-linux-musl -DMERAKIPLUS_SIM -O2 -static -s src/merakiplus.c -lm` |
-| `merakiplus_sim-macos-arm64` (V6.16) | `d1cdd25d14dbcd69bba183d60d5f8baf` | `zig cc -DMERAKIPLUS_SIM -O2 -s src/merakiplus.c -lm` (Mach-O builds are not bit-reproducible) |
+| `merakiplus_sim-linux-x86_64` (V6.17) | `5470e1289839db0fe1b83cec9765cd1f` | `zig cc -target x86_64-linux-musl -DMERAKIPLUS_SIM -O2 -static -s src/merakiplus.c -lm` |
+| `merakiplus_sim-macos-arm64` (V6.17) | `ddbb0ef2a6443c45a1bddfec5b1cbb16` | `zig cc -DMERAKIPLUS_SIM -O2 -s src/merakiplus.c -lm` (Mach-O builds are not bit-reproducible) |
 
 The ARM builds above are reproducible: running `./build.sh` on the same sources with zig 0.17.1 gives
 the same md5, independent of the build directory.
@@ -69,6 +79,7 @@ Like the earlier verified builds it has only the non-loaded trailer removed (deb
 and section headers, which contained the original build machine's file paths); every loadable segment
 is byte-identical to the verified build, which is why its md5 differs from a `./build.sh` build.
 
-Earlier history: the translated-source v6.14 build of `merakiplus` was `eb4d9360756e391df4cc95f92b875c90`
+Earlier history: the V6.16 builds (after the rename) were `737db9b97dcea27764c682381b70dff2` (`merakiplus`) and
+`9c3f1fdb3692283a4c9e1cbaebc05a56` (`merakiplus_sim_arm`). The translated-source v6.14 build of `merakiplus` was `eb4d9360756e391df4cc95f92b875c90`
 (`merakiplus_sim_arm` `24c94f930935c7a276e70307c1f48882`). The v6.14 release shipped the on-device-verified builds (on-device md5 of `merakiplus`
 `1dd63f42e4b0d649ef851660fc123a10`, shipped trimmed as `8d084f10094305e4be3701bc10fce5de`).

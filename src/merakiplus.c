@@ -289,7 +289,7 @@ static int  sim_net_on=1;
 #define KBD_NAME "k62091"
 #define BL_SYSFS "/sys/class/pwm/pwmchip0/pwm2/duty_cycle"
 #define BL_EN_SYSFS "/sys/class/pwm/pwmchip0/pwm2/enable"   /* v6.14: stock uikit_os_back_light_off/on 0xC2278 = blpwm_set_enable(2,0/1) */
-#define MERAKIPLUS_VERSION "V6.16"
+#define MERAKIPLUS_VERSION "V6.17"
 
 /* ---- v6.10: pressure estimate (UI_v6.md §16) ----
  * Word 51 (SPI2 ADC channel 0xA, REGISTERMAP: pressure OR pump-drive candidate) -> bar with ONE linear anchor:
@@ -1251,14 +1251,16 @@ enum { K0=0, KT, KSUB, KLAB, KCHIP, KBTN, KBTNS, KTITLE, KPSUB, KSPL, KDL, KDV, 
  X(TX_TAGLINE, KSPL, "ADVANCED BREWING INTERFACE", "AVANCERET BRYGGE-INTERFACE") \
  X(TX_SPL_CFG_OK, K0, "CONFIG LOADED", "CONFIG INDLÆST") \
  X(TX_SPL_CFG_MISSING, K0, "CONFIG MISSING", "CONFIG MANGLER") \
- X(TX_PG_BREW, KTITLE, "BREW", "BRYG") \
- X(TX_PG_STEAM, KTITLE, "STEAM · WATER", "DAMP · VAND") \
  X(TX_PG_SYSTEM, KTITLE, "SYSTEM", "SYSTEM") \
  X(TX_PG_DIAG, KTITLE, "DIAGNOSTICS", "DIAGNOSE") \
- X(TX_PS_BREW, KPSUB, "ESPRESSO · CORE PARAMETERS", "ESPRESSO · KERNE-PARAMETRE") \
- X(TX_PS_STEAM, KPSUB, "MILK · HOT WATER", "MÆLK · VARMT VAND") \
- X(TX_PS_SYSTEM, KPSUB, "DISPLAY · SOUND · LANGUAGE · TIME", "SKÆRM · LYD · SPROG · TID") \
- X(TX_PS_DIAG, KPSUB, "LINK · SENSORS · CONFIG · BOOT", "LINK · SENSORER · CONFIG · BOOT") \
+ X(TX_SEC_DISPLAY, K0, "DISPLAY", "SKÆRM") \
+ X(TX_SEC_CLOCK, K0, "CLOCK", "UR") \
+ X(TX_SEC_SCHED, K0, "SCHEDULE", "TIDSPLAN") \
+ X(TX_SEC_STOCK, K0, "STOCK UI", "STOCK-UI") \
+ X(TX_LV_GRIND, K0, "ON THE SCALE %s G", "PÅ VÆGTEN %s G") \
+ X(TX_LV_BREW, K0, "BOILER %s° · GROUP %s°", "KEDEL %s° · GRUPPE %s°") \
+ X(TX_LV_WATER, K0, "WATER %s°", "VAND %s°") \
+ X(TX_LV_STEAM, K0, "BOILER %s° · MILK %s°", "KEDEL %s° · MÆLK %s°") \
  X(TX_SL_GRINDW, K0, "GRIND DOSE", "KVÆRN-DOSIS") \
  X(TX_SN_GRINDW, KNOTE, "STOPS AUTOMATICALLY AT THIS WEIGHT", "STOPPER AUTOMATISK VED DENNE VÆGT") \
  X(TX_SL_GRINDMODE, K0, "GRIND MODE", "KVÆRN-TILSTAND") \
@@ -1284,31 +1286,30 @@ enum { K0=0, KT, KSUB, KLAB, KCHIP, KBTN, KBTNS, KTITLE, KPSUB, KSPL, KDL, KDV, 
  X(TX_SL_HOTW, K0, "HOT WATER", "VARMT VAND") \
  X(TX_SN_HOTW, KNOTE, "STOPS AUTOMATICALLY AT THIS WEIGHT", "STOPPER AUTOMATISK VED DENNE VÆGT") \
  X(TX_SL_HOTMODE, K0, "WATER MODE", "VAND-TILSTAND") \
- X(TX_SN_HOTMODE, KNOTE, "CONFIG ONLY · " PRODUCT " STARTS AUTO ONLY", "KUN CONFIG · " PRODUCT " STARTER KUN AUTO") \
+ X(TX_SN_HOTMODE, KNOTE, PRODUCT " STARTS AUTO ONLY", PRODUCT " STARTER KUN AUTO") \
  X(TX_SL_HOTT, K0, "WATER SENSOR", "VAND-SENSOR") \
  X(TX_SN_HOTT, KNOTE, "MEASURED ONLY · NO TARGET EXISTS", "KUN MÅLT · INTET MÅL FINDES") \
  X(TX_SL_UILANG, K0, "UI LANGUAGE", "UI-SPROG") \
  X(TX_SN_UILANG, KNOTE, "LIVE PREVIEW · SAVE TO KEEP", "LIVE PREVIEW · GEM FOR AT BEHOLDE") \
  X(TX_SL_BL, K0, "BRIGHTNESS", "LYSSTYRKE") \
- X(TX_SN_BL, KNOTE, "LIVE PREVIEW · 0 OMITTED (DARK SCREEN)", "LIVE PREVIEW · 0 UDELADT (MØRK SKÆRM)") \
+ X(TX_SN_BL, KNOTE, "LIVE PREVIEW", "LIVE PREVIEW") \
  X(TX_SL_VOL, K0, "VOLUME", "LYDSTYRKE") \
- X(TX_SN_VOL, KNOTE, "CONFIG ONLY · STOCK UI SOUND · 0-100 SLIDER", "KUN CONFIG · STOCK-UI LYD · SLIDER 0-100") \
+ X(TX_SN_VOL, KNOTE, "STOCK UI SOUND", "STOCK-UI LYD") \
  X(TX_SH_VOL, K0, "STEPS = ESTIMATE", "TRIN = SKØN") \
  X(TX_SL_TUNIT, K0, "TEMP UNIT", "TEMP-ENHED") \
  X(TX_SN_TUNIT, KNOTE, "ALSO APPLIES IN " PRODUCT, "GÆLDER OGSÅ I " PRODUCT) \
  X(TX_SL_LANG, K0, "STOCK LANG.", "STOCK-SPROG") \
- X(TX_SN_LANG, KNOTE, "STOCK UI ONLY · " PRODUCT ": SEE UI LANGUAGE", "KUN STOCK-UI · " PRODUCT ": SE UI-SPROG") \
+ X(TX_SN_LANG, KNOTE, "STOCK UI ONLY", "KUN STOCK-UI") \
  X(TX_SL_HOTSC, K0, "WATER SHORTCUT", "VAND-GENVEJ") \
- X(TX_SN_HOTSC, KNOTE, "CONFIG ONLY · STOCK UI HOME SHORTCUT", "KUN CONFIG · STOCK-UI HJEM-GENVEJ") \
+ X(TX_SN_HOTSC, KNOTE, "STOCK UI HOME SHORTCUT", "STOCK-UI HJEM-GENVEJ") \
  X(TX_SL_DST, K0, "DAYLIGHT SAVING", "SOMMERTID") \
- X(TX_SN_CLOCK, KNOTE, "CONFIG ONLY · STOCK UI CLOCK", "KUN CONFIG · STOCK-UI UR") \
  X(TX_SL_CLEARTIP, K0, "CLEANING REMINDER", "RENSE-PÅMINDELSE") \
- X(TX_SN_CLEARTIP, KNOTE, "CONFIG ONLY · STOCK UI TIP", "KUN CONFIG · STOCK-UI TIP") \
+ X(TX_SN_CLEARTIP, KNOTE, "STOCK UI TIP", "STOCK-UI TIP") \
  X(TX_SL_TIMEMODE, K0, "TIME FORMAT", "TIDSFORMAT") \
  X(TX_SL_AUTOTIME, K0, "AUTO TIME", "AUTO-TID") \
- X(TX_SN_AUTOTIME, KNOTE, "CONFIG ONLY · NETWORK TIME", "KUN CONFIG · NETVÆRKSTID") \
+ X(TX_SN_AUTOTIME, KNOTE, "STOCK UI NETWORK TIME", "STOCK-UI NETVÆRKSTID") \
  X(TX_SL_TZ, K0, "TIME ZONE", "TIDSZONE") \
- X(TX_SN_TZ, KNOTE, "LOCKED · SET IT IN THE STOCK UI", "LÅST · SÆTTES I STOCK-UI'ET") \
+ X(TX_SN_TZ, KNOTE, "SET IT IN THE STOCK UI", "SÆTTES I STOCK-UI'ET") \
  X(TX_SH_EST, K0, "MAX = ESTIMATE", "MAX = SKØN") \
  X(TX_E_OFF, K0, "OFF", "FRA") \
  X(TX_E_ON, K0, "ON", "TIL") \
@@ -1379,8 +1380,8 @@ enum { K0=0, KT, KSUB, KLAB, KCHIP, KBTN, KBTNS, KTITLE, KPSUB, KSPL, KDL, KDV, 
  X(TX_T_WAIT_ACT, KT, "WAIT UNTIL THE ACTIVITY ENDS", "VENT TIL AKTIVITET ER SLUT") \
  X(TX_T_WRITE_REJ, KT, "NOT ACCEPTED · NOT SAVED", "IKKE ACCEPTERET · INTET GEMT") \
  X(TX_T_NOACK_SAVE, KT, "SAVE FAILED · NO REPLY", "GEM FEJLET · INTET SVAR") \
- X(TX_T_SAVED_MCU, KT, "SAVED · CONTROLLER + CONFIG", "GEMT · CONTROLLER + CONFIG") \
- X(TX_T_SAVED_CFG, KT, "SAVED · STOCK UI: AFTER RESTART", "GEMT · STOCK-UI: EFTER GENSTART") \
+ X(TX_T_SAVED_MCU, KT, "SAVED · ACTIVE NOW", "GEMT · AKTIV NU") \
+ X(TX_T_SAVED_CFG, KT, "SAVED", "GEMT") \
  X(TX_T_CFG_ERR, KT, "CONFIG ERROR · NOT SAVED", "CONFIG-FEJL · INTET GEMT") \
  X(TX_T_LANG_SAVED, KT, "LANGUAGE SAVED · ENGLISH", "SPROG GEMT · DANSK") \
  X(TX_T_LANG_NOFILE, KT, "LANGUAGE ACTIVE · FILE NOT SAVED", "SPROG AKTIVT · FIL IKKE GEMT") \
@@ -1407,20 +1408,21 @@ enum { K0=0, KT, KSUB, KLAB, KCHIP, KBTN, KBTNS, KTITLE, KPSUB, KSPL, KDL, KDV, 
  X(TX_T_PW_NOLINK, KT, "NO CONNECTION · CANNOT TURN OFF", "INGEN FORBINDELSE · SLUKKER IKKE") \
  X(TX_T_PW_NOACK, KT, "POWER OFF: NO REPLY · TRY AGAIN", "SLUK: INTET SVAR · PRØV IGEN") \
  X(TX_T_PW_ON, KT, "MACHINE IS ON", "MASKINEN ER TÆNDT") \
- X(TX_T_HOLD_HINT, KT, "HOLD THE BUTTON TO START", "HOLD KNAPPEN NEDE FOR START") \
+ X(TX_T_HOLD_HINT, KT, "KEEP HOLDING TO START", "BLIV VED AT HOLDE FOR START") \
  X(TX_T_PINFO, K0, "PRE-INF. %d BAR = RAW %d · LINEAR", "PRÆ-INF. %d BAR = RÅ %d · LINEÆR") \
  X(TX_T_NOACK, KT, "THE MACHINE DID NOT ANSWER", "MASKINEN SVAREDE IKKE") \
  X(TX_T_NOSTART, KT, "NO START · CHECK THE MACHINE", "INGEN START · TJEK MASKINEN") \
- X(TX_H_DOSE_TGT, KLAB, "DOSE · TARGET %s G", "DOSIS · MÅL %s G") \
- X(TX_H_CUP_TGT, KLAB, "IN THE CUP · TARGET %s G", "I KOPPEN · MÅL %s G") \
+ X(TX_H_DOSE, KLAB, "DOSE", "DOSIS") \
+ X(TX_H_CUP, KLAB, "IN THE CUP", "I KOPPEN") \
  X(TX_H_MILK_TGT, KLAB, "MILK · TARGET %s°", "MÆLK · MÅL %s°") \
- X(TX_H_MILK_PROBE, KLAB, "MILK PROBE · NO TARGET", "MÆLKEPROBE · INTET MÅL") \
- X(TX_H_BOILER, KLAB, "BREW BOILER · NOW", "BRYGKEDEL · NU") \
+ X(TX_H_MILK, KLAB, "MILK", "MÆLK") \
+ X(TX_H_MILK_PROBE, KLAB, "MILK PROBE", "MÆLKEPROBE") \
+ X(TX_H_BOILER, KLAB, "BREW BOILER", "BRYGKEDEL") \
  X(TX_H_CRC, K0, "CRC %u", "CRC %u") \
  X(TX_H_DONE_IN, KSUB, "DONE IN %s", "FÆRDIG PÅ %s") \
- X(TX_H_AUTOSTOP_G, KSUB, "AUTO-STOP AT %s G · OR STOP", "AUTO-STOP VED %s G · ELLER STOP") \
- X(TX_H_AUTOSTOP_T, KSUB, "AUTO-STOP AT %s° · OR STOP", "AUTO-STOP VED %s° · ELLER STOP") \
- X(TX_H_WAND_NOSTOP, KSUB, "NO AUTO-STOP · RELEASE WAND", "INGEN AUTO-STOP · SLIP WAND") \
+ X(TX_H_AUTOSTOP_G, KSUB, "STOPS AT %s G", "STOPPER VED %s G") \
+ X(TX_H_AUTOSTOP_T, KSUB, "STOPS AT %s°", "STOPPER VED %s°") \
+ X(TX_H_WAND_NOSTOP, KSUB, "RELEASE THE WAND TO STOP", "SLIP WAND FOR AT STOPPE") \
  X(TX_H_DONE_RISE, KSUB, "DONE IN %s · RISES ≈%s° MORE", "FÆRDIG PÅ %s · STIGER ≈%s° TIL") \
  X(TX_H_NORESP, KSUB, "NO CONNECTION TO THE MACHINE", "INGEN FORBINDELSE TIL MASKINEN") \
  X(TX_H_WAKING, KSUB, "WAKING UP…", "VÅGNER…") \
@@ -1432,7 +1434,7 @@ enum { K0=0, KT, KSUB, KLAB, KCHIP, KBTN, KBTNS, KTITLE, KPSUB, KSPL, KDL, KDV, 
  X(TX_H_HOLD_WATER, KSUB, "HOLD · HOT WATER %s G", "HOLD · VARMT VAND %s G") \
  X(TX_H_HOLD_STEAM, KSUB, "HOLD · STEAM TO %s°", "HOLD · DAMP TIL %s°") \
  X(TX_ST_TIME, K0, "TIME", "TID") \
- X(TX_ST_BAR, K0, "≈BAR EST.", "≈BAR EST.") \
+ X(TX_ST_BAR, K0, "≈BAR", "≈BAR") \
  X(TX_ST_PRAW, K0, "RAW", "RÅ") \
  X(TX_ST_PULSE, K0, "PULSE", "PULS") \
  X(TX_ST_FLOW, K0, "FLOW", "FLOW") \
@@ -1444,11 +1446,10 @@ enum { K0=0, KT, KSUB, KLAB, KCHIP, KBTN, KBTNS, KTITLE, KPSUB, KSPL, KDL, KDV, 
  X(TX_ST_GROUP, K0, "GROUP", "GRUPPE") \
  X(TX_ST_WEIGHT, K0, "WEIGHT", "VÆGT") \
  X(TX_ST_MILK, K0, "MILK", "MÆLK") \
- X(TX_C_HINT, K0, "HOLD AN ICON TO START", "HOLD ET IKON FOR AT STARTE") \
- X(TX_C_HINT2, K0, "SWIPE FOR SETTINGS", "STRYG FOR INDSTILLINGER") \
+ X(TX_C_HINT, K0, "HOLD = START · TAP = SETTINGS", "HOLD = START · TRYK = INDSTIL") \
  X(TX_C_PREHEAT, K0, IC_CLOCK " PRE-HEAT · %s %s", IC_CLOCK " FORVARMNING · %s %s") \
- X(TX_C_ERRCODE, K0, "CODE %s · SEE DIAGNOSTICS", "KODE %s · SE DIAGNOSE") \
- X(TX_C_DIAGREF, K0, "DETAILS IN DIAGNOSTICS", "DETALJER UNDER DIAGNOSE") \
+ X(TX_C_ERRCODE, K0, "CODE %s · TAP FOR DETAILS", "KODE %s · TRYK FOR DETALJER") \
+ X(TX_C_DIAGREF, K0, "TAP FOR DETAILS", "TRYK FOR DETALJER") \
  X(TX_C_PRESS, K0, "PRESSURE", "TRYK") \
  X(TX_C_WEIGHT, K0, "WEIGHT", "VÆGT") \
  X(TX_C_MILK, K0, "MILK TEMP", "MÆLKETEMP") \
@@ -1458,13 +1459,13 @@ enum { K0=0, KT, KSUB, KLAB, KCHIP, KBTN, KBTNS, KTITLE, KPSUB, KSPL, KDL, KDV, 
  X(TX_B_STOP_GRIND, K0, "STOP GRIND", "STOP KVÆRN") \
  X(TX_B_STOP_BREW, K0, "STOP BREW", "STOP BRYG") \
  X(TX_B_STOP_WATER, K0, "STOP WATER", "STOP VAND") \
+ X(TX_B_START, K0, "HOLD TO START", "HOLD FOR START") \
  X(TX_B_BACK, KBTN, "BACK", "TILBAGE") \
  X(TX_B_CANCEL, KBTN, "CANCEL", "ANNULLER") \
  X(TX_B_SAVE, KBTNS, "SAVE", "GEM") \
  X(TX_B_SAVING, KBTNS, "SAVING", "GEMMER") \
  X(TX_B_SWITCH, KBTN, "SWITCH NOW", "SKIFT NU") \
  X(TX_B_EXIT, KBTNS, "EXIT", "AFSLUT") \
- X(TX_X_CAP, KDF, "STARTUP · UI CHOICE", "OPSTART · UI-VALG") \
  X(TX_X_BOOTUI, K0, "BOOT UI", "BOOT-UI") \
  X(TX_X_SWITCH, K0, "SWITCH TO ORIGINAL NOW", "SKIFT TIL ORIGINAL NU") \
  X(TX_X_SWITCH_SUB, KXSUB, "IMMEDIATE · NO RESTART", "STRAKS · UDEN GENSTART") \
@@ -1488,23 +1489,12 @@ enum { K0=0, KT, KSUB, KLAB, KCHIP, KBTN, KBTNS, KTITLE, KPSUB, KSPL, KDL, KDV, 
  X(TX_D_MEASURED, K0, "MEASURED VALUE · NOT A SETTING", "MÅLT VÆRDI · INGEN INDSTILLING") \
  X(TX_D_NOEDIT, K0, "CANNOT BE CHANGED HERE", "KAN IKKE ÆNDRES HER") \
  X(TX_D_NOPTS, K0, "%d OPTIONS", "%d VALG") \
- X(TX_D_LIVE, KF1, "LIVE FROM CONTROLLER", "LIVE FRA CONTROLLER") \
- X(TX_D_SAMESENSOR, KF2, "SAME SENSOR AS STOCK UI", "SAMME SENSOR SOM STOCK-UI") \
- X(TX_D_FROMCFG, KF1, "SHOWN FROM CONFIG.JSON", "VISES FRA CONFIG.JSON") \
- X(TX_D_STOCKEDIT, KF2, "EDITOR ONLY IN STOCK UI", "EDITOR KUN I STOCK-UI") \
- X(TX_D_MCU_CFG, KF1, "CONTROLLER NOW + CONFIG", "CONTROLLER STRAKS + CONFIG") \
- X(TX_D_CFGONLY, KF1, "CONFIG.JSON ONLY", "KUN CONFIG.JSON") \
- X(TX_D_STOCK_RESTART, KF2, "STOCK UI: AFTER RESTART", "STOCK-UI: EFTER GENSTART") \
- X(TX_D_LANG_L1, KF1, PRODUCT " ONLY · " LC "merakiplus/lang", "KUN " PRODUCT " · " LC "merakiplus/lang") \
- X(TX_D_LANG_L2, KF2, "STOCK UI LANGUAGE UNCHANGED", "STOCK-UI-SPROG UÆNDRET") \
  X(TX_D_SAVING, KST, "SAVING…", "GEMMER…") \
  X(TX_D_OOR, KST, "OUT OF SPEC · PICK A NEW VALUE", "UDEN FOR SPEC · VÆLG NY VÆRDI") \
+ X(TX_D_HOLDFAST, KST, "HOLD - OR + TO GO FAST", "HOLD - ELLER + FOR HURTIGT") \
  X(TX_D_CHANGED, K0, "CHANGED · WAS %s %s", "ÆNDRET · FØR %s %s") \
- X(TX_D_SENSOR_LIVE, KST, "SENSOR · LIVE", "SENSOR · LIVE") \
  X(TX_D_LOCKED, KST, "LOCKED", "LÅST") \
- X(TX_D_SAVEDVAL, KST, "SAVED VALUE", "GEMT VÆRDI") \
  X(TX_Y_CHANGED, K0, "CHANGED · WAS %s", "ÆNDRET · FØR %s") \
- X(TX_Y_SAVEDCHOICE, KST, "SAVED CHOICE", "GEMT VALG") \
  X(TX_Y_FLAG_YES, KF1, "FLAG " LC BOOT_FLAG UC " EXISTS", "FLAG " LC BOOT_FLAG UC " FINDES") \
  X(TX_Y_FLAG_NO, KF1, "NO FLAG " LC BOOT_FLAG, "INTET FLAG " LC BOOT_FLAG) \
  X(TX_Y_FLAG_HANDSOFF, KF2, "FLAG IS NOT TOUCHED HERE", "FLAGET RØRES IKKE HERFRA") \
@@ -1619,8 +1609,6 @@ enum { K0=0, KT, KSUB, KLAB, KCHIP, KBTN, KBTNS, KTITLE, KPSUB, KSPL, KDL, KDV, 
  X(TX_DV_PNOW, K0, "RAW %d = ≈%.1f BAR", "RÅ %d = ≈%.1f BAR") \
  X(TX_DV_PPULSE, K0, "RAW %d · PULSE, NO PRESSURE", "RÅ %d · PULS, IKKE TRYK") \
  X(TX_DV_PMAINT, K0, "RAW %d · MAINTENANCE PULSE", "RÅ %d · VEDLIGEHOLD-PULS") \
- X(TX_DG_PNOTE1, KDF, "ESTIMATE · PUMP SIDE · NOT AT THE PUCK", "ESTIMAT · PUMPE-SIDE · IKKE VED PUCKEN") \
- X(TX_DG_PNOTE2, K0, "> %d BAR = PULSE · RAW: GRAPH PILL", "> %d BAR = PULS · RÅ: GRAF-PILLEN") \
  X(TX_DG_ABOUT, KDF, "ABOUT", "OM") \
  X(TX_DG_RAWCAP, KDF, "RAW COUNTERS · SERVICE", "RÅ TÆLLERE · SERVICE") \
  X(TX_DG_L_LANG, KDF, "UI LANGUAGE · " LC "merakiplus/lang", "UI-SPROG · " LC "merakiplus/lang") \
@@ -1646,8 +1634,8 @@ enum { K0=0, KT, KSUB, KLAB, KCHIP, KBTN, KBTNS, KTITLE, KPSUB, KSPL, KDL, KDV, 
  X(TX_SL_PHAT, K0, "PRE-HEAT AT", "FORVARM KL.") \
  X(TX_SL_PHREP, K0, "REPEAT", "GENTAG") \
  X(TX_SL_AUTOOFF, K0, "AUTO OFF", "AUTO-SLUK") \
- X(TX_SN_PREHEAT, KNOTE, "THE CONTROLLER ALARM WAKES + HEATS", "CONTROLLERENS ALARM VÆKKER + VARMER") \
- X(TX_SN_PHAT, KNOTE, "LOCAL TIME · SENT AS THE CMD8 ALARM", "LOKAL TID · SENDES SOM CMD8-ALARM") \
+ X(TX_SN_PREHEAT, KNOTE, "THE MACHINE WAKES + HEATS ITSELF", "MASKINEN VÅGNER + VARMER SELV") \
+ X(TX_SN_PHAT, KNOTE, "LOCAL TIME", "LOKAL TID") \
  X(TX_SN_PHREP, KNOTE, "ONCE = SWITCHES ITSELF OFF AFTER USE", "EN GANG = SLÅR SIG SELV FRA BAGEFTER") \
  X(TX_SN_AUTOOFF, KNOTE, "NO TOUCH OR ACTIVITY · THEN OFF", "INGEN BERØRING ELLER AKTIVITET · SÅ SLUK") \
  X(TX_SN_TIMEFMT, KNOTE, "HOME CLOCK + STOCK UI CLOCK", "UR PÅ HJEM + STOCK-UI'ETS UR") \
@@ -1659,9 +1647,7 @@ enum { K0=0, KT, KSUB, KLAB, KCHIP, KBTN, KBTNS, KTITLE, KPSUB, KSPL, KDL, KDV, 
  X(TX_E_MIN20, K0, "20 MIN", "20 MIN") \
  X(TX_E_MIN30, K0, "30 MIN", "30 MIN") \
  X(TX_E_MIN60, K0, "60 MIN", "60 MIN") \
- X(TX_D_OWN_L1, KF1, PRODUCT " · " LC "merakiplus/schedule", PRODUCT " · " LC "merakiplus/schedule") \
- X(TX_D_OWN_L2, KF2, "STOCK SCHEDULES UNCHANGED", "STOCK-PLANER UÆNDREDE") \
- X(TX_T_OWN_SAVED, KT, "SAVED · " PRODUCT " SCHEDULE", "GEMT · " PRODUCT "-PLAN") \
+ X(TX_T_OWN_SAVED, KT, "SCHEDULE SAVED", "TIDSPLAN GEMT") \
  X(TX_T_OWN_NOFILE, KT, "ACTIVE · FILE NOT SAVED", "AKTIV · FIL IKKE GEMT") \
  X(TX_T_AUTOOFF_SOON, KT, "AUTO OFF IN 30 S · TOUCH TO STAY ON", "AUTO-SLUK OM 30 S · RØR SKÆRMEN") \
  X(TX_T_ONCE_USED, KT, "ONE-TIME PRE-HEAT USED · NOW OFF", "FORVARMNING BRUGT · NU FRA") \
@@ -2055,43 +2041,44 @@ enum { S_GRINDW=0, S_GRINDMODE, S_BREWW, S_BREWT, S_PISW, S_PITIME, S_PIPRESS, S
        S_PREHEAT, S_PHAT, S_PHREP, S_AUTOOFF, NSET };   /* v6.16: + the time rows (merakiplus's own file) */
 static Setting SET[NSET]={
  /*              key                   label            unit    page,spec-tier  min   max step dec kind   opts        mcu    flags                    def hard  note, hint */
- /* ---- page BREW (spec tier 1) ---- */
+ /* v6.17: page = the list page the row belongs to (0 GRIND, 1 BREW, 2 WATER, 3 STEAM, 4 SYSTEM); the row ORDER on a page and the
+  * SYSTEM sections are in FEAT_ROWS / SEC_ROWS (the row model). Before v6.17: 0 BREW, 1 STEAM · WATER, 2 SYSTEM (the spec's tiers). */
+ /* ---- GRIND + BREW (spec tier 1) ---- */
  [S_GRINDW]   ={"autoGrindWeight",    TX_SL_GRINDW,    TX_U_G,   0,1,   10, 309,  1, 1,K_NUM, 0,         M_W4,  0,                      180, 309,TX_SN_GRINDW,0},
  [S_GRINDMODE]={"grindMode",          TX_SL_GRINDMODE, TX_NONE,  0,1,    1,   2,  1, 0,K_ENUM,OPT_GRINDM,M_W2,  0,                        1,   2,TX_SN_GRINDMODE,0},
- [S_BREWW]    ={"autobrewWeight",     TX_SL_BREWW,     TX_U_G,   0,1,  100, 990, 10,-1,K_NUM, 0,         M_W23, 0,                      360, 990,TX_SN_BREWW,0},
- [S_BREWT]    ={"brewTemper",         TX_SL_BREWT,     TX_U_C,   0,1,  850, 960, 10, 1,K_NUM, 0,         M_W11, SF_TEMP10,              870, 960,TX_SN_BREWT,0},
- [S_PISW]     ={"preInfusionSwitch",  TX_SL_PISW,      TX_NONE,  0,1,    0,   1,  1, 0,K_ENUM,OPT_OFFON, M_W112,0,                        0,   1,TX_SN_PISW,0},
- [S_PITIME]   ={"preInfusionTime",    TX_SL_PITIME,    TX_U_S,   0,1,    5,  15,  1, 0,K_NUM, 0,         M_W113,SF_EST,                  15,  60,TX_SN_PITIME,TX_SH_EST},
- [S_PIPRESS]  ={"preInfusionPressure",TX_SL_PIPRESS,   TX_U_BAR, 0,1,    3,   4,  1, 0,K_NUM, 0,         M_W112,0,                        4,   4,TX_SN_PIPRESS,0},
- [S_BREAK]    ={"breakTime",          TX_SL_BREAK,     TX_U_S,   0,1,    0, 255,  1, 0,K_NUM, 0,         M_W113,SF_LOCK,                  5, 255,TX_SN_BREAK,0},
- [S_HEADT]    ={"headTemper",         TX_SL_HEADT,     TX_U_C,   0,1,   30,  80, 10, 0,K_NUM, 0,         M_W114,SF_TEMP1|SF_EST,         50, 100,TX_SN_HEADT,TX_SH_EST},
- /* ---- page STEAM · WATER (spec tier 1) ---- */
- [S_STEAMT]   ={"AtuoSteamTarge",     TX_SL_STEAMT,    TX_U_C,   1,1,  450, 700, 10, 1,K_NUM, 0,         M_W25, SF_TEMP10,              550, 700,TX_SN_STEAMT,0},
- [S_STEAMG]   ={"steamGears",         TX_SL_STEAMG,    TX_NONE,  1,1,    1,   4,  1, 0,K_ENUM,OPT_GEAR,  M_W14, 0,                        4,   4,TX_SN_STEAMG,0},
- [S_HOTW]     ={"autoHotWaterTarget", TX_SL_HOTW,      TX_U_G,   1,1,  300,5000,100,-1,K_NUM, 0,         M_W17, 0,                     3600,5000,TX_SN_HOTW,0},
- [S_HOTMODE]  ={"hotWaterMode",       TX_SL_HOTMODE,   TX_NONE,  1,1,    1,   2,  1, 0,K_ENUM,OPT_HOTM,  M_NONE,0,                        1,   2,TX_SN_HOTMODE,0},
- [S_HOTT]     ={0,                    TX_SL_HOTT,      TX_U_C,   1,1,  200,1200,  1, 1,K_NUM, 0,         M_NONE,SF_SENSOR|SF_LOCK|SF_TEMP10,40,  0,TX_SN_HOTT,0},
- /* ---- page SYSTEM: first merakiplus's own UI language (v6.3; not a spec parameter), then
+ [S_BREWW]    ={"autobrewWeight",     TX_SL_BREWW,     TX_U_G,   1,1,  100, 990, 10,-1,K_NUM, 0,         M_W23, 0,                      360, 990,TX_SN_BREWW,0},
+ [S_BREWT]    ={"brewTemper",         TX_SL_BREWT,     TX_U_C,   1,1,  850, 960, 10, 1,K_NUM, 0,         M_W11, SF_TEMP10,              870, 960,TX_SN_BREWT,0},
+ [S_PISW]     ={"preInfusionSwitch",  TX_SL_PISW,      TX_NONE,  1,1,    0,   1,  1, 0,K_ENUM,OPT_OFFON, M_W112,0,                        0,   1,TX_SN_PISW,0},
+ [S_PITIME]   ={"preInfusionTime",    TX_SL_PITIME,    TX_U_S,   1,1,    5,  15,  1, 0,K_NUM, 0,         M_W113,SF_EST,                  15,  60,TX_SN_PITIME,TX_SH_EST},
+ [S_PIPRESS]  ={"preInfusionPressure",TX_SL_PIPRESS,   TX_U_BAR, 1,1,    3,   4,  1, 0,K_NUM, 0,         M_W112,0,                        4,   4,TX_SN_PIPRESS,0},
+ [S_BREAK]    ={"breakTime",          TX_SL_BREAK,     TX_U_S,   4,1,    0, 255,  1, 0,K_NUM, 0,         M_W113,SF_LOCK,                  5, 255,TX_SN_BREAK,0},
+ [S_HEADT]    ={"headTemper",         TX_SL_HEADT,     TX_U_C,   1,1,   30,  80, 10, 0,K_NUM, 0,         M_W114,SF_TEMP1|SF_EST,         50, 100,TX_SN_HEADT,TX_SH_EST},
+ /* ---- STEAM + WATER (spec tier 1); the WATER SENSOR row is not listed: the WATER page shows it as its live line ---- */
+ [S_STEAMT]   ={"AtuoSteamTarge",     TX_SL_STEAMT,    TX_U_C,   3,1,  450, 700, 10, 1,K_NUM, 0,         M_W25, SF_TEMP10,              550, 700,TX_SN_STEAMT,0},
+ [S_STEAMG]   ={"steamGears",         TX_SL_STEAMG,    TX_NONE,  3,1,    1,   4,  1, 0,K_ENUM,OPT_GEAR,  M_W14, 0,                        4,   4,TX_SN_STEAMG,0},
+ [S_HOTW]     ={"autoHotWaterTarget", TX_SL_HOTW,      TX_U_G,   2,1,  300,5000,100,-1,K_NUM, 0,         M_W17, 0,                     3600,5000,TX_SN_HOTW,0},
+ [S_HOTMODE]  ={"hotWaterMode",       TX_SL_HOTMODE,   TX_NONE,  2,1,    1,   2,  1, 0,K_ENUM,OPT_HOTM,  M_NONE,0,                        1,   2,TX_SN_HOTMODE,0},
+ [S_HOTT]     ={0,                    TX_SL_HOTT,      TX_U_C,   2,1,  200,1200,  1, 1,K_NUM, 0,         M_NONE,SF_SENSOR|SF_LOCK|SF_TEMP10,40,  0,TX_SN_HOTT,0},
+ /* ---- SYSTEM: first merakiplus's own UI language (v6.3; not a spec parameter), then
   *      spec tier 2 and tier 3 — all config only, no MCU write ---- */
- [S_UILANG]   ={0,                    TX_SL_UILANG,    TX_NONE,  2,0,    0,   1,  1, 0,K_ENUM,OPT_UILANG,M_NONE,SF_LOCAL,                 0,   1,TX_SN_UILANG,0},
- [S_BL]       ={"backlight",          TX_SL_BL,        TX_NONE,  2,2,    1,  10,  1, 0,K_NUM, 0,         M_NONE,SF_BL,                    8,  10,TX_SN_BL,0},
- [S_VOL]      ={"volume",             TX_SL_VOL,       TX_NONE,  2,2,    0, 100,  1, 0,K_NUM, 0,         M_NONE,0,                       40, 100,TX_SN_VOL,TX_SH_VOL},
- [S_TUNIT]    ={"Temperature",        TX_SL_TUNIT,     TX_NONE,  2,2,    0,   1,  1, 0,K_ENUM,OPT_TUNIT, M_NONE,0,                        0,   1,TX_SN_TUNIT,0},
- [S_LANG]     ={"language",           TX_SL_LANG,      TX_NONE,  2,2,    0,  10,  1, 0,K_ENUM,OPT_LANG,  M_NONE,0,                        0,  10,TX_SN_LANG,0},
- [S_HOTSC]    ={"hotWaterShortcut",   TX_SL_HOTSC,     TX_NONE,  2,2,    0,   1,  1, 0,K_ENUM,OPT_OFFON, M_NONE,0,                        0,   1,TX_SN_HOTSC,0},
- [S_DST]      ={"sumtime",            TX_SL_DST,       TX_NONE,  2,2,    0,   1,  1, 0,K_ENUM,OPT_OFFON, M_NONE,0,                        0,   1,TX_SN_TIMEFMT,0},
- [S_CLEARTIP] ={"clearTip",           TX_SL_CLEARTIP,  TX_NONE,  2,2,    0,   1,  1, 0,K_ENUM,OPT_OFFON, M_NONE,0,                        0,   1,TX_SN_CLEARTIP,0},
- [S_TIMEMODE] ={"timemode",           TX_SL_TIMEMODE,  TX_NONE,  2,3,    0,   1,  1, 0,K_ENUM,OPT_TIME,  M_NONE,0,                        1,   1,TX_SN_TIMEFMT,0},
- [S_AUTOTIME] ={"Automatically",      TX_SL_AUTOTIME,  TX_NONE,  2,3,    0,   1,  1, 0,K_ENUM,OPT_OFFON, M_NONE,0,                        1,   1,TX_SN_AUTOTIME,0},
- [S_TZ]       ={"timeZone",           TX_SL_TZ,        TX_NONE,  2,3,    0,   0,  1, 0,K_NUM, 0,         M_NONE,SF_LOCK,                 44,   0,TX_SN_TZ,0},
+ [S_UILANG]   ={0,                    TX_SL_UILANG,    TX_NONE,  4,0,    0,   1,  1, 0,K_ENUM,OPT_UILANG,M_NONE,SF_LOCAL,                 0,   1,TX_SN_UILANG,0},
+ [S_BL]       ={"backlight",          TX_SL_BL,        TX_NONE,  4,2,    1,  10,  1, 0,K_NUM, 0,         M_NONE,SF_BL,                    8,  10,TX_SN_BL,0},
+ [S_VOL]      ={"volume",             TX_SL_VOL,       TX_NONE,  4,2,    0, 100,  1, 0,K_NUM, 0,         M_NONE,0,                       40, 100,TX_SN_VOL,TX_SH_VOL},
+ [S_TUNIT]    ={"Temperature",        TX_SL_TUNIT,     TX_NONE,  4,2,    0,   1,  1, 0,K_ENUM,OPT_TUNIT, M_NONE,0,                        0,   1,TX_SN_TUNIT,0},
+ [S_LANG]     ={"language",           TX_SL_LANG,      TX_NONE,  4,2,    0,  10,  1, 0,K_ENUM,OPT_LANG,  M_NONE,0,                        0,  10,TX_SN_LANG,0},
+ [S_HOTSC]    ={"hotWaterShortcut",   TX_SL_HOTSC,     TX_NONE,  4,2,    0,   1,  1, 0,K_ENUM,OPT_OFFON, M_NONE,0,                        0,   1,TX_SN_HOTSC,0},
+ [S_DST]      ={"sumtime",            TX_SL_DST,       TX_NONE,  4,2,    0,   1,  1, 0,K_ENUM,OPT_OFFON, M_NONE,0,                        0,   1,TX_SN_TIMEFMT,0},
+ [S_CLEARTIP] ={"clearTip",           TX_SL_CLEARTIP,  TX_NONE,  4,2,    0,   1,  1, 0,K_ENUM,OPT_OFFON, M_NONE,0,                        0,   1,TX_SN_CLEARTIP,0},
+ [S_TIMEMODE] ={"timemode",           TX_SL_TIMEMODE,  TX_NONE,  4,3,    0,   1,  1, 0,K_ENUM,OPT_TIME,  M_NONE,0,                        1,   1,TX_SN_TIMEFMT,0},
+ [S_AUTOTIME] ={"Automatically",      TX_SL_AUTOTIME,  TX_NONE,  4,3,    0,   1,  1, 0,K_ENUM,OPT_OFFON, M_NONE,0,                        1,   1,TX_SN_AUTOTIME,0},
+ [S_TZ]       ={"timeZone",           TX_SL_TZ,        TX_NONE,  4,3,    0,   0,  1, 0,K_NUM, 0,         M_NONE,SF_LOCK,                 44,   0,TX_SN_TZ,0},
  /* ---- v6.16: pre-heat schedule + auto off — merakiplus's OWN file (/new_customer/merakiplus/schedule), not config.json, no MCU word ---- */
- [S_PREHEAT]  ={0,                    TX_SL_PREHEAT,   TX_NONE,  2,0,    0,   1,  1, 0,K_ENUM,OPT_OFFON, M_NONE,SF_OWN,                   0,   1,TX_SN_PREHEAT,0},
- [S_PHAT]     ={0,                    TX_SL_PHAT,      TX_NONE,  2,0,    0,1435,  5, 0,K_NUM, 0,         M_NONE,SF_OWN|SF_HHMM,         390,1435,TX_SN_PHAT,0},
- [S_PHREP]    ={0,                    TX_SL_PHREP,     TX_NONE,  2,0,    0,   3,  1, 0,K_ENUM,OPT_REPEAT,M_NONE,SF_OWN,                   1,   3,TX_SN_PHREP,0},
- [S_AUTOOFF]  ={0,                    TX_SL_AUTOOFF,   TX_NONE,  2,0,    0,   4,  1, 0,K_ENUM,OPT_AUTOOFF,M_NONE,SF_OWN,                  0,   4,TX_SN_AUTOOFF,0},
+ [S_PREHEAT]  ={0,                    TX_SL_PREHEAT,   TX_NONE,  4,0,    0,   1,  1, 0,K_ENUM,OPT_OFFON, M_NONE,SF_OWN,                   0,   1,TX_SN_PREHEAT,0},
+ [S_PHAT]     ={0,                    TX_SL_PHAT,      TX_NONE,  4,0,    0,1435,  5, 0,K_NUM, 0,         M_NONE,SF_OWN|SF_HHMM,         390,1435,TX_SN_PHAT,0},
+ [S_PHREP]    ={0,                    TX_SL_PHREP,     TX_NONE,  4,0,    0,   3,  1, 0,K_ENUM,OPT_REPEAT,M_NONE,SF_OWN,                   1,   3,TX_SN_PHREP,0},
+ [S_AUTOOFF]  ={0,                    TX_SL_AUTOOFF,   TX_NONE,  4,0,    0,   4,  1, 0,K_ENUM,OPT_AUTOOFF,M_NONE,SF_OWN,                  0,   4,TX_SN_AUTOOFF,0},
 };
-static const short TIER_NAME[3]={TX_PG_BREW,TX_PG_STEAM,TX_PG_SYSTEM};
-static const short TIER_SUB[3]={TX_PS_BREW,TX_PS_STEAM,TX_PS_SYSTEM};
+static const short TIER_NAME[5]={TX_A_GRIND,TX_A_BREW,TX_A_WATER,TX_A_STEAM,TX_PG_SYSTEM};   /* v6.17: the list pages' titles (page = SET[].tier) */
 static int sv(int i){ return SET[i].val; }
 /* v6.10: pressure estimate (the constants and caveats are at P_ANCHOR_RAW at the top). The anchor pressure is config preInfusionPressure,
  * so a changed config changes the scale; outside 1..15 bar (or no config: default 4) P_ANCHOR_BAR_DEF is used. */
@@ -3482,6 +3469,9 @@ static void gfx_init(void){
 #define C_OK     rgb(98,222,168)
 #define C_ERR    rgb(255,96,96)
 #define C_WARN   rgb(255,190,84)
+#define C_STOP_T  rgb(214,58,62)      /* v6.17: the STOP button — bright red, white text >= 4.5:1 on it (v6.13: 120,40,44 / 92,28,34 w. pink text; 1.8:1 against the background) */
+#define C_STOP_B  rgb(182,42,50)
+#define C_STOP_FG rgb(255,255,255)
 /* semantic phase colours (hi = light end of gradient, lo = dark end) */
 static uint32_t ph_hi(int p){
     switch(p){
@@ -3512,9 +3502,19 @@ static const short STOP_SENT[4]={TX_T_STOP_GRIND,TX_T_STOP_BREW,TX_T_STOP_WATER,
 static const short STOP_DONE[4]={TX_T_STOPPED_GRIND,TX_T_STOPPED_BREW,TX_T_STOPPED_WATER,TX_T_STOPPED_STEAM};
 
 enum { V_SPLASH=0, V_MAIN, V_DETAIL, V_SYS, V_BYE, V_OFF };   /* v6.14: V_OFF = the power button's TURNING OFF / OFF / TURNING ON */   /* V_SYS: boot/switch/exit view (xsel); V_BYE: last frame before runtime switch */
-enum { PG_HOME=0, PG_T0, PG_T1, PG_T2, PG_DIAG, NPAGE };
-enum { T_NONE=0, T_ACT0, T_ACT1, T_ACT2, T_ACT3, T_STOP, T_MINUS, T_PLUS, T_SAVE, T_CANCEL, T_EDGE_L, T_EDGE_R, T_GRAPH, T_PINFO, T_GEAR, T_BACK, T_STOPS, T_ROW0=32 };   /* v6.11: T_GEAR (HOME -> settings), T_BACK (close chevron in detail/system) */
+/* v6.17 INFORMATION ARCHITECTURE (docs/ux-audit-v617.md). HOME is the root and the live view of whatever runs. Everything else is a
+ * SHEET that is opened from the thing it belongs to and closed with the chevron at its top (or a swipe right / a pull down on the header):
+ *   HOME icon (tap)   -> that feature's page: GRIND / BREW / WATER / STEAM = live line + ITS settings as rows + HOLD TO START
+ *   HOME icon (hold)  -> start, as before (the icon now carries its target underneath: "18.5 G", "36 G", "360 G", "65°")
+ *   HOME gear         -> SYSTEM: four collapsible sections (DISPLAY, CLOCK, SCHEDULE, STOCK UI) + the DIAGNOSTICS entry
+ *   SYSTEM row        -> DIAGNOSTICS (advanced; also opened by tapping HOME's error / offline hint)
+ * Before v6.17 the pages were a carousel (HOME | BREW | STEAM · WATER | SYSTEM | DIAGNOSTICS: swipe, invisible edge zones, page dots) and
+ * the settings lived in three lists that followed the spec's tiers, not the activity they belong to. */
+enum { PG_HOME=0, PG_GRIND, PG_BREW, PG_WATER, PG_STEAM, PG_SYS, PG_DIAG, NPAGE };
+#define PG_T0 PG_GRIND     /* first list page (page = PG_T0 + SET[].tier) */
+enum { T_NONE=0, T_ACT0, T_ACT1, T_ACT2, T_ACT3, T_STOP, T_MINUS, T_PLUS, T_SAVE, T_CANCEL, T_START, T_DIAG, T_GRAPH, T_PINFO, T_GEAR, T_BACK, T_STOPS, T_ROW0=32 };   /* v6.11: T_GEAR (HOME -> SYSTEM), T_BACK (close chevron); v6.17: T_START (a feature page's HOLD TO START), T_DIAG (HOME's error/offline hint -> DIAGNOSTICS) */
 static int pinfo_hit(int x,int y);   /* v6.10: tap on the chart / BAR field -> toast w. the basis for ≈BAR (defined at draw_chart) */
+static int diag_hint_shown(void);    /* v6.17: HOME's error/offline hint is on screen (the chart field is empty) -> it is the tap target for DIAGNOSTICS */
 #define SPLASH_MS 1500
 #define HOLD_MS 650
 
@@ -3562,8 +3562,6 @@ static int wsrc_tick(ms_t now){
 static struct { int active,stage,idx,val,rollback; long seq; } sav;
 /* v6.2: system actions. X_BOOTUI + X_SWITCH are rows at the bottom of SYSTEM; X_EXIT is the exit reminder */
 enum { X_BOOTUI=0, X_SWITCH, X_EXIT };
-#define NXROW 2
-#define XGAP 30            /* spacing + heading between settings rows and system actions */
 static int xsel=-1, x_edit=0, x_orig=0, x_from_switch=0, x_pending=0, bye_mode=0;
 static int sw_sim=0;       /* preview only: SWITCH NOW starts no process */
 /* device hooks for BOOT.md §9.2 step 1: release UART/touch/fb BEFORE stock is started; reacquire them on failure */
@@ -3577,17 +3575,63 @@ static void toast_show(const char*m,uint32_t col,ms_t now){
     toast.t0=now; toast.dur=2400; toast.col=col;
     SIM_TOAST(m,col)
 }
+/* ---- v6.17: THE ROW MODEL. Every list page is a list of rows of ONE pitch; what a row is, is decided here and nowhere else
+ * (hit-test, drawing, the SIM layout and the selftest all walk rows_get()).
+ *   feature pages : that feature's settings, most used first (FEAT_ROWS)
+ *   SYSTEM        : section headers (RK_SEC; tap = open/close, one open at a time) + the open section's rows (SEC_ROWS: settings and
+ *                   the two system actions BOOT UI / SWITCH TO ORIGINAL NOW) + the DIAGNOSTICS entry (RK_DIAG)
+ * Every setting of SET[] is in exactly one of the two tables — except the WATER SENSOR (read-only word 40), which the WATER page shows
+ * as its live line instead of as a row that looks like a setting (the selftest checks both). */
+enum { SEC_DISPLAY=0, SEC_CLOCK, SEC_SCHED, SEC_STOCK, NSEC };
+enum { RK_SET=0, RK_SEC, RK_X, RK_DIAG };
+typedef struct { signed char kind, a; } Row;      /* a: SET[] index / section / X_BOOTUI|X_SWITCH / 0 */
+#define ROW_MAX 20
+#define RX(x) (-2-(x))                            /* a system action inside SEC_ROWS */
+static const signed char FEAT_ROWS[4][8]={
+ {S_GRINDW,S_GRINDMODE,-1},
+ {S_BREWW,S_BREWT,S_PISW,S_PITIME,S_PIPRESS,S_HEADT,-1},
+ {S_HOTW,S_HOTMODE,-1},
+ {S_STEAMT,S_STEAMG,-1} };
+static const signed char SEC_ROWS[NSEC][10]={
+ [SEC_DISPLAY]={S_UILANG,S_BL,S_TUNIT,-1},
+ [SEC_CLOCK]  ={S_TIMEMODE,S_DST,S_TZ,-1},
+ [SEC_SCHED]  ={S_PREHEAT,S_PHAT,S_PHREP,S_AUTOOFF,-1},
+ [SEC_STOCK]  ={RX(X_BOOTUI),RX(X_SWITCH),S_VOL,S_LANG,S_HOTSC,S_CLEARTIP,S_AUTOTIME,S_BREAK,-1} };   /* what only matters to / leads to the stock UI */
+static const short SEC_NAME[NSEC]={TX_SEC_DISPLAY,TX_SEC_CLOCK,TX_SEC_SCHED,TX_SEC_STOCK};
+static int sec_open=-1;                           /* SYSTEM: the open section (-1 = all closed: five rows, no scrolling) */
+static int pg_feat(int pg){ return pg>=PG_GRIND&&pg<=PG_STEAM; }
+static int pg_list(int pg){ return pg>=PG_GRIND&&pg<=PG_SYS; }
 static int tier_of_page(int pg){ return pg-PG_T0; }
-static int tier_count(int t){ int n=0; for(int i=0;i<NSET;i++) if(SET[i].tier==t) n++; return n; }
-static int tier_item(int t,int k){ for(int i=0;i<NSET;i++) if(SET[i].tier==t){ if(k==0) return i; k--; } return -1; }
+static int rows_get(int pg,Row*r){
+    int n=0;
+    if(pg_feat(pg)){ for(const signed char*p=FEAT_ROWS[pg-PG_GRIND];*p!=-1;p++){ r[n].kind=RK_SET; r[n++].a=*p; } }
+    else if(pg==PG_SYS){
+        for(int sc=0;sc<NSEC;sc++){
+            r[n].kind=RK_SEC; r[n++].a=(signed char)sc;
+            if(sc==sec_open) for(const signed char*p=SEC_ROWS[sc];*p!=-1;p++){ if(*p<-1){ r[n].kind=RK_X; r[n++].a=(signed char)(-2-*p); } else { r[n].kind=RK_SET; r[n++].a=*p; } }
+        }
+        r[n].kind=RK_DIAG; r[n++].a=0;
+    }
+    return n;
+}
+#if defined(MERAKIPLUS_PREVIEW)||defined(SIM_RT)      /* test hooks only: the product code walks rows_get() */
+static int sec_of_set(int i){ for(int sc=0;sc<NSEC;sc++) for(const signed char*p=SEC_ROWS[sc];*p!=-1;p++) if(*p==i) return sc; return -1; }
+#endif
+#ifdef MERAKIPLUS_PREVIEW
+static int row_find(int pg,int kind,int a){ Row r[ROW_MAX]; int n=rows_get(pg,r); for(int k=0;k<n;k++) if(r[k].kind==kind&&r[k].a==a) return k; return -1; }
+#endif
 #define ROW_H 50
 #define ROW_P 58
 #define LIST_Y0 96
 #define LIST_VY0 86
 #define LIST_VY1 394
-static int page_xrows(int pg){ return pg==PG_T2?NXROW:0; }
-static int page_rows(int pg){ return tier_count(tier_of_page(pg))+page_xrows(pg); }
-static int row_y0(int pg,int k){ return LIST_Y0+k*ROW_P+(k>=tier_count(tier_of_page(pg))?XGAP:0); }   /* content coordinate (before scroll) */
+#define FEAT_VY1 342       /* v6.17: a feature page's list ends above its HOLD TO START pill */
+static int list_vy1(int pg){ return pg_feat(pg)?FEAT_VY1:LIST_VY1; }
+static int page_rows(int pg){ Row r[ROW_MAX]; return rows_get(pg,r); }
+static int row_y0(int pg,int k){ (void)pg; return LIST_Y0+k*ROW_P; }   /* content coordinate (before scroll) */
+/* where a page's close chevron leads: DIAGNOSTICS back to where it was opened from (SYSTEM, or HOME via the error hint), the rest to HOME */
+static int diag_from=PG_SYS;
+static int page_parent(int pg){ return pg==PG_DIAG?diag_from:PG_HOME; }
 #define DG_Y0 94
 #define DG_P 42
 /* v6.11: DIAGNOSE is grouped. At the top STATUS (4 rows: link, phase, error codes, awake, net, version, boot push) — what you look
@@ -3597,15 +3641,15 @@ static int row_y0(int pg,int k){ return LIST_Y0+k*ROW_P+(k>=tier_count(tier_of_p
 #define DG_BOOT (DG_Y0+4*DG_P+32)          /* first boot row on DIAGNOSE (v6.11: 4 status rows at the top; v6.5-v6.10: 8) */
 #define DG_GRAPH (DG_BOOT+7*DG_P)          /* v6.9: the GRAPH row (smooth / raw) — the only tap target on DIAGNOSE */
 #define DG_PRESS (DG_BOOT+8*DG_P+6)        /* v6.10: heading of the PRESSURE · ESTIMATE block (anchor, current value, 2 note lines) — where ABOUT was in v6.9 */
-#define DG_RAW (DG_PRESS+28+2*DG_P+52)      /* v6.11: the RAW COUNTERS heading (where ABOUT was in v6.10); 4 rows below it */
+#define DG_RAW (DG_PRESS+28+2*DG_P+20)      /* v6.11: the RAW COUNTERS heading (where ABOUT was in v6.10); 4 rows below it. v6.17: the two note lines under the pressure estimate are gone (-32) */
 #define DG_PWR (DG_RAW+28+4*DG_P+10)        /* v6.14: POWER BUTTON (state, word 0, press, last button, node) — where ABOUT was in v6.13 */
 #define DG_TIME (DG_PWR+28+3*DG_P+10)       /* v6.16: TIME · SCHEDULE (clock, zone/DST, auto off, last alarm sent, next pre-heat) — where ABOUT was in v6.15 */
 #define DG_ABOUT (DG_TIME+28+3*DG_P+10)      /* v6.14: + POWER BUTTON. v6.11: + RAW COUNTERS. v6.3: heading of the ABOUT block (UI language, wordmark, tagline); v6.7: + the NET line; v6.9: + the GRAPH row; v6.10: + PRESSURE · ESTIMATE */
 #define DG_BOTTOM (DG_ABOUT+76+24+11+22)
 static float scroll_max(int pg){
     if(pg==PG_DIAG) return DG_BOTTOM-(LIST_VY1-14);
-    if(pg<PG_T0||pg>PG_T2) return 0;
-    int n=page_rows(pg); float m=n*ROW_P-8+(page_xrows(pg)?XGAP:0)-(LIST_VY1-LIST_VY0-20); return m>0?m:0;
+    if(!pg_list(pg)) return 0;
+    int n=page_rows(pg); float m=n*ROW_P-8-(list_vy1(pg)-LIST_VY0-20); return m>0?m:0;
 }
 
 /* ---- formatting ---- */
@@ -3733,6 +3777,20 @@ static void go_page(int np,int dir,ms_t now){
     tr.type=TR_SLIDE; tr.t0=now; tr.dur=260; tr.dir=dir;
 }
 static void fade_to(ms_t now,int dur){ tr.type=TR_FADE; tr.t0=now; tr.dur=dur; tr.dir=0; }
+/* v6.17: sheets. nav_open() slides a page in from the right, nav_back() slides back to its parent. SYSTEM always opens with its sections
+ * closed and at the top; DIAGNOSTICS remembers where it was opened from. */
+static void nav_open(int np,ms_t now){
+    if(np==page||tr.type) return;
+    if(np==PG_DIAG) diag_from=(page==PG_SYS)?PG_SYS:PG_HOME;
+    if(np==PG_SYS&&page==PG_HOME){ sec_open=-1; scroll[PG_SYS]=0; }
+    if(pg_feat(np)) scroll[np]=0;
+    go_page(np,1,now);
+}
+static void nav_back(ms_t now){ if(page!=PG_HOME&&!tr.type) go_page(page_parent(page),-1,now); }
+static void sec_toggle(int sc){
+    sec_open=(sec_open==sc)?-1:sc;
+    scroll[PG_SYS]=clampf(sec_open<0?0:(float)(sc*ROW_P),0,scroll_max(PG_SYS));   /* the opened header goes to the top of the field */
+}
 static void detail_open(int i,ms_t now){
     memcpy(snapA,canvas,(size_t)W*H*4);
     view=V_DETAIL; sel=i; edit_val=edit_orig=SET[i].val; static_dirty=1; garc.f_d=0; arc_targets(now); compose(now);
@@ -3835,22 +3893,45 @@ static int in_r(int x,int y,int rx,int ry,int rw,int rh){ return x>=rx&&x<rx+rw&
 static int in_c(int x,int y,int cx,int cy,int r){ int dx=x-cx,dy=y-cy; return dx*dx+dy*dy<=r*r; }
 static const int ACT_X[4]={150,210,270,330};
 #define ACT_Y 372
+#define HINT_W 304         /* v6.11: the chart area's hint lines (the chart itself is 244 wide; the hint text may use 304) */
+#define ACT_LAB_Y 405      /* v6.17: each icon's target ("18.5 G", "36 G", "360 G", "65°") right under it — what a hold will do */
 #define GEAR_Y 448
 #define GEAR_HW 32
 #define BACK_X0 (CX-44)    /* v6.11: close chevron in detail/system: 88 x 46 px tap area above the title */
 #define BACK_Y0 34
 #define BACK_W 88
 #define BACK_H 46
+/* v6.17: a page's header = chevron (y 22..30) + title (y 44) + one line under it (y 70). The whole header is the close target. */
+#define PBACK_X0 (CX-80)
+#define PBACK_Y0 14
+#define PBACK_W 160
+#define PBACK_H 66
+#define PG_CHEV_Y 22
+#define PG_TITLE_Y 44
+#define PG_LIVE_Y 70
+/* v6.17: HOLD TO START on a feature page — same hold (HOLD_MS) and same guard as the HOME icon */
+#define START_W 232
+#define START_H 48
+#define START_Y 350
+#define START_HIT_W 248
+#define START_HIT_Y 344
+#define START_HIT_H 60
 /* v6.13: the STOP buttons' tap areas (hit) and drawn pills. ONE button: same tap area as v6.6's STOP STEAM (180 x 56), the pill
  * 160 x 44 in F_S (v6.6-v6.12: 150 — "STOP WATER" / "STOP KVÆRN" are 123 / 122 px and need 14 px of space on each side).
  * TWO buttons (main activity + latched steam): two areas of 148 x 56 each side by side, no gap between; the pills 136 x 44 in F_XS. */
-#define STOP_PILL1_W 160
-#define STOP_PILL2_W 136
-#define STOP_Y 344
-#define STOP_H 56
-static Rect stop_hit(int n,int i){ if(n<=1) return R(150,STOP_Y,180,STOP_H); return i==0?R(92,STOP_Y,148,STOP_H):R(240,STOP_Y,148,STOP_H); }
-static Rect stop_pill(int n,int i){ if(n<=1) return R(CX-STOP_PILL1_W/2,350,STOP_PILL1_W,44); return i==0?R(98,350,STOP_PILL2_W,44):R(246,350,STOP_PILL2_W,44); }
-static int stop_font(int n){ return n>1?F_XS:F_S; }
+/* v6.17: STOP is the most important control while something runs, so it is the largest and brightest thing below the numbers: ONE button
+ * 216 x 54 in F_M (tap area 232 x 60), TWO buttons 152 x 54 in F_S (tap areas 160 x 60, no gap between) — bright red with white text
+ * (v6.13-v6.16: 160 x 44 / 136 x 44 in a dark red that read as "disabled"). */
+#define STOP_PILL1_W 216
+#define STOP_PILL2_W 152
+#define STOP_PILL_H 54
+#define STOP_PILL_Y 346
+#define STOP_Y 342
+#define STOP_H 60
+static Rect stop_hit(int n,int i){ if(n<=1) return R(CX-116,STOP_Y,232,STOP_H); return i==0?R(80,STOP_Y,160,STOP_H):R(240,STOP_Y,160,STOP_H); }
+static Rect stop_pill(int n,int i){ if(n<=1) return R(CX-STOP_PILL1_W/2,STOP_PILL_Y,STOP_PILL1_W,STOP_PILL_H); return i==0?R(84,STOP_PILL_Y,STOP_PILL2_W,STOP_PILL_H):R(244,STOP_PILL_Y,STOP_PILL2_W,STOP_PILL_H); }
+static int stop_font(int n){ return n>1?F_S:F_M; }
+static int diag_hint(int ph){ return ph==PH_ERROR||ph==PH_OFFLINE; }      /* HOME's hint line points to DIAGNOSTICS -> it is a tap target */
 static int hit_test(int x,int y,ms_t now){
     if(view==V_SPLASH||view==V_BYE||view==V_OFF||tr.type) return T_NONE;
     if((view==V_SYS||view==V_DETAIL)&&in_r(x,y,BACK_X0,BACK_Y0,BACK_W,BACK_H)) return T_BACK;   /* v6.11: close chevron at the top */
@@ -3874,20 +3955,22 @@ static int hit_test(int x,int y,ms_t now){
         if(sn){ for(int i=0;i<sn;i++){ Rect r=stop_hit(sn,i); if(in_r(x,y,r.x0,r.y0,r.x1-r.x0,r.y1-r.y0)) return i?T_STOPS:T_STOP; } }   /* v6.13: STOP for grind/brew/water + latched steam */
         else if(!phase_active(p)) for(int i=0;i<4;i++) if(in_c(x,y,ACT_X[i],ACT_Y,30)) return T_ACT0+i;
         if(pinfo_hit(x,y)) return T_PINFO;
-        if(in_r(x,y,CX-GEAR_HW,GEAR_Y-22,2*GEAR_HW,46)) return T_GEAR;          /* v6.11: gear -> the BREW list */
+        if(diag_hint_shown()&&in_r(x,y,CX-HINT_W/2,236,HINT_W,58)) return T_DIAG;   /* v6.17: "TAP FOR DETAILS" (error / offline) */
+        if(in_r(x,y,CX-GEAR_HW,GEAR_Y-22,2*GEAR_HW,46)) return T_GEAR;          /* v6.11: the gear; v6.17: -> SYSTEM */
+        return T_NONE;
     }
-    if(page>=PG_T0&&page<=PG_T2){
-        if(y>=LIST_VY0&&y<LIST_VY1&&x>=64&&x<416){
+    if(in_r(x,y,PBACK_X0,PBACK_Y0,PBACK_W,PBACK_H)) return T_BACK;              /* v6.17: every page but HOME closes with its header chevron */
+    if(pg_list(page)){
+        if(y>=LIST_VY0&&y<list_vy1(page)&&x>=64&&x<416){
             int n=page_rows(page);
             for(int k=0;k<n;k++){ float ry=row_y0(page,k)-scroll[page]; if(y>=ry-4&&y<ry+ROW_H+4) return T_ROW0+k; }
         }
-        if(y>=150&&y<=330){ if(x<64) return T_EDGE_L; if(x>=416) return T_EDGE_R; }   /* v6.11: edge tap switches page on the lists too (like HOME/DIAGNOSE) */
+        if(pg_feat(page)&&in_r(x,y,CX-START_HIT_W/2,START_HIT_Y,START_HIT_W,START_HIT_H)) return T_START;
         return T_NONE;
     }
     if(page==PG_DIAG&&y>=LIST_VY0&&y<LIST_VY1){                      /* v6.9: the GRAPH pill (smooth / raw) */
         float py=DG_GRAPH+12-scroll[PG_DIAG]; if(x>=CX-150&&x<CX+150&&y>=py-8&&y<py+36) return T_GRAPH;   /* v6.11: 44 px high (v6.10: 40) */
     }
-    if(y>=150&&y<=330){ if(x<70) return T_EDGE_L; if(x>410) return T_EDGE_R; }
     return T_NONE;
 }
 /* v6.13: STOP pressed (or the ctrl hook). Queues stop frame(s) and shows "STOPPING …"; stop_step() confirms when the bits are
@@ -3910,26 +3993,32 @@ static void stop_step(ms_t now){
 }
 static void activate(int t,ms_t now){
     if(t==T_STOP||t==T_STOPS){ int sk[2]; stop_btns(now,sk); int k=sk[t==T_STOPS]; if(k!=ACT_NONE) stop_request(k,now); return; }   /* v6.13 */
-    if(t>=T_ACT0&&t<=T_ACT3){ const char*g=act_guard(t-T_ACT0,now); toast_show(g?g:TR(TX_T_HOLD_HINT),g?C_WARN:C_TXT,now); return; }
-    if(t==T_EDGE_L){ go_page((page+NPAGE-1)%NPAGE,-1,now); return; }
-    if(t==T_GEAR){ go_page(PG_T0,1,now); return; }                                   /* v6.11 */
+    if(t>=T_ACT0&&t<=T_ACT3){ nav_open(PG_GRIND+(t-T_ACT0),now); return; }          /* v6.17: a TAP opens the feature's page (v6.6-v6.16: only a toast "HOLD THE BUTTON TO START"); the HOLD still starts */
+    if(t==T_START){ const char*g=act_guard(page-PG_GRIND,now); toast_show(g?g:TR(TX_T_HOLD_HINT),g?C_WARN:C_TXT,now); return; }   /* a tap on HOLD TO START: say what is missing */
+    if(t==T_GEAR){ nav_open(PG_SYS,now); return; }                                   /* v6.11; v6.17: -> SYSTEM */
+    if(t==T_DIAG){ nav_open(PG_DIAG,now); return; }                                  /* v6.17 */
+    if(t==T_BACK&&view==V_MAIN){ nav_back(now); return; }                            /* v6.17: a page's header chevron */
     if(t==T_BACK) t=T_CANCEL;                                                        /* v6.11: chevron = CANCEL/BACK */
     if(t==T_GRAPH){ cd.raw=!cd.raw; hf.ok=0; return; }          /* v6.9: display only — no config, no frames, forgotten on restart */
     if(t==T_PINFO){ char b[96]; snprintf(b,sizeof b,TR(TX_T_PINFO),p_anchor_bar(),P_ANCHOR_RAW); toast_show(b,C_TXT,now); return; }   /* v6.10: the basis for ≈BAR */
-    if(t==T_EDGE_R){ go_page((page+1)%NPAGE,1,now); return; }
     if(t==T_CANCEL){ if(view==V_SYS){ sys_close(now); return; } if(!sav.active) detail_close(now); return; }
     if(t==T_SAVE){ if(view==V_SYS){ sys_confirm(now); return; } save_begin(now); return; }
     if(t>=T_ROW0){
-        int k=t-T_ROW0, ns=tier_count(tier_of_page(page));
-        if(k>=ns){ sys_open(k-ns,now); return; }                       /* system action (SYSTEM page only) */
-        int i=tier_item(tier_of_page(page),k); if(i>=0) detail_open(i,now); return;
+        Row r[ROW_MAX]; int n=rows_get(page,r), k=t-T_ROW0; if(k>=n) return;
+        if(r[k].kind==RK_SET) detail_open(r[k].a,now);
+        else if(r[k].kind==RK_SEC) sec_toggle(r[k].a);
+        else if(r[k].kind==RK_X) sys_open(r[k].a,now);                 /* system action (SYSTEM > STOCK UI) */
+        else nav_open(PG_DIAG,now);
+        return;
     }
 }
 enum { TE_DOWN, TE_MOVE, TE_UP };
 /* v6.11: SWIPE GUARD. Page switch only for a gesture that STARTED horizontally (axis lock at the first 14 px), is >= 60 px long and
  * at most ~30° from horizontal (|dx| >= 1.7·|dy|). v6.10 allowed |dy| <= 50 regardless of direction, so a diagonal drag (e.g. dx 70, dy 45) on a
  * list that started slightly horizontal switched page. A gesture that starts vertically can never switch page — not even
- * on pages without scrolling (HOME). */
+ * on pages without scrolling (HOME).
+ * v6.17: there is no carousel any more. The only horizontal gesture is "swipe RIGHT = back" (same guard), on every page and editor
+ * except HOME — a shortcut for the visible chevron. A swipe LEFT does nothing, and nothing on HOME reacts to a swipe. */
 static int swipe_h(int axis,int dx,int dy){ return axis==1&&abs(dx)>=60&&10*abs(dx)>=17*abs(dy); }
 /* v6.11: swipe DOWN (>= 70 px, vertically locked, |dy| >= 1.7·|dx|) closes the detail/system view like CANCEL — not if
  * the gesture started on −/+ (there the press-down has already changed the value) */
@@ -4129,14 +4218,19 @@ static void ui_touch(int ev,int x,int y,ms_t now){
         tch.x=x; tch.y=y; int dx=x-tch.x0, dy=y-tch.y0;
         if(!tch.moved&&(abs(dx)>14||abs(dy)>14)){
             tch.moved=1; tch.axis=abs(dy)>abs(dx)?2:1;                       /* v6.11: axis lock at first movement (1 = horizontal, 2 = vertical) */
-            if(view==V_MAIN&&page>=PG_T0&&page<=PG_DIAG&&tch.axis==2) tch.scrolling=1;   /* lists + DIAGNOSE */
+            if(view==V_MAIN&&page!=PG_HOME&&tch.axis==2&&tch.y0>=LIST_VY0) tch.scrolling=1;   /* lists + DIAGNOSE (v6.17: a drag that starts on the header is the close gesture) */
         }
         if(tch.scrolling) scroll[page]=clampf(tch.scroll0-dy,0,scroll_max(page));
     } else if(ev==TE_UP&&tch.down){
         tch.down=0; int dx=tch.x-tch.x0, dy=tch.y-tch.y0;
         if(tch.scrolling) return;
-        if(view==V_MAIN&&!tr.type&&swipe_h(tch.axis,dx,dy)){ if(dx<0) go_page((page+1)%NPAGE,1,now); else go_page((page+NPAGE-1)%NPAGE,-1,now); return; }
+        int stepper=tch.target==T_MINUS||tch.target==T_PLUS;
+        if(!tr.type&&dx>0&&swipe_h(tch.axis,dx,dy)&&!stepper){                 /* v6.17: swipe right = back (the chevron's shortcut) */
+            if(view==V_MAIN&&page!=PG_HOME){ nav_back(now); return; }
+            if(view==V_DETAIL||view==V_SYS){ activate(T_CANCEL,now); return; }
+        }
         if((view==V_DETAIL||view==V_SYS)&&!tr.type&&swipe_down(tch.axis,tch.target,dx,dy)){ activate(T_CANCEL,now); return; }   /* v6.11: swipe down = close */
+        if(view==V_MAIN&&page!=PG_HOME&&!tr.type&&tch.y0<LIST_VY0&&swipe_down(tch.axis,tch.target,dx,dy)){ nav_back(now); return; }   /* v6.17: pulling the header down closes a page (inside the list a vertical drag scrolls) */
         if(!tch.moved&&tch.target&&!tch.fired&&tch.target!=T_MINUS&&tch.target!=T_PLUS&&hit_test(tch.x,tch.y,now)==tch.target) activate(tch.target,now);
     }
 }
@@ -4146,7 +4240,7 @@ static int pressed(int t){ return tch.down&&!tch.moved&&tch.target==t; }
 static int gauge_kind(int ph){ switch(ph){ case PH_GRIND: case PH_WATER: return 1; case PH_PRE: case PH_EXT: return 2; case PH_STEAM: return 3; default: return 0; } }
 typedef struct { int ph,eff; uint32_t hi,lo; char hero[16]; const char*unit; char label[64],sub[80]; const char*sl[3]; char svv[3][16]; float gf,gmark,pf; int pvis;
                  int sk,conc; const char*chip,*badge;
-                 char hint1[72]; const char*hint2; uint32_t hc1; char hint2b[72]; } HomeM;   /* v6.11: empty-state hint in the chart area (only when the chart is inactive) */   /* v6.6: steam class, concurrent steam, chip text, steam marker (NULL = none) */
+                 char hint1[72]; const char*hint2; uint32_t hc1; char hint2b[72]; char alab[4][16]; } HomeM;   /* v6.17: alab = each icon's target, drawn under it */   /* v6.11: empty-state hint in the chart area (only when the chart is inactive) */   /* v6.6: steam class, concurrent steam, chip text, steam marker (NULL = none) */
 /* the three stat labels per HOME state (the selftest measures each trio against the columns, in both languages) */
 enum { SS_IDLE=0, SS_BREW, SS_GRIND, SS_WATER, SS_STEAM, SS_BREW_M, SS_GRIND_M, SS_WATER_M, NSS };   /* _M: concurrent steam — the 3rd field is the milk temperature */
 _Static_assert(SS_GRIND_M-SS_GRIND==SS_BREW_M-SS_BREW&&SS_WATER_M-SS_WATER==SS_BREW_M-SS_BREW,"SS_*_M must be at the same offset from SS_*");
@@ -4164,7 +4258,6 @@ static const short STAT_SET[NSS][3]={
 #define STAT_GAP 16        /* v6.11: minimum space between two stat labels (v6.10: 6 px — "GROUP STEAM BOILER WEIGHT" read as one line) */
 #define SUB_X0 72          /* the HOME subline's area (v6.3: 336 px — also room for °F values and the English texts) */
 #define SUB_W 336
-#define HINT_W 304         /* v6.11: the chart area's hint lines (the chart itself is 244 wide; the hint text may use 304) */
 static HomeM hm;
 static int steam_target(void){ return reg_seen[25]?reg[25]:sv(S_STEAMT); }
 #define MILK_RISE10 39     /* the milk probe keeps rising approx. 3.9 °C after auto-stop (STEAMLIVE §5.2: 650 -> 689 in ~11 s) */
@@ -4201,7 +4294,7 @@ static void home_model(ms_t now){
         int src=wsl.src, w=wdbi(hero_v(ph<<8|src,s16(src),tgt,now)); if(w<0&&w>-30)w=0; if(w<-999)w=-999; if(w>9999)w=9999;   /* v6.9: latched source, conditioned, deadband */
         fmt_fix(m->hero,sizeof m->hero,w,1); m->unit=TR(TX_U_G);
         fmt_fix(a,sizeof a,tgt,1);
-        snprintf(m->label,sizeof m->label,TR(e==PH_GRIND?TX_H_DOSE_TGT:TX_H_CUP_TGT),a);
+        snprintf(m->label,sizeof m->label,"%s",TR(e==PH_GRIND?TX_H_DOSE:TX_H_CUP));   /* v6.17: the target is said ONCE — in the sub-line ("STOPS AT 36.0 G"); v6.16 had it in the label too */
         if(ph==PH_DONE) snprintf(m->sub,sizeof m->sub,TR(TX_H_DONE_IN),tb);
         else snprintf(m->sub,sizeof m->sub,TR(TX_H_AUTOSTOP_G),a);
         float fr=tgt>0? (float)w/tgt : 0;
@@ -4233,7 +4326,8 @@ static void home_model(ms_t now){
             else snprintf(m->sub,sizeof m->sub,"%s",TR(TX_H_WAND_NOSTOP));
             m->gmark=-1;
         } else {                    /* latched (AUTO) — or word 24 not read yet: the target is shown, but without a promise of auto-stop */
-            snprintf(m->label,sizeof m->label,TR(TX_H_MILK_TGT),a);
+            if(sk==SK_AUTO&&ph!=PH_DONE) snprintf(m->label,sizeof m->label,"%s",TR(TX_H_MILK));   /* v6.17: the sub-line carries the target ("STOPS AT 65.0°") */
+            else snprintf(m->label,sizeof m->label,TR(TX_H_MILK_TGT),a);
             if(ph==PH_DONE){
                 if(sk==SK_AUTO){ fmt_fix(b,sizeof b,use_c()?MILK_RISE10:MILK_RISE10*9/5,-1); snprintf(m->sub,sizeof m->sub,TR(TX_H_DONE_RISE),tb,b); }
                 else snprintf(m->sub,sizeof m->sub,TR(TX_H_DONE_IN),tb);
@@ -4266,13 +4360,21 @@ static void home_model(ms_t now){
     /* v6.11: hint in the empty chart area — what the user can DO now (replaces v6.10's "NO ACTIVITY", which repeated the phase chip).
      * If a start is possible: "HOLD AN ICON TO START"; otherwise the reason (the guard's text) — and on error/offline a pointer to DIAGNOSE,
      * where the raw code (E1/E2/E3) and the link counters are. Line 2 points to the settings (swipe + the gear). */
-    { const char*g=act_guard(ACT_BREW,now); m->hint2=TR(TX_C_HINT2); m->hc1=C_TXT2;
-      if(home_preheat_text(m->hint2b,sizeof m->hint2b)) m->hint2=m->hint2b;    /* v6.16: a planned pre-heat replaces the swipe hint (the gear is visible) */
+    { const char*g=act_guard(ACT_BREW,now); m->hint2=NULL; m->hc1=C_TXT3;      /* v6.17: ONE hint line ("HOLD = START · TAP = SETTINGS"); v6.11-v6.16: two */
+      if(home_preheat_text(m->hint2b,sizeof m->hint2b)) m->hint2=m->hint2b;    /* v6.16: a planned pre-heat is the second line */
       if(!g) snprintf(m->hint1,sizeof m->hint1,"%s",TR(TX_C_HINT));
       else if(ph==PH_ERROR) snprintf(m->hint1,sizeof m->hint1,TR(TX_C_ERRCODE),err_code());
       else if(ph==PH_OFFLINE) snprintf(m->hint1,sizeof m->hint1,"%s",TR(TX_C_DIAGREF));
       else if(ph==PH_SLEEP) m->hint1[0]=0;                                   /* the subline already says "WAKING UP…" */
-      else { snprintf(m->hint1,sizeof m->hint1,"%s",g); if(g==TR(TX_G_NOCFG)||g==TR(TX_G_OOR)||g==TR(TX_G_RO)) m->hc1=C_WARN; } }
+      else { snprintf(m->hint1,sizeof m->hint1,"%s",g); m->hc1=C_TXT2; if(g==TR(TX_G_NOCFG)||g==TR(TX_G_OOR)||g==TR(TX_G_RO)) m->hc1=C_WARN; }
+      if(g&&diag_hint(ph)) m->hc1=C_TXT2; }
+    /* v6.17: what each icon will do, under the icon (grind dose, brew weight, water amount, milk temperature) */
+    { char u[16];
+      fmt_fix(u,sizeof u,sv(S_GRINDW),1); snprintf(m->alab[ACT_GRIND],16,"%s %s",u,TR(TX_U_G));
+      fmt_fix(u,sizeof u,sv(S_BREWW),-1); snprintf(m->alab[ACT_BREW],16,"%s %s",u,TR(TX_U_G));
+      fmt_fix(u,sizeof u,sv(S_HOTW),-1);  snprintf(m->alab[ACT_WATER],16,"%s %s",u,TR(TX_U_G));
+      fmt_t10(u,sizeof u,sv(S_STEAMT),0); snprintf(m->alab[ACT_STEAM],16,"%s\xC2\xB0",u);
+      for(int k=0;k<4;k++){ static const int si[4]={S_GRINDW,S_BREWW,S_HOTW,S_STEAMT}; if(!SET[si[k]].loaded) snprintf(m->alab[k],16,"--"); } }
     if(cd.raw&&(ss==SS_BREW||ss==SS_BREW_M)) m->sl[1]=TR(TX_ST_PRAW);   /* v6.10: the RAW view shows raw numbers — so ≈BAR is not shown above them */
     m->chip=(ph==PH_STEAM)?steam_label(stm.kind):ph_name(ph);
     m->badge=m->conc?steam_label(m->sk):NULL;
@@ -4336,8 +4438,11 @@ static void ui_update(ms_t now){
     }
     stop_step(now);                                                  /* v6.13: manual STOP — confirmation / failure */
     save_step(now);
+    /* v6.17: a feature page is the setup for something that is NOT running. As soon as an activity runs (started here, on the machine or
+     * by the wand), the UI is on HOME — the one live view, where STOP is. SYSTEM / DIAGNOSTICS and open editors stay (deliberate). */
+    if(view==V_MAIN&&pg_feat(page)&&phase_active(p)&&!tr.type) go_page(PG_HOME,-1,now);
     /* boot state is live (stat + /proc), but only while it is actually shown */
-    if((view==V_SYS||(view==V_MAIN&&(page==PG_T2||page==PG_DIAG)))&&(now-bs.t>=1000||now<bs.t)){
+    if((view==V_SYS||(view==V_MAIN&&(page==PG_SYS||page==PG_DIAG)))&&(now-bs.t>=1000||now<bs.t)){
         int l0=(view==V_SYS)?sys_locked():0, m0=switch_mode(), n0=boot_next_kind();
         boot_poll(now);
         if(view==V_SYS){
@@ -4361,6 +4466,10 @@ static void ui_update(ms_t now){
         if(tch.target>=T_ACT0&&tch.target<=T_ACT3){
             ui_anim=1;
             if(!tch.fired&&now-tch.t0>=HOLD_MS){ tch.fired=1; act_request(tch.target-T_ACT0,now); }
+        }
+        if(tch.target==T_START&&view==V_MAIN&&pg_feat(page)){      /* v6.17: HOLD TO START on the feature page — the same request as the icon's hold */
+            ui_anim=1;
+            if(!tch.fired&&now-tch.t0>=HOLD_MS){ int k=page-PG_GRIND; tch.fired=1; act_request(k,now); if(act.pending==k) go_page(PG_HOME,-1,now); }
         }
         if((tch.target==T_MINUS||tch.target==T_PLUS)&&view==V_DETAIL&&!sav.active){
             while(now>=tch.rep_next){
@@ -4398,12 +4507,6 @@ static float brand_at(float x,int y,int f,uint32_t cw,int a){
     return bx+r+trail;
 }
 static void brand_c(int cx,int y,int f,uint32_t cw,int a){ brand_at(cx-brand_wf(f)/2,y,f,cw,a); }
-static void draw_dots(int y){
-    for(int i=0;i<NPAGE;i++){
-        float x=CX+(i-(NPAGE-1)/2.f)*14;
-        if(i==page) rrect((int)x-7,y-3,14,6,3,C_TXT,255); else disc(x,y,2.6f,C_SURF3,255);
-    }
-}
 static void draw_pill_btn(Rect r,const char*txt,int font,uint32_t bg_t,uint32_t bg_b,uint32_t fg,int press){
     int w=r.x1-r.x0,h=r.y1-r.y0;
     rrect_g(r.x0,r.y0+2,w,h,h/2.f,rgb(0,0,0),rgb(0,0,0),70);              /* soft shadow */
@@ -4440,7 +4543,7 @@ static void overlays_draw(ms_t now){
 }
 
 /* ================= page: HOME ================= */
-enum { W_CHIP=1, W_LABEL, W_HERO, W_SUB, W_CHART, W_STATS, W_ACT, W_FOOT, W_LIST, W_SCROLL, W_DHERO, W_DCHG, W_MINUS, W_PLUS, W_CANCEL, W_SAVE, W_DIAG, W_SPL, W_XNOTE, W_XFOOT, W_BYE, W_GEAR, W_BACKCH, W_OFF, W_CLOCK };   /* v6.16: W_CLOCK = HOME's top line (clock / wordmark) */
+enum { W_CHIP=1, W_LABEL, W_HERO, W_SUB, W_CHART, W_STATS, W_ACT, W_FOOT, W_LIST, W_SCROLL, W_DHERO, W_DCHG, W_MINUS, W_PLUS, W_CANCEL, W_SAVE, W_DIAG, W_SPL, W_XNOTE, W_XFOOT, W_BYE, W_GEAR, W_BACKCH, W_OFF, W_CLOCK, W_LIVE, W_START };   /* v6.16: W_CLOCK = HOME's top line (clock / wordmark); v6.17: W_LIVE / W_START (a page's live line, HOLD TO START) */
 /* v6.9: latest chart scale (state JSON "chart" + selftest) */
 static struct { int mode,active,full,top,raw_max,disp_max,ticks,bticks,n,clip,na,wmax,wtop; } cst;   /* v6.15: + wmax/wtop (weight line, mode 0) */
 static int cmp_int(const void*a,const void*b){ int x=*(const int*)a,y=*(const int*)b; return (x>y)-(x<y); }
@@ -4449,6 +4552,7 @@ static int pinfo_hit(int x,int y){
     if(cst.active&&cst.mode==0&&in_r(x,y,118,240,244,54)) return 1;
     return (hm.eff==PH_PRE||hm.eff==PH_EXT)&&in_r(x,y,CX-STAT_PITCH/2,298,STAT_PITCH,40);
 }
+static int diag_hint_shown(void){ return diag_hint(act.ph)&&!cst.active&&hm.hint1[0]; }
 static void draw_chart(Rect r,ms_t now,const HomeM*m){
     int x0=r.x0+4, w=r.x1-r.x0-8, yb=r.y1-5, h=r.y1-r.y0-20, raw=cd.raw;
     static int c1[260], c2[260], cr[260], ci[260], vs[GN], rs[GN];
@@ -4476,8 +4580,8 @@ static void draw_chart(Rect r,ms_t now,const HomeM*m){
     if(!active){
         for(int x=x0+2;x<x0+w;x+=8) hspan(yb,x,x+3,C_SURF3,255);
         if(!raw) for(int i=0;i<w;i++) if(mode==0&&ci[i]>=40){ cst.bticks++; for(int yy=yb-4;yy<yb;yy++) pset(x0+i,yy,C_DIS,200); }   /* pulses at rest: small ticks on the baseline */
-        if(m->hint1[0]){ text_c(CX,r.y0+8,m->hint1,F_XS,m->hc1,255); text_c(CX,r.y0+26,m->hint2,F_XS,C_TXT3,255); }   /* v6.11: hint instead of "NO ACTIVITY" */
-        else text_c(CX,r.y0+17,m->hint2,F_XS,C_TXT3,255);
+        if(m->hint1[0]&&m->hint2){ text_c(CX,r.y0+8,m->hint1,F_XS,m->hc1,255); text_c(CX,r.y0+26,m->hint2,F_XS,C_TXT3,255); }   /* v6.11: hint instead of "NO ACTIVITY" */
+        else if(m->hint1[0]||m->hint2) text_c(CX,r.y0+17,m->hint1[0]?m->hint1:m->hint2,F_XS,m->hint1[0]?m->hc1:C_TXT3,255);   /* v6.17: one line, centred */
         cst.full=cst.top=0;
         return;
     }
@@ -4524,7 +4628,8 @@ static void draw_chart(Rect r,ms_t now,const HomeM*m){
 }
 /* v6.11: the sub-line at idle (TARGET 87.0°, NO CONNECTION …, errors in plain language) is the screen's most important message -> F_S when it
  * fits in the field; during activities (AUTO-STOP AT …) and for too-long text F_XS as before */
-static int sub_font(const HomeM*m){ return (!phase_active(m->ph)&&m->ph!=PH_DONE&&text_wf(m->sub,F_S)<=SUB_W-8)?F_S:F_XS; }
+/* v6.17: the activity sub-lines are short now ("STOPS AT 36.0 G"), so they get F_S too — readable from where you stand while brewing */
+static int sub_font(const HomeM*m){ return text_wf(m->sub,F_S)<=SUB_W-8?F_S:F_XS; }
 /* v6.11: gear (settings) drawn with primitives — no new glyph in the font */
 static void draw_gear(float cx,float cy,float r,uint32_t c,uint32_t hole){
     for(int k=0;k<8;k++){ float a=k*(float)M_PI/4.f, ca=cosf(a), sa=sinf(a); capsule(cx+ca*r*0.55f,cy+sa*r*0.55f,cx+ca*r*0.92f,cy+sa*r*0.92f,r*0.16f,c,255); }
@@ -4565,7 +4670,7 @@ static void draw_home(ms_t now){
     if(W_begin(W_SUB,R(SUB_X0,212,SUB_W,24),hi(hs(H0,m->sub),m->ph))){
         int sf=sub_font(m); text_c(CX,sf==F_S?215:217,m->sub,sf,(m->ph==PH_ERROR)?C_ERR:(phase_active(m->ph)||m->ph==PH_DONE?m->hi:C_TXT2),255); W_end();
     }
-    if(W_begin(W_CHART,R(CX-HINT_W/2,240,HINT_W,54),hs(hs(hi(hi(hi(hi(hi(H0,g_head),g_n),(int)m->hi),m->sk*8+(m->eff==PH_STEAM)),cd.raw*16+cd.scale),m->hint1),m->hint2))){ draw_chart(R(118,240,244,54),now,m); W_end(); }
+    if(W_begin(W_CHART,R(CX-HINT_W/2,240,HINT_W,54),hs(hs(hi(hi(hi(hi(hi(H0,g_head),g_n),(int)m->hi),m->sk*8+(m->eff==PH_STEAM)),cd.raw*16+cd.scale),m->hint1),m->hint2?m->hint2:""))){ draw_chart(R(118,240,244,54),now,m); W_end(); }
     h=H0; for(int i=0;i<3;i++){ h=hs(h,m->sl[i]); h=hs(h,m->svv[i]); }
     if(W_begin(W_STATS,R(96,298,288,40),h)){
         for(int i=0;i<3;i++){ int x=CX+(i-1)*STAT_PITCH; text_c(x,300,m->sl[i],F_XS,C_TXT3,255); text_c(x,317,m->svv[i],F_M,C_TXT,255); }
@@ -4577,9 +4682,10 @@ static void draw_home(ms_t now){
     float hp=0; int hk=-1;
     if(tch.down&&!tch.moved&&tch.target>=T_ACT0&&tch.target<=T_ACT3){ hk=tch.target-T_ACT0; hp=clampf((now-tch.t0)/(float)HOLD_MS,0,1); }
     h=hi(hi(hi(hi(H0,m->ph),hk),(int)(hp*40)),act.pending); h=hi(h,pressed(T_STOP)); h=hi(h,pressed(T_STOPS)); h=hi(h,sn*25+(sk[0]+1)*5+sk[1]+1); h=hi(h,stm.kind); if(running) h=hi(h,(int)((now/66)&0x7FFFFFFF)); h=hi(h,sv(S_GRINDMODE)*4+sv(S_HOTMODE)); for(int i=0;i<NSET;i++) h=hi(h,set_oor(&SET[i]));
-    if(W_begin(W_ACT,R(92,340,296,64),h)){                        /* v6.13: 296 wide (two STOP buttons); v6.6-v6.12: 256 */
+    for(int i=0;i<4;i++) h=hs(h,m->alab[i]);
+    if(W_begin(W_ACT,R(72,338,336,82),h)){                        /* v6.17: 336 x 82 (STOP 216 / 2 x 152, + the icons' targets); v6.13: 296 x 64 */
         if(sn){
-            for(int i=0;i<sn;i++) draw_pill_btn(stop_pill(sn,i),TR(STOP_BTN[sk[i]]),stop_font(sn),rgb(120,40,44),rgb(92,28,34),rgb(255,214,214),pressed(i?T_STOPS:T_STOP));
+            for(int i=0;i<sn;i++) draw_pill_btn(stop_pill(sn,i),TR(STOP_BTN[sk[i]]),stop_font(sn),C_STOP_T,C_STOP_B,C_STOP_FG,pressed(i?T_STOPS:T_STOP));
         } else {
             for(int i=0;i<4;i++){
                 int en=!running&&!act_guard(i,now); uint32_t ac=ph_hi(ACT_PH[i]); int pr=(hk==i);
@@ -4597,12 +4703,12 @@ static void draw_home(ms_t now){
                 float iw=text_wf(ACT_ICON[i],F_IC);
                 text_at(ACT_X[i]-iw/2,ACT_Y-10,ACT_ICON[i],F_IC,en?ac:C_DIS,255);
                 if(pr&&en&&hp>0) arc_aa(ACT_X[i],ACT_Y,28.5f,1.8f,-90,-90+360*hp,ac,255);
+                if(!running) text_c(ACT_X[i],ACT_LAB_Y,m->alab[i],F_XS,en?C_TXT2:C_DIS,255);   /* v6.17: the icon's target */
             }
         }
         W_end();
     }
-    if(W_begin(W_FOOT,R(180,408,120,24),hi(H0,page))){ draw_dots(420); W_end(); }   /* v6.8: only the page dots (like the other pages) — no REVERT pill */
-    /* v6.11: visible path to the settings (before: only swipe / invisible edge zones): gear button below the dots */
+    /* v6.11: visible path to the settings; v6.17: the gear opens SYSTEM (each feature's settings are behind its own icon), no page dots */
     if(W_begin(W_GEAR,R(CX-22,GEAR_Y-20,44,40),hi(H0,pressed(T_GEAR)))){
         int pr=pressed(T_GEAR); uint32_t bg=pr?C_SURF3:C_SURF2;
         disc(CX,GEAR_Y+1,15,rgb(0,0,0),60); disc(CX,GEAR_Y,15,bg,255); ring(CX,GEAR_Y,14,15.2f,C_LINE,255);
@@ -4613,11 +4719,16 @@ static void draw_home(ms_t now){
 /* ================= page: SETTINGS LIST ================= */
 /* HOME: discreet title line at the top inside the gauge ring — the wordmark w/ "+" badge */
 static void static_home(void){ }   /* v6.16: the wordmark is drawn by W_CLOCK (draw_home) — it gives way to the clock */
-static void static_list(void){
-    int t=tier_of_page(page);
-    text_c(CX,38,TR(TIER_NAME[t]),F_M,C_TXT,255);
-    text_c(CX,65,TR(TIER_SUB[t]),F_XS,C_TXT3,255);
+/* v6.17: a page's title. Feature pages: the feature's icon in its colour + its name (the same icon as on HOME, so the page is
+ * recognisably "the thing behind that button"); SYSTEM / DIAGNOSTICS: the name. No descriptive sub-line any more. */
+static const char* page_title(int pg){ return pg==PG_DIAG?TR(TX_PG_DIAG):TR(TIER_NAME[clampi(tier_of_page(pg),0,4)]); }
+static float page_title_w(int pg){ return text_wf(page_title(pg),F_M)+(pg_feat(pg)?text_wf(ACT_ICON[pg-PG_GRIND],F_IC)+8:0); }
+static void static_page_title(void){
+    const char*t=page_title(page); float x=CX-page_title_w(page)/2;
+    if(pg_feat(page)){ int k=page-PG_GRIND; float iw=text_wf(ACT_ICON[k],F_IC); text_at(x,PG_TITLE_Y-1,ACT_ICON[k],F_IC,ph_hi(ACT_PH[k]),255); x+=iw+8; }
+    text_at(x,PG_TITLE_Y,t,F_M,C_TXT,255);
 }
+static void static_list(void){ static_page_title(); }
 /* soft edges: fade to background at top/bottom of a scroll field */
 static void edge_fade(Rect vr,int top,int bottom){
     for(int j=0;j<14;j++){
@@ -4636,7 +4747,7 @@ static void draw_scroll_ind(float content_h){
     if(W_begin(W_SCROLL,R(444,140,30,200),hi(hi(hi(H0,sc),(int)mx),page))){
         if(mx>0){
             arc_aa(CX,CY,228,1.4f,-22,22,C_SURF3,255);
-            float vis=(LIST_VY1-LIST_VY0)/content_h, span=44*vis, a0=-22+(44-span)*(scroll[page]/mx);
+            float vis=(list_vy1(page)-LIST_VY0)/content_h, span=44*vis, a0=-22+(44-span)*(scroll[page]/mx);
             arc_aa(CX,CY,228,1.6f,a0,a0+span,C_TXT2,255);
         }
         W_end();
@@ -4671,73 +4782,143 @@ static int row_val_font(const char*label,const char*val,int xr,int*room){
     if(text_w(val,F_M)<=*room) return F_M;
     return text_w(val,F_S)<=*room?F_S:F_XS;
 }
+/* v6.17: the close chevron of a PAGE (feature / SYSTEM / DIAGNOSTICS): the same glyph as the editors' (v6.11), at the very top;
+ * the tap area is the whole header (PBACK_*). */
+static void draw_pback(void){
+    int pr=pressed(T_BACK);
+    if(W_begin(W_BACKCH,R(CX-26,PG_CHEV_Y-8,52,24),hi(hi(H0,pr),page))){
+        if(pr) rrect(CX-24,PG_CHEV_Y-7,48,22,11,C_SURF3,255);
+        uint32_t c=pr?C_TXT:C_TXT2;
+        capsule(CX-9,PG_CHEV_Y,CX,PG_CHEV_Y+8,1.5f,c,255); capsule(CX,PG_CHEV_Y+8,CX+9,PG_CHEV_Y,1.5f,c,255);
+        W_end();
+    }
+}
+/* v6.17: the line under a page's title (shared w/ the selftest). Feature pages: WHY start is not possible (the guard's text, amber) —
+ * otherwise the live values that matter before starting: what is on the scale, how hot the boiler / group / milk is.
+ * (TX_G_WAIT is transient — a write is on its way — and is not shown: the line would flicker after every SAVE.) SYSTEM: product + version. */
+#define LIVE_W 296
+static uint32_t page_live_text(int pg,char*o,size_t n,ms_t now){
+    char a[16],b[16]; o[0]=0;
+    if(pg==PG_SYS){ snprintf(o,n,"%s",TR(ro_mode?TX_DV_VERSION_RO:TX_DV_VERSION)); return C_TXT3; }
+    if(!pg_feat(pg)) return C_TXT3;
+    int k=pg-PG_GRIND, up=link_up(now); const char*g=act_guard(k,now);
+    if(g&&g!=TR(TX_G_WAIT)){ snprintf(o,n,"%s",g); return C_WARN; }
+#define LV_T(dst,r_,dec_) do{ if(up&&reg_seen[r_]) fmt_t10(dst,sizeof dst,reg[r_],dec_); else snprintf(dst,sizeof dst,"--"); }while(0)
+    if(k==ACT_GRIND){ if(up&&reg_seen[38]){ int w=wdbi(s16(38)); if(w<-999)w=-999; if(w>9999)w=9999; fmt_fix(a,sizeof a,w,1); } else snprintf(a,sizeof a,"--"); snprintf(o,n,TR(TX_LV_GRIND),a); }
+    else if(k==ACT_BREW){ LV_T(a,40,1); LV_T(b,42,0); snprintf(o,n,TR(TX_LV_BREW),a,b); }
+    else if(k==ACT_WATER){ LV_T(a,40,1); snprintf(o,n,TR(TX_LV_WATER),a); }       /* word 40 = the stock UI's "water sensor" (SET[S_HOTT]) */
+    else { LV_T(a,47,0); LV_T(b,48,1); snprintf(o,n,TR(TX_LV_STEAM),a,b); }
+#undef LV_T
+    return C_TXT2;
+}
+/* v6.17: a section header's summary on SYSTEM (shared w/ the selftest): what you would otherwise have to open the section to see */
+static void sec_summary(int sc,char*o,size_t n){
+    o[0]=0;
+    if(sc==SEC_DISPLAY) snprintf(o,n,"%s",TR(TX_UL_EN+ui_lang));
+    else if(sc==SEC_CLOCK){ if(!home_clock_text(o,n)) snprintf(o,n,"%s",TR(TX_DV_T_NOTSET)); }
+    else if(sc==SEC_SCHED){ if(sch.on) fmt_hm(o,n,sch.hm/60,sch.hm%60,1); else snprintf(o,n,"%s",TR(TX_E_OFF)); }
+}
+/* the DIAGNOSTICS entry's status: OK / the error code / DOWN */
+static uint32_t diag_row_text(char*o,size_t n,ms_t now){
+    if(!link_up(now)){ snprintf(o,n,"%s",TR(TX_DV_DOWN)); return C_ERR; }
+    if(reg[34]|reg[35]|reg[36]){ snprintf(o,n,"%s",err_code()); return C_ERR; }
+    snprintf(o,n,"%s",TR(TX_DV_OK)); return C_OK;
+}
+static void draw_start(ms_t now){
+    int k=page-PG_GRIND, en=!act_guard(k,now), pr=pressed(T_START); uint32_t ac=ph_hi(ACT_PH[k]);
+    float hp=(pr&&en)?clampf((now-tch.t0)/(float)HOLD_MS,0,1):0;
+    Rect wr=R(CX-START_HIT_W/2,START_HIT_Y,START_HIT_W,START_HIT_H);
+    if(W_begin(W_START,wr,hi(hi(hi(hi(hi(H0,k),en),pr),(int)(hp*48)),ui_lang))){
+        int x=CX-START_W/2, y=START_Y; float rr=START_H/2.f; const char*t=TR(TX_B_START);
+        rrect(x,y+2,START_W,START_H,rr,rgb(0,0,0),70);
+        rrect(x,y,START_W,START_H,rr,en?mix(C_SURF3,ac,150):C_SURF3,255);                 /* outline in the feature's colour */
+        rrect_g(x+2,y+2,START_W-4,START_H-4,rr-2,pr?C_SURF3:C_SURF2,pr?C_SURF2:C_SURF,255);
+        if(hp>0){ set_clip(R(x,y,(int)(START_W*hp),START_H)); rrect(x+2,y+2,START_W-4,START_H-4,rr-2,mix(C_SURF2,ac,120),255); set_clip(wr); }   /* the hold fills the pill left -> right */
+        float iw=text_wf(ACT_ICON[k],F_IC), tw=text_wf(t,F_S), tx=CX-(iw+10+tw)/2;
+        text_at(tx,y+START_H/2-10,ACT_ICON[k],F_IC,en?ac:C_DIS,255);
+        text_at(tx+iw+10,y+START_H/2-7,t,F_S,en?C_TXT:C_DIS,255);
+        W_end();
+    }
+}
 static void draw_list(ms_t now){
-    (void)now; int t=tier_of_page(page), n=tier_count(t), nx=page_xrows(page); int sc=(int)lroundf(scroll[page]); int prow=-1;
+    Row rw[ROW_MAX]; int n=rows_get(page,rw), vy1=list_vy1(page); int sc=(int)lroundf(scroll[page]); int prow=-1;
+    draw_pback();
+    { char lv[96]; uint32_t lc=page_live_text(page,lv,sizeof lv-4,now); fit_text(lv,F_XS,LIVE_W);
+      if(W_begin(W_LIVE,R(CX-LIVE_W/2-2,PG_LIVE_Y-3,LIVE_W+4,17),hi(hi(hs(H0,lv),(int)lc),page))){ text_c(CX,PG_LIVE_Y,lv,F_XS,lc,255); W_end(); } }
     if(tch.down&&!tch.moved&&tch.target>=T_ROW0) prow=tch.target-T_ROW0;
-    uint32_t h=hi(hi(hi(H0,sc),prow),page); for(int k=0;k<n;k++){ const Setting*q=&SET[tier_item(t,k)]; h=hi(hi(h,q->val),q->loaded); } h=hi(h,sv(S_TUNIT));
-    if(nx) h=hi(hi(hi(h,bs.flag*8+bs.lock),switch_locked()),switch_mode());
-    Rect vr=R(60,LIST_VY0,360,LIST_VY1-LIST_VY0);
+    char dgs[16]; uint32_t dgc=diag_row_text(dgs,sizeof dgs,now);
+    uint32_t h=hi(hi(hi(hi(H0,sc),prow),page),sec_open*8+ui_lang);
+    for(int k=0;k<n;k++){ h=hi(h,rw[k].kind*64+rw[k].a); if(rw[k].kind==RK_SET){ const Setting*q=&SET[rw[k].a]; h=hi(hi(h,q->val),q->loaded); } }
+    h=hi(h,sv(S_TUNIT));
+    if(page==PG_SYS){ char sm[40]; h=hi(hi(hi(h,bs.flag*8+bs.lock),switch_locked()),switch_mode()); for(int q=0;q<NSEC;q++){ sec_summary(q,sm,sizeof sm); h=hs(h,sm); } h=hi(hs(h,dgs),(int)dgc); }
+    Rect vr=R(60,LIST_VY0,360,vy1-LIST_VY0);
     if(W_begin(W_LIST,vr,h)){
-        char b[40];
+        char b[40]; int c0=-1,c1=-1;
         for(int k=0;k<n;k++){
-            int y=row_y0(page,k)-sc; if(y+ROW_H<LIST_VY0||y>LIST_VY1) continue;
-            int i=tier_item(t,k); const Setting*s=&SET[i]; int lock=(s->flags&SF_LOCK)!=0;
-            int oor=set_oor(s); const char*lab=TR(s->label);
-            rrect_g(72,y,336,ROW_H,16,k==prow?C_SURF3:C_SURF2,k==prow?C_SURF2:C_SURF,255);
-            if(oor) rrect(72,y,336,ROW_H,16,C_ERR,34);                                        /* out of spec: red tint */
-            text_at(94,y+18,lab,F_S,lock?C_TXT2:C_TXT,255);
-            set_fmt(i,s->val,b,sizeof b-4); const char*u=set_unit(i);
-            int xr=lock?388:372;
-            if(*u&&s->kind==K_NUM){ int uw=text_w(u,F_XS); text_r(xr,y+21,u,F_XS,C_TXT3,255); xr-=uw+6; }
-            int vf=F_M, room=0;
-            if(s->kind==K_ENUM||(s->flags&SF_HHMM)||i==S_TZ){ vf=row_val_font(lab,b,xr,&room); if(vf==F_XS) fit_text(b,F_XS,room); }   /* v6.16: + clock times, zone label */   /* long enum names: M -> S -> XS -> … */
-            text_r(xr,y+(vf==F_M?16:(vf==F_S?18:20)),b,vf,oor?C_ERR:(lock?C_TXT3:C_ACC),255); xr-=text_w(b,vf);
-            if(s->hint&&!lock&&!oor) text_r(xr-7,y+21,"≈",F_XS,C_WARN,255);                   /* estimate marker */
-            if(!lock) text_at(380,y+19,">",F_XS,C_TXT3,255);
-        }
-        if(nx){   /* v6.2: system actions — two-line rows (label + explanation) under a heading */
-            int yc=LIST_Y0+n*ROW_P-8+14-sc;
-            if(yc+11>=LIST_VY0&&yc<=LIST_VY1){
-                const char*cap=TR(TX_X_CAP); int tw=text_w(cap,F_XS);
-                text_c(CX,yc,cap,F_XS,C_TXT3,255);
-                hspan(yc+5,84,CX-tw/2-12,C_LINE,255); hspan(yc+5,CX+tw/2+12,396,C_LINE,255);
-            }
-            for(int x=0;x<nx;x++){
-                int k=n+x, y=row_y0(page,k)-sc; if(y+ROW_H<LIST_VY0||y>LIST_VY1) continue;
-                const char*label,*sub,*val; int lock; xrow_text(x,&label,&sub,&val,&lock);
-                rrect_g(72,y,336,ROW_H,16,k==prow?C_SURF3:C_SURF2,k==prow?C_SURF2:C_SURF,255);
+            int y=row_y0(page,k)-sc;
+            if(page==PG_SYS&&rw[k].kind!=RK_SEC&&rw[k].kind!=RK_DIAG){ if(c0<0) c0=y; c1=y+ROW_H; }   /* the open section's rows */
+            if(y+ROW_H<LIST_VY0||y>vy1) continue;
+            int pr=(k==prow);
+            if(rw[k].kind==RK_SET){
+                int i=rw[k].a; const Setting*s=&SET[i]; int lock=(s->flags&SF_LOCK)!=0;
+                int oor=set_oor(s); const char*lab=TR(s->label);
+                rrect_g(72,y,336,ROW_H,16,pr?C_SURF3:C_SURF2,pr?C_SURF2:C_SURF,255);
+                if(oor) rrect(72,y,336,ROW_H,16,C_ERR,34);                                        /* out of spec: red tint */
+                text_at(94,y+18,lab,F_S,lock?C_TXT2:C_TXT,255);
+                set_fmt(i,s->val,b,sizeof b-4); const char*u=set_unit(i);
+                int xr=lock?388:372;
+                if(*u&&s->kind==K_NUM){ int uw=text_w(u,F_XS); text_r(xr,y+21,u,F_XS,C_TXT3,255); xr-=uw+6; }
+                int vf=F_M, room=0;
+                if(s->kind==K_ENUM||(s->flags&SF_HHMM)||i==S_TZ){ vf=row_val_font(lab,b,xr,&room); if(vf==F_XS) fit_text(b,F_XS,room); }   /* v6.16: + clock times, zone label */   /* long enum names: M -> S -> XS -> … */
+                text_r(xr,y+(vf==F_M?16:(vf==F_S?18:20)),b,vf,oor?C_ERR:(lock?C_TXT3:C_ACC),255); xr-=text_w(b,vf);
+                if(s->hint&&!lock&&!oor) text_r(xr-7,y+21,"≈",F_XS,C_WARN,255);                   /* estimate marker */
+                if(!lock) text_at(380,y+19,">",F_XS,C_TXT3,255);
+            } else if(rw[k].kind==RK_SEC){   /* v6.17: section header — name, summary, chevron (right = closed, down = open) */
+                int open=(rw[k].a==sec_open); char sm[40]; sec_summary(rw[k].a,sm,sizeof sm-4);
+                rrect_g(72,y,336,ROW_H,16,pr?C_SURF3:(open?C_SURF3:C_SURF2),pr?C_SURF2:(open?C_SURF2:C_SURF),255);
+                text_at(94,y+18,TR(SEC_NAME[rw[k].a]),F_S,open?C_ACC:C_TXT,255);
+                if(sm[0]&&!open){ fit_text(sm,F_XS,372-(94+text_w(TR(SEC_NAME[rw[k].a]),F_S)+14)); text_r(366,y+20,sm,F_XS,C_TXT3,255); }
+                if(open){ capsule(378,y+22,384,y+28,1.3f,C_ACC,255); capsule(384,y+28,390,y+22,1.3f,C_ACC,255); }
+                else text_at(380,y+19,">",F_XS,C_TXT3,255);
+            } else if(rw[k].kind==RK_X){     /* v6.2: system actions — two-line rows (label + explanation) */
+                const char*label,*sub,*val; int lock; xrow_text(rw[k].a,&label,&sub,&val,&lock);
+                rrect_g(72,y,336,ROW_H,16,pr?C_SURF3:C_SURF2,pr?C_SURF2:C_SURF,255);
                 text_at(94,y+10,label,F_S,lock?C_TXT2:C_TXT,255);
                 text_at(94,y+31,sub,F_XS,lock?C_WARN:C_TXT3,255);
                 if(val) text_r(lock?388:372,y+8,val,F_M,lock?C_TXT3:C_ACC,255);
                 if(!lock) text_at(380,y+(val?12:19),">",F_XS,C_TXT3,255);
+            } else {                          /* v6.17: the DIAGNOSTICS entry (advanced) w. the machine's status */
+                rrect_g(72,y,336,ROW_H,16,pr?C_SURF3:C_SURF2,pr?C_SURF2:C_SURF,255);
+                text_at(94,y+18,TR(TX_PG_DIAG),F_S,C_TXT,255);
+                text_r(366,y+18,dgs,F_S,dgc,255);
+                text_at(380,y+19,">",F_XS,C_TXT3,255);
             }
         }
+        if(c0>=0){ int ya=c0<LIST_VY0?LIST_VY0:c0, yb=c1>vy1?vy1:c1; if(yb>ya) fill_rect(64,ya,2,yb-ya,C_ACC,150); }   /* the open section's rows are tied together by a thin accent rail */
         edge_fade(vr,1,1);
         W_end();
     }
-    draw_scroll_ind(page_rows(page)*ROW_P+(nx?XGAP:0));
-    if(W_begin(W_FOOT,R(180,408,120,24),hi(H0,page))){ draw_dots(420); W_end(); }
+    draw_scroll_ind(n*ROW_P);
+    if(pg_feat(page)) draw_start(now);
 }
 
 /* ================= page: STEPPER DETAIL ================= */
 /* texts for the detail view (shared w/ the selftest's layout check) */
-static void detail_text(int i,char*l,size_t n,const char**l1,const char**l2){
+/* v6.17: the two footer lines ("CONTROLLER NOW + CONFIG" / "STOCK UI: AFTER RESTART", file paths, "SHOWN FROM CONFIG.JSON" …) are gone:
+ * they described the implementation on every single editor. What matters is said once — by the SAVED toast, by the row's note, and by
+ * the STOCK UI section the stock-only rows now live in. */
+static void detail_text(int i,char*l,size_t n){
     const Setting*s=&SET[i]; char a[24],b[24]; int lock=(s->flags&SF_LOCK)!=0, sens=(s->flags&SF_SENSOR)!=0;
     if(sens) snprintf(l,n,"%s",TR(TX_D_MEASURED));
     else if(lock) snprintf(l,n,"%s",TR(TX_D_NOEDIT));
     else if(s->kind==K_ENUM){ if(s->max-s->min==1) snprintf(l,n,"%s / %s",TR(s->opts[0]),TR(s->opts[1])); else snprintf(l,n,TR(TX_D_NOPTS),s->max-s->min+1); }
     else { const char*u=set_unit(i); set_fmt(i,s->lo,a,sizeof a); set_fmt(i,s->hi,b,sizeof b); snprintf(l,n,*u?"%s - %s %s":"%s - %s",a,b,u); }
-    /* reload semantics (PARITY §1.4): the controller gets the value on SAVE; the stock UI reads
-     * config ONLY at startup and then boot-pushes it to the controller itself. */
-    if(sens){ *l1=TR(TX_D_LIVE); *l2=TR(TX_D_SAMESENSOR); }
-    else if(lock){ *l1=TR(TX_D_FROMCFG); *l2=TR(TX_D_STOCKEDIT); }
-    else if(s->flags&SF_LOCAL){ *l1=TR(TX_D_LANG_L1); *l2=TR(TX_D_LANG_L2); }           /* v6.3: own file; the stock UI's language is a different field */
-    else if(s->flags&SF_OWN){ *l1=TR(TX_D_OWN_L1); *l2=TR(TX_D_OWN_L2); }               /* v6.16: own file; stock's schedules live in /customer/config.bin */
-    else { *l1=TR(s->mcu!=M_NONE?TX_D_MCU_CFG:TX_D_CFGONLY); *l2=TR(TX_D_STOCK_RESTART); }
 }
+/* v6.17: is the stepper worth holding? (hold = repeat w. acceleration; shown as a micro-hint while the value is unchanged) */
+static int detail_holdable(const Setting*s){ return s->kind==K_NUM&&!(s->flags&SF_LOCK)&&s->step>0&&(s->hi-s->lo)/s->step>=20; }
 static void static_detail(void){
-    const Setting*s=&SET[sel]; char l[72]; const char*l1,*l2; int lock=(s->flags&SF_LOCK)!=0, sens=(s->flags&SF_SENSOR)!=0;
-    detail_text(sel,l,sizeof l,&l1,&l2);
+    const Setting*s=&SET[sel]; char l[72]; int lock=(s->flags&SF_LOCK)!=0, sens=(s->flags&SF_SENSOR)!=0;
+    detail_text(sel,l,sizeof l);
     text_c(CX,82,TR(s->label),F_S,C_TXT2,255);
     /* range line (+ visible hint when max/mapping is an estimate, PARITY §6.6) */
     if(s->hint&&!lock){
@@ -4746,11 +4927,20 @@ static void static_detail(void){
         x=text_at(x,106,l,F_XS,C_TXT3,255); x=text_at(x,106," · ",F_XS,C_TXT3,255); text_at(x,106,hint,F_XS,C_WARN,255);
     } else text_c(CX,106,l,F_XS,C_TXT3,255);
     text_c(CX,254,TR(s->note),F_XS,(lock&&!sens&&s->mcu!=M_NONE)?C_WARN:C_TXT3,255);
-    text_c(CX,398,l1,F_XS,C_TXT3,255);
-    text_c(CX,416,l2,F_XS,C_TXT3,255);
 }
 /* v6.11: close chevron at the top of the detail/system view (tap = CANCEL/BACK; swiping down does the same). The down arrow is
  * the "pull down to close" handle; the tap field is 88 x 46 px (BACK_*). */
+/* v6.17: the editor's status line (shared w/ the selftest): SAVING… / out of spec / CHANGED · WAS … / the zone's place names / — when the
+ * value is untouched — the one thing about −/+ you cannot see: holding repeats and accelerates. Otherwise empty ("SAVED VALUE" is gone). */
+static uint32_t detail_status(char*l,size_t n){
+    const Setting*s=&SET[sel]; char o[40]; int lock=(s->flags&SF_LOCK)!=0; l[0]=0;
+    if(sav.active){ snprintf(l,n,"%s",TR(TX_D_SAVING)); return C_ACC; }
+    if(!lock&&!set_valid(s,edit_val)){ snprintf(l,n,"%s",TR(TX_D_OOR)); return C_ERR; }
+    if(edit_val!=edit_orig){ set_fmt(sel,edit_orig,o,sizeof o); snprintf(l,n,TR(TX_D_CHANGED),o,s->kind==K_NUM?set_unit(sel):""); return C_ACC; }
+    if(sel==S_TZ&&edit_val>=0&&edit_val<TZ_N){ snprintf(l,n-4,"%s",TZT[edit_val].name); fit_text(l,F_XS,276); return C_TXT2; }   /* v6.16: the zone's place names */
+    if(detail_holdable(s)) snprintf(l,n,"%s",TR(TX_D_HOLDFAST));
+    return C_TXT3;
+}
 static void draw_backch(void){
     int pr=pressed(T_BACK);
     if(W_begin(W_BACKCH,R(CX-26,42,52,30),hi(H0,pr))){
@@ -4761,7 +4951,7 @@ static void draw_backch(void){
     }
 }
 static void draw_detail(ms_t now){
-    (void)now; draw_backch(); const Setting*s=&SET[sel]; char b[40],o[40],l[112];
+    (void)now; draw_backch(); const Setting*s=&SET[sel]; char b[40],l[112];
     int lock=(s->flags&SF_LOCK)!=0; set_fmt(sel,edit_val,b,sizeof b); const char*u=set_unit(sel);
     int eoor=!lock&&!set_valid(s,edit_val);
     if(W_begin(W_DHERO,R(122,128,236,90),hi(hs(hs(H0,b),u),eoor))){
@@ -4774,14 +4964,8 @@ static void draw_detail(ms_t now){
         W_end();
     }
     int chg=edit_val!=edit_orig;
-    if(W_begin(W_DCHG,R(100,224,280,22),hi(hi(hi(H0,chg),lock?0:edit_orig),eoor)+sav.active)){
-        if(sav.active) text_c(CX,228,TR(TX_D_SAVING),F_XS,C_ACC,255);
-        else if(eoor) text_c(CX,228,TR(TX_D_OOR),F_XS,C_ERR,255);
-        else if(chg){ set_fmt(sel,edit_orig,o,sizeof o); snprintf(l,sizeof l,TR(TX_D_CHANGED),o,s->kind==K_NUM?u:""); text_c(CX,228,l,F_XS,C_ACC,255); }
-        else if(sel==S_TZ&&edit_val>=0&&edit_val<TZ_N){ snprintf(l,sizeof l,"%s",TZT[edit_val].name); fit_text(l,F_XS,276); text_c(CX,228,l,F_XS,C_TXT2,255); }   /* v6.16: the zone's place names */
-        else text_c(CX,228,TR((s->flags&SF_SENSOR)?TX_D_SENSOR_LIVE:(lock?TX_D_LOCKED:TX_D_SAVEDVAL)),F_XS,C_TXT3,255);
-        W_end();
-    }
+    { uint32_t stc=detail_status(l,sizeof l);
+      if(W_begin(W_DCHG,R(100,224,280,22),hi(hs(H0,l),(int)stc))){ if(l[0]) text_c(CX,228,l,F_XS,stc,255); W_end(); } }
     for(int k=0;k<2;k++){
         int cx=k?396:84, t=k?T_PLUS:T_MINUS; int en=!lock&&!sav.active&&(eoor||(k?edit_val<s->hi:edit_val>s->lo)); int pr=pressed(t);
         if(W_begin(k?W_PLUS:W_MINUS,R(cx-38,146,76,78),hi(hi(hi(H0,en),pr),lock))){
@@ -4820,7 +5004,7 @@ static void sys_text(SysT*t){
         t->title=TR(TX_X_BOOTUI); t->sub=boot_state_text(); t->hero=lock?boot_next_name():TR(x_edit?TX_BN_OURS:TX_BN_ORIGINAL); t->ok=TR(TX_B_SAVE);
         if(lock) t->status=TR(TX_D_LOCKED);
         else if(chg){ snprintf(st,sizeof st,TR(TX_Y_CHANGED),TR(x_orig?TX_BN_OURS:TX_BN_ORIGINAL)); t->status=st; t->c_status=C_ACC; }
-        else t->status=TR(TX_Y_SAVEDCHOICE);
+        /* v6.17: unchanged = no status line ("SAVED CHOICE" was noise) */
         t->note=lock?boot_lock_text(bs.lock,1):TR(TX_BH1); if(lock) t->c_note=C_WARN;
         if(lock){ t->l1=TR(bs.flag?TX_Y_FLAG_YES:TX_Y_FLAG_NO); t->l2=TR(TX_Y_FLAG_HANDSOFF); }
         else { t->l1=TR(TX_BH2); t->l2=TR(TX_BH3); }               /* the §9.1 help text */
@@ -4887,7 +5071,7 @@ static void draw_sys(ms_t now){
             }
         }
     }
-    if(t.status&&W_begin(W_DCHG,R(60,224,360,22),hi(hs(H0,t.status),(int)t.c_status))){ text_c(CX,228,t.status,F_XS,t.c_status,255); W_end(); }
+    if(W_begin(W_DCHG,R(60,224,360,22),hi(hs(H0,t.status?t.status:""),(int)t.c_status))){ if(t.status) text_c(CX,228,t.status,F_XS,t.c_status,255); W_end(); }
     if(W_begin(W_XNOTE,R(40,xsel==X_EXIT?238:250,400,22),hi(hs(H0,t.note),(int)t.c_note))){ text_c(CX,xsel==X_EXIT?242:254,t.note,F_XS,t.c_note,255); W_end(); }
     if(W_begin(W_CANCEL,lock?R(170,286,140,60):R(100,286,136,60),hi(hi(H0,pressed(T_CANCEL)),lock))){
         draw_pill_btn(lock?R(178,292,124,48):R(108,292,124,48),t.cancel,F_XS,C_SURF2,C_SURF,C_TXT,pressed(T_CANCEL)); W_end();
@@ -4932,10 +5116,7 @@ static void draw_off(ms_t now){
 }
 
 /* ================= page: DIAGNOSE ================= */
-static void static_diag(void){
-    text_c(CX,38,TR(TX_PG_DIAG),F_M,C_TXT,255);
-    text_c(CX,65,TR(TX_PS_DIAG),F_XS,C_TXT3,255);
-}
+static void static_diag(void){ static_page_title(); }   /* v6.17: title only (the sub-line listed the sections) */
 #define DG_N 16
 #define DG_NB 6
 #define DG_FULL_W 336
@@ -5014,12 +5195,11 @@ static void diag_net_text(char*o,size_t n,uint32_t*col){
 }
 /* v6.10: the PRESSURE · ESTIMATE block (shared w/ the selftest): the anchor line, the now line (raw word 51 -> ≈bar; above P_EST_MAX a pulse —
  * at idle "MAINTENANCE PULSE", during an activity "PULSE, NO PRESSURE", never a bar value) and note line 2 (the limit) */
-static void diag_press_text(char*anc,size_t an,char*nw,size_t nn,uint32_t*col,char*n2,size_t n2n){
+static void diag_press_text(char*anc,size_t an,char*nw,size_t nn,uint32_t*col){
     snprintf(anc,an,TR(TX_DV_PANCH),p_anchor_bar(),P_ANCHOR_RAW,(double)p_k());
     int r=reg[51]; float b=p_bar((float)r);
     if(b>=0.f){ snprintf(nw,nn,TR(TX_DV_PNOW),r,(double)b); *col=C_TXT; }
     else { snprintf(nw,nn,TR(!phase_active(act.ph)&&act.ph!=PH_DONE?TX_DV_PMAINT:TX_DV_PPULSE),r); *col=C_WARN; }
-    snprintf(n2,n2n,TR(TX_DG_PNOTE2),(int)P_EST_MAX);
 }
 static void dg_caption(int yc,const char*cap,Rect vr){
     int tw=text_w(cap,F_XS);
@@ -5045,10 +5225,10 @@ static void diag_time_text(char clk[28],uint32_t*cc,char zone[40],char ao[28],ch
     if(!home_preheat_text(nx,72)) snprintf(nx,72,"%s",TR(sch.on&&!ok?TX_T_NOCLOCK:TX_DV_T_NOSCHED));
 }
 static void draw_diag(ms_t now){
-    char v[DG_N+DG_NB][28]; uint32_t col[DG_N+DG_NB]; char exe[160],evt[128],pids[48],lng[96],nets[64],panc[64],pnow[64],pn2[64]; uint32_t netc,pcol;
-    diag_top_text(v,col,now); diag_net_text(nets,sizeof nets,&netc); diag_press_text(panc,sizeof panc,pnow,sizeof pnow,&pcol,pn2,sizeof pn2);
+    char v[DG_N+DG_NB][28]; uint32_t col[DG_N+DG_NB]; char exe[160],evt[128],pids[48],lng[96],nets[64],panc[64],pnow[64]; uint32_t netc,pcol;
+    diag_top_text(v,col,now); diag_net_text(nets,sizeof nets,&netc); diag_press_text(panc,sizeof panc,pnow,sizeof pnow,&pcol);
     diag_boot_text(v+DG_N,col+DG_N,exe,sizeof exe,evt,sizeof evt,pids,sizeof pids);
-    diag_lang_text(lng,sizeof lng);
+    diag_lang_text(lng,sizeof lng); draw_pback();
     char pst[28],pw0[28],pcnt[28],pkey[40],pnode[80]; uint32_t pstc; diag_pw_text(pst,&pstc,pw0,pcnt,pkey,pnode,sizeof pnode,now);   /* v6.14 */
     char tck[28],tzn[40],tao[28],tal[40],tnx[72]; uint32_t tcc; diag_time_text(tck,&tcc,tzn,tao,tal,tnx,now);   /* v6.16 */
     int sc=(int)lroundf(scroll[PG_DIAG]); float mx=scroll_max(PG_DIAG);
@@ -5081,9 +5261,7 @@ static void draw_diag(ms_t now){
         dg_caption(DG_PRESS-sc,TR(TX_DG_PCAP),vr);
         { int y=DG_PRESS+28-sc;
           if(y+30>=vr.y0&&y<=vr.y1){ text_c(CX,y,TR(TX_DG_L_PANCH),F_XS,C_TXT3,255); text_c(CX,y+16,panc,F_S,C_TXT,255); }
-          y+=DG_P; if(y+30>=vr.y0&&y<=vr.y1){ text_c(CX,y,TR(TX_DG_L_PNOW),F_XS,C_TXT3,255); text_c(CX,y+16,pnow,F_S,pcol,255); }
-          y+=DG_P; if(y+11>=vr.y0&&y<=vr.y1) text_c(CX,y,TR(TX_DG_PNOTE1),F_XS,C_TXT2,255);
-          y+=16;   if(y+11>=vr.y0&&y<=vr.y1) text_c(CX,y,pn2,F_XS,C_TXT2,255); }
+          y+=DG_P; if(y+30>=vr.y0&&y<=vr.y1){ text_c(CX,y,TR(TX_DG_L_PNOW),F_XS,C_TXT3,255); text_c(CX,y+16,pnow,F_S,pcol,255); } }   /* v6.17: the two caveat lines moved to docs/calibration.md */
         dg_caption(DG_RAW-sc,TR(TX_DG_RAWCAP),vr);                               /* v6.11: RAW COUNTERS (the cells are drawn in the loop above) */
         /* v6.14: POWER BUTTON — state, the controller's word 0, press/off/on, latest key event, node */
         dg_caption(DG_PWR-sc,TR(TX_DG_PWCAP),vr);
@@ -5113,7 +5291,6 @@ static void draw_diag(ms_t now){
         W_end();
     }
     draw_scroll_ind(DG_BOTTOM-DG_Y0+16);
-    if(W_begin(W_FOOT,R(180,408,120,24),hi(H0,page))){ draw_dots(420); W_end(); }
 }
 
 /* ================= boot splash ================= */
@@ -5141,7 +5318,7 @@ static void static_build(void){
     else if(view==V_DETAIL) static_detail();
     else if(view==V_SYS) static_sys();
     else if(view==V_MAIN){
-        if(page>=PG_T0&&page<=PG_T2) static_list();
+        if(pg_list(page)) static_list();
         else if(page==PG_DIAG) static_diag();
         else static_home();
     }
@@ -5625,7 +5802,7 @@ static void sim_state_emit(ms_t now,int force){   /* force=0: only if the line's
     if(!sim_sf) return;
     static char buf[12288]; JB j={buf,buf+sizeof buf-4};
     static const char*const VW[]={"splash","main","detail","sys","bye","off"};
-    static const char*const TAB[]={"home","brew","steam","system","diag"};
+    static const char*const TAB[]={"home","grind","brew","water","steam","system","diag"};   /* v6.17: one page per feature + SYSTEM (v6.4-v6.16: home/brew/steam/system/diag) */
     static const short SHOWN[]={0,1,2,3,4,6,9,11,14,16,17,19,22,23,24,25,33,34,35,36,37,38,39,40,41,42,44,46,47,48,50,51,52,58,112,113,114};   /* v6.6: + 44, 46 (the wand switch) */
     int pr=phase_raw(now); struct stat st; char rn[340], stamp[160]="", a[40], b[40];
     static uint32_t last_h; jb(&j,"\"client\":\"merakiplus-sim\",\"version\":\"" MERAKIPLUS_VERSION "\"");
@@ -5672,8 +5849,10 @@ static void sim_state_emit(ms_t now,int force){   /* force=0: only if the line's
         jb(&j,",\"raw\":%d,\"min\":%d,\"max\":%d,\"step\":%d,\"locked\":%s,\"saving\":%s",edit_val,SET[sel].lo,SET[sel].hi,SET[sel].step,(SET[sel].flags&SF_LOCK)?"true":"false",sav.active?"true":"false");
     } else if(view==V_SYS){
         jb(&j,"\"x\":\"%s\",\"edit\":%d,\"locked\":%s",xsel==X_BOOTUI?"bootui":(xsel==X_SWITCH?"switch":"exit"),x_edit,sys_locked()?"true":"false");
-    } else if(view==V_MAIN&&page>=PG_T0&&page<=PG_T2){
-        jb(&j,"\"title\":"); jb_s(&j,TR(TIER_NAME[tier_of_page(page)])); jb(&j,",\"rows\":%d,\"scroll\":%d",page_rows(page),(int)scroll[page]);
+    } else if(view==V_MAIN&&pg_list(page)){
+        static const char*const SECK[]={"display","clock","schedule","stock"}; char lv[96]; page_live_text(page,lv,sizeof lv,now);
+        jb(&j,"\"title\":"); jb_s(&j,page_title(page)); jb(&j,",\"rows\":%d,\"scroll\":%d,\"live\":",page_rows(page),(int)scroll[page]); jb_s(&j,lv);
+        jb(&j,",\"section\":"); if(page==PG_SYS&&sec_open>=0) jb(&j,"\"%s\"",SECK[sec_open]); else jb(&j,"null");
     } else if(view==V_BYE){ jb(&j,"\"sub\":"); jb_s(&j,bye_sub()); }
     jb(&j,"}");
     /* toast: text = the table's DANISH text (the scenarios' assert language), shown = the text on screen */
@@ -5796,6 +5975,9 @@ static void sim_go_main(void){
     sel=-1; xsel=-1; x_from_switch=0; tr.type=TR_NONE; static_dirty=1; force_all=1; ui_kick=1;
 }
 static void sim_set_page(int np){ if(page!=np){ page=np; static_dirty=1; if(np==PG_HOME) act.gkind=-1; } }
+/* v6.17: the page a row lives on — and, on SYSTEM, its section opened (as the user would have had to) */
+static void sim_set_row(int idx){ sim_set_page(PG_T0+SET[idx].tier); if(SET[idx].tier==4&&sec_of_set(idx)>=0){ sec_open=sec_of_set(idx); scroll[PG_SYS]=clampf((float)(sec_open*ROW_P),0,scroll_max(PG_SYS)); } }
+static void sim_set_stock(void){ sim_set_page(PG_SYS); sec_open=SEC_STOCK; scroll[PG_SYS]=clampf((float)(SEC_STOCK*ROW_P),0,scroll_max(PG_SYS)); }
 /* SAVE as via stepper + SAVE: open the row, set the value the stepper would show, tap SAVE (save_begin) */
 static int sim_save_now(int idx,int val,const char*param,ms_t now){
     ssave.idx=idx; ssave.val=val; snprintf(ssave.param,sizeof ssave.param,"%s",param);
@@ -5803,7 +5985,7 @@ static int sim_save_now(int idx,int val,const char*param,ms_t now){
         ssave.state=SSV_REJECTED; ssave.idx=0; toast_show(TR(TX_D_LOCKED),C_WARN,now); ui_kick=1; return 0;
     }
     Setting*s=&SET[idx]; int was=s->val;
-    sim_go_main(); sim_set_page(PG_T0+s->tier);
+    sim_go_main(); sim_set_row(idx);
     detail_open(idx,now);
     if(!set_valid(s,val)||(s->step>1&&(val-s->lo)%s->step)){   /* outside the range or between the stepper's steps */
         ssave.state=SSV_REJECTED; toast_show(TR(TX_T_RANGE),C_ERR,now); detail_close(now); return 0;
@@ -5889,24 +6071,32 @@ static void sim_dispatch(const char*line,char*out,size_t on,ms_t now){
     else if(!strcmp(cmd,"page")){
         char param[40]=""; js_str(kv,n,"param",param,sizeof param); int ok=1;
         sim_go_main();
+        /* v6.17: grind | brew | water | steam | system by name ("settings" + tab 0..4 = the same five pages; tab 1 = BREW is the default);
+         * "section" (display | clock | schedule | stock) opens that SYSTEM section */
+        static const char*const PGN[]={"grind","brew","water","steam","system"}; int np=-1; char sn[16]="";
+        for(int k=0;k<5;k++) if(!strcmp(name,PGN[k])) np=PG_GRIND+k;
+        if(!strcmp(name,"settings")) np=PG_GRIND+clampi(js_int(kv,n,"tab",1),0,4);
         if(!strcmp(name,"home")) { if(page!=PG_HOME) go_page(PG_HOME,-1,now); }
-        else if(!strcmp(name,"settings")){ int np=PG_T0+clampi(js_int(kv,n,"tab",0),0,2); if(page!=np) go_page(np,np>page?1:-1,now); }
-        else if(!strcmp(name,"diag")){ if(page!=PG_DIAG) go_page(PG_DIAG,1,now); }
-        else if(!strcmp(name,"detail")){ int idx=param[0]?sim_param_idx(param):S_GRINDW; if(idx<0) ok=0; else { sim_set_page(PG_T0+SET[idx].tier); detail_open(idx,now); } }
-        else if(!strcmp(name,"sys")){ sim_set_page(PG_T2); sys_open(js_int(kv,n,"x",X_BOOTUI)==X_SWITCH?X_SWITCH:X_BOOTUI,now); }
+        else if(np>=0){
+            if(np==PG_SYS){ static const char*const SECK[]={"display","clock","schedule","stock"}; sec_open=-1; scroll[PG_SYS]=0;
+                if(js_str(kv,n,"section",sn,sizeof sn)) for(int k=0;k<NSEC;k++) if(!strcmp(sn,SECK[k])){ sec_open=k; scroll[PG_SYS]=clampf((float)(k*ROW_P),0,scroll_max(PG_SYS)); } }
+            if(page!=np) go_page(np,1,now); }
+        else if(!strcmp(name,"diag")){ if(page!=PG_DIAG){ diag_from=PG_SYS; go_page(PG_DIAG,1,now); } }
+        else if(!strcmp(name,"detail")){ int idx=param[0]?sim_param_idx(param):S_GRINDW; if(idx<0) ok=0; else { sim_set_row(idx); detail_open(idx,now); } }
+        else if(!strcmp(name,"sys")){ sim_set_stock(); sys_open(js_int(kv,n,"x",X_BOOTUI)==X_SWITCH?X_SWITCH:X_BOOTUI,now); }
         else ok=0;
         jb(&j,"{\"ok\":%s,\"page\":\"%s\"",ok?"true":"false",sim_page_key());
     }
     else if(!strcmp(cmd,"touch")){ sim_touch_inject(js_int(kv,n,"x",CX),js_int(kv,n,"y",CY),js_int(kv,n,"ms",80),now); jb(&j,"{\"ok\":true"); }
     else if(!strcmp(cmd,"boot_flag")){                      /* SYSTEM -> BOOT UI -> choose -> SAVE (sys_confirm -> boot_flag_set w/ guard) */
         int want=js_int(kv,n,"value",0)!=0; struct stat st;
-        sim_go_main(); sim_set_page(PG_T2); sys_open(X_BOOTUI,now); x_edit=want; sys_confirm(now);
+        sim_go_main(); sim_set_stock(); sys_open(X_BOOTUI,now); x_edit=want; sys_confirm(now);
         if(view==V_SYS) sys_close(now);                     /* locked / error: toast is shown, the user taps BACK */
         int have=stat(rp(BOOT_FLAG),&st)==0;
         jb(&j,"{\"ok\":%s,\"flag\":%s,\"lock\":%d",have==want?"true":"false",have?"true":"false",bs.lock);
     }
     else if(!strcmp(cmd,"runtime_switch")){                 /* SYSTEM -> SWITCH TO ORIGINAL NOW -> SWITCH NOW (sys_confirm -> do_switch) */
-        sim_go_main(); sim_set_page(PG_T2); sys_open(X_SWITCH,now); sys_confirm(now);
+        sim_go_main(); sim_set_stock(); sys_open(X_SWITCH,now); sys_confirm(now);
         int went=sim_bye_on||!run;
         if(view==V_SYS&&xsel==X_SWITCH) sys_close(now);     /* blocked (activity/locked): toast shown, the user goes back */
         jb(&j,"{\"ok\":%s,\"dry\":%s",went?"true":"false",sw_dry?"true":"false"); if(!went&&sim_tst.id>=0) jb(&j,",\"guard\":\"%s\"",STR_ID[sim_tst.id]);
@@ -5960,16 +6150,22 @@ static void sim_dispatch(const char*line,char*out,size_t on,ms_t now){
         } else if(view==V_MAIN&&page==PG_HOME){
             int sk[2], sn=stop_btns(now,sk);                                   /* v6.13: STOP for grind/brew/water + latched steam */
             if(sn){ for(int i=0;i<sn;i++){ Rect r=stop_hit(sn,i); LT_R(STOP_KEY[sk[i]],r.x0,r.y0,r.x1-r.x0,r.y1-r.y0); } }
-            else for(int k=0;k<4;k++) LT_C(ACT_KEY[k],ACT_X[k],ACT_Y,30);
-            LT_R("edge_left",10,150,60,180); LT_R("edge_right",410,150,60,180);
-        } else if(view==V_MAIN&&page>=PG_T0&&page<=PG_T2){
-            int ns=tier_count(tier_of_page(page)), nr=page_rows(page);
-            for(int k=0;k<nr;k++){ int y=(int)(row_y0(page,k)-scroll[page]); if(y<LIST_VY0-4||y+ROW_H>LIST_VY1+4) continue;
-                LT_R(k<ns?sim_param_id(tier_item(tier_of_page(page),k)):(k-ns==X_BOOTUI?"boot_ui":"switch_now"),64,y,352,ROW_H); }
+            else if(!phase_active(phase_raw(now))) for(int k=0;k<4;k++) LT_C(ACT_KEY[k],ACT_X[k],ACT_Y,30);   /* tap = the feature's page, hold = start */
+            if(diag_hint_shown()) LT_R("diag",CX-HINT_W/2,236,HINT_W,58);
+            LT_R("gear",CX-GEAR_HW,GEAR_Y-22,2*GEAR_HW,46);
+        } else if(view==V_MAIN){                                               /* v6.17: every page but HOME: "back" (the header) */
+            LT_R("back",PBACK_X0,PBACK_Y0,PBACK_W,PBACK_H);
+            if(pg_list(page)){
+                static const char*const SECK[]={"sec_display","sec_clock","sec_schedule","sec_stock"};
+                Row rw[ROW_MAX]; int nr=rows_get(page,rw), vy1=list_vy1(page);
+                for(int k=0;k<nr;k++){ int y=(int)(row_y0(page,k)-scroll[page]); if(y<LIST_VY0-4||y+ROW_H>vy1+4) continue;
+                    LT_R(rw[k].kind==RK_SET?sim_param_id(rw[k].a):(rw[k].kind==RK_SEC?SECK[rw[k].a]:(rw[k].kind==RK_DIAG?"diag":(rw[k].a==X_BOOTUI?"boot_ui":"switch_now"))),64,y,352,ROW_H); }
+                if(pg_feat(page)) LT_R("start",CX-START_HIT_W/2,START_HIT_Y,START_HIT_W,START_HIT_H);
+            } else if(page==PG_DIAG){ int py=(int)(DG_GRAPH+12-scroll[PG_DIAG]); if(py-8>=LIST_VY0&&py+36<=LIST_VY1) LT_R("graph",CX-150,py-8,300,44); }
         }
 #undef LT_C
 #undef LT_R
-        jb(&j,"],\"swipe\":\"horizontal >= 60 px switches page (home, brew, steam, system, diag)\"");
+        jb(&j,"],\"swipe\":\"right >= 60 px = back (every page and editor but home); no carousel since v6.17\"");
     }
     else jb(&j,"{\"ok\":false,\"error\":\"unknown cmd\"");
 done:
@@ -6224,7 +6420,7 @@ static void sim_run(ms_t ms){
 #define PV_CLK (days_civil(2026,11,18)*86400+15*3600+35*60+28)   /* v6.16: preview clock = 2026-11-18 15:35:28 UTC (16:35:28 in zone #48) */
 static void sim_reset(void){
     clk_fake=PV_CLK; idle_t0=0; ao_warned=0; memset(&arm,0,sizeof arm);
-    view=V_MAIN; page=PG_HOME; sel=-1; memset(scroll,0,sizeof scroll); memset(&tch,0,sizeof tch);
+    view=V_MAIN; page=PG_HOME; sel=-1; sec_open=-1; diag_from=PG_SYS; memset(scroll,0,sizeof scroll); memset(&tch,0,sizeof tch);
     toast.dur=0; rip.on=0; tr.type=0; memset(&sav,0,sizeof sav); memset(ov_prev,0,sizeof ov_prev);
     xsel=-1; x_from_switch=0; x_pending=0; bye_mode=0; run=1; bs.t=-100000; lang_set(pv_lang);
     act.raw=PH_OFFLINE; act.ph=PH_OFFLINE; act.last_ph=PH_READY; act.pending=ACT_NONE; act.gkind=-1; act.t_done=-100000; act.t_col=-100000;
@@ -6751,9 +6947,9 @@ static void st_phases(void){
     fmt_t10(a,sizeof a,600,1); snprintf(b,sizeof b,TR(TX_H_AUTOSTOP_T),a);
     st_check("LATCHED (word 24 = 1, work_sta 4121, wand switch 0): chip = STEAM·AUTO / DAMP·AUTO, phase STEAM",
              pre&&stm.kind==SK_AUTO&&!stm.wand&&act.ph==PH_STEAM&&phase_raw(t)==PH_STEAM&&hm.chip==TR(TX_PH_STEAM_AUTO)&&!hm.conc&&!hm.badge);
-    st_check("LATCHED: the target is WORD 25 (60.0°, not the config's 65.0°) — label, auto-stop expectation and gauge marker",
-             st_has(hm.label,a)&&!strcmp(hm.sub,b)&&fabsf(hm.gmark-(600-200)/600.f)<1e-4f&&steam_target()==600&&sv(S_STEAMT)==650);
-    st_check("LATCHED: the STOP button is shown and hittable (150,344,180x56); no start buttons",steam_stop_visible()&&hit_test(240,372,t)==T_STOP&&hit_test(150,372,t)==T_STOP&&hit_test(330,372,t)==T_NONE);
+    st_check("LATCHED: the target is WORD 25 (60.0°, not the config's 65.0°) — the auto-stop expectation ('STOPS AT 60.0°', said once: the label is just 'MILK') and the gauge marker",
+             !strcmp(hm.label,TR(TX_H_MILK))&&!st_has(hm.label,a)&&st_has(hm.sub,a)&&!strcmp(hm.sub,b)&&fabsf(hm.gmark-(600-200)/600.f)<1e-4f&&steam_target()==600&&sv(S_STEAMT)==650);
+    st_check("LATCHED: the STOP button is shown and hittable (124,342,232x60; v6.6-v6.16: 150,344,180x56); no start buttons",steam_stop_visible()&&hit_test(240,372,t)==T_STOP&&hit_test(150,372,t)==T_STOP&&hit_test(330,372,t)==T_STOP&&hit_test(120,372,t)==T_NONE&&hit_test(360,372,t)==T_NONE&&hit_test(240,340,t)==T_NONE);
     { int ok=1; static const uint16_t pulse[]={0x6121,0x4521,0x4121,0x6121};      /* bit 10/13 pulses on top of steam (STEAMLIVE §3) */
       for(unsigned q=0;q<4;q++){ st_s0(pulse[q],1,0x000C,0,(uint16_t)(288+q*40),t+=100); ui_frame(t); if(stm.kind!=SK_AUTO||hm.chip!=TR(TX_PH_STEAM_AUTO)) ok=0; }
       st_check("LATCHED: maintenance pulses (6121 / 4521) change nothing — still STEAM·AUTO",ok); }
@@ -7383,14 +7579,14 @@ static void st_press(const char*cfgsrc,const char*dir){
     /* ---- (2) HOME: the BAR field during pre-infusion and extraction ---- */
     sim_reset(); cs_ws=0x1107; cs_p=358; cs_w39=0xFFFD; cs_w38=0; cs_pulse=0; cs_glitch=0; sim_tick=tick_cs; sim_run(4000); st_chart_now();
     { float v=(float)atof(hm.svv[1]);
-      st_check("HOME, PRE-INF. (plateau 358 +- 20 noise): the BAR field shows 4.0 (+- 0.1) under the label '≈BAR · EST.'",act.ph==PH_PRE&&hm.sl[1]==TR(TX_ST_BAR)&&fabsf(v-4.f)<=0.1f&&strstr(TR(TX_ST_BAR),"EST."));
+      st_check("HOME, PRE-INF. (plateau 358 +- 20 noise): the BAR field shows 4.0 (+- 0.1) under the label '≈BAR'",act.ph==PH_PRE&&hm.sl[1]==TR(TX_ST_BAR)&&fabsf(v-4.f)<=0.1f&&strstr(TR(TX_ST_BAR),"\xE2\x89\x88"));
       printf("       pre: '%s' = '%s'\n",hm.sl[1],hm.svv[1]); }
     cs_ws=0x1307; cs_p=1346; sim_run(6000); st_chart_now();
     { float v=(float)atof(hm.svv[1]);
       st_check("HOME, EXTRACTION (plateau 1346): the BAR field shows 15.0 (+- 0.2) — linear anchor, pump side (UI_v6.md §16)",act.ph==PH_EXT&&hm.sl[1]==TR(TX_ST_BAR)&&fabsf(v-15.f)<=0.2f);
       printf("       ext: '%s' = '%s'\n",hm.sl[1],hm.svv[1]); }
-    st_check("v6.11: the BAR field's label is '≈BAR EST.' (EN + DA), the chart caption is short ('PRESSURE' / 'TRYK' — the estimate is in the field right below); 'UKALIBRERET' / 'UNCAL' no longer appear in any string",
-             !strcmp(STR[LANG_EN][TX_ST_BAR],"≈BAR EST.")&&!strcmp(STR[LANG_DA][TX_ST_BAR],"≈BAR EST.")&&!strcmp(STR[LANG_EN][TX_C_PRESS],"PRESSURE")&&!strcmp(STR[LANG_DA][TX_C_PRESS],"TRYK")&&!str_any("UKALIB")&&!str_any("UNCAL"));
+    st_check("v6.17: the BAR field's label is '≈BAR' (EN + DA; the ≈ says 'estimate' — v6.11-v6.16 added 'EST.' on top of it), the chart caption is short ('PRESSURE' / 'TRYK'); 'UKALIBRERET' / 'UNCAL' no longer appear in any string",
+             !strcmp(STR[LANG_EN][TX_ST_BAR],"≈BAR")&&!strcmp(STR[LANG_DA][TX_ST_BAR],"≈BAR")&&!strcmp(STR[LANG_EN][TX_C_PRESS],"PRESSURE")&&!strcmp(STR[LANG_DA][TX_C_PRESS],"TRYK")&&!str_any("UKALIB")&&!str_any("UNCAL"));
     /* ---- (3) the basis: toast on tapping the chart / the BAR field (no frames, no phase change) ---- */
     { snprintf(e,sizeof e,TR(TX_T_PINFO),4,358); int n0=wq.n; long ok0=wq.n_ok;
       toast.dur=0; tap(240,268); int t1=toast.dur>0&&!strcmp(toast.msg,e); sim_run(3000);
@@ -7404,7 +7600,7 @@ static void st_press(const char*cfgsrc,const char*dir){
       int ok=copy_file(cfgsrc,op); snprintf(cfg_path,sizeof cfg_path,"%s",op); snprintf(cfg_bakdir,sizeof cfg_bakdir,"%s/pressbak",dir);
       ok&=cfg_set_int("preInfusionPressure",3);
       sim_reset(); cs_ws=0x1307; cs_p=1346; cs_pulse=0; sim_tick=tick_cs; sim_run(6000); st_chart_now();
-      char anc[64],nw[64],n2[64]; uint32_t c; diag_press_text(anc,sizeof anc,nw,sizeof nw,&c,n2,sizeof n2);
+      char anc[64],nw[64]; uint32_t c; diag_press_text(anc,sizeof anc,nw,sizeof nw,&c);
       snprintf(b,sizeof b,TR(TX_DV_PANCH),3,358,(double)(3.f/358.f)); snprintf(e,sizeof e,TR(TX_T_PINFO),3,358); toast.dur=0; tap(240,268);
       float v=(float)atof(hm.svv[1]);
       st_check("CONFIG ANCHOR: preInfusionPressure = 3 (config copy, settings_load) -> k = 3/358; ext 1346 -> 11.3; the DIAGNOSE anchor and the toast say 3 BAR",
@@ -7421,15 +7617,14 @@ static void st_press(const char*cfgsrc,const char*dir){
     { int no186=1; for(int i=0;i<3;i++) if(strstr(hm.svv[i],"186")||strstr(hm.svv[i],"17")==hm.svv[i]) no186=0;
       st_check("HOME, sustained deadhead (16670 for 1.5 s during EXTRACTION): the BAR field shows 'PULSE' — not '186.2'",act.ph==PH_EXT&&!strcmp(hm.svv[1],TR(TX_ST_PULSE))&&no186);
       printf("       deadhead: '%s' = '%s' (raw %u)\n",hm.sl[1],hm.svv[1],reg[51]);
-      char anc[64],nw[64],n2[64]; uint32_t c; diag_press_text(anc,sizeof anc,nw,sizeof nw,&c,n2,sizeof n2); snprintf(e,sizeof e,TR(TX_DV_PPULSE),(int)reg[51]);
+      char anc[64],nw[64]; uint32_t c; diag_press_text(anc,sizeof anc,nw,sizeof nw,&c); snprintf(e,sizeof e,TR(TX_DV_PPULSE),(int)reg[51]);
       st_check("… the DIAGNOSE now line during a brew: 'RAW 16670 · PULSE, NO PRESSURE' (amber), no bar figure",!strcmp(nw,e)&&c==C_WARN&&!strstr(nw,"BAR")); }
     sim_reset(); cs_w38=0; cs_w39=367; cs_glitch=0; sim_tick=tick_idle_maint; sim_run(3000); sim_tick=NULL; reg[33]=0x0101; reg[51]=16670; sim_run(100); st_chart_now();
-    { char anc[64],nw[64],n2[64]; uint32_t c; diag_press_text(anc,sizeof anc,nw,sizeof nw,&c,n2,sizeof n2); snprintf(e,sizeof e,TR(TX_DV_PMAINT),16670);
-      char n2e[64]; snprintf(n2e,sizeof n2e,TR(TX_DG_PNOTE2),20);
+    { char anc[64],nw[64]; uint32_t c; diag_press_text(anc,sizeof anc,nw,sizeof nw,&c); snprintf(e,sizeof e,TR(TX_DV_PMAINT),16670);
       st_check("IDLE + maintenance pulse 16670: DIAGNOSE shows 'RAW 16670 · MAINTENANCE PULSE' (amber) — not 186 bar; HOME shows no BAR (the chart: ticks on the baseline)",
-               act.ph==PH_READY&&!strcmp(nw,e)&&c==C_WARN&&!strstr(nw,"186")&&hm.sl[1]!=TR(TX_ST_BAR)&&!strcmp(n2,n2e));
-      printf("       idle: '%s' · note '%s'\n",nw,n2);
-      reg[51]=12; diag_press_text(anc,sizeof anc,nw,sizeof nw,&c,n2,sizeof n2); snprintf(e,sizeof e,TR(TX_DV_PNOW),12,(double)(12*4.f/358.f));
+               act.ph==PH_READY&&!strcmp(nw,e)&&c==C_WARN&&!strstr(nw,"186")&&hm.sl[1]!=TR(TX_ST_BAR));
+      printf("       idle: '%s'\n",nw);
+      reg[51]=12; diag_press_text(anc,sizeof anc,nw,sizeof nw,&c); snprintf(e,sizeof e,TR(TX_DV_PNOW),12,(double)(12*4.f/358.f));
       st_check("… and idle without a pulse (raw 12): 'RAW 12 = ≈0.1 BAR'",!strcmp(nw,e)&&c==C_TXT); }
     /* ---- (6) the RAW view (DIAGNOSE → GRAPH) is untouched: raw figures, raw ring buffer ---- */
     sim_reset(); cs_ws=0x1307; cs_p=1346; cs_pulse=0; sim_tick=tick_cs; sim_run(6000); st_chart_now();
@@ -7527,10 +7722,10 @@ static void st_v611(void){
     st_check("touch: the four activity icons each have a touch area >= 48 x 48 px (circle r 30 = 61 px; the drawn icon is 50 px)",ok);
     st_hitbox(T_GEAR,&w,&h); printf("       HOME gear: %d x %d px\n",w,h);
     st_check("touch: the gear (settings) has a touch area >= 44 x 44 px, without overlapping the icons",w>=44&&h>=44&&hit_test(ACT_X[1],ACT_Y+28,sim_now)==T_ACT1&&hit_test(CX,GEAR_Y,sim_now)==T_GEAR);
-    page=PG_T0; static_dirty=1; sim_run(300);
+    page=PG_BREW; static_dirty=1; sim_run(300);
     ok=1; for(int k=0;k<3;k++){ st_hitbox(T_ROW0+k,&w,&h); printf("       BREW row %d: %d x %d px\n",k,w,h); ok&=w>=300&&h>=48; }
     st_check("touch: list rows have a touch area >= 48 px high (50 px row + 4 px above/below) and >= 300 px wide",ok);
-    activate(T_ROW0+3,sim_now); sim_run(400);
+    activate(T_ROW0+1,sim_now); sim_run(400);
     { int r[6]={T_MINUS,T_PLUS,T_CANCEL,T_SAVE,T_BACK,0}; const char*nm[5]={"-","+","CANCEL","SAVE","close chevron"}; ok=1;
       for(int i=0;i<5;i++){ st_hitbox(r[i],&w,&h); printf("       detail %s: %d x %d px\n",nm[i],w,h); ok&=w>=(i==4?44:48)&&h>=(i==4?44:48); }
       st_check("touch: detail −/+ (circle r 42), CANCEL/SAVE (136 x 64) >= 48 px; the close chevron >= 44 px",ok); }
@@ -7543,43 +7738,45 @@ static void st_v611(void){
       printf("       C_TXT3: %.2f / %.2f / %.2f (background / SURF / SURF2; v6.10's 104,111,126: %.2f on background) · C_TXT2: %.2f / %.2f / %.2f · C_DIS (disabled): %.2f · background edge %.2f\n",c3[0],c3[1],c3[2],o3,c2[0],c2[1],c2[2],d,st_cr(C_TXT3,bge));
       st_check("contrast: small captions (C_TXT3) >= 4.5:1 on background, SURF and SURF2 (list rows); C_TXT2 >= 7:1 on background and SURF, >= 6:1 on SURF2",c3[0]>=4.5f&&c3[1]>=4.5f&&c3[2]>=4.5f&&st_cr(C_TXT3,bge)>=4.5f&&c2[0]>=7.f&&c2[1]>=7.f&&c2[2]>=6.f);
       st_check("contrast: disabled (C_DIS) is visibly weaker than C_TXT3, but >= 3:1 (large glyphs: icon, stepper sign, offline hero)",d>=3.f&&d<c3[0]-1.f&&o3<4.5f); }
-    /* ---- (3) swipe guard ---- */
-    sim_reset(); page=PG_T0; static_dirty=1; sim_run(300);
-    { int g[]={240,200, 262,205, 310,245}; st_gest(g,3); st_settle(); int a=page==PG_T0;                      /* diagonal: dx 70, dy 45 (~33°) */
-      int g2[]={240,200, 222,203, 140,210}; st_gest(g2,3); st_settle(); int b2=page==PG_T1;                   /* horizontal: dx -100, dy 10 -> next page */
-      page=PG_T0; static_dirty=1; sim_run(300); float s0=scroll[PG_T0];
-      int g3[]={240,200, 243,220, 140,250}; st_gest(g3,3); st_settle(); int c=page==PG_T0;                    /* starts vertical (scroll), ends horizontal */
-      printf("       diagonal 70/45: page %s · horizontal -100/10: next page %s · vertical start + horizontal end: no page %s (scroll %.0f -> %.0f)\n",a?"unchanged":"CHANGED",b2?"yes":"NO",c?"unchanged":"CHANGED",(double)s0,(double)scroll[PG_T0]);
-      st_check("swipe guard: a diagonal drag (dx 70, dy 45) on a list does NOT change page (v6.10 did); a horizontal one (dx -100, dy 10) does",a&&b2);
-      st_check("swipe guard: a gesture that starts vertical (scroll) never changes page, even if it ends horizontal",c);
-      sim_reset(); sim_run(300); int g4[]={240,200, 242,222, 120,236}; st_gest(g4,3); st_settle();
-      st_check("swipe guard: also on HOME (no scrolling): vertical start + horizontal end does not change page",page==PG_HOME&&!tr.type); }
+    /* ---- (3) swipe guard (v6.17: the only horizontal gesture is "swipe right = back") ---- */
+    sim_reset(); page=PG_BREW; static_dirty=1; sim_run(300);
+    { int g[]={240,200, 262,205, 310,245}; st_gest(g,3); st_settle(); int a=page==PG_BREW;                    /* diagonal: dx 70, dy 45 (~33°) */
+      int g2[]={240,200, 222,203, 140,210}; st_gest(g2,3); st_settle(); int b2=page==PG_BREW;                 /* horizontal LEFT: dx -100, dy 10 -> nothing (no carousel) */
+      float s0=scroll[PG_BREW];
+      int g3[]={240,200, 243,220, 330,250}; st_gest(g3,3); st_settle(); int c=page==PG_BREW;                  /* starts vertical (scroll), ends horizontal right */
+      scroll[PG_BREW]=0; int g5[]={140,200, 158,203, 240,210}; st_gest(g5,3); st_settle(); int d=page==PG_HOME;   /* horizontal RIGHT: dx 100, dy 10 -> back */
+      printf("       diagonal 70/45: page %s · left -100/10: %s · vertical start + horizontal end: page %s (scroll %.0f -> %.0f) · right 100/10: %s\n",a?"unchanged":"CHANGED",b2?"nothing":"PAGE CHANGED",c?"unchanged":"CHANGED",(double)s0,(double)scroll[PG_BREW],d?"back to HOME":"NOT BACK");
+      st_check("swipe guard: a diagonal drag (dx 70, dy 45) on a page does nothing; a horizontal swipe LEFT does nothing (v6.17: no carousel); a horizontal swipe RIGHT (dx 100, dy 10) goes back to HOME",a&&b2&&d);
+      st_check("swipe guard: a gesture that starts vertical (scroll) never closes the page, even if it ends horizontal",c);
+      sim_reset(); sim_run(300); int g4[]={240,200, 242,222, 120,236}; st_gest(g4,3); st_settle(); int h1=page==PG_HOME&&!tr.type;
+      int g6[]={140,200, 160,202, 260,206}; st_gest(g6,3); st_settle(); int g7[]={300,200, 280,202, 180,206}; st_gest(g7,3); st_settle();
+      st_check("swipe guard: HOME reacts to no swipe at all (left, right, vertical start) — everything on HOME is a visible button",h1&&page==PG_HOME&&!tr.type&&view==V_MAIN); }
     /* ---- (4) close chevron + swipe down ---- */
-    sim_reset(); page=PG_T0; static_dirty=1; sim_run(300); activate(T_ROW0+3,sim_now); sim_run(400);
+    sim_reset(); page=PG_BREW; static_dirty=1; sim_run(300); activate(T_ROW0+1,sim_now); sim_run(400);
     { int i=sel, v0=SET[i].val; tap(396,184); sim_run(10); int chg=edit_val!=v0, ht=hit_test(CX,57,sim_now);
       tap(CX,57); sim_run(400); int a=view==V_MAIN&&SET[i].val==v0&&!sav.active;
       printf("       chevron: sel %d v0 %d edit %d chg %d hit %d view %d val %d\n",i,v0,edit_val,chg,ht,view,SET[i].val);
-      activate(T_ROW0+3,sim_now); sim_run(400); int g[]={240,250, 242,268, 246,340}; st_gest(g,3); sim_run(400); int c=view==V_MAIN;
-      activate(T_ROW0+3,sim_now); sim_run(400); int e0=edit_val; int g2[]={84,184, 86,204, 90,280}; st_gest(g2,3); sim_run(400); int d=view==V_DETAIL&&edit_val==e0-SET[i].step;
-      int g3[]={240,250, 262,262, 330,300}; st_gest(g3,3); sim_run(400); int e=view==V_DETAIL;                      /* diagonal -> do not close */
-      detail_close(sim_now); sim_run(400);
+      activate(T_ROW0+1,sim_now); sim_run(400); int g[]={240,250, 242,268, 246,340}; st_gest(g,3); sim_run(400); int c=view==V_MAIN;
+      activate(T_ROW0+1,sim_now); sim_run(400); int e0=edit_val; int g2[]={84,184, 86,204, 90,280}; st_gest(g2,3); sim_run(400); int d=view==V_DETAIL&&edit_val==e0-SET[i].step;
+      int g3[]={240,250, 262,268, 310,320}; st_gest(g3,3); sim_run(400); int e=view==V_DETAIL;                      /* diagonal (45°) -> do not close */
+      int g8[]={150,250, 170,252, 260,256}; st_gest(g8,3); sim_run(400); int f=view==V_MAIN&&page==PG_BREW&&SET[i].val==v0;   /* v6.17: swipe right = back (to the page the editor was opened from) */
       st_check("close chevron: a tap at the top (240,57) closes the detail like CANCEL — a changed value is NOT saved",chg&&a);
-      st_check("swipe down (>= 70 px, vertical) closes the detail; started on − it does not close (the press has already counted a step); diagonal does not close",c&&d&&e); }
+      st_check("swipe down (>= 70 px, vertical) closes the detail; started on − it does not close (the press has already counted a step); diagonal does not close; v6.17: swipe right closes it too (nothing saved)",c&&d&&e&&f); }
     sim_reset(); sys_open(X_BOOTUI,sim_now); sim_run(400); tap(CX,57); sim_run(400);
     st_check("the close chevron also works in the system view (BOOT UI): back to the list, the flag untouched",view==V_MAIN&&xsel==-1);
-    /* ---- (5) gear + edge taps on the lists ---- */
-    sim_reset(); sim_run(400); { int n0=wq.n; int q0=txq_len; tap(CX,GEAR_Y); st_settle(); int a=page==PG_T0&&wq.n==n0&&txq_len==q0;
-      tap(20,240); st_settle(); int c=page==PG_HOME; page=PG_T1; static_dirty=1; sim_run(300); tap(460,240); st_settle(); int d=page==PG_T2;
-      st_check("the gear on HOME opens the BREW list (no frame); edge taps now also work on the lists (left -> previous, right -> next)",a&&c&&d); }
+    /* ---- (5) gear ---- */
+    sim_reset(); sim_run(400); { int n0=wq.n; int q0=txq_len; tap(CX,GEAR_Y); st_settle(); int a=page==PG_SYS&&wq.n==n0&&txq_len==q0;
+      int e1=hit_test(20,240,sim_now)==T_NONE&&hit_test(460,240,sim_now)==T_NONE; tap(20,240); st_settle(); tap(460,240); st_settle(); int c=page==PG_SYS;
+      st_check("the gear on HOME opens SYSTEM (no frame); v6.17: there are no invisible edge zones any more (a tap at the left / right edge does nothing)",a&&e1&&c); }
     /* ---- (6) empty-state hint + subline ---- */
     sim_reset(); sim_run(1500); home_model(sim_now);
-    { int a=!strcmp(hm.hint1,TR(TX_C_HINT))&&hm.hint2==TR(TX_C_HINT2)&&!cst.active; char t[40]; fmt_t10(t,sizeof t,870,1); snprintf(b,sizeof b,TR(TX_H_SET_TO),t);
+    { int a=!strcmp(hm.hint1,TR(TX_C_HINT))&&hm.hint2==NULL&&!cst.active; char t[40]; fmt_t10(t,sizeof t,870,1); snprintf(b,sizeof b,TR(TX_H_SET_TO),t);
       int s1=!strcmp(hm.sub,b)&&sub_font(&hm)==F_S;
       reg[35]=1; sim_run(400); home_model(sim_now); int e=act.ph==PH_ERROR&&strstr(hm.hint1,"E2")&&!strstr(hm.sub,"E2")&&!strcmp(hm.sub,TR(TX_ER_E2_BREW)); reg[35]=0;
       sim_link=0; sim_run(3000); home_model(sim_now); int o=act.ph==PH_OFFLINE&&!strcmp(hm.hint1,TR(TX_C_DIAGREF))&&!strcmp(hm.sub,TR(TX_H_NORESP)); sim_link=1; sim_run(400);
       reg[1]=1; sim_run(400); home_model(sim_now); int z=act.ph==PH_SLEEP&&!hm.hint1[0]&&!strcmp(hm.sub,TR(TX_H_WAKING)); reg[1]=0; sim_run(400);
-      printf("       ready: '%s' / '%s' · subline '%s' (F_S %d) · error '%s' / '%s' · offline '%s' / '%s'\n",hm.hint1,hm.hint2,b,s1,TR(TX_ER_E2_BREW),TR(TX_C_ERRCODE),TR(TX_H_NORESP),TR(TX_C_DIAGREF));
-      st_check("HOME idle: the chart field says what you can DO ('HOLD AN ICON …' + 'SWIPE FOR SETTINGS') instead of 'NO ACTIVITY'; the subline is 'TARGET 87.0°' in F_S",a&&s1);
+      printf("       ready: '%s' · subline '%s' (F_S %d) · error '%s' / '%s' · offline '%s' / '%s'\n",TR(TX_C_HINT),b,s1,TR(TX_ER_E2_BREW),TR(TX_C_ERRCODE),TR(TX_H_NORESP),TR(TX_C_DIAGREF));
+      st_check("HOME idle: the chart field says what you can DO in ONE line ('HOLD = START · TAP = SETTINGS'; v6.11-v6.16: two lines) instead of 'NO ACTIVITY'; the subline is 'TARGET 87.0°' in F_S",a&&s1);
       st_check("error: the subline is plain language (no E code); the code is shown dimmed in the chart field with a reference to DIAGNOSE · offline: 'NO CONNECTION TO THE MACHINE' + DIAGNOSE reference · asleep: 'WAKING UP…'",e&&o&&z); }
     { sim_reset(); reg[33]=0x1307; sim_run(1500); home_model(sim_now); int a=cst.active;
       st_check("the hint is shown only in the empty chart (during a brew the curve is drawn as before)",a&&act.ph==PH_EXT); }
@@ -7592,9 +7789,139 @@ static void st_v611(void){
     /* ---- (8) DIAGNOSE groups ---- */
     { int perm[DG_N]={0}, okp=1; for(int i=0;i<DG_N;i++){ if(DG_SLOT[i]<0||DG_SLOT[i]>=DG_N||perm[DG_SLOT[i]]++) okp=0; }
       static const int st[]={0,1,5,7,8,13,14,15}; int s8=1; for(int i=0;i<8;i++) s8&=DG_SLOT[st[i]]<8;
-      int order=DG_Y0+3*DG_P+30<DG_BOOT-28&&DG_GRAPH<DG_PRESS&&DG_PRESS+28+2*DG_P+16+11<DG_RAW&&DG_RAW+28+3*DG_P+30<DG_ABOUT&&dg_cell_y(2)>DG_RAW&&dg_cell_y(12)>DG_RAW;
+      int order=DG_Y0+3*DG_P+30<DG_BOOT-28&&DG_GRAPH<DG_PRESS&&DG_PRESS+28+DG_P+30<DG_RAW-11&&DG_RAW+28+3*DG_P+30<DG_ABOUT&&dg_cell_y(2)>DG_RAW&&dg_cell_y(12)>DG_RAW;
       printf("       STATUS y %d..%d · BOOT %d · GRAPH %d · PRESSURE %d · RAW COUNTERS %d · ABOUT %d · bottom %d\n",DG_Y0,DG_Y0+3*DG_P,DG_BOOT,DG_GRAPH,DG_PRESS,DG_RAW,DG_ABOUT,DG_BOTTOM);
       st_check("DIAGNOSE: STATUS at the top (link, phase, E1/E2/E3, awake, net, version, boot push), then boot/net/graph/pressure, RAW COUNTERS (rx, crc, work_sta, cmd6, current, frame, mirror, md5) in their own section, ABOUT at the bottom; every cell has exactly one slot",okp&&s8&&order); }
+    sim_reset(); sim_tick=NULL;
+}
+/* ============================ v6.17: IA consolidation (docs/ux-audit-v617.md) ============================ */
+static int st_q_snap(char*o,size_t n){   /* the write queue as hex, frame by frame (what WILL go out) */
+    size_t l=0; o[0]=0;
+    for(int k=0;k<wq.n;k++){ uint8_t b[80]; int m=build_write(b,wq.q[k].sub,wq.q[k].w,wq.q[k].len); for(int i=0;i<m&&l+4<n;i++) l+=(size_t)snprintf(o+l,n-l,"%02x",b[i]); if(l+2<n){ o[l++]='|'; o[l]=0; } }
+    return wq.n;
+}
+static int st_hold(int x,int y,ms_t ms){   /* a real hold: DOWN, frames for ms (the write queue is NOT stepped, so what was queued stays), UP */
+    ms_t t=sim_now; ui_touch(TE_DOWN,x,y,t); for(ms_t e=t+ms;t<e;t+=11){ if(sim_link) last_rx_ms=t; ui_frame(t); } int f=tch.fired; ui_touch(TE_UP,x,y,t); sim_now=t; return f;
+}
+static void st_v617(void){
+    printf("== selftest: v6.17 IA consolidation (HOME = live root; one page per feature w. its settings + HOLD TO START; SYSTEM in sections; DIAGNOSTICS behind SYSTEM; one way back) ==\n");
+    int ok,w,h; char a[96],b[96];
+    /* ---- (1) the row model: every parameter has exactly one home ---- */
+    { int seen[NSET]={0}, tier_ok=1, n_feat=0, n_sys=0, n_x=0;
+      for(int f=0;f<4;f++) for(const signed char*q=FEAT_ROWS[f];*q!=-1;q++){ seen[(int)*q]++; n_feat++; if(SET[(int)*q].tier!=f) tier_ok=0; }
+      for(int sc=0;sc<NSEC;sc++) for(const signed char*q=SEC_ROWS[sc];*q!=-1;q++){ if(*q<-1){ n_x++; continue; } seen[(int)*q]++; n_sys++; if(SET[(int)*q].tier!=4) tier_ok=0; }
+      ok=1; for(int i=0;i<NSET;i++) if(seen[i]!=(i==S_HOTT?0:1)){ ok=0; printf("     SET[%d] (%s) is listed %d time(s)\n",i,TR(SET[i].label),seen[i]); }
+      printf("       %d settings: GRIND %d · BREW %d · WATER %d · STEAM %d · SYSTEM %d in %d sections + %d actions (v6.16: BREW 9 · STEAM·WATER 5 · SYSTEM 15 + 2 actions, three flat lists)\n",NSET,
+             page_rows(PG_GRIND),page_rows(PG_BREW),page_rows(PG_WATER),page_rows(PG_STEAM),n_sys,NSEC,n_x);
+      st_check("row model: every one of the 29 parameters is on exactly ONE page (its SET[].tier), nothing is dropped; the only one that is not a row is the read-only WATER SENSOR (it is the WATER page's live line)",
+               ok&&tier_ok&&n_feat+n_sys==NSET-1&&n_x==2&&(SET[S_HOTT].flags&SF_SENSOR)&&SET[S_HOTT].tier==2);
+      st_check("feature pages carry what the feature uses: GRIND 2 rows, BREW 6, WATER 2, STEAM 2 — each at most 2 rows away from fitting without scrolling (4 rows are in view above HOLD TO START)",
+               page_rows(PG_GRIND)==2&&page_rows(PG_BREW)==6&&page_rows(PG_WATER)==2&&page_rows(PG_STEAM)==2&&scroll_max(PG_GRIND)==0&&scroll_max(PG_WATER)==0&&scroll_max(PG_STEAM)==0&&scroll_max(PG_BREW)<=2*ROW_P); }
+    /* ---- (2) reachability with real taps: every setting in <= 3 taps from HOME, and back with the chevron — no frame on the way ---- */
+    { int maxt=0, maxd=0; ok=1;
+      for(int i=0;i<NSET;i++){ if(i==S_HOTT) continue;
+          st_home(); int taps=0, drags=0, pg=PG_T0+SET[i].tier;
+          if(pg_feat(pg)){ tap(ACT_X[pg-PG_GRIND],ACT_Y); taps++; st_settle(); }
+          else { tap(CX,GEAR_Y); taps++; st_settle(); tap(240,row_y0(PG_SYS,sec_of_set(i))+25); taps++; st_settle(); }
+          int k=row_find(page,RK_SET,i);
+          if(page!=pg||k<0){ ok=0; printf("     %s: page %d (want %d), row %d\n",TR(SET[i].label),page,pg,k); continue; }
+          for(int q=0;q<8;q++){ int y=row_y0(page,k)-(int)scroll[page]; if(y>=LIST_VY0+10&&y+ROW_H<=list_vy1(page)-10) break; int g[]={240,300, 240,280, 240,200}; st_gest(g,3); sim_run(100); drags++; }
+          tap(240,row_y0(page,k)-(int)scroll[page]+25); taps++; st_settle();
+          if(!(view==V_DETAIL&&sel==i)){ ok=0; printf("     %s: the row tap did not open its editor (view %d sel %d)\n",TR(SET[i].label),view,sel); }
+          tap(CX,57); st_settle(); if(!(view==V_MAIN&&page==pg)) ok=0;
+          tap(CX,PG_TITLE_Y+6); st_settle(); if(page!=PG_HOME) ok=0;
+          if(wq.n||txq_len){ ok=0; printf("     %s: navigating queued/sent a frame\n",TR(SET[i].label)); }
+          if(taps>maxt) maxt=taps; if(drags>maxd) maxd=drags; }
+      printf("       worst case: %d taps (+ %d scroll drag(s)) from HOME to an editor\n",maxt,maxd);
+      st_check("reachability: every setting's editor opens by TAPS from HOME — feature settings in 2 (icon, row), SYSTEM settings in 3 (gear, section, row) — and the chevron leads back the same way; no frame is sent while navigating",ok&&maxt<=3);
+      st_home(); tap(CX,GEAR_Y); st_settle(); tap(240,row_y0(PG_SYS,SEC_STOCK)+25); st_settle(); int kb=row_find(PG_SYS,RK_X,X_BOOTUI);
+      tap(240,row_y0(PG_SYS,kb)-(int)scroll[PG_SYS]+25); st_settle(); int x1=view==V_SYS&&xsel==X_BOOTUI; tap(CX,57); st_settle();
+      tap(240,row_y0(PG_SYS,kb+1)-(int)scroll[PG_SYS]+25); st_settle(); int x2=view==V_SYS&&xsel==X_SWITCH; tap(CX,57); st_settle();
+      tap(240,row_y0(PG_SYS,SEC_STOCK)-(int)scroll[PG_SYS]+25); st_settle(); int cl=sec_open==-1&&scroll[PG_SYS]==0&&page_rows(PG_SYS)==NSEC+1;
+      tap(240,row_y0(PG_SYS,NSEC)+25); st_settle(); int dg=page==PG_DIAG&&diag_from==PG_SYS; tap(CX,PG_TITLE_Y+6); st_settle(); int bs1=page==PG_SYS; tap(CX,PG_TITLE_Y+6); st_settle();
+      st_check("SYSTEM: BOOT UI and SWITCH TO ORIGINAL NOW open from STOCK UI; a tap on the open header closes the section again; the DIAGNOSTICS row opens DIAGNOSTICS, whose chevron leads back to SYSTEM and from there to HOME",x1&&x2&&cl&&dg&&bs1&&page==PG_HOME&&wq.n==0&&txq_len==0);
+      st_home(); tap(CX,GEAR_Y); st_settle(); tap(240,row_y0(PG_SYS,SEC_DISPLAY)+25); st_settle(); int o1=sec_open==SEC_DISPLAY&&row_find(PG_SYS,RK_SET,S_UILANG)==1;
+      { int g[]={240,300, 240,280, 240,200}; st_gest(g,3); sim_run(100); }                                      /* DISPLAY is open: SCHEDULE's header is below the fold -> scroll */
+      tap(240,row_y0(PG_SYS,row_find(PG_SYS,RK_SEC,SEC_SCHED))-(int)scroll[PG_SYS]+25); st_settle();
+      int o2=sec_open==SEC_SCHED&&row_find(PG_SYS,RK_SET,S_UILANG)<0&&row_find(PG_SYS,RK_SET,S_PREHEAT)==SEC_SCHED+1&&(int)scroll[PG_SYS]==(int)clampf((float)(SEC_SCHED*ROW_P),0,scroll_max(PG_SYS));
+      tap(CX,PG_TITLE_Y+6); st_settle(); tap(CX,GEAR_Y); st_settle();
+      st_check("SYSTEM sections: one open at a time (opening SCHEDULE closes DISPLAY and brings its header to the top); leaving SYSTEM and coming back shows it closed again",o1&&o2&&page==PG_SYS&&sec_open==-1&&scroll[PG_SYS]==0); }
+    /* ---- (3) tap vs hold: the same icon / pill, two meanings, one frame set ---- */
+    { char qi[4][400], qs[4][400]; int okt=1, okh=1, oks=1;
+      for(int k=0;k<4;k++){
+          st_home(); int f=st_hold(ACT_X[k],ACT_Y,700); int n1=st_q_snap(qi[k],sizeof qi[k]); if(!(f&&act.pending==k&&page==PG_HOME&&view==V_MAIN&&n1>=1)) okh=0;
+          st_home(); tap(ACT_X[k],ACT_Y); st_settle(); if(!(page==PG_GRIND+k&&view==V_MAIN&&wq.n==0&&txq_len==0&&!toast.dur&&act.pending==ACT_NONE)) okt=0;
+          tap(CX,START_Y+START_H/2); sim_run(100); if(!(page==PG_GRIND+k&&wq.n==0&&txq_len==0&&toast.dur&&!strcmp(toast.msg,TR(TX_T_HOLD_HINT)))) oks=0; toast.dur=0;
+          int f2=st_hold(CX,START_Y+START_H/2,700); int n2=st_q_snap(qs[k],sizeof qs[k]); int pend=act.pending==k; sim_run(500);
+          if(!(f2&&pend&&n2==n1&&!strcmp(qi[k],qs[k])&&page==PG_HOME)){ oks=0; printf("     %s: icon hold '%s' vs HOLD TO START '%s' (page %d)\n",TR(ACT_NAME[k]),qi[k],qs[k],page); } }
+      st_check("HOME icon: a TAP opens that feature's page — no frame, no toast, nothing started (v6.16: a toast 'HOLD THE BUTTON TO START' and a dead end)",okt);
+      st_check("HOME icon: a HOLD (650 ms) still starts the activity directly, HOME stays",okh);
+      st_check("feature page: HOLD TO START queues byte for byte the SAME frames as the icon hold (grind, brew, water, steam) and returns to HOME (the live view w. STOP); a short tap on it only says 'KEEP HOLDING TO START'",oks);
+      st_hitbox(T_ACT0,&w,&h); st_home(); page=PG_BREW; static_dirty=1; sim_run(300); st_hitbox(T_START,&w,&h); printf("       HOLD TO START: %d x %d px (pill %d x %d)\n",w,h,START_W,START_H);
+      st_check("touch: HOLD TO START has a touch area >= 48 px high and >= 200 px wide, clear of the list above it",w>=200&&h>=48&&START_HIT_Y>=FEAT_VY1&&hit_test(CX,FEAT_VY1-6,sim_now)!=T_START);
+      st_hitbox(T_BACK,&w,&h); printf("       page header (close): %d x %d px\n",w,h);
+      st_check("touch: a page's close target is its whole header (chevron + title), >= 48 px high and >= 120 px wide, clear of the first row",w>=120&&h>=48&&PBACK_Y0+PBACK_H<=LIST_VY0&&hit_test(CX,LIST_Y0+25,sim_now)==T_ROW0); }
+    /* ---- (4) the live line: values when a start is possible, the reason when it is not ---- */
+    { st_home(); page=PG_BREW; uint32_t c=page_live_text(PG_BREW,a,sizeof a,sim_now); char t1[16],t2[16]; fmt_t10(t1,sizeof t1,reg[40],1); fmt_t10(t2,sizeof t2,reg[42],0); snprintf(b,sizeof b,TR(TX_LV_BREW),t1,t2);
+      int v1=!strcmp(a,b)&&c==C_TXT2; page_live_text(PG_WATER,a,sizeof a,sim_now); snprintf(b,sizeof b,TR(TX_LV_WATER),t1); int v2=!strcmp(a,b);
+      int kg=SET[S_GRINDMODE].val; SET[S_GRINDMODE].val=2; c=page_live_text(PG_GRIND,a,sizeof a,sim_now); int g1=!strcmp(a,TR(TX_G_GRINDTIME))&&c==C_WARN; c=page_live_text(PG_BREW,a,sizeof a,sim_now); int g2=c==C_TXT2; SET[S_GRINDMODE].val=kg;
+      uint16_t w1[1]={(uint16_t)sv(S_BREWW)}; wq_push(23,w1,1); c=page_live_text(PG_BREW,a,sizeof a,sim_now); int bz=act_guard(ACT_BREW,sim_now)==TR(TX_G_WAIT)&&c==C_TXT2&&strcmp(a,TR(TX_G_WAIT)); memset(&wq,0,sizeof wq);
+      sim_link=0; sim_run(3000); c=page_live_text(PG_STEAM,a,sizeof a,sim_now); int off=!strcmp(a,TR(TX_G_NOLINK))&&c==C_WARN; int f=st_hold(CX,START_Y+START_H/2,700); int nf=wq.n==0&&act.pending==ACT_NONE&&toast.dur&&!strcmp(toast.msg,TR(TX_G_NOLINK)); (void)f; sim_link=1; sim_run(400);
+      st_check("feature page live line: BREW 'BOILER 99.9° · GROUP 70°', WATER 'WATER 99.9°' (word 40 — the row that looked like a setting in v6.16); GRIND MODE = TIME shows the reason on GRIND only; a write in transit does not flicker 'ONE MOMENT…'",v1&&v2&&g1&&g2&&bz);
+      st_check("feature page offline: the live line says NO CONNECTION (amber), HOLD TO START starts nothing and says why",off&&nf); }
+    /* ---- (5) something starts running while a page is open: HOME (with STOP) takes over ---- */
+    { st_home(); tap(ACT_X[ACT_GRIND],ACT_Y); st_settle(); int on=page==PG_GRIND; reg[33]=0x1307; sim_run(700); int h1=page==PG_HOME&&view==V_MAIN&&hit_test(240,372,sim_now)==T_STOP;
+      st_home(); tap(CX,GEAR_Y); st_settle(); reg[33]=0x1307; sim_run(700); int s1=page==PG_SYS;
+      st_home(); tap(ACT_X[ACT_BREW],ACT_Y); st_settle(); tap(240,LIST_Y0+25); st_settle(); int ed=view==V_DETAIL&&sel==S_BREWW; reg[33]=0x1307; sim_run(700); int e1=view==V_DETAIL; tap(CX,57); sim_run(900); int e2=view==V_MAIN&&page==PG_HOME;
+      st_home(); reg[33]=0x1307; sim_run(400); int ic=hit_test(ACT_X[0],ACT_Y,sim_now)!=T_ACT0;
+      st_check("an activity starts (on the machine) while a feature page is open: the UI slides to HOME, where STOP is; SYSTEM stays (deliberate); an open editor stays until it is closed — then HOME; no feature page can be opened while something runs",on&&h1&&s1&&ed&&e1&&e2&&ic); }
+    /* ---- (6) one way back: chevron/header, swipe right, pull the header down; DIAGNOSTICS from HOME's error hint ---- */
+    { st_home(); tap(CX,GEAR_Y); st_settle(); int g1[]={240,40, 240,60, 240,130}; st_gest(g1,3); st_settle(); int p1=page==PG_HOME;
+      tap(ACT_X[ACT_BREW],ACT_Y); st_settle(); int g2[]={240,150, 240,170, 240,260}; st_gest(g2,3); st_settle(); int p2=page==PG_BREW&&scroll[PG_BREW]==0;
+      int g3[]={240,300, 240,280, 240,200}; st_gest(g3,3); st_settle(); int p3=page==PG_BREW&&scroll[PG_BREW]>0;
+      st_home(); int nohint=hit_test(240,262,sim_now)!=T_DIAG; reg[35]=1; sim_run(500); int hd=hit_test(240,262,sim_now)==T_DIAG&&strstr(hm.hint1,"E2")!=NULL; tap(240,262); st_settle(); int d1=page==PG_DIAG&&diag_from==PG_HOME;
+      tap(CX,PG_TITLE_Y+6); st_settle(); int d2=page==PG_HOME; reg[35]=0; sim_run(300);
+      sim_link=0; sim_run(3000); int ho=hit_test(240,262,sim_now)==T_DIAG&&!strcmp(hm.hint1,TR(TX_C_DIAGREF)); sim_link=1; sim_run(400);
+      st_check("back: pulling a page's header down closes it; a vertical drag inside the list scrolls (never closes)",p1&&p2&&p3);
+      st_check("error / offline on HOME: the hint 'CODE E2 · TAP FOR DETAILS' IS the way to DIAGNOSTICS (tap -> DIAGNOSTICS, chevron -> back to HOME); when all is well that area is no target",nohint&&hd&&d1&&d2&&ho); }
+    /* ---- (7) STOP: the biggest, brightest thing under the numbers ---- */
+    { Rect r1=stop_pill(1,0), r2=stop_pill(2,0), r3=stop_pill(2,1); uint32_t bg=bgpure[372*W+CX];
+      float ct=st_cr(C_STOP_FG,C_STOP_T), cb=st_cr(C_STOP_FG,C_STOP_B), cbg=st_cr(C_STOP_T,bg), old=st_cr(rgb(120,40,44),bg);
+      st_home(); reg[33]=0x1307; sim_run(400); st_hitbox(T_STOP,&w,&h); int gw,gh; st_hitbox(T_GEAR,&gw,&gh);
+      printf("       STOP: pill %d x %d (v6.16: 160 x 44), touch %d x %d · white on red %.2f / %.2f · red on background %.2f (v6.16's dark red: %.2f)\n",r1.x1-r1.x0,r1.y1-r1.y0,w,h,ct,cb,cbg,old);
+      st_check("STOP: one pill 216 x 54 (v6.16: 160 x 44 — 66 % larger), two pills 152 x 54 with a gap, all inside the widget and the circle's chord; touch area >= 232 x 60 and the largest target on HOME while something runs",
+               r1.x1-r1.x0==216&&r1.y1-r1.y0==54&&r2.x1-r2.x0==152&&r3.x0-r2.x1>=8&&r2.x0>=72&&r3.x1<=408&&(r1.x1-r1.x0)/2<=chord_half(STOP_PILL_Y,STOP_PILL_H)&&r3.x1-CX<=chord_half(STOP_PILL_Y,STOP_PILL_H)&&w>=232&&h>=60&&w*h>gw*gh);
+      st_check("STOP contrast: white text >= 4.5:1 on the whole red gradient; the red >= 3:1 against the background (v6.16's dark red was below 2:1 — it read as disabled)",ct>=4.5f&&cb>=4.5f&&cbg>=3.f&&old<2.f); }
+    /* ---- (8) less text: what is on screen, measured ---- */
+    { st_home(); page=PG_BREW; static_dirty=1; sim_run(300); int ne=1;
+      static const int probe[]={S_BREWT,S_HOTW,S_UILANG,S_PHAT,S_TZ,S_VOL};
+      for(unsigned q=0;q<sizeof probe/sizeof probe[0];q++){ detail_open(probe[q],sim_now); sim_run(500); force_all=1; ui_frame(sim_now+1);
+          for(int y=362;y<426;y++) for(int x=140;x<340;x++) if(canvas[y*W+x]!=bgpure[y*W+x]){ ne=0; y=H; break; }
+          detail_close(sim_now); sim_run(400); }
+      st_check("editor: nothing is drawn below CANCEL / SAVE any more (v6.16: two footer lines on every editor — 'CONTROLLER NOW + CONFIG', 'STOCK UI: AFTER RESTART', file paths)",ne);
+      detail_open(S_HOTW,sim_now); sim_run(400); uint32_t c=detail_status(a,sizeof a); int s1=!strcmp(a,TR(TX_D_HOLDFAST))&&c==C_TXT3; tap(396,184); sim_run(50); detail_status(a,sizeof a); int s2=strstr(a,TR(TX_D_HOLDFAST))==NULL&&a[0]; detail_close(sim_now); sim_run(400);
+      detail_open(S_PISW,sim_now); sim_run(400); detail_status(a,sizeof a); int s3=!a[0]&&!detail_holdable(&SET[S_PISW])&&!detail_holdable(&SET[S_BREWT])&&!detail_holdable(&SET[S_TZ])&&detail_holdable(&SET[S_VOL])&&detail_holdable(&SET[S_PHAT]); detail_close(sim_now); sim_run(400);
+      st_check("editor status line: untouched + a long range -> 'HOLD - OR + TO GO FAST' (the stepper's hidden ability, said where it applies); changed -> 'CHANGED · WAS …'; an ON/OFF or short range -> empty ('SAVED VALUE' is gone)",s1&&s2&&s3);
+      int bad=0; for(int i=0;i<NSTR;i++){ int k=STR_K[i]; if(k==KCON||k==KDL||k==KDV||k==KDF) continue; for(int lg=0;lg<NLANG;lg++){ const char*t=STR[lg][i];
+            if(strstr(t,"CONFIG ONLY")||strstr(t,"KUN CONFIG")||strstr(t,"CMD8")||strstr(t,"CONFIG.JSON")||strstr(t,"OR STOP")||strstr(t,"ELLER STOP")||strstr(t,"EST.")){ bad++; printf("     [%s] %s: '%s'\n",LANG_CODE[lg],STR_ID[i],t); } } }
+      printf("       string table: %d ids (v6.16: 449)\n",NSTR);
+      st_check("text: no user-facing string says CONFIG ONLY / CONFIG.JSON / CMD8 / '· OR STOP' / 'EST.' any more; the string table is smaller than v6.16's 449 ids although v6.17 adds pages",bad==0&&NSTR<449);
+      st_home(); home_model(sim_now); int one=!strcmp(hm.hint1,TR(TX_C_HINT))&&hm.hint2==NULL&&!strcmp(hm.label,TR(TX_H_BOILER))&&!st_has(hm.label,"\xC2\xB7");
+      reg[33]=0x0141; sim_run(600); home_model(sim_now); fmt_fix(a,sizeof a,sv(S_GRINDW),1); snprintf(b,sizeof b,TR(TX_H_AUTOSTOP_G),a); int g=!strcmp(hm.label,TR(TX_H_DOSE))&&!st_has(hm.label,a)&&!strcmp(hm.sub,b)&&sub_font(&hm)==F_S;
+      st_check("HOME: one hint line; the label is the name of the number only ('BREW BOILER', 'DOSE' — no '· NOW', no repeated target); during an activity the target is said once, in F_S ('STOPS AT 18.5 G')",one&&g); }
+    /* ---- (9) the icons say what they will do ---- */
+    { st_home(); home_model(sim_now); char e[4][16]; char u[16];
+      fmt_fix(u,sizeof u,sv(S_GRINDW),1); snprintf(e[0],16,"%s %s",u,TR(TX_U_G)); fmt_fix(u,sizeof u,sv(S_BREWW),-1); snprintf(e[1],16,"%s %s",u,TR(TX_U_G));
+      fmt_fix(u,sizeof u,sv(S_HOTW),-1); snprintf(e[2],16,"%s %s",u,TR(TX_U_G)); fmt_t10(u,sizeof u,sv(S_STEAMT),0); snprintf(e[3],16,"%s\xC2\xB0",u);
+      ok=1; for(int k=0;k<4;k++) ok&=!strcmp(hm.alab[k],e[k]);
+      printf("       icon targets: %s · %s · %s · %s\n",hm.alab[0],hm.alab[1],hm.alab[2],hm.alab[3]);
+      int kv=SET[S_BREWW].val, ktu=SET[S_TUNIT].val; SET[S_BREWW].val=420; SET[S_TUNIT].val=0; home_model(sim_now); int chg=!strcmp(hm.alab[1],"42 G")&&strstr(hm.alab[3],"149")!=NULL; SET[S_BREWW].val=kv; SET[S_TUNIT].val=ktu;
+      int kl=SET[S_HOTW].loaded; SET[S_HOTW].loaded=0; home_model(sim_now); int nl=!strcmp(hm.alab[2],"--"); SET[S_HOTW].loaded=kl; home_model(sim_now);
+      st_check("HOME icons carry their target underneath (grind dose, brew weight, water amount, milk temperature in the chosen unit) and follow the settings; a value that is not loaded shows '--'",ok&&chg&&nl);
+      char sm[40]; sec_summary(SEC_DISPLAY,sm,sizeof sm); int q1=!strcmp(sm,TR(TX_UL_EN+ui_lang)); sec_summary(SEC_CLOCK,sm,sizeof sm); char ck[24]; home_clock_text(ck,sizeof ck); int q2=!strcmp(sm,ck);
+      int kon=sch.on,khm=sch.hm; sch.on=0; sec_summary(SEC_SCHED,sm,sizeof sm); int q3=!strcmp(sm,TR(TX_E_OFF)); sch.on=1; sch.hm=390; sec_summary(SEC_SCHED,sm,sizeof sm); int q4=!strcmp(sm,"06:30"); sch.on=kon; sch.hm=khm; sec_summary(SEC_STOCK,sm,sizeof sm);
+      uint32_t dc=diag_row_text(a,sizeof a,sim_now); int q5=!strcmp(a,TR(TX_DV_OK))&&dc==C_OK; reg[35]=1; dc=diag_row_text(a,sizeof a,sim_now); int q6=!strcmp(a,"E2")&&dc==C_ERR; reg[35]=0;
+      st_check("SYSTEM's closed headers say what is inside: DISPLAY = the UI language's own name, CLOCK = the time, SCHEDULE = OFF / the pre-heat time; the DIAGNOSTICS row shows OK / the error code",q1&&q2&&q3&&q4&&!sm[0]&&q5&&q6); }
     sim_reset(); sim_tick=NULL;
 }
 /* ============================ v6.14: the power button ============================ */
@@ -7759,8 +8086,8 @@ static void st_time(const char*dir){
       clk_fake=10000; v=home_clock_text(c,sizeof c); clk_fake=PV_CLK;
       st_check("HOME top line: \"16:35\" (timemode 1) / \"04:35 P.M.\" (timemode 0); clock not set -> the wordmark",a&&!v); }
     { t=st_pw_home(); sch.on=1; sch.rep=1; sch.hm=390; sch.once_at=0; char h[72]; int v=home_preheat_text(h,sizeof h); char want[72]; snprintf(want,sizeof want,TR(TX_C_PREHEAT),TR(TX_WD_THU),"06:30");
-      home_model(t); st_check("HOME hint: a planned pre-heat replaces SWIPE FOR SETTINGS with \"{clock} PRE-HEAT · THU 06:30\" (the next occurrence)",v&&!strcmp(h,want)&&!strcmp(hm.hint2,want));
-      sch.on=0; home_model(t); st_check("... no pre-heat: the swipe hint as before",hm.hint2==TR(TX_C_HINT2)); }
+      home_model(t); st_check("HOME hint: a planned pre-heat is shown as the second hint line \"{clock} PRE-HEAT · THU 06:30\" (the next occurrence)",v&&!strcmp(h,want)&&hm.hint2&&!strcmp(hm.hint2,want));
+      sch.on=0; home_model(t); st_check("... no pre-heat: no second line (v6.17: one hint line)",hm.hint2==NULL&&!strcmp(hm.hint1,TR(TX_C_HINT))); }
     unlink(sched_path); snprintf(sched_path,sizeof sched_path,"%s",keep_sp);
     SET[S_TIMEMODE].val=keep_tm; SET[S_TZ].val=keep_tz; SET[S_DST].val=keep_dst; clk_fake=PV_CLK; settings_load();
 }
@@ -7781,7 +8108,7 @@ static void st_power(void){
     t=st_pw_home(); pw_key(116,1,t); t=st_pw_loop(t,1400,1,1); pw_key(116,0,t); t=st_pw_loop(t,3000,1,1);
     st_check("short press (1.4 s < 1.5 s): no frames, ON, counted as a short press (stock: only wakes its screensaver)",txq_len==0&&pw.state==PW_ON&&pw.n_short==1&&pw.n_off==0&&view==V_MAIN);
     /* ---- (4) HOLD: cmd8 -> 80 ms -> cmd6 sub0 len2 -> ACK -> OFF ---- */
-    t0=t=st_pw_home(); page=PG_T1; static_dirty=1; pw_key(116,1,t); t=st_pw_loop(t,1490,1,0);
+    t0=t=st_pw_home(); page=PG_STEAM; static_dirty=1; pw_key(116,1,t); t=st_pw_loop(t,1490,1,0);
     int before=txq_len==0&&pw.state==PW_ON;
     t=st_pw_loop(t,20,1,0); nf=st_txq_frames(fr,16);
     int at=nf==1&&!strcmp(fr[0],PW_V_CMD8)&&pw.state==PW_OFFING&&view==V_OFF&&pw.t_req-t0>=PW_HOLD_MS&&pw.t_req-t0<PW_HOLD_MS+20;
@@ -7853,7 +8180,7 @@ static void st_power(void){
     st_check("no ACK (not on the retransmit either): back to ON/HOME, light never turned off, toast 'POWER OFF: NO REPLY'",
              pw.state==PW_ON&&pw.n_fail==1&&!bl_is_off&&view==V_MAIN&&!strcmp(toast.msg,TR(TX_T_PW_NOACK))&&toast.col==C_ERR&&nf==3&&!strcmp(fr[1],PW_V_OFF)&&!strcmp(fr[2],PW_V_OFF));
     /* ---- (13) open detail with brightness preview: reverted before powering off ---- */
-    t=st_pw_home(); page=PG_T2; static_dirty=1; view=V_DETAIL; sel=S_BL; edit_val=SET[S_BL].val+1; pw_key(116,1,t); t=st_pw_loop(t,1600,1,1); pw_key(116,0,t); t=st_pw_loop(t,300,1,1);
+    t=st_pw_home(); page=PG_SYS; sec_open=SEC_DISPLAY; static_dirty=1; view=V_DETAIL; sel=S_BL; edit_val=SET[S_BL].val+1; pw_key(116,1,t); t=st_pw_loop(t,1600,1,1); pw_key(116,0,t); t=st_pw_loop(t,300,1,1);
     st_check("power off in the middle of an open detail: the detail is closed without SAVE (sel -1), TURNING OFF…/OFF is shown",view==V_OFF&&sel<0&&pw.state==PW_OFF&&cfg_writes>=0);
     /* ---- (14) texts and layout ---- */
     { int ok=1; static const short T[]={TX_PW_OFFING,TX_PW_OFF,TX_PW_WAKING,TX_PW_SUB_OFFING,TX_PW_SUB_OFF,TX_PW_SUB_WAKING,TX_PW_NOTE_OFF};
@@ -7882,7 +8209,7 @@ static void st_hit_size(int tgt,int x,int y,ms_t t,int*w,int*h){ *w=*h=0; for(in
 static void st_stop(void){
     printf("== selftest: v6.13 manual STOP for grind / brew / water (stop words reversed from the MCU firmware + the stock UI's own stop calls) ==\n");
     ms_t t; int sk[2], sn;
-    const char*orstop=STR[ui_lang][TX_H_AUTOSTOP_G]; orstop=strstr(orstop,"%s G")?strstr(orstop,"%s G")+4:orstop;   /* " · OR STOP" / " · ELLER STOP" */
+    char stops[40]; snprintf(stops,sizeof stops,"%s",STR[ui_lang][TX_H_AUTOSTOP_G]); { char*q=strstr(stops,"%s"); if(q) *q=0; }   /* "STOPS AT " / "STOPPER VED " */
     /* ---- (1) frames byte for byte ---- */
     t=st_home();
     act_push_stop(ACT_GRIND); st_check("GRIND stop = cmd6 sub6 len1, word 6 = 0: " ST_V_GRIND " (MCU grind-ctl 0x19C6 runs while word 6 != 0; stock onClick 0x10928C usart_send(6,6,1))",wq.n==1&&q_hex(0,ST_V_GRIND)); wq.n=0;
@@ -7910,14 +8237,14 @@ static void st_stop(void){
           printf("       %-17s STOP button: %s · touch area %d x %d px\n",P[q].nm,sn?TR(STOP_BTN[sk[0]]):"(none)",w,h);
           if(!(sn==1&&sk[0]==P[q].kind&&hit_test(240,372,t)==T_STOP&&hit_test(ACT_X[0],ACT_Y,t)!=T_ACT0&&hit_test(ACT_X[2],ACT_Y,t)!=T_ACT2)) ok=0;
           if(w<48||h<48) okw=0;
-          if(!st_has(hm.sub,orstop)) oks=0; }
+          if(strncmp(hm.sub,stops,strlen(stops))||st_has(hm.sub,"\xC2\xB7")||sub_font(&hm)!=F_S) oks=0; }
       st_check("STOP is shown during GRIND, PRE-INF., EXTRACTION and WATER (one button, same place as STOP STEAM; no start icons)",ok);
-      st_check("touch: the STOP button's touch area is >= 48 x 48 px (180 x 56)",okw);
-      st_check("the subline keeps the auto-stop expectation and mentions STOP ('AUTO-STOP AT 36.0 G · OR STOP' / '… · ELLER STOP')",oks); }
+      st_check("touch: the STOP button's touch area is >= 48 x 48 px (232 x 60)",okw);
+      st_check("the subline is the auto-stop expectation and nothing else ('STOPS AT 36.0 G' / 'STOPPER VED 36.0 G' in F_S — v6.13-v6.16: 'AUTO-STOP AT 36.0 G · OR STOP' in F_XS; the STOP button is right below)",oks); }
     t=st_home(); st_s0(0x0101,0,0x000C,0,300,t+=100); ui_frame(t); sn=stop_btns(t,sk);
     st_check("idle (0101): no STOP button — the start icons are there",sn==0&&hit_test(ACT_X[0],ACT_Y,t)==T_ACT0&&hit_test(240,372,t)!=T_STOP);
     st_s0(0x4121,1,0x000C,0,300,t+=100); ui_frame(t); sn=stop_btns(t,sk);
-    st_check("latched steam alone: one button = STOP STEAM (unchanged behaviour, same touch area)",sn==1&&sk[0]==ACT_STEAM&&hit_test(240,372,t)==T_STOP&&hit_test(150,372,t)==T_STOP&&hit_test(330,372,t)==T_NONE);
+    st_check("latched steam alone: one button = STOP STEAM (unchanged behaviour, same touch area as the other STOP buttons)",sn==1&&sk[0]==ACT_STEAM&&hit_test(240,372,t)==T_STOP&&hit_test(150,372,t)==T_STOP&&hit_test(330,372,t)==T_STOP&&hit_test(360,372,t)==T_NONE);
     /* ---- (4) WATER all the way: tap -> STOPPING WATER… -> frame -> retransmit -> ACK -> bits cleared -> WATER STOPPED ---- */
     t=st_home(); reg[16]=1; reg[17]=400; reg_seen[19]=1; reg[19]=0;
     st_s0(0x030B,0,0x000C,0,300,t+=100); ui_frame(t);
@@ -8159,16 +8486,16 @@ static int selftest(const char*cfgsrc){
       sel=S_BREAK; edit_val=5; edit_step(1,1); ok&=edit_val==5; sel=S_TZ; edit_val=48; edit_step(1,1); ok&=edit_val==48; sel=S_HOTT; edit_val=900; edit_step(1,1); ok&=edit_val==900;
       sel=-1; view=V_MAIN; st_check("stepper: clamp to the spec interval, step grid, locked rows cannot be changed",ok); }
     for(int lg=0;lg<NLANG;lg++){ /* layout: all texts in the detail view lie within ring/chord (otherwise they are silently clipped) — both languages */
-      int ok=1, nell=0; char l[112]; const char*l1,*l2; lang_set(lg);
+      int ok=1, nell=0; char l[112]; lang_set(lg);
       int ktu=SET[S_TUNIT].val;
       for(int i=0;i<NSET;i++) for(int tu=0;tu<2;tu++){ const Setting*s=&SET[i]; const char*lab=TR(s->label);
           if(tu&&!(s->flags&(SF_TEMP10|SF_TEMP1))) continue;                 /* temperature rows: both °C and °F */
-          SET[S_TUNIT].val=(s->flags&(SF_TEMP10|SF_TEMP1))?tu:ktu; detail_text(i,l,sizeof l,&l1,&l2);
+          SET[S_TUNIT].val=(s->flags&(SF_TEMP10|SF_TEMP1))?tu:ktu; detail_text(i,l,sizeof l);
           char iv[200]; snprintf(iv,sizeof iv,"%s%s%s",l,(s->hint&&!(s->flags&SF_LOCK))?" · ":"",(s->hint&&!(s->flags&SF_LOCK))?TR(s->hint):"");
           LAY(text_wf(lab,F_S),2*ring_half(82,14)-12,"detail label",lab);
           LAY(text_wf(iv,F_XS),2*ring_half(106,11)-12,"interval+hint (inside the gauge ring)",iv);
           LAY(text_wf(TR(s->note),F_XS),KB[KNOTE].maxw,"note",TR(s->note));
-          LAY(text_wf(l1,F_XS),KB[KF1].maxw,"footer 1",l1); LAY(text_wf(l2,F_XS),KB[KF2].maxw,"footer 2",l2);
+          if(detail_holdable(s)) LAY(text_wf(TR(TX_D_HOLDFAST),F_XS),KB[KST].maxw,"hold hint (status line)",TR(TX_D_HOLDFAST));
           char vb[40]; int xr=(s->flags&SF_LOCK)?388:372;
           if(s->kind==K_ENUM){
               LAY(94+text_w(lab,F_S)+12+60,xr,"list row: label leaves < 60 px for the value",lab);
@@ -8182,7 +8509,7 @@ static int selftest(const char*cfgsrc){
               set_fmt(i,s->hi,vb,sizeof vb); LAY(text_wf(vb,F_M)+(*u?text_wf(u,F_M)+10:0),228,"number hero (smallest font F_M)",vb);
           } }
       SET[S_TUNIT].val=ktu;
-      char nm[200]; snprintf(nm,sizeof nm,"layout: label, interval+hint, note, footers, hero and list row fit for all %d rows (%d enum name(s) truncated in the list)",NSET,nell);
+      char nm[200]; snprintf(nm,sizeof nm,"layout: label, interval+hint, note, hold hint, hero and list row fit for all %d rows (%d enum name(s) truncated in the list)",NSET,nell);
       st_check(stl(nm),ok&&nell<=1); }
     lang_set(base_lang);
 
@@ -8336,7 +8663,7 @@ static int selftest(const char*cfgsrc){
     printf("== selftest: runtime switch B->A per BOOT.md §9.2 (mock root; 'stock' is a copy of this test binary) ==\n");
     { char ss[440],rel[440],real[700]="",want[800],er[72]=""; ms_t tn=20000; int pp[2]={-1,-1};
       snprintf(ss,sizeof ss,"%s/tmp/stock_started",root); snprintf(rel,sizeof rel,"%s/tmp/released",root);
-#define SW_PREP() do{ sim_ready(tn); memset(&wq,0,sizeof wq); memset(&sav,0,sizeof sav); act.pending=ACT_NONE; view=V_MAIN; page=PG_T2; sel=-1; xsel=-1; tr.type=0; run=1; toast.dur=0; rip.on=0; \
+#define SW_PREP() do{ sim_ready(tn); memset(&wq,0,sizeof wq); memset(&sav,0,sizeof sav); act.pending=ACT_NONE; view=V_MAIN; page=PG_SYS; sec_open=SEC_STOCK; sel=-1; xsel=-1; tr.type=0; run=1; toast.dur=0; rip.on=0; \
                       sw_child=0; sw_seq=sw_seq_frame=sw_seq_release=sw_seq_launch=0; st_rel=st_reacq=0; unlink(ss); unlink(rel); }while(0)
       st_relfile=rel; dev_release=st_release_hook; dev_reacquire=st_reacq_hook; sw_sim=0; sw_dry=0;
       if(!self_bin||!strchr(self_bin,'/')||access(self_bin,X_OK)!=0){ printf("     (own binary path unknown — launch tests skipped)\n"); st_check("launch test could run",0); }
@@ -8385,7 +8712,7 @@ static int selftest(const char*cfgsrc){
       dev_release=NULL; dev_reacquire=NULL; st_relfile=NULL; st_relfd=-1; view=V_MAIN; xsel=-1; run=1; sw_child=0; }
 
     printf("== selftest: UI routes (SWITCH NOW, BOOT UI; v6.8: no REVERT button) ==\n");
-    { ms_t tn=20000; int ns=tier_count(2);
+    { ms_t tn=20000; int ns;
       sw_sim=1; sim_ready(tn); memset(&wq,0,sizeof wq); memset(&sav,0,sizeof sav); act.pending=ACT_NONE; view=V_MAIN; page=PG_HOME; sel=-1; xsel=-1; tr.type=0; run=1; toast.dur=0; rip.on=0;
       mock_boot_b(root); unlink(rn);
       sys_open(X_SWITCH,tn); tr.type=0;
@@ -8417,9 +8744,14 @@ static int selftest(const char*cfgsrc){
             if(t!=T_NONE&&!(t==T_GEAR&&in_r(x,y,CX-GEAR_HW,GEAR_Y-22,2*GEAR_HW,46))) z=0; } }   /* v6.11: only the gear (page change, no frame) */
         reg[33]=0x0101; int nr=1; for(int lg=0;lg<NLANG;lg++) for(int i=0;i<NSTR;i++) if(STR[lg][i]&&strstr(STR[lg][i],"REVERT")) nr=0;
         st_check("v6.8 HOME: no touch zone where the REVERT pill used to be (the area 150..329 x 404..479 gives T_NONE — idle and during a brew — except v6.11's gear, which only changes page); no UI string (EN/DA) mentions REVERT",z&&nr); }
-      mock_boot_b(root); page=PG_T2; scroll[PG_T2]=scroll_max(PG_T2);
-      int yb=(int)(row_y0(PG_T2,ns+X_BOOTUI)-scroll[PG_T2])+25, ys=(int)(row_y0(PG_T2,ns+X_SWITCH)-scroll[PG_T2])+25;
-      st_check("SYSTEM list: BOOT UI and SWITCH TO ORIGINAL NOW are rows 16 and 17 (after UI LANGUAGE + 10 config rows + v6.16's 4 time rows) — both hittable at the bottom of the list",ns==15&&hit_test(240,yb,tn)==T_ROW0+ns&&hit_test(240,ys,tn)==T_ROW0+ns+1&&ys+25<LIST_VY1&&hit_test(240,(int)(row_y0(PG_T2,0)-scroll[PG_T2])+25,tn)!=T_ROW0);
+      /* v6.17: SYSTEM > STOCK UI. Closed: 5 rows (4 sections + DIAGNOSTICS), no scrolling. A tap on the STOCK UI header opens it and
+       * brings it to the top; BOOT UI and SWITCH TO ORIGINAL NOW are its first two rows. */
+      mock_boot_b(root); page=PG_SYS; sec_open=-1; scroll[PG_SYS]=0;
+      int closed=page_rows(PG_SYS)==NSEC+1&&scroll_max(PG_SYS)==0&&row_find(PG_SYS,RK_X,X_BOOTUI)<0&&row_find(PG_SYS,RK_DIAG,0)==NSEC;
+      activate(T_ROW0+SEC_STOCK,tn); ns=row_find(PG_SYS,RK_X,X_BOOTUI);
+      int yb=(int)(row_y0(PG_SYS,ns)-scroll[PG_SYS])+25, ys=(int)(row_y0(PG_SYS,ns+1)-scroll[PG_SYS])+25;
+      st_check("SYSTEM: closed = 4 section headers + DIAGNOSTICS (5 rows, no scrolling); tapping STOCK UI opens it at the top: BOOT UI and SWITCH TO ORIGINAL NOW are its first two rows, both hittable (v6.16: rows 16 and 17 of one list)",
+               closed&&sec_open==SEC_STOCK&&ns==SEC_STOCK+1&&row_find(PG_SYS,RK_X,X_SWITCH)==ns+1&&hit_test(240,yb,tn)==T_ROW0+ns&&hit_test(240,ys,tn)==T_ROW0+ns+1&&ys+25<LIST_VY1&&yb-25>=LIST_VY0);
       activate(T_ROW0+ns,tn); tr.type=0;
       st_check("BOOT UI opens with the current choice (flag set -> MERAKIPLUS)",view==V_SYS&&xsel==X_BOOTUI&&x_edit==1&&x_orig==1);
       ui_touch(TE_DOWN,84,184,tn); ui_touch(TE_UP,84,184,tn);
@@ -8456,11 +8788,14 @@ static int selftest(const char*cfgsrc){
       LAY(text_wf(TR(TX_Y_EXIT_CMD),F_M)+40,2*ring_half(188,38)-12,"command field",TR(TX_Y_EXIT_CMD));
       st_check(stl("the system views (BOOT UI / SWITCH / exit reminder): title, hero, status, note, footers and buttons fit in all states"),ok);
       ok=1; view=V_MAIN;
-      for(int lock=0;lock<4;lock++) for(int f=0;f<2;f++) for(int a=0;a<2;a++) for(int x=0;x<NXROW;x++){
+      for(int lock=0;lock<4;lock++) for(int f=0;f<2;f++) for(int a=0;a<2;a++) for(int x=0;x<=X_SWITCH;x++){
           const char*label,*sub,*val; int lk; bs.lock=lock; bs.flag=f; bs.a_bin=a; bs.n_stock=0; xrow_text(x,&label,&sub,&val,&lk);
           LAY(text_wf(sub,F_XS),KB[KXSUB].maxw,"row subline",sub); LAY(94+text_wf(label,F_S)+12+(val?text_wf(val,F_M):0),lk?388:372,"row label+value",label);
       }
-      LAY(text_wf(TR(TX_X_CAP),F_XS),250,"section heading",TR(TX_X_CAP));
+      /* v6.17: section headers (name + the widest summary + chevron) and the DIAGNOSTICS entry */
+      for(int q=0;q<NSEC;q++){ char sm[40]; int ktm=SET[S_TIMEMODE].val, kon=sch.on, khm=sch.hm; SET[S_TIMEMODE].val=0; sch.on=1; sch.hm=22*60+45; sec_summary(q,sm,sizeof sm); SET[S_TIMEMODE].val=ktm; sch.on=kon; sch.hm=khm;
+          LAY(94+text_wf(TR(SEC_NAME[q]),F_S)+14+text_wf(sm,F_XS),366,"section header (name + summary)",TR(SEC_NAME[q])); }
+      LAY(94+text_wf(TR(TX_PG_DIAG),F_S)+14+text_wf(TR(TX_DV_DOWN),F_S),366,"DIAGNOSTICS entry (name + status)",TR(TX_PG_DIAG));
       st_check(stl("SYSTEM rows BOOT UI / SWITCH: label, value and subline (incl. all lock reasons) fit in the row"),ok);
       /* ---- DIAGNOSE: the top 14 cells, the boot block and the ABOUT block ---- */
       ok=1; { char v[DG_NB][28]; uint32_t col[DG_NB]; char exe[160],evt[128],pids[48],lng[96]; char tv[DG_N][28]; uint32_t tc[DG_N];
@@ -8489,11 +8824,11 @@ static int selftest(const char*cfgsrc){
       { int ks=lang_src; for(lang_src=LS_DEFAULT;lang_src<=LS_SESSION;lang_src++){ diag_lang_text(lng,sizeof lng); LAY(text_wf(lng,F_S),DG_FULL_W,"ABOUT: UI language line",lng); } lang_src=ks; }
       LAY(text_wf(PRODUCT " " MERAKIPLUS_VERSION,F_S),DG_FULL_W,"ABOUT: wordmark + version",PRODUCT " " MERAKIPLUS_VERSION);
       /* v6.10: the PRESSURE · ESTIMATE block — anchor 1..15 bar, the now line with a 5-digit raw value in all three forms, the notes, the toast */
-      { uint16_t k51=reg[51]; int kph=act.ph,kv=SET[S_PIPRESS].val; char anc[64],nw[64],n2[64],tb[96]; uint32_t c;
+      { uint16_t k51=reg[51]; int kph=act.ph,kv=SET[S_PIPRESS].val; char anc[64],nw[64],tb[96]; uint32_t c;
         LAY(text_wf(TR(TX_DG_PCAP),F_XS),250,"diagnose heading",TR(TX_DG_PCAP));
         for(int av=1;av<=15;av+=14) for(int q=0;q<4;q++){ SET[S_PIPRESS].val=av; reg[51]=(uint16_t)(q==0?1790*av/4:(q==1?1790*4/av:65535)); act.ph=q==3?PH_EXT:PH_READY;
-            diag_press_text(anc,sizeof anc,nw,sizeof nw,&c,n2,sizeof n2);
-            LAY(text_wf(anc,F_S),DG_FULL_W,"PRESSURE · ESTIMATE: anchor line",anc); LAY(text_wf(nw,F_S),DG_FULL_W,"PRESSURE · ESTIMATE: now line",nw); LAY(text_wf(n2,F_XS),DG_FULL_W,"PRESSURE · ESTIMATE: note 2",n2);
+            diag_press_text(anc,sizeof anc,nw,sizeof nw,&c);
+            LAY(text_wf(anc,F_S),DG_FULL_W,"PRESSURE · ESTIMATE: anchor line",anc); LAY(text_wf(nw,F_S),DG_FULL_W,"PRESSURE · ESTIMATE: now line",nw);
             snprintf(tb,sizeof tb,TR(TX_T_PINFO),p_anchor_bar(),P_ANCHOR_RAW); LAY(text_wf(tb,F_XS),TOAST_TW,"basis toast",tb); }
         reg[51]=k51; act.ph=kph; SET[S_PIPRESS].val=kv; }
       LAY(text_wf(TR(TX_ST_PULSE),F_M),STAT_PITCH-8,"BAR field: PULSE",TR(TX_ST_PULSE)); LAY(text_wf("65535",F_M),STAT_PITCH-8,"BAR field: raw value","65535"); }
@@ -8513,11 +8848,27 @@ static int selftest(const char*cfgsrc){
         for(int i=0;i<3;i++) LAY(text_wf(TR(cp[i][0]),F_XS)+text_wf(TR(cp[i][1]),F_XS)+12,236,"chart captions (field 236)",TR(cp[i][0]));
         for(int i=0;i<3;i++) LAY(text_wf(TR(cp[i][0]),F_XS)+text_wf(TR(TX_C_RAW),F_XS)+12,236,"chart caption + RAW tag (v6.9)",TR(TX_C_RAW));
         /* v6.11: the hint lines in the empty chart field (field HINT_W, 4 px margin on each side) — every text that can appear there */
-        { static const short hl[]={TX_C_HINT,TX_C_HINT2,TX_C_DIAGREF,TX_G_RO,TX_G_BUSY,TX_G_WAIT,TX_G_NOCFG,TX_G_OOR};
+        { static const short hl[]={TX_C_HINT,TX_C_DIAGREF,TX_G_RO,TX_G_BUSY,TX_G_WAIT,TX_G_NOCFG,TX_G_OOR};
           for(size_t i=0;i<sizeof hl/sizeof hl[0];i++) LAY(text_wf(TR(hl[i]),F_XS),HINT_W-8,"chart hint (field 304, v6.11)",TR(hl[i]));
           char eb[96]; snprintf(eb,sizeof eb,TR(TX_C_ERRCODE),"E3"); LAY(text_wf(eb,F_XS),HINT_W-8,"chart hint (field 304, v6.11)",eb); } }
-      for(int k=0;k<4;k++){ LAY(text_wf(TR(STOP_BTN[k]),stop_font(1)),STOP_PILL1_W-28,"STOP button (v6.13: pill 160, F_S)",TR(STOP_BTN[k]));
-                            LAY(text_wf(TR(STOP_BTN[k]),stop_font(2)),STOP_PILL2_W-28,"STOP button, two side by side (v6.13: pill 136, F_XS)",TR(STOP_BTN[k])); }
+      for(int k=0;k<4;k++){ LAY(text_wf(TR(STOP_BTN[k]),stop_font(1)),STOP_PILL1_W-28,"STOP button (v6.17: pill 216, F_M)",TR(STOP_BTN[k]));
+                            LAY(text_wf(TR(STOP_BTN[k]),stop_font(2)),STOP_PILL2_W-28,"STOP button, two side by side (v6.17: pill 152, F_S)",TR(STOP_BTN[k])); }
+      /* v6.17: HOLD TO START (icon + text in the pill), the page titles (icon + name, in the chord at y 44..62), the live lines (widest
+       * values, °C and °F; every guard text that can stand there) and the icons' targets on HOME (pitch 60 px, >= 8 px between two) */
+      for(int k=0;k<4;k++) LAY(text_wf(ACT_ICON[k],F_IC)+10+text_wf(TR(TX_B_START),F_S),START_W-32,"HOLD TO START pill",TR(TX_B_START));
+      for(int pg=PG_GRIND;pg<=PG_DIAG;pg++) LAY(page_title_w(pg),2*chord_half(PG_TITLE_Y,20)-16,"page title",page_title(pg));
+      { int ktu=SET[S_TUNIT].val; uint16_t kr[REGN]; int ks[REGN]; memcpy(kr,reg,sizeof reg); memcpy(ks,reg_seen,sizeof reg_seen); ms_t klr=last_rx_ms; char lv[96];
+        for(int tu=0;tu<2;tu++){ SET[S_TUNIT].val=tu; reg[38]=(uint16_t)-9999; reg[40]=reg[42]=reg[47]=reg[48]=1500; reg_seen[38]=reg_seen[40]=reg_seen[42]=reg_seen[47]=reg_seen[48]=1; reg[33]=0x0101; reg[34]=reg[35]=reg[36]=0; reg[1]=0; last_rx_ms=1000000000L;
+            for(int pg=PG_GRIND;pg<=PG_SYS;pg++){ page_live_text(pg,lv,sizeof lv,1000000000L); LAY(text_wf(lv,F_XS),LIVE_W,"page live line",lv); LAY(text_wf(lv,F_XS),2*chord_half(PG_LIVE_Y,11)-12,"page live line (chord)",lv); } }
+        { static const short gl[]={TX_G_RO,TX_G_NOLINK,TX_G_ERROR,TX_G_SLEEP,TX_G_BUSY,TX_G_NOCFG,TX_G_OOR,TX_G_GRINDTIME,TX_G_WATERMAN,TX_DV_VERSION_RO};
+          for(size_t i=0;i<sizeof gl/sizeof gl[0];i++) LAY(text_wf(TR(gl[i]),F_XS),LIVE_W,"page live line (guard text)",TR(gl[i])); }
+        memcpy(reg,kr,sizeof reg); memcpy(reg_seen,ks,sizeof reg_seen); last_rx_ms=klr;
+        for(int tu=0;tu<2;tu++){ SET[S_TUNIT].val=tu; int kv[4]={SET[S_GRINDW].val,SET[S_BREWW].val,SET[S_HOTW].val,SET[S_STEAMT].val};
+            SET[S_GRINDW].val=SET[S_GRINDW].hi; SET[S_BREWW].val=SET[S_BREWW].hi; SET[S_HOTW].val=SET[S_HOTW].hi; SET[S_STEAMT].val=SET[S_STEAMT].hi; home_model(1000000000L);
+            for(int k=0;k<4;k++){ LAY(text_wf(hm.alab[k],F_XS),60-8,"icon target (pitch 60)",hm.alab[k]); }
+            LAY(text_wf(hm.alab[0],F_XS)/2+(ACT_X[1]-ACT_X[0])*1.5f,chord_half(ACT_LAB_Y,11)-4,"icon targets (outermost within the chord)",hm.alab[0]);
+            SET[S_GRINDW].val=kv[0]; SET[S_BREWW].val=kv[1]; SET[S_HOTW].val=kv[2]; SET[S_STEAMT].val=kv[3]; }
+        SET[S_TUNIT].val=ktu; }
       for(int k=0;k<4;k++){ char sb[96]; snprintf(sb,sizeof sb,TR(TX_H_STARTING),TR(ACT_NAME[k])); LAY(text_wf(sb,F_XS),KB[KSUB].maxw,"HOME subline",sb); }
       LAY(hypotf(brand_wf(F_XS)/2,(float)(CY-HOME_BRAND_Y)),196.5f-4,"HOME title line (must lie within the progress ring r 196.5)",PRODUCT);
       LAY(HOME_BRAND_Y+(int)FS[F_XS].cap+8,76,"HOME title line (clear of the phase chip y 76)",PRODUCT);
@@ -8593,31 +8944,32 @@ static int selftest(const char*cfgsrc){
       ms_t tn=40000; char cp[460],kcfg[256],kbak[256],rnl[500]; strcpy(kcfg,cfg_path); strcpy(kbak,cfg_bakdir);
       snprintf(cp,sizeof cp,"%s/config_lang.json",dir); copy_file(cfgsrc,cp); snprintf(cfg_path,sizeof cfg_path,"%s",cp); snprintf(cfg_bakdir,sizeof cfg_bakdir,"%s/langbak",dir); snprintf(rnl,sizeof rnl,"%s/RESTART_NEEDED",cfg_bakdir);
       unlink(lp); lang_load(); settings_load(); char md0[33]; strcpy(md0,cfg_md5); int cw0=cfg_writes, stock0=sv(S_LANG);
-#define UL_PREP() do{ sim_ready(tn); memset(&wq,0,sizeof wq); memset(&sav,0,sizeof sav); act.pending=ACT_NONE; view=V_MAIN; page=PG_T2; sel=-1; xsel=-1; tr.type=0; run=1; toast.dur=0; rip.on=0; memset(scroll,0,sizeof scroll); txq_len=0; }while(0)
+#define UL_PREP() do{ sim_ready(tn); memset(&wq,0,sizeof wq); memset(&sav,0,sizeof sav); act.pending=ACT_NONE; view=V_MAIN; page=PG_SYS; sec_open=SEC_DISPLAY; sel=-1; xsel=-1; tr.type=0; run=1; toast.dur=0; rip.on=0; memset(scroll,0,sizeof scroll); txq_len=0; }while(0)
+#define UL_ROW (T_ROW0+1)   /* v6.17: SYSTEM > DISPLAY is open: row 0 = the DISPLAY header, row 1 = UI LANGUAGE */
       UL_PREP();
-      st_check("UI LANGUAGE / UI-SPROG is the FIRST row on SYSTEM, is not a config key and has no MCU word; the stock row (config.language) still exists",
-               tier_item(2,0)==S_UILANG&&SET[S_UILANG].key==NULL&&SET[S_UILANG].mcu==M_NONE&&(SET[S_UILANG].flags&SF_LOCAL)&&hit_test(240,row_y0(PG_T2,0)+25,tn)==T_ROW0&&!strcmp(SET[S_LANG].key,"language")&&!(SET[S_LANG].flags&SF_LOCAL));
-      activate(T_ROW0,tn); tr.type=0;
+      st_check("UI LANGUAGE / UI-SPROG is the FIRST row of SYSTEM's first section (DISPLAY; the closed header shows the language's own name), is not a config key and has no MCU word; the stock row (config.language) still exists (STOCK UI section)",
+               SEC_ROWS[SEC_DISPLAY][0]==S_UILANG&&row_find(PG_SYS,RK_SET,S_UILANG)==1&&SET[S_UILANG].key==NULL&&SET[S_UILANG].mcu==M_NONE&&(SET[S_UILANG].flags&SF_LOCAL)&&hit_test(240,row_y0(PG_SYS,1)+25,tn)==UL_ROW&&!strcmp(SET[S_LANG].key,"language")&&!(SET[S_LANG].flags&SF_LOCAL)&&sec_of_set(S_LANG)==SEC_STOCK);
+      activate(UL_ROW,tn); tr.type=0;
       st_check("the row opens the stepper detail with the active language (ENGLISH); the options are ENGLISH / DANSK",view==V_DETAIL&&sel==S_UILANG&&edit_val==LANG_EN&&SET[S_UILANG].lo==0&&SET[S_UILANG].hi==1&&hit_test(396,184,tn)==T_PLUS&&hit_test(310,316,tn)==T_SAVE);
       const char*t_en=TR(TX_B_CANCEL); static_dirty=0;
       ui_touch(TE_DOWN,396,184,tn); ui_touch(TE_UP,396,184,tn);
       st_check("+ : LIVE — the whole UI switches to Danish immediately (lookup per render, static layer redrawn); nothing is written yet",edit_val==LANG_DA&&ui_lang==LANG_DA&&static_dirty==1&&TR(TX_B_CANCEL)!=t_en&&!strcmp(TR(TX_B_CANCEL),"ANNULLER")&&SET[S_UILANG].val==LANG_EN&&access(lp,F_OK)!=0);
       ui_frame(tn+40); tr.type=0;
-      { char l[112]; const char*l1,*l2; detail_text(S_UILANG,l,sizeof l,&l1,&l2); st_check("  the detail shows 'ENGLISH / DANSK' (endonyms) and points to its own file + the unchanged stock language",!strcmp(l,"ENGLISH / DANSK")&&l1==TR(TX_D_LANG_L1)&&l2==TR(TX_D_LANG_L2)); }
+      { char l[112], sm[40]; detail_text(S_UILANG,l,sizeof l); sec_summary(SEC_DISPLAY,sm,sizeof sm); st_check("  the detail shows 'ENGLISH / DANSK' (endonyms); the DISPLAY header's summary is the live language's own name",!strcmp(l,"ENGLISH / DANSK")&&!strcmp(sm,"DANSK")); }
       activate(T_CANCEL,tn); tr.type=0;
       st_check("CANCEL: back to English, no file",view==V_MAIN&&ui_lang==LANG_EN&&SET[S_UILANG].val==LANG_EN&&access(lp,F_OK)!=0);
-      activate(T_ROW0,tn); tr.type=0; ui_touch(TE_DOWN,396,184,tn); ui_touch(TE_UP,396,184,tn); activate(T_SAVE,tn); tr.type=0;
+      activate(UL_ROW,tn); tr.type=0; ui_touch(TE_DOWN,396,184,tn); ui_touch(TE_UP,396,184,tn); activate(T_SAVE,tn); tr.type=0;
       st_check("SAVE: file = \"da\", the language is Danish, the confirmation is in the NEW language, the view closes",file_is(lp,"da")&&ui_lang==LANG_DA&&SET[S_UILANG].val==LANG_DA&&lang_src==LS_FILE&&view==V_MAIN&&!sav.active&&!strcmp(toast.msg,STR[LANG_DA][TX_T_LANG_SAVED]));
       cfg_read(); int v_lang=-1; cfg_get_int("language",&v_lang);
       st_check("SAVE does NOT touch stock: config.json md5 unchanged, config.language unchanged, 0 config writes, no RESTART_NEEDED, no backup directory",!strcmp(cfg_md5,md0)&&v_lang==stock0&&cfg_writes==cw0&&access(rnl,F_OK)!=0&&access(cfg_bakdir,F_OK)!=0);
       st_check("SAVE sends NO cmd6 frame (write queue empty, 0 bytes to the UART) — the frame policy is untouched",wq.n==0&&txq_len==0&&wq.n_block==0);
       ui_lang=LANG_EN; lang_src=LS_DEFAULT; lang_load(); settings_load();
       st_check("'restart' (lang_load + settings_load): Danish is remembered from the file",ui_lang==LANG_DA&&lang_src==LS_FILE&&SET[S_UILANG].val==LANG_DA);
-      UL_PREP(); activate(T_ROW0,tn); tr.type=0; ui_touch(TE_DOWN,84,184,tn); ui_touch(TE_UP,84,184,tn); int live_en=ui_lang==LANG_EN; activate(T_SAVE,tn); tr.type=0;
+      UL_PREP(); activate(UL_ROW,tn); tr.type=0; ui_touch(TE_DOWN,84,184,tn); ui_touch(TE_UP,84,184,tn); int live_en=ui_lang==LANG_EN; activate(T_SAVE,tn); tr.type=0;
       st_check("− and SAVE: back to English, file = \"en\", confirmation in English",live_en&&file_is(lp,"en")&&ui_lang==LANG_EN&&!strcmp(toast.msg,STR[LANG_EN][TX_T_LANG_SAVED]));
       { int ok=cfg_set_int("language",3); settings_load(); int a=sv(S_LANG)==3&&ui_lang==LANG_EN&&file_is(lp,"en"); ok&=cfg_set_int("language",stock0); settings_load();
         st_check("conversely: the stock LANGUAGE (config.language 0 -> 3 -> back) changes neither the UI language nor the lang file",ok&&a&&sv(S_LANG)==stock0&&ui_lang==LANG_EN); }
-      snprintf(lang_path,sizeof lang_path,"%s",nodir); UL_PREP(); activate(T_ROW0,tn); tr.type=0; ui_touch(TE_DOWN,396,184,tn); ui_touch(TE_UP,396,184,tn); activate(T_SAVE,tn); tr.type=0;
+      snprintf(lang_path,sizeof lang_path,"%s",nodir); UL_PREP(); activate(UL_ROW,tn); tr.type=0; ui_touch(TE_DOWN,396,184,tn); ui_touch(TE_UP,396,184,tn); activate(T_SAVE,tn); tr.type=0;
       st_check("the file cannot be written: the language applies anyway (this session), warning in a toast, DIAGNOSE source = not saved",ui_lang==LANG_DA&&lang_src==LS_SESSION&&view==V_MAIN&&!strcmp(toast.msg,STR[LANG_DA][TX_T_LANG_NOFILE])&&access(nodir,F_OK)!=0);
       { int ok=1; for(int lg=0;lg<NLANG;lg++){ lang_set(lg); settings_load(); UL_PREP(); static_dirty=1; force_all=1; ui_frame(tn+100);
             const char*g=act_guard(ACT_BREW,tn+100); ok&=(g==NULL); reg[35]=1; ok&=!strcmp(err_text(),STR[lg][TX_ER_E2_BREW])&&!strcmp(ph_name(PH_ERROR),STR[lg][TX_PH_ERROR]); reg[35]=0;
@@ -8644,6 +8996,7 @@ static int selftest(const char*cfgsrc){
     st_press(cfgsrc,dir);
     /* ============================ v6.11 ============================ */
     st_v611();
+    st_v617();
     /* ============================ v6.15 ============================ */
     st_graph();
     printf("== selftest [%s]: %s (%d checks, %d failed) — work dir %s ==\n",LANG_CODE[base_lang],st_fail?"FAILED":"ALL OK",st_n,st_fail,dir);
@@ -8680,7 +9033,7 @@ static void bench(void){
     double avg=(msnow()-t0)/n;
     printf("bench brew (animated gauge+chart+numbers): avg %.3f ms/frame, max %.3f ms (host)\n",avg,mx);
     t0=msnow(); for(int i=0;i<200;i++){ force_all=1; static_dirty=1; compose(sim_now); } printf("bench full rebuild (static+all):       %.3f ms/frame (host)\n",(msnow()-t0)/200);
-    sim_reset(); sim_run(500); t0=msnow(); n=0; go_page(PG_T0,1,sim_now); while(tr.type){ sim_run(33); n++; } printf("bench slide transition:               %.3f ms/frame over %d frames (host)\n",(msnow()-t0)/(n?n:1),n);
+    sim_reset(); sim_run(500); t0=msnow(); n=0; go_page(PG_BREW,1,sim_now); while(tr.type){ sim_run(33); n++; } printf("bench slide transition:               %.3f ms/frame over %d frames (host)\n",(msnow()-t0)/(n?n:1),n);
     sim_reset(); sim_run(3000); t0=msnow(); for(int i=0;i<300;i++) sim_run(33); printf("bench idle (no change):               %.3f ms/frame (host)\n",(msnow()-t0)/300);
 }
 int main(int argc,char**argv){
@@ -8726,53 +9079,54 @@ int main(int argc,char**argv){
     sim_reset(); reg[1]=1; reg[33]=0x0001; reg[40]=852; reg[47]=1025; sim_run(1500); dump(out,"11_home_sleep");
     sim_reset(); reg[35]=0x01; sim_run(1500); dump(out,"12_home_error");
     sim_reset(); rx_bad=3; last_bad_ms=sim_now; sim_run(1500); dump(out,"13_home_crc_warning");
-    sim_reset(); page=PG_T0; sim_run(600); dump(out,"14_list_bryg");
-    sim_reset(); page=PG_T0; sim_run(300); ui_touch(TE_DOWN,240,300,sim_now); sim_run(60); ui_touch(TE_MOVE,240,220,sim_now); sim_run(60); ui_touch(TE_MOVE,240,150,sim_now); sim_run(120); dump(out,"15_list_bryg_scrolled"); ui_touch(TE_UP,240,150,sim_now);
-    sim_reset(); page=PG_T1; sim_run(300); ui_touch(TE_DOWN,240,180,sim_now); sim_run(100); dump(out,"16_list_dampvand_pressed");
-    sim_reset(); page=PG_T2; sim_run(600); dump(out,"17_list_system");
-    sim_reset(); page=PG_T0; sim_run(300); detail_open(S_BREWT,sim_now); sim_run(900); dump(out,"18_detail_brewtemp");
+#define PV_SEC(sc_) do{ page=PG_SYS; sec_open=(sc_); scroll[PG_SYS]=clampf((float)((sc_)*ROW_P),0,scroll_max(PG_SYS)); static_dirty=1; }while(0)   /* v6.17: SYSTEM with one section opened */
+    /* v6.17: the BREW page (tap on the cup icon): title, live line, the feature's six settings (four in view), HOLD TO START */
+    sim_reset(); page=PG_BREW; sim_run(600); dump(out,"14_page_brew");
+    sim_reset(); page=PG_BREW; sim_run(300); ui_touch(TE_DOWN,240,300,sim_now); sim_run(60); ui_touch(TE_MOVE,240,220,sim_now); sim_run(60); ui_touch(TE_MOVE,240,150,sim_now); sim_run(120); dump(out,"15_page_brew_scrolled"); ui_touch(TE_UP,240,150,sim_now);
+    sim_reset(); page=PG_STEAM; sim_run(300); ui_touch(TE_DOWN,240,180,sim_now); sim_run(100); dump(out,"16_page_steam_row_pressed"); memset(&tch,0,sizeof tch);
+    sim_reset(); page=PG_SYS; sim_run(600); dump(out,"17_system");                 /* v6.17: SYSTEM closed — four sections + DIAGNOSTICS, no scrolling */
+    sim_reset(); page=PG_BREW; sim_run(300); detail_open(S_BREWT,sim_now); sim_run(900); dump(out,"18_detail_brewtemp");
     tap(396,184); sim_run(120); tap(396,184); sim_run(200); ui_touch(TE_DOWN,396,184,sim_now); sim_run(150); dump(out,"19_detail_brewtemp_changed"); ui_touch(TE_UP,396,184,sim_now);
-    sim_reset(); page=PG_T0; sim_run(300); detail_open(S_PISW,sim_now); sim_run(900); dump(out,"20_detail_enum");
-    sim_reset(); page=PG_T2; sim_run(300); detail_open(S_TZ,sim_now); sim_run(900); dump(out,"21_detail_locked");
-    sim_reset(); page=PG_T0; sim_run(300); detail_open(S_GRINDW,sim_now); sim_run(700);
+    sim_reset(); page=PG_BREW; sim_run(300); detail_open(S_PISW,sim_now); sim_run(900); dump(out,"20_detail_enum");
+    sim_reset(); PV_SEC(SEC_CLOCK); sim_run(300); detail_open(S_TZ,sim_now); sim_run(900); dump(out,"21_detail_locked");
+    sim_reset(); page=PG_GRIND; sim_run(300); detail_open(S_GRINDW,sim_now); sim_run(700);
     ui_touch(TE_DOWN,84,184,sim_now); sim_run(2600); dump(out,"22_detail_hold_accel"); ui_touch(TE_UP,84,184,sim_now);
     /* save OK: MCU ACK simulated + real config persist on a copy */
     snprintf(cfg_path,sizeof cfg_path,"%s",cpy);
-    sim_reset(); page=PG_T0; sim_run(300); detail_open(S_BREWT,sim_now); sim_run(600); tap(396,184); sim_run(100); tap(396,184); sim_run(200);
+    sim_reset(); page=PG_BREW; sim_run(300); detail_open(S_BREWT,sim_now); sim_run(600); tap(396,184); sim_run(100); tap(396,184); sim_run(200);
     tap(310,316); sim_run(700); dump(out,"23_saved_toast");
     printf("   (save scenario: brewTemper=%d, md5 %s, cmd6 ok=%ld)\n",sv(S_BREWT),cfg_md5,wq.n_ok);
     /* save FAILED: no ACK */
-    sim_reset(); wq.sim_ack=0; page=PG_T0; sim_run(300); detail_open(S_BREWW,sim_now); sim_run(600); tap(396,184); sim_run(200);
+    sim_reset(); wq.sim_ack=0; page=PG_BREW; sim_run(300); detail_open(S_BREWW,sim_now); sim_run(600); tap(396,184); sim_run(200);
     tap(310,316); sim_run(160); dump(out,"24_detail_saving"); sim_run(700); dump(out,"25_save_fail_no_ack");
     printf("   (failure scenario: autobrewWeight=%d unchanged, retx=%ld fail=%ld)\n",sv(S_BREWW),wq.n_retx,wq.n_fail);
     snprintf(cfg_path,sizeof cfg_path,"%s",cfgsrc);
     sim_reset(); page=PG_DIAG; sim_run(600); dump(out,"26_diag");
-    sim_reset(); sim_run(1500); go_page(PG_T0,1,sim_now); sim_run(110); dump(out,"27_slide_transition");
-    sim_reset(); sim_run(1500); tap(150,372); sim_run(400); dump(out,"28_home_tap_hint_toast");
+    sim_reset(); sim_run(1500); tap(ACT_X[ACT_BREW],ACT_Y); sim_run(77); dump(out,"27_slide_transition");   /* v6.17: a tap on the cup icon slides the BREW page in */
+    sim_reset(); sim_run(1500); tap(150,372); sim_run(700); dump(out,"28_page_grind_from_tap");   /* v6.17: a tap on the bean icon opens the GRIND page (v6.16: a toast "HOLD THE BUTTON TO START") */
     sim_reset(); sim_run(1500); ui_touch(TE_DOWN,330,372,sim_now); sim_run(800); ui_touch(TE_UP,330,372,sim_now); sim_run(500); dump(out,"29_home_steam_armed");
     /* ---- v6.1: spec alignment ---- */
-    sim_reset(); page=PG_T0; sim_run(300); detail_open(S_PITIME,sim_now); sim_run(900); dump(out,"30_detail_estimate_hint");
-    sim_reset(); page=PG_T1; sim_run(300); detail_open(S_HOTT,sim_now); sim_run(900); dump(out,"31_detail_sensor_vandtemp");
-    sim_reset(); page=PG_T0; sim_run(300); detail_open(S_BREAK,sim_now); sim_run(900); dump(out,"32_detail_breaktime_locked");
-    sim_reset(); page=PG_T2; sim_run(300); detail_open(S_LANG,sim_now); sim_run(600); for(int k=0;k<7;k++){ tap(396,184); sim_run(80); } sim_run(300); dump(out,"33_detail_language");
-    sim_reset(); page=PG_T1; sim_run(300); detail_open(S_STEAMG,sim_now); sim_run(900); dump(out,"34_detail_steam_gear");
-    sim_reset(); page=PG_T2; sim_run(300);
-    for(int k=0;k<2;k++){ ui_touch(TE_DOWN,240,330,sim_now); sim_run(60); ui_touch(TE_MOVE,240,200,sim_now); sim_run(60); ui_touch(TE_MOVE,240,60,sim_now); sim_run(120); ui_touch(TE_UP,240,60,sim_now); sim_run(200); }
-    dump(out,"35_list_system_scrolled");      /* v6.2: the bottom of SYSTEM = STARTUP · UI CHOICE (BOOT UI + SWITCH) */
+    sim_reset(); page=PG_BREW; sim_run(300); detail_open(S_PITIME,sim_now); sim_run(900); dump(out,"30_detail_estimate_hint");
+    sim_reset(); page=PG_WATER; sim_run(300); detail_open(S_HOTT,sim_now); sim_run(900); dump(out,"31_detail_sensor_vandtemp");
+    sim_reset(); PV_SEC(SEC_STOCK); sim_run(300); detail_open(S_BREAK,sim_now); sim_run(900); dump(out,"32_detail_breaktime_locked");
+    sim_reset(); PV_SEC(SEC_STOCK); sim_run(300); detail_open(S_LANG,sim_now); sim_run(600); for(int k=0;k<7;k++){ tap(396,184); sim_run(80); } sim_run(300); dump(out,"33_detail_language");
+    sim_reset(); page=PG_STEAM; sim_run(300); detail_open(S_STEAMG,sim_now); sim_run(900); dump(out,"34_detail_steam_gear");
+    sim_reset(); page=PG_SYS; sim_run(300); tap(240,row_y0(PG_SYS,SEC_STOCK)+25); sim_run(500);
+    dump(out,"35_system_stock_open");         /* v6.17: a tap on the STOCK UI header opens the section at the top: BOOT UI + SWITCH first, then the stock-only config rows */
     /* config out of spec (copy with brewTemper=990): marking, blocked start, the stepper brings it back in */
     { char oor[400]; snprintf(oor,sizeof oor,"%s/_preview_config_oor.json",out); copy_file(cfgsrc,oor);
       snprintf(cfg_path,sizeof cfg_path,"%s",oor); cfg_set_int("brewTemper",990); cfg_set_int("preInfusionPressure",6);
-      sim_reset(); page=PG_T0; sim_run(600); dump(out,"36_list_bryg_out_of_spec");
-      sim_reset(); page=PG_T0; sim_run(300); detail_open(S_BREWT,sim_now); sim_run(900); dump(out,"37_detail_out_of_spec");
+      sim_reset(); page=PG_BREW; sim_run(600); dump(out,"36_page_brew_out_of_spec");
+      sim_reset(); page=PG_BREW; sim_run(300); detail_open(S_BREWT,sim_now); sim_run(900); dump(out,"37_detail_out_of_spec");
       sim_reset(); sim_run(1500); ui_touch(TE_DOWN,210,372,sim_now); sim_run(900); ui_touch(TE_UP,210,372,sim_now); sim_run(300); dump(out,"38_home_start_blocked_out_of_spec");
       printf("   (out-of-spec scenario: brew start %s, cmd6 queued=%d, blocked=%ld)\n",act.pending==ACT_NONE?"BLOCKED":"STARTED",wq.n,wq.n_block);
       snprintf(cfg_path,sizeof cfg_path,"%s",cfgsrc); }
     /* ---- v6.2: boot slot, runtime switch, exit reminder (all against the mock root) ---- */
-#define SYS_BOTTOM() do{ sim_reset(); page=PG_T2; scroll[PG_T2]=scroll_max(PG_T2); }while(0)
-#define ROW_TAP(k) tap(240,(int)(row_y0(PG_T2,(k))-scroll[PG_T2])+25)
-    int nsys=tier_count(2);
+#define SYS_BOTTOM() do{ sim_reset(); PV_SEC(SEC_STOCK); }while(0)                                  /* v6.17: SYSTEM > STOCK UI (v6.2-v6.16: the bottom of the SYSTEM list) */
+#define ROW_TAP(k) tap(240,(int)(row_y0(PG_SYS,(k))-scroll[PG_SYS])+25)
+    int nsys=SEC_STOCK+1;                                                                              /* the row of BOOT UI when STOCK UI is open */
     mock_reset(pvr); mock_slot_b(pvr,0,MB_NONE); mock_flag(pvr,0); mock_self(pvr,"/new_customer/merakiplus/merakiplus"); mock_proc(pvr,MOCK_STOCK_PID,SLOT_A_EXE,"demo_v9",'T',40); mock_rm(pvr,SLOT_A_EXE);
-    SYS_BOTTOM(); sim_run(600); dump(out,"39_list_system_boot_locked");
+    SYS_BOTTOM(); sim_run(600); dump(out,"39_system_stock_boot_locked");
     mock_boot_b(pvr);
     SYS_BOTTOM(); sim_run(300); ROW_TAP(nsys+X_BOOTUI); sim_run(900); dump(out,"40_bootui_detail");
     tap(84,184); sim_run(500); dump(out,"41_bootui_changed");
@@ -8802,7 +9156,7 @@ int main(int argc,char**argv){
     mock_boot_b(pvr);
     /* ---- v6.3: UI language (own file), live switch, ABOUT block ---- */
     { int other=pv_lang==LANG_EN?LANG_DA:LANG_EN, bx=other>pv_lang?396:84;       /* + towards DANSK, − towards ENGLISH */
-      sim_reset(); page=PG_T2; sim_run(300); detail_open(S_UILANG,sim_now); sim_run(900); dump(out,"51_detail_ui_language");
+      sim_reset(); PV_SEC(SEC_DISPLAY); sim_run(300); detail_open(S_UILANG,sim_now); sim_run(900); dump(out,"51_detail_ui_language");
       tap(bx,184); sim_run(500); dump(out,"52_ui_language_live_preview");
       printf("   (language scenario: live preview = %s, saved = %s, file %s)\n",LANG_CODE[ui_lang],LANG_CODE[SET[S_UILANG].val],access(lang_path,F_OK)==0?"exists":"does not exist");
       tap(310,316); sim_run(700); dump(out,"53_ui_language_saved_toast");
@@ -8840,7 +9194,7 @@ int main(int argc,char**argv){
     cs_ws=0x1307; cs_p=1346; for(int q=0;q<8;q++){ cs_w39=q*25; sim_run(1000); } tap(240,268); sim_run(500); dump(out,"69_home_brew_pinfo_toast");
     /* v6.11: UX review — press feedback on the gear and the close chevron (held down), and DIAGNOSE's RAW COUNTERS section */
     sim_reset(); sim_run(1500); ui_touch(TE_DOWN,CX,GEAR_Y,sim_now); sim_run(120); dump(out,"70_home_gear_pressed"); memset(&tch,0,sizeof tch);
-    sim_reset(); page=PG_T0; static_dirty=1; sim_run(400); activate(T_ROW0+3,sim_now); sim_run(400); ui_touch(TE_DOWN,CX,57,sim_now); sim_run(120); dump(out,"71_detail_back_pressed"); memset(&tch,0,sizeof tch);
+    sim_reset(); page=PG_BREW; static_dirty=1; sim_run(400); activate(T_ROW0+1,sim_now); sim_run(400); ui_touch(TE_DOWN,CX,57,sim_now); sim_run(120); dump(out,"71_detail_back_pressed"); memset(&tch,0,sizeof tch);
     sim_reset(); page=PG_DIAG; scroll[PG_DIAG]=DG_RAW-LIST_VY0-12; sim_run(600); dump(out,"72_diag_raw_counters");
     /* v6.13: manual STOP — water: the button held down, "STOPPING WATER…" after release, "WATER STOPPED" once the MCU has cleared the bits;
      * two buttons (brew + latched steam); and "STOP NOT CONFIRMED" when the bits stay set for 5 s */
@@ -8861,11 +9215,22 @@ int main(int argc,char**argv){
     /* v6.16: time & scheduling — the preview clock is 2026-11-18 16:35 local (Wednesday), zone #48 */
 #define PV_SCHED(a_,b_,c_,d_) do{ sch.on=(a_); sch.hm=(b_); sch.rep=(c_); sch.ao=(d_); sch.once_at=0; SET[S_PREHEAT].val=sch.on; SET[S_PHAT].val=sch.hm; SET[S_PHREP].val=sch.rep; SET[S_AUTOOFF].val=sch.ao; }while(0)
     sim_reset(); SET[S_TIMEMODE].val=0; PV_SCHED(1,390,1,0); sim_run(1500); dump(out,"84_home_clock12_preheat");
-    sim_reset(); PV_SCHED(1,390,2,3); page=PG_T2; scroll[PG_T2]=scroll_max(PG_T2); static_dirty=1; sim_run(600); dump(out,"85_list_system_time");
-    sim_reset(); PV_SCHED(1,390,1,0); page=PG_T2; static_dirty=1; sim_run(300); detail_open(S_PHAT,sim_now); sim_run(400); edit_val=405; sim_run(200); dump(out,"86_detail_preheat_at");
-    sim_reset(); page=PG_T2; static_dirty=1; sim_run(300); detail_open(S_TZ,sim_now); sim_run(400); dump(out,"87_detail_timezone");
+    sim_reset(); PV_SCHED(1,390,2,3); PV_SEC(SEC_SCHED); sim_run(600); dump(out,"85_system_schedule_open");
+    sim_reset(); PV_SCHED(1,390,1,0); PV_SEC(SEC_SCHED); sim_run(300); detail_open(S_PHAT,sim_now); sim_run(400); edit_val=405; sim_run(200); dump(out,"86_detail_preheat_at");
+    sim_reset(); PV_SEC(SEC_CLOCK); sim_run(300); detail_open(S_TZ,sim_now); sim_run(400); dump(out,"87_detail_timezone");
     sim_reset(); PV_SCHED(1,390,2,3); arm.n_sent=2; arm.n_ack=2; arm.ad=19; arm.ah=6; arm.am=30; idle_t0=sim_now-754000; page=PG_DIAG; scroll[PG_DIAG]=DG_TIME-LIST_VY0-12; sim_run(600); dump(out,"88_diag_time");
     sim_reset(); PV_SCHED(0,390,1,1); pv_sched=1; idle_t0=sim_now-(15*60000-20000); sim_run(1200); dump(out,"89_home_autooff_warn"); pv_sched=0;
+    /* v6.17: the per-feature pages and the consolidated SYSTEM (docs/ux-audit-v617.md) */
+    sim_reset(); page=PG_BREW; sim_run(600); ui_touch(TE_DOWN,CX,START_Y+START_H/2,sim_now); sim_run(400); dump(out,"90_page_brew_hold_start"); memset(&tch,0,sizeof tch);
+    sim_reset(); page=PG_WATER; sim_run(600); dump(out,"91_page_water");
+    sim_reset(); page=PG_STEAM; sim_run(600); dump(out,"92_page_steam");
+    sim_reset(); sim_link=0; last_rx_ms=sim_now-9000; page=PG_BREW; sim_run(1500); dump(out,"93_page_brew_offline");                 /* the live line says why HOLD TO START is off */
+    sim_reset(); SET[S_GRINDMODE].val=2; page=PG_GRIND; sim_run(600); dump(out,"94_page_grind_mode_time");
+    sim_reset(); page=PG_SYS; sim_run(300); tap(240,row_y0(PG_SYS,SEC_DISPLAY)+25); sim_run(500); dump(out,"95_system_display_open");
+    sim_reset(); SET[S_TIMEMODE].val=0; PV_SCHED(1,390,2,3); page=PG_SYS; sim_run(600); dump(out,"96_system_summaries_12h");            /* closed headers: language, clock (12 h), next pre-heat */
+    sim_reset(); PV_SEC(SEC_CLOCK); sim_run(600); dump(out,"97_system_clock_open");
+    sim_reset(); reg[35]=0x01; sim_run(1500); tap(240,262); sim_run(700); dump(out,"98_diag_from_home_error");                         /* HOME's "CODE E2 · TAP FOR DETAILS" -> DIAGNOSTICS */
+    sim_reset(); page=PG_SYS; sim_run(400); ui_touch(TE_DOWN,CX,PG_TITLE_Y+6,sim_now); sim_run(120); dump(out,"99_page_back_pressed"); memset(&tch,0,sizeof tch);
     return 0;
 }
 #endif

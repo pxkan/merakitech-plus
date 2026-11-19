@@ -1,0 +1,382 @@
+{
+  "name": "ia_navigation",
+  "description": "v6.17 IA with REAL taps (layout targets): HOME icon tap → that feature's page (title/rows/live line) → row → editor → CANCEL → header chevron → HOME; gear → SYSTEM (closed: 4 sections + DIAGNOSTICS) → section opens/closes → row → editor; DIAGNOSTICS row → DIAGNOSTICS → back to SYSTEM → HOME. Navigation sends no frame and changes no config",
+  "duration_s": 34,
+  "ui_only": true,
+  "events": [
+    {
+      "t": 2,
+      "target": "ui",
+      "cmd": "touch",
+      "layout": "brew",
+      "ms": 90
+    },
+    {
+      "t": 3,
+      "target": "runner",
+      "op": "snapshot",
+      "label": "brew-page"
+    },
+    {
+      "t": 4,
+      "target": "ui",
+      "cmd": "touch",
+      "layout": "brew_temp",
+      "ms": 90
+    },
+    {
+      "t": 5,
+      "target": "runner",
+      "op": "snapshot",
+      "label": "brew-temp-editor"
+    },
+    {
+      "t": 6,
+      "target": "ui",
+      "cmd": "touch",
+      "layout": "cancel",
+      "ms": 90
+    },
+    {
+      "t": 8,
+      "target": "ui",
+      "cmd": "touch",
+      "layout": "back",
+      "ms": 90
+    },
+    {
+      "t": 10,
+      "target": "ui",
+      "cmd": "touch",
+      "layout": "steam",
+      "ms": 90
+    },
+    {
+      "t": 11,
+      "target": "runner",
+      "op": "snapshot",
+      "label": "steam-page"
+    },
+    {
+      "t": 12,
+      "target": "ui",
+      "cmd": "touch",
+      "layout": "back",
+      "ms": 90
+    },
+    {
+      "t": 14,
+      "target": "ui",
+      "cmd": "touch",
+      "layout": "gear",
+      "ms": 90
+    },
+    {
+      "t": 15,
+      "target": "runner",
+      "op": "snapshot",
+      "label": "system-closed"
+    },
+    {
+      "t": 16,
+      "target": "ui",
+      "cmd": "touch",
+      "layout": "sec_schedule",
+      "ms": 90
+    },
+    {
+      "t": 17,
+      "target": "runner",
+      "op": "snapshot",
+      "label": "system-schedule"
+    },
+    {
+      "t": 18,
+      "target": "ui",
+      "cmd": "touch",
+      "layout": "preheat_at",
+      "ms": 90
+    },
+    {
+      "t": 20,
+      "target": "ui",
+      "cmd": "touch",
+      "layout": "cancel",
+      "ms": 90
+    },
+    {
+      "t": 22,
+      "target": "ui",
+      "cmd": "touch",
+      "layout": "sec_schedule",
+      "ms": 90
+    },
+    {
+      "t": 24,
+      "target": "ui",
+      "cmd": "touch",
+      "layout": "diag",
+      "ms": 90
+    },
+    {
+      "t": 25,
+      "target": "runner",
+      "op": "snapshot",
+      "label": "diagnostics"
+    },
+    {
+      "t": 26,
+      "target": "ui",
+      "cmd": "touch",
+      "layout": "back",
+      "ms": 90
+    },
+    {
+      "t": 28,
+      "target": "ui",
+      "cmd": "touch",
+      "layout": "back",
+      "ms": 90
+    },
+    {
+      "t": 30,
+      "target": "runner",
+      "op": "snapshot",
+      "label": "home"
+    }
+  ],
+  "expect": [
+    {
+      "kind": "state",
+      "path": "tab",
+      "t": 3,
+      "window": 0.8,
+      "equals": "brew"
+    },
+    {
+      "kind": "page",
+      "t": 3,
+      "window": 0.8,
+      "value": "settings"
+    },
+    {
+      "kind": "state",
+      "path": "shown.rows",
+      "t": 3,
+      "window": 0.8,
+      "equals": 6
+    },
+    {
+      "kind": "state",
+      "path": "shown.live",
+      "t": 3,
+      "window": 0.8,
+      "contains": "°"
+    },
+    {
+      "kind": "page",
+      "t": 5,
+      "window": 0.8,
+      "value": "detail"
+    },
+    {
+      "kind": "state",
+      "path": "shown.param",
+      "t": 5,
+      "window": 0.8,
+      "equals": "brew_temp"
+    },
+    {
+      "kind": "state",
+      "path": "tab",
+      "t": 7,
+      "window": 0.8,
+      "equals": "brew"
+    },
+    {
+      "kind": "page",
+      "t": 7,
+      "window": 0.8,
+      "value": "settings"
+    },
+    {
+      "kind": "page",
+      "t": 9,
+      "window": 0.8,
+      "value": "home"
+    },
+    {
+      "kind": "state",
+      "path": "tab",
+      "t": 9,
+      "window": 0.8,
+      "equals": "home"
+    },
+    {
+      "kind": "state",
+      "path": "tab",
+      "t": 11,
+      "window": 0.8,
+      "equals": "steam"
+    },
+    {
+      "kind": "state",
+      "path": "shown.rows",
+      "t": 11,
+      "window": 0.8,
+      "equals": 2
+    },
+    {
+      "kind": "page",
+      "t": 13,
+      "window": 0.8,
+      "value": "home"
+    },
+    {
+      "kind": "state",
+      "path": "tab",
+      "t": 15,
+      "window": 0.8,
+      "equals": "system"
+    },
+    {
+      "kind": "page",
+      "t": 15,
+      "window": 0.8,
+      "value": "settings"
+    },
+    {
+      "kind": "state",
+      "path": "shown.rows",
+      "t": 15,
+      "window": 0.8,
+      "equals": 5
+    },
+    {
+      "kind": "state",
+      "path": "shown.section",
+      "t": 15,
+      "window": 0.8,
+      "equals": null
+    },
+    {
+      "kind": "state",
+      "path": "shown.section",
+      "t": 17,
+      "window": 0.8,
+      "equals": "schedule"
+    },
+    {
+      "kind": "state",
+      "path": "shown.rows",
+      "t": 17,
+      "window": 0.8,
+      "equals": 9
+    },
+    {
+      "kind": "page",
+      "t": 19,
+      "window": 0.8,
+      "value": "detail"
+    },
+    {
+      "kind": "state",
+      "path": "shown.param",
+      "t": 19,
+      "window": 0.8,
+      "equals": "preheat_at"
+    },
+    {
+      "kind": "state",
+      "path": "shown.section",
+      "t": 21,
+      "window": 0.8,
+      "equals": "schedule"
+    },
+    {
+      "kind": "state",
+      "path": "shown.section",
+      "t": 23,
+      "window": 0.8,
+      "equals": null
+    },
+    {
+      "kind": "state",
+      "path": "shown.rows",
+      "t": 23,
+      "window": 0.8,
+      "equals": 5
+    },
+    {
+      "kind": "page",
+      "t": 25,
+      "window": 0.8,
+      "value": "diag"
+    },
+    {
+      "kind": "state",
+      "path": "tab",
+      "t": 25,
+      "window": 0.8,
+      "equals": "diag"
+    },
+    {
+      "kind": "state",
+      "path": "tab",
+      "t": 27,
+      "window": 0.8,
+      "equals": "system"
+    },
+    {
+      "kind": "page",
+      "t": 30,
+      "window": 0.8,
+      "value": "home"
+    },
+    {
+      "kind": "state",
+      "path": "tab",
+      "t": 30,
+      "window": 0.8,
+      "equals": "home"
+    },
+    {
+      "kind": "phase_hold",
+      "t0": 2,
+      "t1": 33,
+      "value": "READY",
+      "min_ratio": 0.95
+    },
+    {
+      "kind": "config",
+      "t": 32,
+      "field": "brewTemper",
+      "value": 870
+    },
+    {
+      "kind": "state",
+      "path": "sched.preheat",
+      "t": 31,
+      "window": 0.8,
+      "equals": 0
+    },
+    {
+      "kind": "state",
+      "path": "config_writes",
+      "t": 31,
+      "window": 0.8,
+      "equals": 0
+    },
+    {
+      "kind": "sim_log",
+      "assert": "no_writes_between",
+      "t0": 1,
+      "t1": 33,
+      "except_subs": [
+        0,
+        1,
+        112
+      ]
+    }
+  ]
+}

@@ -1,0 +1,142 @@
+{
+  "name": "activity_takes_home",
+  "description": "v6.17: a feature page is the setup for something that is NOT running — the GRIND page is open when steam starts on the machine (wand): the UI slides to HOME (the one live view); SYSTEM, opened on purpose during the steam, stays; after the wand is released the pages open again",
+  "duration_s": 22,
+  "ui_only": true,
+  "events": [
+    {
+      "t": 2,
+      "target": "ui",
+      "cmd": "touch",
+      "layout": "grind",
+      "ms": 90
+    },
+    {
+      "t": 3,
+      "target": "runner",
+      "op": "snapshot",
+      "label": "grind-page"
+    },
+    {
+      "t": 4,
+      "target": "sim",
+      "event": {
+        "type": "wand_down"
+      }
+    },
+    {
+      "t": 6,
+      "target": "runner",
+      "op": "snapshot",
+      "label": "home-steam-wand"
+    },
+    {
+      "t": 7,
+      "target": "ui",
+      "cmd": "touch",
+      "layout": "gear",
+      "ms": 90
+    },
+    {
+      "t": 9,
+      "target": "runner",
+      "op": "snapshot",
+      "label": "system-during-steam"
+    },
+    {
+      "t": 10,
+      "target": "ui",
+      "cmd": "touch",
+      "layout": "back",
+      "ms": 90
+    },
+    {
+      "t": 12,
+      "target": "sim",
+      "event": {
+        "type": "wand_up"
+      }
+    },
+    {
+      "t": 17,
+      "target": "ui",
+      "cmd": "touch",
+      "layout": "water",
+      "ms": 90
+    },
+    {
+      "t": 18.5,
+      "target": "runner",
+      "op": "snapshot",
+      "label": "water-page"
+    }
+  ],
+  "expect": [
+    {
+      "kind": "state",
+      "path": "tab",
+      "t": 3,
+      "window": 0.8,
+      "equals": "grind"
+    },
+    {
+      "kind": "state",
+      "path": "tab",
+      "t": 5.5,
+      "window": 1,
+      "equals": "home"
+    },
+    {
+      "kind": "phase",
+      "t": 6,
+      "window": 1.5,
+      "value": "STEAM"
+    },
+    {
+      "kind": "state",
+      "path": "steam.kind",
+      "t": 6,
+      "window": 1.5,
+      "equals": "wand"
+    },
+    {
+      "kind": "state",
+      "path": "tab",
+      "t": 9,
+      "window": 1,
+      "equals": "system"
+    },
+    {
+      "kind": "state",
+      "path": "tab",
+      "t": 11.2,
+      "window": 0.7,
+      "equals": "home"
+    },
+    {
+      "kind": "state",
+      "path": "tab",
+      "t": 18.5,
+      "window": 1,
+      "equals": "water"
+    },
+    {
+      "kind": "state",
+      "path": "shown.rows",
+      "t": 18.5,
+      "window": 1,
+      "equals": 2
+    },
+    {
+      "kind": "sim_log",
+      "assert": "no_writes_between",
+      "t0": 1,
+      "t1": 21,
+      "except_subs": [
+        0,
+        1,
+        112
+      ]
+    }
+  ]
+}

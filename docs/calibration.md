@@ -45,7 +45,7 @@ The constants can be changed at build time: `-DP_ANCHOR_RAW=… -DP_ANCHOR_BAR_D
 
 | Where | Text (DA / EN) |
 |---|---|
-| HOME, the stat field during brewing | label **≈BAR · EST.**, value e.g. **15.0**; above 20 bar **PULS** / PULSE |
+| HOME, the stat field during brewing | label **≈BAR** (v6.17; v6.10: ≈BAR · EST., v6.11–v6.16: ≈BAR EST.), value e.g. **15.0**; above 20 bar **PULS** / PULSE |
 | HOME, the chart caption (brew, water, idle after a brew) | **TRYK ≈BAR · EST.** / PRESS. ≈BAR · EST. (replaces *TRYK\* UKALIBRERET*) |
 | HOME, tap on the chart or the BAR field | toast (the footnote): **PRÆ-INF. 4 BAR = RÅ 358 · LINEÆR** / PRE-INF. 4 BAR = RAW 358 · LINEAR |
 | DIAGNOSTICS, new block **PRESSURE · ESTIMATE** (between GRAPH and ABOUT) | *ANCHOR · PRE-INF. IN RECORDING* → **4 BAR = RAW 358 · k 0.01117** · *NOW · WORD 51 · PUMP SIDE, LINEAR* → **RAW 1346 = ≈15.0 BAR**, or in amber **RAW 16670 · MAINTENANCE PULSE** (idle) / **RAW … · PULSE, NO PRESSURE** (during an activity) · notes: *ESTIMATE · PUMP SIDE · NOT AT THE PUCK* and *> 20 BAR = PULSE · RAW: GRAPH PILL* |
@@ -55,7 +55,11 @@ The constants can be changed at build time: `-DP_ANCHOR_RAW=… -DP_ANCHOR_BAR_D
 Display only: control logic, writes, auto-stop, guards and thresholds never use bar (build-checked:
 37 control, protocol and conditioning fragments are token-identical to v6.9).
 
-### 16.3 Caveats — why *EST.* and not a calibration
+### 16.3 Caveats — why an estimate (≈) and not a calibration
+
+Up to v6.16 DIAGNOSTICS carried two of these caveats as text under the pressure block (*ESTIMATE · PUMP SIDE ·
+NOT AT THE PUCK*, *> 20 BAR = PULSE · RAW: GRAPH PILL*). v6.17 removed them from the screen; they are (a) and (b) below,
+and the raw series is still DIAGNOSTICS → GRAPH = RAW.
 
 * **(a) Pump side, not the puck.** The linear anchor gives extraction ≈ 15 bar. That is plausible
   for a vibration pump **without an OPV** (budget machine; 12–15 bar is common), but it is the
