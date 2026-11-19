@@ -157,7 +157,7 @@ affected. If the hero should follow faster, raise `CD_A_HERO` (e.g. 0.4 → abou
 {"cmd":"cond","raw":1}                            # = DIAGNOSTICS → GRAPH = RAW
 ```
 State JSON (addition, display only): `cond{…, wdb, gate, hero_snaps}`,
-`chart{mode, active, full, top, raw_max, disp_max, ticks, base_ticks, clipped, n, n_active}`,
+`chart{mode, active, full, top, raw_max, disp_max, ticks, base_ticks, clipped, n, n_active}` (v6.15: + `buf, w_max, w_top, resets, reanchors, act_ms`, §14.7),
 `weight{src, switches, shown}`.
 
 ### 14.6 Before/after figures (graph + weight)
@@ -167,3 +167,39 @@ same sim and seed) and computes per segment what was on the screen. The result i
 `sim/reports/v6.9/calm_stats.txt`, and snapshots are side by side in `calm_chart_v68_v69.png`
 (chart detail) and `calm_full_v68_v69.png` (full screen). The figures are in
 [CHANGES-v6.9](dev/UI_v6.md#changes-v69) item 6.
+
+### 14.7 The graph starts over when an activity starts (v6.15)
+
+**The bug (user report):** starting a grind, brew or hot water tares the weight to 0 (the MCU does
+this), but the graph's 40 s window still held the samples from before the start, for example a
+200–300 g cup that had just been placed on the scale. The weight axis was scaled to that cup step,
+so the 0 → 36 g curve of the actual brew was a nearly flat line at the bottom of the chart.
+
+**What v6.15 does (display only):**
+
+* **Reset on idle → active.** `graph_push()` clears the ring buffer (`g_n = g_head = 0`) and restarts
+  the three chart filters when the main phase (`phase_main()`: grind, pre-infusion/extraction, hot
+  water, or steam on its own) goes from idle to active. The first sample of the activity is the first
+  sample in the ring. The y-autoscale is computed from the ring on every draw, so it follows at once:
+  1 s into a brew the weight axis top is the 10 g floor × 1.08 (108) instead of 250 g × 1.08 (2700).
+* **No reset for a concurrent activity.** A wand flush or steam that starts *during* a brew or grind
+  is not an idle → active transition (the main phase stays BREW/GRIND), so the curve is kept. The same
+  applies to a brew started while steam is running: the main phase changes from STEAM to BREW without
+  passing through idle, so nothing is cleared.
+* **Re-anchor right after the start.** Within 1.5 s of the start the ring is cleared once more if the
+  weight source latches late (a grind started at the machine: the source switches to word 38 after
+  the 300 ms debounce, §14.2) or the tare lands late (the weight drops by more than 2 g in one sample).
+  The cup's pre-tare samples therefore never stay in the curve.
+* **Link gaps are not idle.** OFFLINE samples do not count as idle, so a short link loss during a
+  brew does not wipe the brew curve when the link comes back.
+* **All series.** There is one ring buffer for pressure (word 51), weight (38/39) and milk temperature
+  (48), so all three are relative to the activity. Flow (word 52) is a stat number without history.
+* **Unchanged:** `reg[]`, the state JSON's `regs`/`regs_s`, writes, the frame policy, auto-stop,
+  thresholds, guards and the phase logic. DIAGNOSTICS → GRAPH = RAW still shows the raw
+  (unconditioned) values; after a start that is the raw series of the fresh ring.
+* **State JSON (SIM build):** `chart` now also has `buf` (samples in the ring), `w_max`/`w_top`
+  (the weight line's maximum and axis top in brew/water mode, 0.1 g), `resets`, `reanchors` and
+  `act_ms` (ms since the current curve started, −1 = none yet).
+
+The x-axis stays a 40 s window, so early in an activity the curve starts part-way across the chart
+and grows to the right, as before.

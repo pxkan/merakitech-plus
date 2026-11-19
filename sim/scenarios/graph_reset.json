@@ -1,0 +1,144 @@
+{
+  "name": "graph_reset",
+  "description": "v6.15 graph reset: a 250 g cup on the scale at rest, then a brew (the MCU tares word 39) — the HOME graph clears on idle→active and scales to the brew; a wand flush during the brew does not clear it",
+  "duration_s": 46,
+  "events": [
+    {
+      "t": 1,
+      "target": "sim",
+      "event": {
+        "type": "set_reg",
+        "word": 39,
+        "value": 2500
+      }
+    },
+    {
+      "t": 7,
+      "target": "runner",
+      "op": "snapshot",
+      "label": "cup-at-rest"
+    },
+    {
+      "t": 8,
+      "target": "ui",
+      "cmd": "action",
+      "name": "brew"
+    },
+    {
+      "t": 18,
+      "target": "sim",
+      "event": {
+        "type": "wand_down"
+      }
+    },
+    {
+      "t": 22,
+      "target": "sim",
+      "event": {
+        "type": "wand_up"
+      }
+    },
+    {
+      "t": 20,
+      "target": "runner",
+      "op": "snapshot",
+      "label": "flush-under-brew"
+    },
+    {
+      "t": 32,
+      "target": "runner",
+      "op": "snapshot",
+      "label": "extraction-full-scale"
+    }
+  ],
+  "expect": [
+    {
+      "kind": "phase_seq",
+      "t0": 0,
+      "t1": 46,
+      "values": [
+        "READY",
+        "PRE",
+        "EXT",
+        "READY"
+      ]
+    },
+    {
+      "kind": "word_hold",
+      "word": 39,
+      "t0": 2,
+      "t1": 7.5,
+      "min": 2400,
+      "max": 2600,
+      "signed": true
+    },
+    {
+      "kind": "chart",
+      "label": "rest",
+      "t0": 2,
+      "t1": 7.5,
+      "field": "resets",
+      "max": 0
+    },
+    {
+      "kind": "chart",
+      "label": "cleared",
+      "t0": 10,
+      "t1": 11,
+      "field": "buf",
+      "min": 1,
+      "max": 35
+    },
+    {
+      "kind": "chart",
+      "label": "one-reset",
+      "t0": 10,
+      "t1": 34,
+      "field": "resets",
+      "min": 1,
+      "max": 1
+    },
+    {
+      "kind": "chart",
+      "label": "kept-under-flush",
+      "t0": 19,
+      "t1": 22,
+      "field": "buf",
+      "min": 90,
+      "mode": "any"
+    },
+    {
+      "kind": "chart",
+      "label": "weight-axis",
+      "t0": 28,
+      "t1": 34,
+      "field": "w_top",
+      "min": 100,
+      "max": 420
+    },
+    {
+      "kind": "chart",
+      "label": "weight-curve",
+      "t0": 28,
+      "t1": 34,
+      "field": "w_max",
+      "min": 150,
+      "mode": "any"
+    },
+    {
+      "kind": "phase",
+      "t": 20,
+      "window": 1.5,
+      "value": "STEAM"
+    },
+    {
+      "kind": "word_hold",
+      "word": 39,
+      "t0": 10,
+      "t1": 34,
+      "min": -10,
+      "max": 365,
+      "signed": true
+    }
+  ]
+}

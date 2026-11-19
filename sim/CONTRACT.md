@@ -444,3 +444,16 @@ The contract and ADDENDUM v6.4/v6.5/v6.6 (UI work stream) are unchanged. Full do
 * The `--quick` subset is unchanged (the power scenarios are run specifically: `--scenario power_off_wake` or `--all`).
 
 *— test work stream, 2026-11-18 (v6.14-sim). Local only; the device was not touched; `artifacts/ourui/*` and `boot/` were not touched. Reports: `sim/reports/v6.14-sim/`.*
+
+---
+
+## ADDENDUM v6.15 — the HOME graph resets on activity start (state.chart fields, expect kind `chart`)
+
+**Date:** 2026-11-19 · **Applies to:** `sim/run_e2e.py`, `sim/scenarios/graph_reset.json`, `sim/sim_ui_profile-ref.json`. The contract above is **unchanged**; everything here is additive.
+
+* **ourui SIM build, state JSON:** `chart` keeps its v6.9 fields and adds `buf` (samples in the graph ring), `w_max` / `w_top` (the weight line's maximum and axis top in brew/water mode, 0.1 g; 0 in other modes), `resets` (idle → active clears since start), `reanchors` (re-clears within 1.5 s of a start: late tare / late weight-source latch) and `act_ms` (ms since the current curve started, −1 = none). Display only: `regs`/`regs_s` stay raw.
+* **Expect kind `chart`** (`run_e2e.py`): `{"kind":"chart","t0":…,"t1":…,"field":"buf","min":…,"max":…,"mode":"any"?}` — every sample in the window that has `chart.<field>` must be in `[min,max]` (`"mode":"any"`: at least one). Extra keys (e.g. `"label"`) are ignored by the evaluator and let profiles match one expectation exactly.
+* **Scenario `graph_reset`** (46 s): `set_reg` word 39 = 2500 (a 250 g cup) at rest → UI brew at 8 s (the sim tares word 39) → `wand_down`/`wand_up` at 18/22 s (flush during the extraction). Green against the ourui v6.15 SIM build (EN + DA, 21/21).
+* **REF profile:** the reference client has no HOME graph, so `sim_ui_profile-ref.json` replaces the 6 `chart` expectations 1:1 with phase/word checks for the same windows (`phase` READY/PRE/STEAM, `phase_hold` EXT, `word_hold`/`word_min_seen` 39). Green against the reference client (21/21).
+* `--quick` is unchanged (run `--scenario graph_reset` or `--all`).
+

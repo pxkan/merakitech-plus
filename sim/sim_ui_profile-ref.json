@@ -305,6 +305,38 @@
         "keep": ["t"],
         "why": "REF oracle: the reference client exposes lang_patch and persists 0. ourui: not exposed, 'LOCKED' (UI_v6.md §4.5) — the scenario default requires an unchanged 1."
       }
+    ],
+    "graph_reset": [
+      {
+        "match": {"kind": "chart", "label": "rest"},
+        "replace": {"kind": "phase", "t": 5, "window": 1.5, "value": "READY"},
+        "why": "REF oracle: the reference client has no HOME graph (state.chart is ourui-only, v6.15). The graph-reset checks are replaced 1:1 by phase/word checks for the same window, which prove the sim side (cup at rest, tare at start, brew + flush) for the oracle."
+      },
+      {
+        "match": {"kind": "chart", "label": "cleared"},
+        "replace": {"kind": "phase", "t": 10.5, "window": 1.0, "value": "PRE"},
+        "why": "REF oracle: the reference client has no HOME graph (state.chart is ourui-only, v6.15). The graph-reset checks are replaced 1:1 by phase/word checks for the same window, which prove the sim side (cup at rest, tare at start, brew + flush) for the oracle."
+      },
+      {
+        "match": {"kind": "chart", "label": "one-reset"},
+        "replace": {"kind": "phase_hold", "t0": 23, "t1": 30, "value": "EXT", "min_ratio": 0.9},
+        "why": "REF oracle: the reference client has no HOME graph (state.chart is ourui-only, v6.15). The graph-reset checks are replaced 1:1 by phase/word checks for the same window, which prove the sim side (cup at rest, tare at start, brew + flush) for the oracle."
+      },
+      {
+        "match": {"kind": "chart", "label": "kept-under-flush"},
+        "replace": {"kind": "phase", "t": 20.5, "window": 1.5, "value": "STEAM"},
+        "why": "REF oracle: the reference client has no HOME graph (state.chart is ourui-only, v6.15). The graph-reset checks are replaced 1:1 by phase/word checks for the same window, which prove the sim side (cup at rest, tare at start, brew + flush) for the oracle."
+      },
+      {
+        "match": {"kind": "chart", "label": "weight-axis"},
+        "replace": {"kind": "word_hold", "word": 39, "t0": 28, "t1": 34, "min": -10, "max": 365, "signed": true},
+        "why": "REF oracle: the reference client has no HOME graph (state.chart is ourui-only, v6.15). The graph-reset checks are replaced 1:1 by phase/word checks for the same window, which prove the sim side (cup at rest, tare at start, brew + flush) for the oracle."
+      },
+      {
+        "match": {"kind": "chart", "label": "weight-curve"},
+        "replace": {"kind": "word_min_seen", "word": 39, "t0": 28, "t1": 34, "min": 150, "signed": true},
+        "why": "REF oracle: the reference client has no HOME graph (state.chart is ourui-only, v6.15). The graph-reset checks are replaced 1:1 by phase/word checks for the same window, which prove the sim side (cup at rest, tare at start, brew + flush) for the oracle."
+      }
     ]
   }
 }

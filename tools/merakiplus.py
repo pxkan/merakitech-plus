@@ -41,13 +41,13 @@ import time
 import urllib.request
 from concurrent.futures import ThreadPoolExecutor
 
-VERSION = "6.14"
+VERSION = "6.15"
 REPO = "thomasgrastein/merakitech-plus"
 RAW_BASE = "https://raw.githubusercontent.com/" + REPO + "/{ref}/bin/{name}"
 
 # md5 of the shipped device binaries in bin/ (kept in sync with bin/MD5SUMS by CI).
 BIN_MD5 = {
-    "ourui": "eb4d9360756e391df4cc95f92b875c90",
+    "ourui": "bada0a00a1983cad3bec947f9d2241e9",
     "switcher": "de0d4920e4e80be32e3a70798886a3c0",
     "grab_shim.so": "c42076c807c54d477a5868977404186d",
 }

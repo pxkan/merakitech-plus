@@ -3,17 +3,32 @@
 All notable changes to Meraki+. Details (with evidence, frames and test figures) are in
 [docs/dev/UI_v6.md](docs/dev/UI_v6.md) under *CHANGES-v6.x*. All dates are 2026.
 
-## Unreleased — 2026-11-19
+## [6.15] — 2026-11-19
+### Fixed
+- **The HOME graph resets when an activity starts.** Starting a grind, brew or hot water tares the
+  weight to 0, but the graph's 40 s window still held the history from before the start — e.g. a
+  200–300 g cup placed on the scale — so the y-autoscale was set by the cup step and the 0 → 36 g curve
+  looked flat. The graph (pressure, weight and milk series, and the chart filters) now starts over on
+  the idle → active transition and scales to the activity. A concurrent activity (steam/wand flush
+  during a brew or grind) does not clear it, and a link gap does not count as idle. Within 1.5 s of the
+  start a late tare or late weight-source latch re-anchors the curve once. Display only — regs, control,
+  auto-stop and thresholds are unchanged; DIAGNOSTICS → GRAPH = RAW still shows raw values.
+  See [docs/calibration.md §14.7](docs/calibration.md#147-the-graph-starts-over-when-an-activity-starts-v615).
+- Full E2E gate: the replay scenarios now start the recording relative to the UI's clock instead of
+  the simulator's process start, and the runner's event clock and the simulator's log times are
+  re-based on the UI's clock origin, so the timing windows no longer drift on a busy CI runner.
+### Added
+- Simulator: scenario `graph_reset` (a cup at rest, then a brew with a wand flush) and the E2E expect kind
+  `chart` (asserts the SIM build's `state.chart`, which now also reports `buf`, `w_max`, `w_top`,
+  `resets`, `reanchors`, `act_ms`).
 ### Changed
 - Source comments, developer console/log output, simulator tooling and scenario descriptions are now
   English (the bilingual EN/DA UI string table is unchanged). Switcher log lines are English
   (`GESTURE TRIGGERED`, `switch A→B DONE`); ourui's DIAGNOSTICS still recognises the old Danish lines.
-- `bin/`: `ourui`, `ourui_sim_arm`, `switcher`, `tinj_hold`, `keyinj` and the host SIM builds rebuilt
-  from the translated sources (new md5s in `bin/MD5SUMS`, see `bin/README.md`); `grab_shim.so` unchanged.
-### Fixed
-- Full E2E gate: the replay scenarios now start the recording relative to the UI's clock instead of
-  the simulator's process start, and the runner's event clock and the simulator's log times are
-  re-based on the UI's clock origin, so the timing windows no longer drift on a busy CI runner.
+- `bin/`: plain `./build.sh` builds of these sources (md5s in `bin/MD5SUMS`, `tools/merakiplus.py` and
+  `bin/README.md`): `ourui` is now **V6.15**; `ourui_sim_arm` and the host SIM builds rebuilt with it;
+  `switcher`, `tinj_hold` and `keyinj` rebuilt from the translated sources (unchanged by the graph fix);
+  `grab_shim.so` is still the on-device-verified build. The new builds are not yet verified on a machine.
 
 ## [6.14] — 2026-11-18 — first public release
 ### Added

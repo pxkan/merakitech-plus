@@ -127,6 +127,7 @@ For an interactive browser view of the simulator, see [PLAY.md](PLAY.md).
 | `stop_control_auto` | 15 s | **v6.13 control:** WATER without a stop word → no stop writes, word16=1 during dispensing, MCU auto-stop at word39≥word17 (unchanged) |
 | `power_off_wake` | 55 s | **v6.14:** HOLD 1.6 s → cmd8 (alarm 0/0/0) + sub0 len2 [0,0] ACK → **sleep** (silent UART, registers frozen, keep-awake paused for 34 s) → sim button hold → **reboot to factory defaults** (word11=920/word114=50) → 0x89 → **re-push** restores the config → PowerOn + HOME + READY |
 | `power_during_activity` | 42 s | **v6.14:** a power HOLD during a brew is **blocked** (toast, no frames — the stock UI never stops an activity on power-off); the brew auto-stops undisturbed; a new full hold after the brew powers off normally |
+| `graph_reset` | 46 s | **v6.15 (ourui):** a 250 g cup on the brew scale at rest → BREW (the MCU tares word 39) → wand flush during the extraction → `state.chart`: no reset at rest, ONE reset at the start, ring cleared (`buf` ≤ 35 at 2–3 s), kept during the flush (`buf` ≥ 90), weight axis relative to the brew (`w_top` ≤ 420, not 2700). The REF profile replaces the 6 `chart` checks 1:1 |
 | `fault_e1/e2/e3` | 12–16 s | error bits words 34/35/36 → error UI + safety stop of the activity |
 | `crc_garbage` | 12 s | garbage stream + CRC corruption → resync, the link is kept |
 | `no_ack` | 12 s | **SAVE is blocked** (retransmit→FAIL, config unchanged) → recovery with the normal profile |
@@ -195,7 +196,9 @@ Scenarios are JSON files in `sim/scenarios/` (they can be written by hand or gen
 **Expect kinds:** `phase`, `phase_hold`, `phase_seq`, `word`, `word_hold`, `word_min_seen`,
 `work_sta_seen`, `stop_ok` (v6.13: `state.stop.ok/fail`), `page`, `view`, `toast`, `lang`, `config`,
 `flag`, `save`, `save_rejected`, `config_oor_min`, `exit_code`, `crc_bad_min`, `offline_seen`,
-`link_up_at`, `cmd6`, `circle`, `region`, `point`, `gesture`, `contract`, `replay_truth`, `sim_log`.
+`link_up_at`, `cmd6`, `circle`, `region`, `point`, `gesture`, `contract`, `replay_truth`, `sim_log`,
+`power`, `power_hold`, `power_counter` (v6.14), `chart` (v6.15: `state.chart.<field>` within `[min,max]` over
+`[t0,t1]`, every sample or `"mode": "any"`; ourui SIM build only — the reference client has no chart).
 **sim_log asserts:** `boot_push`, `version`, `keepalive_ok`, `no_reboot`, `no_calib`,
 `no_band_rejects`, `range_max`, `range_min`, `write_words`, `ack_words` (v6.13: ACK echo sub+words),
 `no_write_word`, `no_writes_between`, `activity_start`, `activity_stop`, `sleep_write_seen`,
@@ -372,7 +375,7 @@ Details: `sim/reports/v6.14-sim/SUMMARY.md` + CONTRACT.md ADDENDUM v6.14-sim.
 | `proto.py` | CRC/frame/parse/parity/evdev shared library |
 | `png.py` | dependency-free PNG + contact sheet |
 | `gen_scenarios.py` | reproducible generator for scenarios/*.json |
-| `scenarios/*.json` | 31 timelines (v6.14: + power_off_wake/power_during_activity) |
+| `scenarios/*.json` | 33 timelines (v6.14: + power_off_wake/power_during_activity; v6.15: + graph_reset) |
 | `play.py`, `play_viewer.html`, `PLAY.md` | interactive browser simulator |
 | `CONTRACT.md` | the contract for the UI's SIM build |
 | `README.md` | this file |

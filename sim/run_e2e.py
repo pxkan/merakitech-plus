@@ -703,6 +703,22 @@ class ScenarioRun:
             ok = bool(vals) and max(vals) >= ex.get("min", 1)
             self.add(f"power.{ex['field']}≥{ex.get('min', 1)}", ok,
                      f"max={max(vals) if vals else '-'}")
+        elif kind == "chart":
+            # v6.15: state.chart.<field> (ourui SIM build: the HOME graph — buf, resets, reanchors,
+            # w_max, w_top, top, mode …) in [t0,t1]. "all" (default): every sample with the field
+            # must be within [min,max]; "any": at least one. The reference client has no chart
+            # (the REF profile replaces these 1:1).
+            sts = self.states_in(ex["t0"], ex["t1"])
+            f = ex["field"]
+            vals = [s["chart"][f] for s in sts
+                    if isinstance(s.get("chart"), dict) and f in s["chart"]]
+            lo, hi = ex.get("min", -1e18), ex.get("max", 1e18)
+            inr = [lo <= v <= hi for v in vals]
+            ok = bool(vals) and (any(inr) if ex.get("mode") == "any" else all(inr))
+            self.add(f"chart.{f}∈[{ex.get('min', '-')},{ex.get('max', '-')}]"
+                     f"{'(any)' if ex.get('mode') == 'any' else ''}[{ex['t0']},{ex['t1']}]",
+                     ok, f"n={len(vals)} min={min(vals) if vals else '-'} "
+                     f"max={max(vals) if vals else '-'}")
         elif kind == "page":
             sts = self.states_in(ex["t"] - win, ex["t"] + win)
             ok = any(s.get("page") == ex["value"] for s in sts)

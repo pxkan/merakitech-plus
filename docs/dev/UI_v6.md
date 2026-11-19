@@ -1,4 +1,4 @@
-# UI_v6 — Meraki+ (code name ourui) v6.14: the physical power button + manual STOP for water / brew / grind + settings parity (spec-aligned) + boot slot integration + EN/DA + design for the round screen + SIM build/E2E + boot push and RX resync on the device + live-proven phase semantics, 64-bit clock and re-push after an MCU restart + Wi-Fi at startup and self-healing (network guard) + HOME without REVERT + calm graph and stable weight (display conditioning, weight latch, dead band) + pressure as a ≈bar estimate (anchor: pre-infusion = config pressure) + UX review (plain language, contrast, start hint, gear, close chevron, swipe guard, DIAGNOSTICS groups)
+# UI_v6 — Meraki+ (code name ourui) v6.15: graph reset on activity start + the physical power button + manual STOP for water / brew / grind + settings parity (spec-aligned) + boot slot integration + EN/DA + design for the round screen + SIM build/E2E + boot push and RX resync on the device + live-proven phase semantics, 64-bit clock and re-push after an MCU restart + Wi-Fi at startup and self-healing (network guard) + HOME without REVERT + calm graph and stable weight (display conditioning, weight latch, dead band) + pressure as a ≈bar estimate (anchor: pre-infusion = config pressure) + UX review (plain language, contrast, start hint, gear, close chevron, swipe guard, DIAGNOSTICS groups)
 
 > **Note (public edition):** Development notes written during development. Paths such as
 > `artifacts/…`, `boot_install.py` steps and md5 tables refer to the author's working environment; as
@@ -10,7 +10,7 @@
 > `SESSION.md`, `HOTWATER.md`, `WRITETEST.md`, `FINDINGS` and `GROUND-TRUTH.md` are to the author's
 > capture/analysis notes.
 
-**Date:** 2026-11-18 · **Version:** v6.14 (v6.13 + **the physical power button** — user bug: the button did not work in ourui; the k62091 node (event1) is now read, and the stock UI's power-off/power-on semantics have been reverse-engineered and mirrored, §19 + [CHANGES-v6.14](#changes-v614)). v6.13 = (v6.12 + **manual STOP for WATER, BREW and GRIND** — user bug: hot water could not be stopped from the screen; the stop words were reverse-engineered from the MCU firmware and cross-checked against the stock UI's own stop calls; auto-stop is unchanged — see [§18](#18-manual-stop-v613) and [CHANGES-v6.13](#changes-v613); v6.12 = the v6.11 UI + the boot work stream's gesture fix ([gesture.md](../gesture.md)), source kept as `ourui_v6_12.c`; v6.11 = v6.10 + **UX review**: a critical design pass over all pages and states — plain language instead of word numbers and raw codes, raised contrast, a start hint in the empty chart field, a visible gear for the settings, a close chevron + swipe-down in the details, a swipe guard with axis lock, short stat labels and DIAGNOSTICS in sections; control logic and protocol are unchanged — see [§17](#17-ux-review-v611) and [CHANGES-v6.11](#changes-v611); v6.10 = v6.9 + **pressure estimate**: "PRESSURE\* UNCALIBRATED" has been replaced by **≈BAR · EST.** with a single linear anchor — the pre-infusion plateau of 358 raw in the recording = config `preInfusionPressure` (4 bar) — and a pulse limit of 20 bar; display only — see [§16](#16-pressure-estimate-v610) and [CHANGES-v6.10](#changes-v610); v6.9 = v6.8 + **display conditioning** of the graph and hero — median-3 + EMA, a robust scale, pulse gate, pressure curve only during brew/water —, a **stable weight source** (a latch instead of the phase per sample: the user's periodic weight spikes) and a **weight dead band** < 0.25 g; display only, all control logic reads raw values — see [§14](#14-display-conditioning-and-stable-weight-v69) and [CHANGES-v6.9](#changes-v69); v6.8 = v6.7 without the REVERT button on HOME — see [CHANGES-v6.8](#changes-v68); v6.7 = v6.6 + **network guard**: Wi-Fi at startup (a slot B boot had no network) and self-healing of the Wi-Fi stack, plus word 113 in the boot push as the stock UI's recorded value — see [CHANGES-v6.7](#changes-v67); v6.6 = v6.5 + phase semantics after the live session — two steam paths and concurrent phases —, a **64-bit clock** (v6.5's clock wrapped after 24.86 days on the device) and a **re-push of the boot push after an MCU restart** — see [CHANGES-v6.6](#changes-v66); v6.5 = v6.4 + a boot push from the config at startup **also on the device**, with an activity guard, and a resync watchdog in the RX parser — see [CHANGES-v6.5](#changes-v65); v6.4 = v6.3 + a SIM build against the simulated test environment — see [§13](#13-sim-build-and-e2e-v64) and [CHANGES-v6.4](#changes-v64); v6.3 = v6.2 + the product name **Meraki+** and two UI languages, English default / Danish — see [CHANGES-v6.3](#changes-v63); v6.2 = v6.1 + BOOT UI, runtime switch to the stock UI, exit reminder — see [CHANGES-v6.2](#changes-v62)) · **Status:** implemented, cross-compiled and **only verified locally** (offline previews + self-test + automated spec alignment). **Nothing has been run on the machine, and no network device has been contacted.** The on-device work belongs to the integration engineer (§11).
+**Date:** 2026-11-19 · **Version:** v6.15 (v6.14 + **the graph resets when an activity starts** — user bug: the cup placed before a brew dominated the graph scale, so the 0 → 36 g curve looked flat; display only, §14.7 + [CHANGES-v6.15](#changes-v615)). v6.14 = (v6.13 + **the physical power button** — user bug: the button did not work in ourui; the k62091 node (event1) is now read, and the stock UI's power-off/power-on semantics have been reverse-engineered and mirrored, §19 + [CHANGES-v6.14](#changes-v614)). v6.13 = (v6.12 + **manual STOP for WATER, BREW and GRIND** — user bug: hot water could not be stopped from the screen; the stop words were reverse-engineered from the MCU firmware and cross-checked against the stock UI's own stop calls; auto-stop is unchanged — see [§18](#18-manual-stop-v613) and [CHANGES-v6.13](#changes-v613); v6.12 = the v6.11 UI + the boot work stream's gesture fix ([gesture.md](../gesture.md)), source kept as `ourui_v6_12.c`; v6.11 = v6.10 + **UX review**: a critical design pass over all pages and states — plain language instead of word numbers and raw codes, raised contrast, a start hint in the empty chart field, a visible gear for the settings, a close chevron + swipe-down in the details, a swipe guard with axis lock, short stat labels and DIAGNOSTICS in sections; control logic and protocol are unchanged — see [§17](#17-ux-review-v611) and [CHANGES-v6.11](#changes-v611); v6.10 = v6.9 + **pressure estimate**: "PRESSURE\* UNCALIBRATED" has been replaced by **≈BAR · EST.** with a single linear anchor — the pre-infusion plateau of 358 raw in the recording = config `preInfusionPressure` (4 bar) — and a pulse limit of 20 bar; display only — see [§16](#16-pressure-estimate-v610) and [CHANGES-v6.10](#changes-v610); v6.9 = v6.8 + **display conditioning** of the graph and hero — median-3 + EMA, a robust scale, pulse gate, pressure curve only during brew/water —, a **stable weight source** (a latch instead of the phase per sample: the user's periodic weight spikes) and a **weight dead band** < 0.25 g; display only, all control logic reads raw values — see [§14](#14-display-conditioning-and-stable-weight-v69) and [CHANGES-v6.9](#changes-v69); v6.8 = v6.7 without the REVERT button on HOME — see [CHANGES-v6.8](#changes-v68); v6.7 = v6.6 + **network guard**: Wi-Fi at startup (a slot B boot had no network) and self-healing of the Wi-Fi stack, plus word 113 in the boot push as the stock UI's recorded value — see [CHANGES-v6.7](#changes-v67); v6.6 = v6.5 + phase semantics after the live session — two steam paths and concurrent phases —, a **64-bit clock** (v6.5's clock wrapped after 24.86 days on the device) and a **re-push of the boot push after an MCU restart** — see [CHANGES-v6.6](#changes-v66); v6.5 = v6.4 + a boot push from the config at startup **also on the device**, with an activity guard, and a resync watchdog in the RX parser — see [CHANGES-v6.5](#changes-v65); v6.4 = v6.3 + a SIM build against the simulated test environment — see [§13](#13-sim-build-and-e2e-v64) and [CHANGES-v6.4](#changes-v64); v6.3 = v6.2 + the product name **Meraki+** and two UI languages, English default / Danish — see [CHANGES-v6.3](#changes-v63); v6.2 = v6.1 + BOOT UI, runtime switch to the stock UI, exit reminder — see [CHANGES-v6.2](#changes-v62)) · **Status:** implemented, cross-compiled and **only verified locally** (offline previews + self-test + automated spec alignment). **Nothing has been run on the machine, and no network device has been contacted.** The on-device work belongs to the integration engineer (§11).
 **Source:** `ourui_v6.c` (one file, plain C, no new dependencies) · **Binary:** `ourui_v6` (static ARMv7 EABI5 musl) · **Previews:** `round_v6/` (English; contact sheet) + `round_v6/da/` (Danish; contact sheet) · `EN | DA side by side` · **Revert:** `REVERT.md` · **Boot integration:** `boot/BOOT.md` (the boot work stream's; §9 = the UI requirements for v6.2) · **Spec:** [PARITY.md](PARITY.md) / `parity_spec.json` · **Predecessor:** `ROUNDUI.md` (v4)
 
 > **Status of the caveat in v6:** the spec was missing when v6 was written, and all limits were assumptions. v6.1 has replaced them with the spec's proven ranges. The alignment is automated: `parity_check.py` compares `SET[]` in the binary with `parity_spec.json` and fails on any unjustified deviation (`round_v6/parity_check.txt`: **41 spec parameters → 24 rows, 17 left out with a rationale, ALL ALIGNED**). What is still estimated or locked is in §4.4. All changes are listed in [CHANGES-v6.1](#changes-v61).
@@ -850,7 +850,7 @@ affected. If the hero should follow faster, raise `CD_A_HERO` (e.g. 0.4 → abou
 {"cmd":"cond","raw":1}                            # = DIAGNOSTICS → GRAPH = RAW
 ```
 State JSON (addition, display only): `cond{…, wdb, gate, hero_snaps}`,
-`chart{mode, active, full, top, raw_max, disp_max, ticks, base_ticks, clipped, n, n_active}`,
+`chart{mode, active, full, top, raw_max, disp_max, ticks, base_ticks, clipped, n, n_active}` (v6.15: + `buf, w_max, w_top, resets, reanchors, act_ms`, §14.7),
 `weight{src, switches, shown}`.
 
 ### 14.6 Before/after figures (graph + weight)
@@ -860,6 +860,42 @@ same sim and seed) and computes per segment what was on the screen. The result i
 `sim/reports/v6.9/calm_stats.txt`, and snapshots are side by side in `calm_chart_v68_v69.png`
 (chart detail) and `calm_full_v68_v69.png` (full screen). The figures are in
 [CHANGES-v6.9](#changes-v69) item 6.
+
+### 14.7 The graph starts over when an activity starts (v6.15)
+
+**The bug (user report):** starting a grind, brew or hot water tares the weight to 0 (the MCU does
+this), but the graph's 40 s window still held the samples from before the start, for example a
+200–300 g cup that had just been placed on the scale. The weight axis was scaled to that cup step,
+so the 0 → 36 g curve of the actual brew was a nearly flat line at the bottom of the chart.
+
+**What v6.15 does (display only):**
+
+* **Reset on idle → active.** `graph_push()` clears the ring buffer (`g_n = g_head = 0`) and restarts
+  the three chart filters when the main phase (`phase_main()`: grind, pre-infusion/extraction, hot
+  water, or steam on its own) goes from idle to active. The first sample of the activity is the first
+  sample in the ring. The y-autoscale is computed from the ring on every draw, so it follows at once:
+  1 s into a brew the weight axis top is the 10 g floor × 1.08 (108) instead of 250 g × 1.08 (2700).
+* **No reset for a concurrent activity.** A wand flush or steam that starts *during* a brew or grind
+  is not an idle → active transition (the main phase stays BREW/GRIND), so the curve is kept. The same
+  applies to a brew started while steam is running: the main phase changes from STEAM to BREW without
+  passing through idle, so nothing is cleared.
+* **Re-anchor right after the start.** Within 1.5 s of the start the ring is cleared once more if the
+  weight source latches late (a grind started at the machine: the source switches to word 38 after
+  the 300 ms debounce, §14.2) or the tare lands late (the weight drops by more than 2 g in one sample).
+  The cup's pre-tare samples therefore never stay in the curve.
+* **Link gaps are not idle.** OFFLINE samples do not count as idle, so a short link loss during a
+  brew does not wipe the brew curve when the link comes back.
+* **All series.** There is one ring buffer for pressure (word 51), weight (38/39) and milk temperature
+  (48), so all three are relative to the activity. Flow (word 52) is a stat number without history.
+* **Unchanged:** `reg[]`, the state JSON's `regs`/`regs_s`, writes, the frame policy, auto-stop,
+  thresholds, guards and the phase logic. DIAGNOSTICS → GRAPH = RAW still shows the raw
+  (unconditioned) values; after a start that is the raw series of the fresh ring.
+* **State JSON (SIM build):** `chart` now also has `buf` (samples in the ring), `w_max`/`w_top`
+  (the weight line's maximum and axis top in brew/water mode, 0.1 g), `resets`, `reanchors` and
+  `act_ms` (ms since the current curve started, −1 = none yet).
+
+The x-axis stays a 40 s window, so early in an activity the curve starts part-way across the chart
+and grows to the right, as before.
 
 ---
 
@@ -2151,6 +2187,31 @@ In addition: the RX counters are `uint32_t` (wrap around in a well-defined way),
 8. **REVERT:** v6.14 only lives in `ourui_v6.c` and the three `_14` files. Back to v6.13: `cp ourui_v6_13.c ourui_v6.c` (md5 `eec5085d…`); the binaries `ourui_v6` (`163692b5…`) and `ourui_v6_sim*` are unchanged v6.13. If v6.14 has already been promoted/installed: `cp ourui_v6_13.bin ourui_v6` (from step 7) and reinstall via the normal boot install path. UI_v6.md before v6.14 does not exist as a copy — the sections §19, test plan T and this section are pure additions, and Appendix A is generated from the string table. No config, flag or slot changes to undo (none have been made). On the device an interrupted `verify_power_v614.py` leaves at most `/tmp/ourui_p/` (tmpfs) — run.sh SIGCONTs the stock UI, and ourui turns the backlight on at exit; a backlight left off after a crash: `echo 1 > /sys/class/pwm/pwmchip0/pwm2/enable`.
 9. **Not touched:** `boot/`, `sim/mcu_sim.py`, `sim/scenarios/`, `sim/run_e2e.py`, `ourui_v6`, `ourui_v6_sim`, `ourui_v6_sim_arm`, `config.json`, the flag and the slots. No contact with the device. The previews in `round_v6/` are generated from the v6.14 source.
 
+## CHANGES-v6.15
+
+**The graph resets when an activity starts.** User bug: starting grind/brew/water tares the weight to 0, but the graph still held the pre-start history (e.g. a 200–300 g cup placed on the scale), so the y-autoscale was dominated by the cup step and the 0 → 36 g curve looked flat. Details in [§14.7](#147-the-graph-starts-over-when-an-activity-starts-v615). **Display only:** the write queue, frame policy, start/stop recipes, auto-stop, thresholds, guards and the phase logic are unchanged; `reg[]` and the state JSON's `regs` are raw.
+
+1. **Reset:** `graph_push()` clears the ring (`graph_clear()`: `g_n = g_head = 0`, chart filters restart) on the idle → active transition of `phase_main()` (grind / brew / water / steam on its own). The scale is recomputed from the fresh ring on the next draw.
+2. **No reset** when a secondary activity starts during the main one (wand flush / steam during a brew or grind), or when the main phase changes between active phases (PRE → EXT, STEAM → BREW). OFFLINE samples are not idle (a link gap keeps the curve).
+3. **Re-anchor:** within 1.5 s (`G_REANCHOR_MS`) of the start the ring is cleared once more on a late weight-source latch (physical grind start, word 39 → 38 after 300 ms) or a late tare (weight drop > 2 g in one sample).
+4. **State JSON (SIM):** `chart` += `buf`, `w_max`, `w_top`, `resets`, `reanchors`, `act_ms`. Preview/selftest only: `gr_off` (1 = v6.14 behaviour) for the before/after proof; the device build compiles it to a constant.
+5. **Verification (local dev iteration, §15):**
+
+| What | Result |
+|---|---|
+| Self-test | **454 / 0** EN and DA (repo fixture config). New section "v6.15 graph reset" **13/13**: cup at rest in the ring; ONE reset at the brew start, only post-start samples, none with the cup; y-autoscale recomputed (weight top 108, not 2700); wand flush during the brew = no reset, curve kept; 0 → 35 g at ≥ 85 % of the weight axis; display only (word 39 raw, no frames); RAW view; v6.14 behaviour (`gr_off`) = weight top 2700 and the 35 g point at 12 % (the bug); DONE → water = a second reset; late tare → one re-anchor; OFFLINE gap = no reset; physical grind start → one re-anchor, grind scale = target; idle → steam = reset, brew during steam = no reset. Two older checks adapted: "grind + wand" (the 300 ms of brew-scale samples are now re-anchored away) and "3 s into an extraction" (the mostly-not-brew window is now reached via a brew started during steam) |
+| Self-test as a 32-bit ARM binary | **454 / 0** EN + DA (ARMv7 container, non-root) |
+| Mutation probes | **5/5**: `noreset`, `anyswitch`, `offidle`, `noreanchor`, `everysample` |
+| Builds | device, SIM ARM, SIM host, preview: **0 warnings** (fresh zig cache); `-Wall -Wextra` the same set as v6.14 (25 × missing field initializer + unused `fill_rect`). Device binary reproducible (same md5 from another directory) |
+| Previews | 84 scenarios × 2 languages; **circle 0 violations**. Vs. v6.14: **134 byte-identical**; the 32 changed HOME activity frames differ only in the chart (+ sub-pixel gauge-ring AA in `04_home_brew_pre`, max channel delta 23). New: `83_home_brew_after_cup` (250 g cup, then a brew: 0 → 35 g fills the weight axis) |
+| Spec alignment | **ALL ALIGNED** |
+| `sim/selftest.py` | **187 / 0** |
+| `run_e2e.py --all --quick --parallel 4` (EN) | **5/5, 97/97** |
+| New scenario `graph_reset` | **21/21** EN, DA and reference client (REF profile replaces the 6 `chart` checks 1:1) |
+| On-device | **not run** (install deferred) |
+
+6. **Files:** `src/ourui_v6.c`, `sim/scenarios/graph_reset.json`, `sim/run_e2e.py` (expect kind `chart`, additive), `sim/sim_ui_profile-ref.json` (6 overrides), `bin/` (`ourui`, `ourui_sim_arm`, host SIM builds; md5 in `bin/MD5SUMS`).
+
 ## Appendix A — string table (id / EN / DA)
 
 <!-- I18N-APPENDIX:BEGIN (generated by i18n_appendix.py — edit STR_TABLE in ourui_v6.c, not here) -->
@@ -2549,8 +2610,8 @@ In addition: the RX counters are `uint32_t` (wrap around in a well-defined way),
 | `TX_DV_YES` | diag-value | `YES` | `JA` |
 | `TX_DV_NO` | diag-value | `NO` | `NEJ` |
 | `TX_DV_MAINS` | - | `%u V · %u HZ` | `%u V · %u HZ` |
-| `TX_DV_VERSION` | - | `MERAKI+ V6.14` | `MERAKI+ V6.14` |
-| `TX_DV_VERSION_RO` | - | `MERAKI+ V6.14 RO` | `MERAKI+ V6.14 RO` |
+| `TX_DV_VERSION` | - | `MERAKI+ V6.15` | `MERAKI+ V6.15` |
+| `TX_DV_VERSION_RO` | - | `MERAKI+ V6.15 RO` | `MERAKI+ V6.15 RO` |
 | `TX_DV_MISSING` | diag-value | `MISSING` | `MANGLER` |
 | `TX_DV_FLAG_YES` | diag-value | `EXISTS` | `FINDES` |
 | `TX_DV_FLAG_NO` | diag-value | `NOT PRESENT` | `FINDES IKKE` |

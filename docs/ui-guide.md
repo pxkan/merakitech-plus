@@ -1,7 +1,7 @@
 # Meraki+ — UI guide
 
 This guide is extracted from the full UI specification ([dev/UI_v6.md](dev/UI_v6.md)) and describes the
-pages, touch zones and settings in **Meraki+ v6.14**. For a short user guide, see
+pages, touch zones and settings in **Meraki+ v6.15**. For a short user guide, see
 [README → Usage](../README.md#usage). Addresses in square brackets (e.g. `[0x12bcfc]`) refer to the
 place in the original UI program where the limit was read (see [dev/PARITY.md](dev/PARITY.md)).
 
@@ -18,7 +18,7 @@ Five pages in a ring; **a horizontal swipe** changes page (v6.11: the gesture mu
 
 | # | Page | Contents |
 |---|---|---|
-| 0 | **HOME** | **v6.3:** the title line *MERAKI+* at the top inside the ring · gauge, phase chip, hero number, auto-stop line, chart (40 s), 3 stats, 4 activity buttons, page dots. **v6.8:** no REVERT button |
+| 0 | **HOME** | **v6.3:** the title line *MERAKI+* at the top inside the ring · gauge, phase chip, hero number, auto-stop line, chart (40 s), 3 stats, 4 activity buttons, page dots. **v6.8:** no REVERT button. **v6.15:** the chart starts over when an activity starts (the cup placed before a brew no longer sets the scale) |
 | 1 | **BREW** | 9 rows — espresso core (spec tier 1) |
 | 2 | **STEAM · WATER** | 5 rows — milk, steam, hot water + the water temperature **sensor** (spec tier 1) |
 | 3 | **SYSTEM** | 11 rows — **v6.3: UI LANGUAGE at the top** (ourui's own setting), then screen, sound, stock language, time (spec tier 2 + the tier 3 fields that are pure config flags) + **v6.2:** *STARTUP · UI CHOICE* with **BOOT UI** and **SWITCH TO ORIGINAL NOW** |

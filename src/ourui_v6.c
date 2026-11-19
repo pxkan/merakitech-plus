@@ -1,7 +1,17 @@
 /* ourui_v6.c — Meraki+ (internal code name: ourui): a custom display UI for the round
- * 480x480 screen, v6.14: feature parity (settings + activity control), its own visual
+ * 480x480 screen, v6.15: feature parity (settings + activity control), its own visual
  * design system, boot-slot integration, product name + two languages — and from v6.4 a SIM build.
  *
+ * v6.15 = v6.14 + the HOME graph RESETS WHEN AN ACTIVITY STARTS (UI_v6.md "CHANGES-v6.15" + §14.7). User bug: grind/brew/water start
+ *  tares the weight to 0 (MCU), but the graph's 40 s window still held the pre-start history (e.g. a 200-300 g cup placed on the
+ *  scale), so the autoscale was dominated by the cup step and the 0 -> 36 g curve was a flat line at the bottom. Now graph_push()
+ *  clears the ring buffer (and restarts the chart filters) on the IDLE -> ACTIVE transition of the main phase (phase_main: grind,
+ *  brew, water, or steam alone); the scale is recomputed from the fresh buffer, so the curve starts at 0 and fills the height.
+ *  A concurrent secondary activity (steam/wand flush during a brew or grind) is NOT an idle -> active transition and keeps the
+ *  curve. Within 1.5 s of the start the buffer is re-anchored once more if the weight source latches late (a physical grind
+ *  start) or the tare lands late (weight drops > 2 g in one sample). One ring buffer holds pressure, weight and milk, so all
+ *  series are action-relative (flow is word 52, a stat number without history). DISPLAY ONLY: regs, control, auto-stop and
+ *  thresholds read the raw words; the DIAGNOSTICS RAW view still shows raw (unconditioned) values of the buffer.
  * v6.14 = v6.13 + the PHYSICAL POWER BUTTON (UI_v6.md "CHANGES-v6.14" + §19). User bug: the button did nothing in ourui —
  *  ourui only read the touch node (event0); the button is the k62091 node (event1, EV_KEY), which stock's app_powerKey_thread (0x140AB4)
  *  reads. The stock semantics are reversed (dealPowerState 0x14911C / powerOff 0x149074 / SleepRefresh 0x149268) and mirrored:
@@ -270,7 +280,7 @@ static int  sim_net_on=1;
 #define KBD_NAME "k62091"
 #define BL_SYSFS "/sys/class/pwm/pwmchip0/pwm2/duty_cycle"
 #define BL_EN_SYSFS "/sys/class/pwm/pwmchip0/pwm2/enable"   /* v6.14: stock uikit_os_back_light_off/on 0xC2278 = blpwm_set_enable(2,0/1) */
-#define OURUI_VERSION "V6.14"
+#define OURUI_VERSION "V6.15"
 
 /* ---- v6.10: pressure estimate (UI_v6.md §16) ----
  * Word 51 (SPI2 ADC channel 0xA, REGISTERMAP: pressure OR pump-drive candidate) -> bar with ONE linear anchor:
@@ -2372,11 +2382,30 @@ static unsigned char g_a[GN];                                  /* v6.9: sample t
 static float g_pd[GN], g_wd[GN], g_md[GN];                    /* v6.9: conditioned (for drawing only) */
 static int g_n=0,g_head=0;
 static Cond cf_p,cf_w,cf_m; static int cf_ph=-1, g_lsrc=39;
+/* v6.15: the graph starts over when an activity starts (display only). g_prim = the main phase (phase_main) of the latest ONLINE
+ * sample was active; OFFLINE samples do not count as idle, so a link gap during a brew does not wipe the brew on reconnect.
+ * gr.t0 = start of the current activity's curve; resets = idle -> active clears; reanchors = re-clears within G_REANCHOR_MS. */
+#define G_REANCHOR_MS 1500
+static int g_prim=0;
+static struct { int resets,reanchors; ms_t t0; } gr={0,0,-100000};
+static void graph_clear(void){ g_n=0; g_head=0; cf_ph=-1; }   /* empty ring + the next sample snaps all three chart filters */
+#ifdef OURUI_PREVIEW
+static int gr_off=0;                                           /* preview/selftest only: 1 = v6.14 behaviour (no reset) for the before/after proof */
+#define GR_ON (!gr_off)
+#else
+#define GR_ON 1
+#endif
 /* src = the weight word (38/39), chosen by the latched source (wsrc_tick). The weight is read SIGNED (int16). The filters snap to
  * the raw value when the ACTIVITY (grind/pre-inf./extraction/water/steam vs. idle) or the source changes — not on switches between
  * the idle phases (READY/HEATING/SLEEPING …), so threshold flicker at rest does not reset the smoothing. */
 static void graph_push(ms_t t,int p,int src){
     int w=(int)(int16_t)reg[src], m=reg[48], pm=phase_main(t), key=(phase_active(pm)?pm:0)<<8|src;
+    if(GR_ON&&phase_active(pm)){
+        if(!g_prim){ graph_clear(); gr.t0=t; gr.resets++; }                  /* v6.15: idle -> active: the curve starts from the tare */
+        else if(g_n>0&&t>=gr.t0&&t-gr.t0<G_REANCHOR_MS&&(src!=g_lsrc||(float)w<(float)g_w[(g_head+GN-1)%GN]-CD_W_JUMP)){
+            graph_clear(); gr.reanchors++; }                                     /* late source latch / late tare right after the start */
+    }
+    if(pm!=PH_OFFLINE) g_prim=phase_active(pm);
     if(cf_ph<0){ cond_snap(&cf_p,p); cond_snap(&cf_w,w); cond_snap(&cf_m,m); cf_p.fast=cf_w.fast=cf_m.fast=CD_FAST+1; }   /* first sample (possibly a pulse: gone again after 2 samples, no tail) */
     else if(key!=cf_ph){ cond_rearm(&cf_p); cond_rearm(&cf_m);                                         /* activity switch: no smearing */
         if(src!=g_lsrc) cond_snap(&cf_w,w); else cond_rearm(&cf_w); }                                 /* source switch: a DIFFERENT weight word — no history to carry over */
@@ -3991,7 +4020,7 @@ static void overlays_draw(ms_t now){
 /* ================= page: HOME ================= */
 enum { W_CHIP=1, W_LABEL, W_HERO, W_SUB, W_CHART, W_STATS, W_ACT, W_FOOT, W_LIST, W_SCROLL, W_DHERO, W_DCHG, W_MINUS, W_PLUS, W_CANCEL, W_SAVE, W_DIAG, W_SPL, W_XNOTE, W_XFOOT, W_BYE, W_GEAR, W_BACKCH, W_OFF };
 /* v6.9: latest chart scale (state JSON "chart" + selftest) */
-static struct { int mode,active,full,top,raw_max,disp_max,ticks,bticks,n,clip,na; } cst;
+static struct { int mode,active,full,top,raw_max,disp_max,ticks,bticks,n,clip,na,wmax,wtop; } cst;   /* v6.15: + wmax/wtop (weight line, mode 0) */
 static int cmp_int(const void*a,const void*b){ int x=*(const int*)a,y=*(const int*)b; return (x>y)-(x<y); }
 /* v6.10: the chart, when it shows pressure (latest drawing: active, mode 0), and the BAR field during brew are tap targets for the basis toast */
 static int pinfo_hit(int x,int y){
@@ -4021,6 +4050,7 @@ static void draw_chart(Rect r,ms_t now,const HomeM*m){
     }
     int active=phase_active(m->ph)||m->ph==PH_DONE||(mode==0&&(raw?mr>=40:nact>0));   /* v6.9: the idle chart is "active" when the window contains a brew/water */
     cst.mode=mode; cst.active=active; cst.raw_max=mr; cst.disp_max=m1; cst.n=nv; cst.ticks=0; cst.bticks=0; cst.clip=0; cst.na=0;
+    cst.wmax=mode==0?m2:0; cst.wtop=mode==0?(int)((m2<100?100:m2)*1.08f):0;
     if(!active){
         for(int x=x0+2;x<x0+w;x+=8) hspan(yb,x,x+3,C_SURF3,255);
         if(!raw) for(int i=0;i<w;i++) if(mode==0&&ci[i]>=40){ cst.bticks++; for(int yy=yb-4;yy<yb;yy++) pset(x0+i,yy,C_DIS,200); }   /* pulses at rest: small ticks on the baseline */
@@ -5167,8 +5197,12 @@ static void sim_state_emit(ms_t now,int force){   /* force=0: only if the line's
     { float pb=p_bar((float)reg[51]);                       /* v6.10: the pressure estimate (display only; regs are raw) — bar = null above P_EST_MAX (pulse) */
       jb(&j,",\"press\":{\"raw\":%u,\"k\":%.6f,\"anchor_bar\":%d,\"p0\":%d,\"max_bar\":%.1f",reg[51],(double)p_k(),p_anchor_bar(),P_ANCHOR_RAW,(double)P_EST_MAX);
       if(pb<0.f) jb(&j,",\"bar\":null,\"pulse\":true}"); else jb(&j,",\"bar\":%.2f,\"pulse\":false}",(double)pb); }
-    jb(&j,",\"chart\":{\"mode\":%d,\"active\":%s,\"full\":%d,\"top\":%d,\"raw_max\":%d,\"disp_max\":%d,\"ticks\":%d,\"base_ticks\":%d,\"clipped\":%d,\"n\":%d,\"n_active\":%d}",
+    jb(&j,",\"chart\":{\"mode\":%d,\"active\":%s,\"full\":%d,\"top\":%d,\"raw_max\":%d,\"disp_max\":%d,\"ticks\":%d,\"base_ticks\":%d,\"clipped\":%d,\"n\":%d,\"n_active\":%d",
        cst.mode,cst.active?"true":"false",cst.full,cst.top,cst.raw_max,cst.disp_max,cst.ticks,cst.bticks,cst.clip,cst.n,cst.na);
+    /* v6.15: graph reset on activity start — buf = samples in the ring, w_max/w_top = the weight line's max + axis top (mode 0),
+     * resets/reanchors = counters, act_ms = ms since the current curve started (-1 = none since start) */
+    jb(&j,",\"buf\":%d,\"w_max\":%d,\"w_top\":%d,\"resets\":%d,\"reanchors\":%d,\"act_ms\":%lld}",
+       g_n,cst.wmax,cst.wtop,gr.resets,gr.reanchors,(long long)(gr.resets?now-gr.t0:-1));
     /* what the screen shows */
     jb(&j,",\"shown\":{");
     if(view==V_MAIN&&page==PG_HOME){
@@ -5718,7 +5752,7 @@ static void sim_reset(void){
     toast.dur=0; rip.on=0; tr.type=0; memset(&sav,0,sizeof sav); memset(ov_prev,0,sizeof ov_prev);
     xsel=-1; x_from_switch=0; x_pending=0; bye_mode=0; run=1; bs.t=-100000; lang_set(pv_lang);
     act.raw=PH_OFFLINE; act.ph=PH_OFFLINE; act.last_ph=PH_READY; act.pending=ACT_NONE; act.gkind=-1; act.t_done=-100000; act.t_col=-100000;
-    g_n=0; g_head=0; static_dirty=1; force_all=1; garc.f_d=0; parc.f_d=0;
+    g_n=0; g_head=0; static_dirty=1; force_all=1; garc.f_d=0; parc.f_d=0; g_prim=0; gr.resets=gr.reanchors=0; gr.t0=-100000;
     cond_reset(); memset(&hf,0,sizeof hf); cd.raw=0;               /* v6.9: the filters restart (the display state from DIAGNOSE is reset) */
     wsl.src=wsl.cand=39; wsl.n_sw=0; wsl.req=ACT_NONE; wsl.t_req=-100000; g_lsrc=39;
     sim_now+=100000; ui_start=sim_now-20000; ui_last=sim_now; sim_tick=NULL; sim_link=1; sim_t0=sim_now;
@@ -5739,6 +5773,16 @@ static void tick_grind(ms_t t){
     if(t<400){ reg[33]=0x0101; reg[38]=0; }
     else if(t<9900){ reg[33]=0x0141; reg[38]=(uint16_t)((t-400)*184/9500); reg[58]=640+(t/113)%40; }
     else { reg[33]=0x0101; reg[38]=186; reg[58]=5; }
+}
+/* v6.15: a 250 g cup on the brew scale at rest for 20 s, then a brew; the MCU tares word 39 at the start (cb_late ms after the bits,
+ * 0 = the same sample, as mcu_sim). cb_flush0..1 = a wand flush (steam bits 0x4020) during the brew. Pressure 350..366 / 1340..1348. */
+static int cb_late=0, cb_flush0=0, cb_flush1=0;
+static void tick_cupbrew(ms_t t){
+    if(t<20000){ reg[33]=0x0101; reg[51]=2; reg[52]=0; reg[39]=2500; }
+    else if(t<24000){ reg[33]=0x1107; reg[51]=350+(t/97)%17; reg[52]=360; reg[50]=1533; reg[39]=t<20000+cb_late?2500:(uint16_t)(int16_t)-3; }
+    else if(t<44000){ reg[33]=0x1307; reg[51]=1340+(t/131)%9; reg[52]=150; reg[50]=1046; reg[39]=t<25000?0:(uint16_t)((t-25000)*360/19000); }
+    else { reg[33]=0x0101; reg[51]=12; reg[52]=0; reg[50]=5; reg[39]=362; }
+    if(cb_flush1>cb_flush0&&t>=cb_flush0&&t<cb_flush1){ reg[33]|=0x4020; reg[24]=0; reg[44]=1; } else reg[44]=0;
 }
 static void tick_water(ms_t t){
     if(t<300){ reg[33]=0x0101; reg[39]=0; }
@@ -6325,8 +6369,8 @@ static void st_phases(void){
     t=st_home(); reg[38]=123; reg[39]=7; reg[58]=640; reg_seen[51]=1; memset(&lt,0,sizeof lt); g_n=0; g_head=0;
     st_s0(0x0141,0,0x000C,0,300,t+=100); ui_frame(t); loop_graph(t);
     for(int q=0;q<4;q++){ st_s0(0x4161,0,0x000D,1,340,t+=100); ui_frame(t); loop_graph(t); }   /* v6.9: a source switch takes 300 ms (no UI start here) */
-    st_check("grind + wand (0141 | 4020): the main phase is GRINDING with a steam badge, 3rd stat field = MILK, and the graph still takes the GRIND weight (word 38; v6.9: after 300 ms debounce)",
-             act.ph==PH_GRIND&&hm.conc&&hm.badge==TR(TX_PH_STEAM_WAND)&&hm.sl[2]==TR(TX_ST_MILK)&&hm.sl[1]==TR(TX_ST_CURRENT)&&g_n==5&&g_w[(g_head+GN-1)%GN]==123&&wsl.src==38&&wsl.n_sw==1);
+    st_check("grind + wand (0141 | 4020): the main phase is GRINDING with a steam badge, 3rd stat field = MILK, and the graph still takes the GRIND weight (word 38; v6.9: after 300 ms debounce; v6.15: the 300 ms of brew-scale samples are re-anchored away — 2 samples left, all word 38)",
+             act.ph==PH_GRIND&&hm.conc&&hm.badge==TR(TX_PH_STEAM_WAND)&&hm.sl[2]==TR(TX_ST_MILK)&&hm.sl[1]==TR(TX_ST_CURRENT)&&g_n==2&&g_w[0]==123&&g_w[1]==123&&gr.resets==1&&gr.reanchors==1&&wsl.src==38&&wsl.n_sw==1);
     t=st_home(); reg[39]=200;
     st_s0(0x5327,0,0x000D,1,560,t+=100); ui_frame(t); ms_t t_st=stm.t0;
     st_s0(0x4121,0,0x000D,1,640,t+=9000); ui_frame(t);                             /* brew finished, wand still open */
@@ -6751,8 +6795,9 @@ static void st_cond(void){
       printf("       chart top: smooth (p90) %d · RAW = v6.8 (raw series + max scale) %d\n",top_pct,rawtop);
       st_check("… vs v6.8 = DIAGNOSE → GRAPH = RAW (unconditioned series, max scale): top >= 16000 x 1.08, so the plateau filled less than 1/10 of the height; back to SMOOTH afterwards",
                rawd>=15500&&rawtop>=16000*1.08f-1&&1340*10<rawtop&&!cd.raw&&cst.top==top_pct); }
-    /* ---- (1b) the first seconds of an extraction: the window is mostly idle ---- */
-    sim_reset(); cs_ws=0x0101; cs_p=0; cs_w39=0; cs_pulse=0; sim_tick=tick_cs; sim_run(36000); cs_ws=0x1307; cs_p=1320; sim_run(3000); st_chart_now();
+    /* ---- (1b) the first seconds of an extraction while the window is mostly NOT brew. v6.15: idle -> brew clears the graph, so this
+     * now only happens when the brew starts during steam (no idle -> active transition): 36 s of steam (pressure 0), then brew + steam ---- */
+    sim_reset(); cs_ws=0x4121; cs_p=0; cs_w39=0; cs_pulse=0; sim_tick=tick_cs; sim_run(36000); cs_ws=0x5327; cs_p=1320; sim_run(3000); st_chart_now();
     { int all[GN],n=0; ms_t t0=sim_now-40000; for(int i=0;i<g_n;i++){ int k=(g_head+GN-g_n+i)%GN; if(g_t[k]>=t0) all[n++]=g_p[k]; } qsort(all,(size_t)n,sizeof all[0],cmp_int);
       int p90all=all[(n-1)*90/100];
       st_check("3 s into an extraction: p90 of ACTIVE samples keeps the plateau in scale (top >= 1320), where p90 of the WHOLE window would be ~0 and squash the curve against the ceiling",
@@ -6931,6 +6976,72 @@ static int st_hitbox(int t,int*w,int*h){ int x0=W,y0=H,x1=-1,y1=-1,n=0;
     *w=n?x1-x0+1:0; *h=n?y1-y0+1:0; return n; }
 static void st_gest(const int*p,int np){ ui_touch(TE_DOWN,p[0],p[1],sim_now); for(int i=1;i<np;i++){ sim_now+=16; ui_touch(TE_MOVE,p[2*i],p[2*i+1],sim_now); } ui_touch(TE_UP,p[2*np-2],p[2*np-1],sim_now); }
 static void st_settle(void){ sim_run(400); }
+/* ---- v6.15: the graph resets when an activity starts (display only) ---- */
+static ms_t g_oldest(void){ return g_n?g_t[(g_head+GN-g_n)%GN]:-1; }
+static int g_maxw(void){ int mx=-100000; for(int i=0;i<g_n;i++){ int v=g_w[(g_head+GN-g_n+i)%GN]; if(v>mx) mx=v; } return mx; }
+static void tick_cupgrind(ms_t t){                     /* cup (250 g) on the brew scale, portafilter tared on the grind scale; a PHYSICAL grind start at 10 s */
+    reg[39]=2500;
+    if(t<10000){ reg[33]=0x0101; reg[38]=0; reg[58]=5; }
+    else if(t<19000){ reg[33]=0x0141; reg[38]=(uint16_t)((t-10000)*185/9000); reg[58]=640+(t/113)%40; }
+    else { reg[33]=0x0101; reg[38]=187; reg[58]=5; }
+}
+static void st_graph(void){
+    printf("== selftest: v6.15 graph reset on activity start (idle -> active clears the ring + chart filters; a concurrent activity does not) ==\n");
+    /* (1) 250 g cup at rest, then a brew started at the machine (no UI frames at all) */
+    sim_reset(); cb_late=0; cb_flush0=30000; cb_flush1=36000; sim_tick=tick_cupbrew; sim_t0=sim_now; sim_run(19900); st_chart_now();
+    int n_idle=g_n, cup=0; for(int i=0;i<g_n;i++) if(g_w[(g_head+GN-g_n+i)%GN]==2500) cup++;
+    st_check("at rest with a 250 g cup: the ring holds the idle history incl. the cup (20 s, >= 140 samples of word 39 = 2500), no reset yet",n_idle>=140&&cup==n_idle&&gr.resets==0);
+    ms_t ts=sim_t0+20000; int wq0=wq.n, txq0=txq_len;
+    sim_run(1100); st_chart_now();
+    st_check("1 s after the brew starts: ONE reset; the ring holds only the ~8 samples since the start, none with the cup's 250 g",
+             gr.resets==1&&gr.reanchors==0&&g_n>=6&&g_n<=11&&g_oldest()>=ts&&g_maxw()<2000);
+    printf("       1 s in: ring %d samples · weight top %d · pressure top %d\n",g_n,cst.wtop,cst.top);
+    st_check("… the y-autoscale is recomputed from the fresh ring: weight axis top = the 10 g floor x 1.08 (108), not 250 g x 1.08 (2700); pressure top from the plateau (< 600)",
+             cst.active&&cst.mode==0&&cst.wtop>=100&&cst.wtop<=110&&cst.top>=400&&cst.top<600);
+    sim_run(12000); st_chart_now();                                               /* t = 33.0 s: wand flush (0x5327) during the extraction */
+    st_check("a wand flush DURING the brew (secondary, concurrent): NO reset — the brew curve is kept (oldest sample = the brew start, ring keeps growing)",
+             hm.conc&&act.ph==PH_EXT&&gr.resets==1&&gr.reanchors==0&&g_oldest()>=ts&&g_oldest()<ts+150&&g_n>=90);
+    sim_run(10500); st_chart_now();                                               /* t = 43.5 s: ~35 g, flush over */
+    { int pct=cst.wtop?(int)(wdb(g_lastf(g_wd))*100/cst.wtop):0, tare_ok=1;
+      for(int i=0;i<3;i++){ int v=g_w[(g_head+GN-g_n+i)%GN]; if(v<-5||v>5) tare_ok=0; }
+      printf("       43.5 s: weight now %.0f, max %d (0.1 g) · axis top %d · curve height %d %%\n",(double)g_lastf(g_wd),cst.wmax,cst.wtop,pct);
+      st_check("0 -> 35 g renders at FULL SCALE: the weight series starts at the tare (first samples -0.3..0 g) and the line's current point is at >= 85 % of the weight axis",
+               tare_ok&&cst.wmax>=330&&cst.wmax<=360&&pct>=85&&gr.resets==1);
+      st_check("… display only: word 39 is raw (~350), no frame was queued or sent by the reset, the brew phase is untouched",
+               abs((int)reg[39]-350)<=3&&wq.n==wq0&&txq_len==txq0&&act.ph==PH_EXT);
+      cd.raw=1; st_chart_now(); int rawmax=cst.wmax==g_maxw(); cd.raw=0; st_chart_now();
+      st_check("… DIAGNOSE → GRAPH = RAW still shows the RAW (unconditioned) series of the same post-start ring",rawmax&&!cd.raw);
+      /* the same session with v6.14's behaviour (no reset): the bug */
+      gr_off=1; sim_reset(); cb_late=0; cb_flush0=cb_flush1=0; sim_tick=tick_cupbrew; sim_t0=sim_now; sim_run(43500); st_chart_now(); gr_off=0;
+      int pct14=cst.wtop?(int)(wdb(g_lastf(g_wd))*100/cst.wtop):0;
+      printf("       v6.14 behaviour: weight max %d · axis top %d · curve height %d %%\n",cst.wmax,cst.wtop,pct14);
+      st_check("… vs v6.14 (no reset): the cup step (250 g) sets the weight axis (top >= 2700) and the 35 g point sits at < 15 % of the height — the user's flat curve",
+               cst.wtop>=2700&&pct14<15); }
+    /* (2) the brew ends -> DONE; the next activity (water) starts within the DONE screen: a second reset */
+    sim_reset(); cb_flush0=cb_flush1=0; sim_tick=tick_cupbrew; sim_t0=sim_now; sim_run(46000);
+    { int done=act.ph==PH_DONE; ms_t tw=sim_now; sim_tick=tick_water; sim_t0=sim_now; sim_run(2000); st_chart_now();
+      st_check("DONE -> the next activity (water) 2 s later: a second reset; the ring starts at the water start (no brew/cup samples)",
+               done&&act.ph==PH_WATER&&gr.resets==2&&g_oldest()>=tw+300&&g_maxw()<100); }
+    /* (3) the tare lands late (word 39 stays 250 g for 300 ms after the bits): re-anchored once */
+    sim_reset(); cb_late=300; sim_tick=tick_cupbrew; sim_t0=sim_now; sim_run(21500); st_chart_now(); cb_late=0;
+    st_check("late tare (+300 ms): ONE re-anchor within 1.5 s of the start; no 250 g sample survives, weight axis top 108",
+             gr.resets==1&&gr.reanchors==1&&g_maxw()<2000&&cst.wtop<=110&&g_oldest()>=sim_t0+20300);
+    /* (4) a link gap during the brew is not an idle -> active transition */
+    sim_reset(); sim_tick=tick_cupbrew; sim_t0=sim_now; sim_run(30000); ms_t o0=g_oldest(); sim_link=0; sim_run(2500); int off=phase_main(sim_now)==PH_OFFLINE; sim_link=1; sim_run(1500);
+    st_check("OFFLINE for 2.5 s during the extraction, then back: no reset (the curve since the brew start is kept)",off&&gr.resets==1&&g_oldest()==o0&&act.ph==PH_EXT);
+    /* (5) a PHYSICAL grind start with a cup on the brew scale: the source latches to word 38 after 300 ms -> re-anchored */
+    sim_reset(); sim_tick=tick_cupgrind; sim_t0=sim_now; sim_run(14000); st_chart_now();
+    { int no39=1; for(int i=0;i<g_n;i++) if(g_w[(g_head+GN-g_n+i)%GN]==2500) no39=0;
+      printf("       grind 4 s in: ring %d · reanchors %d · top %d (target %d)\n",g_n,gr.reanchors,cst.top,sv(S_GRINDW));
+      st_check("physical grind start (cup on the brew scale): reset + ONE re-anchor at the 300 ms source latch; only word 38 in the ring; grind scale = target x 1.08 (not the cup)",
+               act.ph==PH_GRIND&&cst.mode==1&&gr.resets==1&&gr.reanchors==1&&no39&&cst.top<=sv(S_GRINDW)*1.2f&&wsl.src==38); }
+    /* (6) steam alone is a main activity (idle -> steam = reset); a brew started DURING steam is not idle -> active (no reset) */
+    sim_reset(); sim_tick=NULL; sim_run(5000); reg[33]=0x4121; reg[24]=0; sim_run(1000); int r1=gr.resets; ms_t os=g_oldest();
+    reg[33]=0x5327; sim_run(2000);
+    st_check("idle -> steam: reset (the milk curve starts at the steam start); brew started during steam: no second reset, the steam samples stay",
+             r1==1&&gr.resets==1&&g_oldest()==os&&phase_main(sim_now)==PH_EXT);
+    sim_reset();
+}
 static void st_v611(void){
     printf("== selftest: v6.11 UX review (touch targets >= 44/48 px measured via hit_test, contrast, swipe guard, close chevron, gear, empty-state hint, plain language, DIAGNOSE groups) ==\n");
     char b[160]; int w,h,ok;
@@ -7918,6 +8029,8 @@ static int selftest(const char*cfgsrc){
     st_press(cfgsrc,dir);
     /* ============================ v6.11 ============================ */
     st_v611();
+    /* ============================ v6.15 ============================ */
+    st_graph();
     printf("== selftest [%s]: %s (%d checks, %d failed) — work dir %s ==\n",LANG_CODE[base_lang],st_fail?"FAILED":"ALL OK",st_n,st_fail,dir);
     return st_fail?1:0;
 }
@@ -8127,6 +8240,8 @@ int main(int argc,char**argv){
     pw_key(116,1,sim_now); sim_run(300); dump(out,"80_power_turning_on"); pw_key(116,0,sim_now);
     sim_reset(); sim_run(400); sim_tick=tick_brew; sim_t0=sim_now; sim_run(6000); pw_key(116,1,sim_now); sim_run(1700); dump(out,"81_home_power_blocked_brew"); pw_key(116,0,sim_now);
     sim_reset(); page=PG_DIAG; scroll[PG_DIAG]=DG_PWR-LIST_VY0-12; pw.n_ev=6; pw.n_press=3; pw.n_off=1; pw.n_on=1; pw.key_code=116; pw.key_val=0; pw.t_key=sim_now-4000; sim_run(600); dump(out,"82_diag_power");
+    /* v6.15: 250 g cup at rest, then a brew — the graph starts from the tare (0 -> 36 g fills the weight axis) */
+    sim_reset(); cb_late=0; cb_flush0=cb_flush1=0; sim_tick=tick_cupbrew; sim_t0=sim_now; sim_run(43800); dump(out,"83_home_brew_after_cup");
     return 0;
 }
 #endif
