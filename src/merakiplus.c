@@ -1,4 +1,4 @@
-/* ourui_v6.c — Meraki+ (internal code name: ourui): a custom display UI for the round
+/* merakiplus.c — Meraki+ (identifier: merakiplus): a custom display UI for the round
  * 480x480 screen, v6.16: feature parity (settings + activity control), its own visual
  * design system, boot-slot integration, product name + two languages — and from v6.4 a SIM build.
  *
@@ -9,7 +9,7 @@
  *  the cmd8 alarm with the power-off frame exactly as stock (performSleepActions 0x148324 -> powerOffSend 0x14700C(day, hour, minute))
  *  and is pre-armed while on; the MCU's sleep task wakes on it (reset -> heating; the display cold-boots -> boot push). Plus optional
  *  AUTO OFF after 15/20/30/60 min without touch or activity (stock: fixed 30 min, SleepRefresh 0x149268). Schedule + auto off live in
- *  ourui's own file /new_customer/ourui/schedule; config.json gets only timemode/sumtime as before. The cmd8 date/time is now stock's
+ *  merakiplus's own file /new_customer/merakiplus/schedule; config.json gets only timemode/sumtime as before. The cmd8 date/time is now stock's
  *  local time (v6.14 sent the SoC's UTC).
  * v6.15 = v6.14 + the HOME graph RESETS WHEN AN ACTIVITY STARTS (UI_v6.md "CHANGES-v6.15" + §14.7). User bug: grind/brew/water start
  *  tares the weight to 0 (MCU), but the graph's 40 s window still held the pre-start history (e.g. a 200-300 g cup placed on the
@@ -21,14 +21,14 @@
  *  start) or the tare lands late (weight drops > 2 g in one sample). One ring buffer holds pressure, weight and milk, so all
  *  series are action-relative (flow is word 52, a stat number without history). DISPLAY ONLY: regs, control, auto-stop and
  *  thresholds read the raw words; the DIAGNOSTICS RAW view still shows raw (unconditioned) values of the buffer.
- * v6.14 = v6.13 + the PHYSICAL POWER BUTTON (UI_v6.md "CHANGES-v6.14" + §19). User bug: the button did nothing in ourui —
- *  ourui only read the touch node (event0); the button is the k62091 node (event1, EV_KEY), which stock's app_powerKey_thread (0x140AB4)
+ * v6.14 = v6.13 + the PHYSICAL POWER BUTTON (UI_v6.md "CHANGES-v6.14" + §19). User bug: the button did nothing in merakiplus —
+ *  merakiplus only read the touch node (event0); the button is the k62091 node (event1, EV_KEY), which stock's app_powerKey_thread (0x140AB4)
  *  reads. The stock semantics are reversed (dealPowerState 0x14911C / powerOff 0x149074 / SleepRefresh 0x149268) and mirrored:
- *  HOLD the button (stock: two one-second ticks = 1-2 s; ourui 1.5 s) -> cmd8 time/alarm frame (alarm 0/0/0 = none) + 80 ms ->
+ *  HOLD the button (stock: two one-second ticks = 1-2 s; merakiplus 1.5 s) -> cmd8 time/alarm frame (alarm 0/0/0 = none) + 80 ms ->
  *  cmd6 sub0 len2 = [0, 0] (word 0 = power off, word 1 = awake) -> OFF view, backlight off, keep-awake paused.
  *  Blocked (like stock's isExtractionOrSteamSwitchOn 0x1481E0) while brew/steam/grind is running — stock NEVER stops an activity.
  *  The MCU (sleep task 0x2F52) deletes the status task itself (no UART replies), resets work_sta + outputs and wakes ONLY on a
- *  hold of the button (>= 0.8 s, its own GPIO PC.8 -> MCU reset 0x326) or an alarm. ourui: button again -> TURNING ON… -> when
+ *  hold of the button (>= 0.8 s, its own GPIO PC.8 -> MCU reset 0x326) or an alarm. merakiplus: button again -> TURNING ON… -> when
  *  the controller replies with word 0 = 1 -> PowerOn (sub0=[1] + sub1=[0], as at boot) -> HOME. No SoC suspend
  *  (stock: echo mem > /sys/power/state + killall demo_v9) — net watchdog and telnet keep running; only the backlight goes off.
  * v6.13 = v6.12 + MANUAL STOP for WATER, BREW and GRIND (UI_v6.md "CHANGES-v6.13" + §18). User bug: hot water could not be
@@ -37,8 +37,8 @@
  *  word22=0, GRIND cmd6 sub6 len1 word6=0 (addresses at act_push_stop()). HOME shows the STOP button (STOP WATER / STOP BREW /
  *  STOP GRIND) in the same place as STOP STEAM while the activity's bits are set; with latched steam at the same time = two buttons side by side.
  *  Press -> toast "STOPPING …" -> frame (CRC + ACK + one retransmit) -> "… STOPPED" once the MCU has cleared the bits; otherwise
- *  "STOP: NO REPLY" / "STOP NOT CONFIRMED" (5 s). Auto-stop is unchanged (ourui sends nothing when the MCU stops by itself).
- *  v6.12 = the v6.11 UI (source = ourui_v6_12.c, binary 725386cc…) + the boot agent's gesture fix (boot/GESTUS-FIX.md).
+ *  "STOP: NO REPLY" / "STOP NOT CONFIRMED" (5 s). Auto-stop is unchanged (merakiplus sends nothing when the MCU stops by itself).
+ *  v6.12 = the v6.11 UI (source = merakiplus_v6_12.c, binary 725386cc…) + the boot agent's gesture fix (boot/GESTUS-FIX.md).
  *
  * v6.10 = v6.9 + PRESSURE ESTIMATE in bar (UI_v6.md "CHANGES-v6.10" + §16): "PRESSURE* UNCALIBRATED" is replaced by "≈BAR · EST.".
  *  One linear anchor: the pre-infusion plateau in the capture (BREW.md §6: word 51 = 358 raw at 6.06 s) = config
@@ -62,11 +62,11 @@
  *
  * v6.7 = v6.6 + two things (UI_v6.md "CHANGES-v6.7"):
  *  - NET WATCHDOG: wifi at boot + self-heal (the section "NET" below). On a slot B boot nothing started
- *    wifi (INSTALL-REPORT §3.1). ourui now does what stock's libmi_wlan does according to /config/wifi/wlan.json —
+ *    wifi (INSTALL-REPORT §3.1). merakiplus now does what stock's libmi_wlan does according to /config/wifi/wlan.json —
  *    init script, conf from config.json (byte-identical w. save_config), wpa_supplicant and udhcpc with
  *    stock's arguments — but ONLY when the stack is down. A live wpa_supplicant is never touched, and still
  *    no signal is sent to any process (0 kill calls). DIAGNOSTICS has a NET row; log in
- *    /tmp/ourui_net.log; `ourui --net-status` (read-only) and `--net-watch [s]`.
+ *    /tmp/merakiplus_net.log; `merakiplus --net-status` (read-only) and `--net-watch [s]`.
  *  - WORD 113 IN THE BOOT PUSH: the lo byte is sent as 0 (stock's captured boot push, GROUND-TRUTH.md);
  *    the SAVE path still packs breakTime.
  *
@@ -95,11 +95,11 @@
  *    are consumed without a CRC verdict. New counter on DIAGNOSTICS (RX CRC / RESYNC) + boot push status.
  *
  * v6.4 = v6.3 + SIM HAL against the simulated test environment (sim/CONTRACT.md; UI_v6.md "CHANGES-v6.4"):
- *  - -DOURUI_SIM (without OURUI_PREVIEW) = REAL-TIME build without hardware: framebuffer -> memory
+ *  - -DMERAKIPLUS_SIM (without MERAKIPLUS_PREVIEW) = REAL-TIME build without hardware: framebuffer -> memory
  *    + file, touch -> FIFO w. raw 16-byte evdev records, UART -> pty, all system paths under a
  *    sandbox root, state JSONL per frame and a ctrl socket w. test hooks. Same main loop,
  *    same protocol, save, activity and drawing code as the device.
- *  - WITHOUT -DOURUI_SIM all of this is gone: the source after the preprocessor is the same as
+ *  - WITHOUT -DMERAKIPLUS_SIM all of this is gone: the source after the preprocessor is the same as
  *    v6.3 except for the version string and one toast text (see below).
  *  - BOOT PUSH (sub1 len30 + sub112 len3, like the stock UI's fuart_thread) existed in v6.4 ONLY in
  *    the SIM and preview builds (contract requirement). From v6.5 the device build sends it too (see above).
@@ -108,18 +108,18 @@
  * v6.3 = v6.2 + product name + internationalisation (see UI_v6.md "CHANGES-v6.3", REVERT.md):
  *  - PRODUCT NAME: the UI is called Meraki+ (splash, HOME title line w. "+" badge, DIAGNOSTICS/ABOUT,
  *    exit texts). No generation name in any UI string — the same software runs on several
- *    machine generations. Code name, paths and process name are still ourui (run.sh/boot).
+ *    machine generations. Paths, binaries and logs use the identifier merakiplus (run.sh/boot).
  *  - I18N: ONE string table (STR_TABLE) w. English (default) + Danish for EVERY visible text;
  *    lookup per render (TR()), so a language switch takes effect live without a restart.
- *  - SYSTEM row UI LANGUAGE / UI-SPROG: saved in ourui's OWN file /new_customer/ourui/lang
+ *  - SYSTEM row UI LANGUAGE / UI-SPROG: saved in merakiplus's OWN file /new_customer/merakiplus/lang
  *    ("en"/"da", atomic; missing/unreadable/unknown -> English). The stock UI's config.language
  *    is not touched; its row (STOCK LANG. / STOCK-SPROG) is independent.
  *  - Numbers, decimal point and units (°C, g, s, bar) are the same in both languages; only words are translated.
  *  - Protocol, frame policy, keep-awake, EVIOCGRAB, circle clip, boot logic and run.sh: UNCHANGED.
  *
  * v6.2 = v6.1 + boot-slot integration (see UI_v6.md "CHANGES-v6.2", REVERT.md):
- *  - SYSTEM row BOOT UI: OURUI/ORIGINAL for the NEXT reboot = the flag file /customer/new
- *    (touch/rm). Only when /new_customer is mounted and its demo_v9 is ourui; otherwise locked.
+ *  - SYSTEM row BOOT UI: MERAKIPLUS/ORIGINAL for the NEXT reboot = the flag file /customer/new
+ *    (touch/rm). Only when /new_customer is mounted and its demo_v9 is merakiplus; otherwise locked.
  *  - SYSTEM action SWITCH TO ORIGINAL NOW: runtime switch without reboot per boot/BOOT.md §9.2
  *    (close UART/fb/touch -> fork+setsid+execl /customer/demo_v9 -> wait 400 ms -> exit).
  *  - REVERT/exit: visible reminder when the stock UI continues on an old RAM mirror.
@@ -133,7 +133,7 @@
  *  - Central frame policy in wq_push_t(): trigger words 26/27/30 can NEVER be != 0,
  *    start words only w. explicit intent, and every word must lie within its spec interval.
  *
- * Phase 2 soft-replace (unchanged contract): run.sh SIGSTOPs demo_v9, ourui owns
+ * Phase 2 soft-replace (unchanged contract): run.sh SIGSTOPs demo_v9, merakiplus owns
  * /dev/fb0 + /dev/ttyS1 + /dev/input/event0, run.sh SIGCONTs demo_v9 on exit.
  *
  * v6 vs v4 (details in UI_v6.md):
@@ -148,24 +148,24 @@
  *    270-degree gauge w. LUT, retained compositor w. dirty rects, page slide,
  *    crossfade, touch ripple, toasts, boot splash. Global circle clip kept.
  *
- * Build (device):  zig cc -target arm-linux-musleabihf -mcpu=cortex_a7 -static -O2 -o ourui_v6 ourui_v6.c
- * Build (SIM):     zig cc -DOURUI_SIM -O2 -o ourui_v6_sim ourui_v6.c -lm          (host; the one run_e2e.py starts)
- *                  zig cc -target arm-linux-musleabihf -mcpu=cortex_a7 -static -O2 -DOURUI_SIM -o ourui_v6_sim_arm ourui_v6.c
- *                  env: OURUI_SIM_TTY, OURUI_SIM_FB, OURUI_SIM_STATE (required), OURUI_SIM_ROOT (required),
- *                  OURUI_SIM_TOUCH, OURUI_SIM_CTRL, OURUI_SIM_NOBOOTPUSH=1, OURUI_SIM_NOPROVISION=1,
- *                  OURUI_SIM_BOOTPUSH_GUARD=1 (the device's activity guard: skip instead of defer),
- *                  OURUI_SIM_UPTIME_MS=<n> (v6.6: the clock starts at n ms — real-time wrap test; exists only in the SIM build)
- * Build (preview): zig cc -DOURUI_PREVIEW -O2 -o /tmp/ourui_v6_preview ourui_v6.c
- *                  /tmp/ourui_v6_preview [--lang en|da] <outdir>   (all pages/states -> .bin)
- *                  /tmp/ourui_v6_preview [--lang en|da] --selftest (frame vectors, config save, i18n)
- *                  /tmp/ourui_v6_preview --bench         (ms/frame)
- *                  /tmp/ourui_v6_preview --dump-table    (SET[] as TSV -> parity_check.py)
- *                  /tmp/ourui_v6_preview --dump-strings  (the string table as TSV: id, class, EN, DA)
- * Env (device):    OURUI_CONFIG, OURUI_BAKDIR, OURUI_NOGRAB=1, OURUI_NOBL=1, OURUI_READONLY=1,
- *                  OURUI_NOBOOTPUSH=1 (v6.5: no boot push at startup — v6.4 behaviour),
- *                  OURUI_LANGFILE=<file> (the language file; default /new_customer/ourui/lang),
- *                  OURUI_SWITCH_DRY=1 (SWITCH NOW only logs what it would do; ourui keeps running),
- *                  OURUI_ROOT=<dir> (prefix for the boot paths /customer /new_customer /proc /tmp; test only)
+ * Build (device):  zig cc -target arm-linux-musleabihf -mcpu=cortex_a7 -static -O2 -o merakiplus_v6 merakiplus.c
+ * Build (SIM):     zig cc -DMERAKIPLUS_SIM -O2 -o merakiplus_v6_sim merakiplus.c -lm          (host; the one run_e2e.py starts)
+ *                  zig cc -target arm-linux-musleabihf -mcpu=cortex_a7 -static -O2 -DMERAKIPLUS_SIM -o merakiplus_v6_sim_arm merakiplus.c
+ *                  env: MERAKIPLUS_SIM_TTY, MERAKIPLUS_SIM_FB, MERAKIPLUS_SIM_STATE (required), MERAKIPLUS_SIM_ROOT (required),
+ *                  MERAKIPLUS_SIM_TOUCH, MERAKIPLUS_SIM_CTRL, MERAKIPLUS_SIM_NOBOOTPUSH=1, MERAKIPLUS_SIM_NOPROVISION=1,
+ *                  MERAKIPLUS_SIM_BOOTPUSH_GUARD=1 (the device's activity guard: skip instead of defer),
+ *                  MERAKIPLUS_SIM_UPTIME_MS=<n> (v6.6: the clock starts at n ms — real-time wrap test; exists only in the SIM build)
+ * Build (preview): zig cc -DMERAKIPLUS_PREVIEW -O2 -o /tmp/merakiplus_v6_preview merakiplus.c
+ *                  /tmp/merakiplus_v6_preview [--lang en|da] <outdir>   (all pages/states -> .bin)
+ *                  /tmp/merakiplus_v6_preview [--lang en|da] --selftest (frame vectors, config save, i18n)
+ *                  /tmp/merakiplus_v6_preview --bench         (ms/frame)
+ *                  /tmp/merakiplus_v6_preview --dump-table    (SET[] as TSV -> parity_check.py)
+ *                  /tmp/merakiplus_v6_preview --dump-strings  (the string table as TSV: id, class, EN, DA)
+ * Env (device):    MERAKIPLUS_CONFIG, MERAKIPLUS_BAKDIR, MERAKIPLUS_NOGRAB=1, MERAKIPLUS_NOBL=1, MERAKIPLUS_READONLY=1,
+ *                  MERAKIPLUS_NOBOOTPUSH=1 (v6.5: no boot push at startup — v6.4 behaviour),
+ *                  MERAKIPLUS_LANGFILE=<file> (the language file; default /new_customer/merakiplus/lang),
+ *                  MERAKIPLUS_SWITCH_DRY=1 (SWITCH NOW only logs what it would do; merakiplus keeps running),
+ *                  MERAKIPLUS_ROOT=<dir> (prefix for the boot paths /customer /new_customer /proc /tmp; test only)
  */
 #define _GNU_SOURCE
 #include <stdio.h>
@@ -191,14 +191,14 @@
 typedef int64_t ms_t;
 /* v6.4: three build types.
  *   DEVICE_RT      (default)                        the device: /dev/fb0, /dev/ttyS1, /dev/input/event0
- *   OURUI_PREVIEW  (-DOURUI_PREVIEW)                offline previews + selftest (synthetic time)
- *   SIM_RT         (-DOURUI_SIM without OURUI_PREVIEW) real time against sim/mcu_sim.py (sim/CONTRACT.md)
+ *   MERAKIPLUS_PREVIEW  (-DMERAKIPLUS_PREVIEW)                offline previews + selftest (synthetic time)
+ *   SIM_RT         (-DMERAKIPLUS_SIM without MERAKIPLUS_PREVIEW) real time against sim/mcu_sim.py (sim/CONTRACT.md)
  * Everything SIM-specific is in "#ifdef SIM_RT" blocks or in the macros below, which are EMPTY
  * (or equal to the v6.3 expression) in the device build. */
-#if defined(OURUI_SIM) && !defined(OURUI_PREVIEW)
+#if defined(MERAKIPLUS_SIM) && !defined(MERAKIPLUS_PREVIEW)
 #define SIM_RT 1
 #endif
-#if !defined(OURUI_PREVIEW) && !defined(SIM_RT)
+#if !defined(MERAKIPLUS_PREVIEW) && !defined(SIM_RT)
 #define DEVICE_RT 1
 #endif
 #ifdef DEVICE_RT
@@ -289,7 +289,7 @@ static int  sim_net_on=1;
 #define KBD_NAME "k62091"
 #define BL_SYSFS "/sys/class/pwm/pwmchip0/pwm2/duty_cycle"
 #define BL_EN_SYSFS "/sys/class/pwm/pwmchip0/pwm2/enable"   /* v6.14: stock uikit_os_back_light_off/on 0xC2278 = blpwm_set_enable(2,0/1) */
-#define OURUI_VERSION "V6.16"
+#define MERAKIPLUS_VERSION "V6.16"
 
 /* ---- v6.10: pressure estimate (UI_v6.md §16) ----
  * Word 51 (SPI2 ADC channel 0xA, REGISTERMAP: pressure OR pump-drive candidate) -> bar with ONE linear anchor:
@@ -324,7 +324,7 @@ static int  sim_net_on=1;
  * (The typedef is at the top of the file, before the HAL macros.) */
 _Static_assert(sizeof(ms_t)==8,"the time base must be 64 bits");
 #ifdef SIM_RT
-static int64_t sim_clk_off=0;                              /* OURUI_SIM_UPTIME_MS: the clock starts at a chosen value (real-time wrap test) */
+static int64_t sim_clk_off=0;                              /* MERAKIPLUS_SIM_UPTIME_MS: the clock starts at a chosen value (real-time wrap test) */
 #define CLK_OFF sim_clk_off
 #else
 #define CLK_OFF 0
@@ -349,9 +349,9 @@ static ms_t last_rx_ms=-100000, last_bad_ms=-100000;
 static int ufd=-1;
 static uint8_t rxbuf[8192]; static int rxlen=0;
 static uint8_t txq[1024]; static int txq_len=0;
-static int ro_mode=0;                 /* OURUI_READONLY=1: no cmd6 writes at all */
+static int ro_mode=0;                 /* MERAKIPLUS_READONLY=1: no cmd6 writes at all */
 
-#ifndef OURUI_PREVIEW
+#ifndef MERAKIPLUS_PREVIEW
 static void uart_open(void){
     ufd=open(UART_DEV, O_RDWR|O_NOCTTY|O_NONBLOCK);
     if(ufd<0){ perror("open ttyS1"); exit(UART_ERR_RC); }
@@ -420,7 +420,7 @@ static uint8_t last_tx[80]; static int last_tx_len=0;   /* latest cmd6 frame (se
  *   (a) lie outside the write bands (words 0..31 / 112..114),
  *   (b) have a trigger word != 0 without the caller explicitly asking for it (intent), or
  *   (c) have a word outside its spec interval (word_ok(), derived from SET[]).
- * No intent can allow TRIG_NEVER — ourui never calibrates and never reboots. */
+ * No intent can allow TRIG_NEVER — merakiplus never calibrates and never reboots. */
 #define WBIT(n) (1u<<(n))
 #define TRIG_NEVER (WBIT(26)|WBIT(27)|WBIT(30))
 #define TRIG_START (WBIT(3)|WBIT(6)|WBIT(9)|WBIT(16)|WBIT(22)|WBIT(24))
@@ -486,7 +486,7 @@ static void wq_on_ack(uint8_t sub,uint8_t L,const uint8_t*payload){
 enum { BP_OFF=0, BP_WAIT_A, BP_A, BP_WAIT_B, BP_B, BP_DONE };
 enum { BPR_NONE=0, BPR_OK, BPR_NOACK, BPR_BLOCKED, BPR_NOCFG, BPR_SKIP };
 static struct { int state, ra, rb, runs, guard; long seq; ms_t t0; int t0_set; } bp;   /* t0: when the push left WAITING (block queued / settled) */
-static int bp_on=1;                    /* OURUI_NOBOOTPUSH / OURUI_SIM_NOBOOTPUSH turn the boot push off */
+static int bp_on=1;                    /* MERAKIPLUS_NOBOOTPUSH / MERAKIPLUS_SIM_NOBOOTPUSH turn the boot push off */
 static int repush_count(void);         /* v6.6: number of re-pushes after an MCU restart (repush_step) */
 
 /* ---- RX frame parse (v4 logic + ACK queue + timestamps) — v6.5: RESYNC WATCHDOG ----
@@ -609,7 +609,7 @@ static void md5_hex(const uint8_t*data,size_t n,char out[33]){
 
 /* ================= sysroot + boot-id (v6.2) =================
  * All boot-related paths (/customer, /new_customer, /proc, /tmp) go through rp(), so
- * the flag/switch logic can be run against a mock root (OURUI_ROOT / selftest). Empty = real root. */
+ * the flag/switch logic can be run against a mock root (MERAKIPLUS_ROOT / selftest). Empty = real root. */
 static char sysroot[200]="";
 static const char* rp(const char*p){
     static char b[4][400]; static int k;
@@ -631,7 +631,7 @@ static void boot_id_read(char*out,size_t n){
  * Before every write: rolling backup (config.json.bak). Every write is logged w. md5. */
 #define CFG_MAX 16384
 static char cfg_path[256]="/customer/config.json";
-static char cfg_bakdir[256]="/new_customer/ourui/cfgbak";
+static char cfg_bakdir[256]="/new_customer/merakiplus/cfgbak";
 static char cfgbuf[CFG_MAX]; static int cfglen=0; static int cfg_ok=0;
 static char cfg_md5[33]="-"; static int cfg_writes=0; static char cfg_err[64]="";
 
@@ -707,7 +707,7 @@ static int cfg_set_int(const char*key,int newv){
     memcpy(nb,cur,a); memcpy(nb+a,num,nl); memcpy(nb+a+nl,cur+b,n-b); nb[nn]=0;
     /* 4) tmp in the same directory -> fsync -> re-read+compare -> rename */
     char tmp[300]; snprintf(tmp,sizeof tmp,"%s",cfg_path);
-    char*sl=strrchr(tmp,'/'); if(sl) snprintf(sl+1,sizeof tmp-(sl+1-tmp),".ourui_cfg.tmp"); else snprintf(tmp,sizeof tmp,".ourui_cfg.tmp");
+    char*sl=strrchr(tmp,'/'); if(sl) snprintf(sl+1,sizeof tmp-(sl+1-tmp),".merakiplus_cfg.tmp"); else snprintf(tmp,sizeof tmp,".merakiplus_cfg.tmp");
     if(!write_all(tmp,nb,nn,0)){ snprintf(cfg_err,sizeof cfg_err,"tmp-write: %s",strerror(errno)); unlink(tmp); return 0; }
     char chk[CFG_MAX]; fd=open(tmp,O_RDONLY); int cn=fd>=0?read(fd,chk,CFG_MAX):-1; if(fd>=0) close(fd);
     if(cn!=nn||memcmp(chk,nb,nn)){ snprintf(cfg_err,sizeof cfg_err,"tmp verification failed"); unlink(tmp); return 0; }
@@ -723,7 +723,7 @@ static int cfg_set_int(const char*key,int newv){
         fflush(lf); fsync(fileno(lf)); fclose(lf);
     }
     snprintf(p,sizeof p,"%s/RESTART_NEEDED",cfg_bakdir);
-    lf=fopen(p,"w"); if(lf){ fprintf(lf,"config.json changed by ourui. The controller already has the values (cmd6 on SAVE).\n"
+    lf=fopen(p,"w"); if(lf){ fprintf(lf,"config.json changed by merakiplus. The controller already has the values (cmd6 on SAVE).\n"
                            "The stock UI (demo_v9) reads config ONLY at startup: restart it (kill $(pidof demo_v9);\n"
                            "the watchdog starts it again) BEFORE stock settings are used. At startup it boot-pushes\n"
                            "the config values to the controller (cmd6 sub1 len30 + sub112 len3).\n");
@@ -751,19 +751,19 @@ static int cfg_set_int(const char*key,int newv){
  *                       and:  udhcpc -i wlan0 -s /etc/init.d/udhcpc.script -a -q -b -t 20 -T 1 &
  *      (-q: udhcpc exits once it has a lease — which is why there is no udhcpc in normal operation)
  *   Environment for the children: LD_LIBRARY_PATH and PATH get ":/config/wifi" appended.
- * ourui does the same, but only when the stack is DOWN:
+ * merakiplus does the same, but only when the stack is DOWN:
  *   - the init script is run ONLY when wlan0 does not exist (an insmod of a loaded driver fails);
  *   - the conf file is written directly from config.json (ssid/password) in EXACTLY the format save_config produces
  *     (byte-identical, md5-proven) — and only when the content differs; then wpa_supplicant is started with the
  *     same arguments, and 1 s later udhcpc with the same arguments — unless wlan0 still has its
  *     IP and default route (heal after a dead supplicant): then they are kept (same IP; stock never runs
  *     udhcpc again in operation either, -q);
- *   - a live wpa_supplicant is NEVER killed — ourui does not send a signal to any process (0 kill calls).
+ *   - a live wpa_supplicant is NEVER killed — merakiplus does not send a signal to any process (0 kill calls).
  *     If it is alive but wlan0 is administratively DOWN, "ifconfig wlan0 up" is done (like MI_WLAN_Open).
  *     If the IP is missing (or the default route, if there has been one) and no udhcpc is running, udhcpc is started
  *     (after NET_NOIP_MS / NET_NOGW_MS, with backoff). Without carrier it waits (the supplicant reconnects by itself).
  * Everything is non-blocking: the main loop calls net_step(); slow steps are child processes.
- * Log: /tmp/ourui_net.log (transitions only; the password is never written). OURUI_NONET=1 turns the watchdog off. */
+ * Log: /tmp/merakiplus_net.log (transitions only; the password is never written). MERAKIPLUS_NONET=1 turns the watchdog off. */
 #define NET_IF          "wlan0"
 #define NET_WIFI_DIR    "/config/wifi"
 #define NET_WPA_BIN     NET_WIFI_DIR "/wpa_supplicant"
@@ -774,7 +774,7 @@ static int cfg_set_int(const char*key,int newv){
 #define NET_CTRL        NET_RUN_DIR "/wpa_supplicant"
 #define NET_DHCP_BIN    "/sbin/udhcpc"
 #define NET_DHCP_SH     "/etc/init.d/udhcpc.script"
-#define NET_LOG         "/tmp/ourui_net.log"
+#define NET_LOG         "/tmp/merakiplus_net.log"
 #define NET_LOG_MAX     131072
 #define NET_CONF_HDR    "ctrl_interface=" NET_CTRL "\nupdate_config=1\n"
 #define NET_PROBE_MS       1000     /* while something is in progress */
@@ -906,7 +906,7 @@ static int net_conf_sync(void){
     snprintf(path,sizeof path,"%s",rp(NET_CONF));
     int fd=open(path,O_RDONLY); int hn=fd>=0?(int)read(fd,have,sizeof have):-1; if(fd>=0) close(fd);
     if(hn==wn&&!memcmp(have,want,(size_t)wn)) return 0;
-    snprintf(tmp,sizeof tmp,"%s.ourui.tmp",path);
+    snprintf(tmp,sizeof tmp,"%s.merakiplus.tmp",path);
     if(!write_all(tmp,want,wn,0)){ unlink(tmp); return -1; }
     if(rename(tmp,path)!=0){ unlink(tmp); return -1; }
     fsync_dir(path);
@@ -924,7 +924,7 @@ static void net_log(const char*fmt,...){
     FILE*f=fopen(path,"a");
     if(f){
         time_t t=time(NULL); struct tm tmv; gmtime_r(&t,&tmv); char ts[32]; strftime(ts,sizeof ts,"%Y-%m-%dT%H:%M:%SZ",&tmv);
-        fprintf(f,"%s up=%lld.%03d ourui[%d] NET %s\n",ts,(long long)(net_now/1000),(int)(net_now%1000),(int)getpid(),m); fclose(f);
+        fprintf(f,"%s up=%lld.%03d merakiplus[%d] NET %s\n",ts,(long long)(net_now/1000),(int)(net_now%1000),(int)getpid(),m); fclose(f);
     }
     if(net_echo){ printf("up=%lld.%03d NET %s\n",(long long)(net_now/1000),(int)(net_now%1000),m); fflush(stdout); }
 }
@@ -993,7 +993,7 @@ static void net_child_env(void){
     else { snprintf(b,sizeof b,"%s:%s",pa,NET_WIFI_DIR); setenv("PATH",b,1); }
 }
 /* detach=1: double fork — the process is inherited by init (PPid 1, own session), like stock's "… &" from system().
- * The child inherits NONE of ourui's fds (fb, UART, touch grab) — stock's wpa_supplicant inherits all of them.
+ * The child inherits NONE of merakiplus's fds (fb, UART, touch grab) — stock's wpa_supplicant inherits all of them.
  * Returns: detach -> 1 on success; otherwise the child's pid; -1 on error. */
 static int net_spawn(int detach,const char*out,const char*path,char*const argv[]){
     fflush(stdout); fflush(stderr);
@@ -1199,7 +1199,7 @@ static void net_start(ms_t now,int enable){
     memset(&net,0,sizeof net); net_now=now; net.cfg_logged=-1; net.on=enable;
     if(!enable) return;
     net_cfg_load();
-    net_log("net-vagt startet (" OURUI_VERSION "): %s; ssid length %d, password length %d",NC_TXT[net.cfg],net.ssid_n,(int)strlen(net.psk));   /* "net-vagt startet" stays: tools/merakiplus.py greps the net log for it */
+    net_log("net-vagt startet (" MERAKIPLUS_VERSION "): %s; ssid length %d, password length %d",NC_TXT[net.cfg],net.ssid_n,(int)strlen(net.psk));   /* "net-vagt startet" stays: tools/merakiplus.py greps the net log for it */
 }
 
 
@@ -1207,7 +1207,7 @@ static void net_start(ms_t now,int enable){
 /* ================= PRODUCT NAME + I18N (v6.3) ========================= */
 /* ====================================================================== */
 /* The product name lives in ONE place. UI strings use PRODUCT; the word mark is drawn as BRAND_WORD +
- * "+" badge (brand_at()). "ourui" is only the code name: paths, process name, logs. */
+ * "+" badge (brand_at()). "merakiplus" is only the technical identifier: paths, binaries, logs. */
 #define BRAND_WORD  "MERAKI"
 #define BRAND_BADGE "+"
 #define PRODUCT     BRAND_WORD BRAND_BADGE
@@ -1238,7 +1238,7 @@ static void net_start(ms_t now,int enable){
  *   pixel budget (K0 = measured in context by the layout tests, KCON = console).
  *   Rules (enforced by --selftest): both languages filled in; the same printf conversions;
  *   the same numbers/punctuation for numbers and units; only characters the stroke font has; no
- *   generation name; the code name "ourui" only inside code spans (LC … UC) or on the console. */
+ *   generation name; the identifier "merakiplus" only inside code spans (LC … UC) or on the console. */
 enum { LANG_EN=0, LANG_DA, NLANG };
 enum { K0=0, KT, KSUB, KLAB, KCHIP, KBTN, KBTNS, KTITLE, KPSUB, KSPL, KDL, KDV, KDF, KNOTE, KF1, KF2, KXSUB, KST, KCON, NKLASS };
 #define STR_TABLE(X) \
@@ -1495,7 +1495,7 @@ enum { K0=0, KT, KSUB, KLAB, KCHIP, KBTN, KBTNS, KTITLE, KPSUB, KSPL, KDL, KDV, 
  X(TX_D_MCU_CFG, KF1, "CONTROLLER NOW + CONFIG", "CONTROLLER STRAKS + CONFIG") \
  X(TX_D_CFGONLY, KF1, "CONFIG.JSON ONLY", "KUN CONFIG.JSON") \
  X(TX_D_STOCK_RESTART, KF2, "STOCK UI: AFTER RESTART", "STOCK-UI: EFTER GENSTART") \
- X(TX_D_LANG_L1, KF1, PRODUCT " ONLY · " LC "ourui/lang", "KUN " PRODUCT " · " LC "ourui/lang") \
+ X(TX_D_LANG_L1, KF1, PRODUCT " ONLY · " LC "merakiplus/lang", "KUN " PRODUCT " · " LC "merakiplus/lang") \
  X(TX_D_LANG_L2, KF2, "STOCK UI LANGUAGE UNCHANGED", "STOCK-UI-SPROG UÆNDRET") \
  X(TX_D_SAVING, KST, "SAVING…", "GEMMER…") \
  X(TX_D_OOR, KST, "OUT OF SPEC · PICK A NEW VALUE", "UDEN FOR SPEC · VÆLG NY VÆRDI") \
@@ -1571,8 +1571,8 @@ enum { K0=0, KT, KSUB, KLAB, KCHIP, KBTN, KBTNS, KTITLE, KPSUB, KSPL, KDL, KDV, 
  X(TX_DV_YES, KDV, "YES", "JA") \
  X(TX_DV_NO, KDV, "NO", "NEJ") \
  X(TX_DV_MAINS, K0, "%u V · %u HZ", "%u V · %u HZ") \
- X(TX_DV_VERSION, K0, PRODUCT " " OURUI_VERSION, PRODUCT " " OURUI_VERSION) \
- X(TX_DV_VERSION_RO, K0, PRODUCT " " OURUI_VERSION " RO", PRODUCT " " OURUI_VERSION " RO") \
+ X(TX_DV_VERSION, K0, PRODUCT " " MERAKIPLUS_VERSION, PRODUCT " " MERAKIPLUS_VERSION) \
+ X(TX_DV_VERSION_RO, K0, PRODUCT " " MERAKIPLUS_VERSION " RO", PRODUCT " " MERAKIPLUS_VERSION " RO") \
  X(TX_DV_MISSING, KDV, "MISSING", "MANGLER") \
  X(TX_DV_FLAG_YES, KDV, "EXISTS", "FINDES") \
  X(TX_DV_FLAG_NO, KDV, "NOT PRESENT", "FINDES IKKE") \
@@ -1623,7 +1623,7 @@ enum { K0=0, KT, KSUB, KLAB, KCHIP, KBTN, KBTNS, KTITLE, KPSUB, KSPL, KDL, KDV, 
  X(TX_DG_PNOTE2, K0, "> %d BAR = PULSE · RAW: GRAPH PILL", "> %d BAR = PULS · RÅ: GRAF-PILLEN") \
  X(TX_DG_ABOUT, KDF, "ABOUT", "OM") \
  X(TX_DG_RAWCAP, KDF, "RAW COUNTERS · SERVICE", "RÅ TÆLLERE · SERVICE") \
- X(TX_DG_L_LANG, KDF, "UI LANGUAGE · " LC "ourui/lang", "UI-SPROG · " LC "ourui/lang") \
+ X(TX_DG_L_LANG, KDF, "UI LANGUAGE · " LC "merakiplus/lang", "UI-SPROG · " LC "merakiplus/lang") \
  X(TX_DG_LANG_DEFAULT, K0, "%s · DEFAULT (NO FILE)", "%s · STANDARD (INGEN FIL)") \
  X(TX_DG_LANG_FILE, K0, "%s · FROM FILE", "%s · FRA FIL") \
  X(TX_DG_LANG_UNKNOWN, K0, "%s · UNKNOWN FILE VALUE", "%s · UKENDT VÆRDI I FIL") \
@@ -1659,7 +1659,7 @@ enum { K0=0, KT, KSUB, KLAB, KCHIP, KBTN, KBTNS, KTITLE, KPSUB, KSPL, KDL, KDV, 
  X(TX_E_MIN20, K0, "20 MIN", "20 MIN") \
  X(TX_E_MIN30, K0, "30 MIN", "30 MIN") \
  X(TX_E_MIN60, K0, "60 MIN", "60 MIN") \
- X(TX_D_OWN_L1, KF1, PRODUCT " ONLY · " LC "ourui/schedule", "KUN " PRODUCT " · " LC "ourui/schedule") \
+ X(TX_D_OWN_L1, KF1, PRODUCT " · " LC "merakiplus/schedule", PRODUCT " · " LC "merakiplus/schedule") \
  X(TX_D_OWN_L2, KF2, "STOCK SCHEDULES UNCHANGED", "STOCK-PLANER UÆNDREDE") \
  X(TX_T_OWN_SAVED, KT, "SAVED · " PRODUCT " SCHEDULE", "GEMT · " PRODUCT "-PLAN") \
  X(TX_T_OWN_NOFILE, KT, "ACTIVE · FILE NOT SAVED", "AKTIV · FIL IKKE GEMT") \
@@ -1687,10 +1687,10 @@ enum { K0=0, KT, KSUB, KLAB, KCHIP, KBTN, KBTNS, KTITLE, KPSUB, KSPL, KDL, KDV, 
  X(TX_DV_T_DST, K0, "%s · DST", "%s · SOMMERTID") \
  X(TX_DV_T_STD, K0, "%s · STANDARD", "%s · NORMALTID") \
  X(TX_DV_T_IDLE, K0, "%s · %d:%02d", "%s · %d:%02d") \
- X(TX_O_SWITCHED, KCON, "== ourui: runtime switch B->A (user button): stock UI pid %d started from " SLOT_A_EXE "; ourui exits\n", "== ourui: runtime-skift B->A (bruger-knap): stock-UI pid %d startet fra " SLOT_A_EXE "; ourui afslutter\n") \
- X(TX_O_RESTART, KCON, "== ourui: STOCK UI NEEDS A RESTART OF demo_v9 FOR NEW VALUES:   kill $(pidof demo_v9)\n==        (config.json changed by ourui; the watchdog restarts it, the boot push syncs the controller)\n", "== ourui: STOCK-UI KRAEVER GENSTART AF demo_v9 FOR NYE VAERDIER:   kill $(pidof demo_v9)\n==        (config.json aendret af ourui; watchdog genstarter, boot-push synker controlleren)\n") \
- X(TX_O_CFGCHANGED, KCON, "== ourui: config.json changed %d time(s) - no paused stock UI is waiting; the next stock start reads it itself\n", "== ourui: config.json aendret %d gang(e) - intet pauset stock-UI venter; naeste stock-start laeser den selv\n") \
- X(TX_O_BLOCKED, KCON, "== ourui: %ld cmd6 frame(s) rejected by the frame policy (see UI_v6.md)\n", "== ourui: %ld cmd6-frame(s) afvist af frame-politikken (se UI_v6.md)\n") \
+ X(TX_O_SWITCHED, KCON, "== merakiplus: runtime switch B->A (user button): stock UI pid %d started from " SLOT_A_EXE "; merakiplus exits\n", "== merakiplus: runtime-skift B->A (bruger-knap): stock-UI pid %d startet fra " SLOT_A_EXE "; merakiplus afslutter\n") \
+ X(TX_O_RESTART, KCON, "== merakiplus: STOCK UI NEEDS A RESTART OF demo_v9 FOR NEW VALUES:   kill $(pidof demo_v9)\n==        (config.json changed by merakiplus; the watchdog restarts it, the boot push syncs the controller)\n", "== merakiplus: STOCK-UI KRAEVER GENSTART AF demo_v9 FOR NYE VAERDIER:   kill $(pidof demo_v9)\n==        (config.json aendret af merakiplus; watchdog genstarter, boot-push synker controlleren)\n") \
+ X(TX_O_CFGCHANGED, KCON, "== merakiplus: config.json changed %d time(s) - no paused stock UI is waiting; the next stock start reads it itself\n", "== merakiplus: config.json aendret %d gang(e) - intet pauset stock-UI venter; naeste stock-start laeser den selv\n") \
+ X(TX_O_BLOCKED, KCON, "== merakiplus: %ld cmd6 frame(s) rejected by the frame policy (see UI_v6.md)\n", "== merakiplus: %ld cmd6-frame(s) afvist af frame-politikken (se UI_v6.md)\n") \
  /* end */
 
 enum {
@@ -1709,14 +1709,14 @@ static const char*const STR[NLANG][NSTR]={
  STR_TABLE(X)
 #undef X
  }};
-#if defined(OURUI_PREVIEW)||defined(SIM_RT)
+#if defined(MERAKIPLUS_PREVIEW)||defined(SIM_RT)
 static const char*const STR_ID[NSTR]={
 #define X(id,k,en,da) #id,
  STR_TABLE(X)
 #undef X
 };
 #endif
-#ifdef OURUI_PREVIEW
+#ifdef MERAKIPLUS_PREVIEW
 static const unsigned char STR_K[NSTR]={
 #define X(id,k,en,da) k,
  STR_TABLE(X)
@@ -1731,12 +1731,12 @@ static const char* TR(int id){
     return s?s:STR[LANG_EN][id];
 }
 
-/* ---- the language file: ourui's OWN setting (not the stock UI's config.language) ----
+/* ---- the language file: merakiplus's OWN setting (not the stock UI's config.language) ----
  * Content: exactly "en" or "da" (plain text; on read, whitespace/newlines and
  * upper case are tolerated, so `echo da > lang` also works). If the file is missing, cannot be read,
  * or contains anything else: ENGLISH. Written atomically: tmp in the same directory + fsync +
  * re-read/compare + rename() + fsync of the directory. */
-static char lang_path[256]="/new_customer/ourui/lang";
+static char lang_path[256]="/new_customer/merakiplus/lang";
 static const char*const LANG_CODE[NLANG]={"en","da"};
 enum { LS_DEFAULT=0, LS_FILE, LS_UNKNOWN, LS_SESSION };   /* where the active language comes from (DIAGNOSTICS) */
 static int lang_src=LS_DEFAULT;
@@ -1776,28 +1776,29 @@ static int lang_save(int l){
 /* ====================================================================== */
 /* Vendor boot (artifacts/demo.sh): the flag file /customer/new selects slot B (/new_customer)
  * over slot A (/customer). The watchdog /customer/test.sh only checks whether there is a
- * process whose ps line contains "demo_v9". In the boot integration ourui lives as
+ * process whose ps line contains "demo_v9". In the boot integration merakiplus lives as
  * /new_customer/demo_v9 (slot B); the stock UI is /customer/demo_v9 (slot A).
  *
  *   BOOT UI (persistent)  = create/remove /customer/new. Applies to the NEXT reboot. Only allowed
- *                           when /new_customer is mounted AND its demo_v9 is ourui — otherwise
+ *                           when /new_customer is mounted AND its demo_v9 is merakiplus — otherwise
  *                           the flag belongs to the vendor's OTA mechanism, and we do not touch it.
- *   SWITCH TO ORIGINAL NOW = runtime, without reboot (BOOT.md §9.2): ourui closes UART/fb/touch,
+ *   SWITCH TO ORIGINAL NOW = runtime, without reboot (BOOT.md §9.2): merakiplus closes UART/fb/touch,
  *                           starts /customer/demo_v9 directly and exits 400 ms later.
- * ourui NEVER sends a signal to any process — neither kill, SIGSTOP nor SIGCONT. */
+ * merakiplus NEVER sends a signal to any process — neither kill, SIGSTOP nor SIGCONT. */
 /* (BOOT_FLAG, SLOT_*_EXE, SLOT_B_MNT and SW_LOG are defined at the string table above) */
-/* what(1) marker: this is how the BOOT UI guard recognises an ourui binary in slot B (the first 10 characters
- * are the needle). v6.1 had no marker and is recognised by a string from its exit message. */
-static const char OURUI_MARK[]="@(#)ourui " OURUI_VERSION " meraki-plus display-ui";
-#define OURUI_MARK_N 10
-static const char OURUI_MARK_V61[]="== ourui: config.json aendret";
+/* what(1) marker: this is how the BOOT UI guard recognises a Meraki+ binary in slot B (the "@(#)merakiplus "
+ * prefix is the needle). v6.1 had no marker and is recognised by a string from its exit message. */
+#define MERAKIPLUS_MARK_HEAD "@(#)merakiplus "
+static const char MERAKIPLUS_MARK[]=MERAKIPLUS_MARK_HEAD MERAKIPLUS_VERSION " meraki-plus display-ui";
+#define MERAKIPLUS_MARK_N ((int)sizeof MERAKIPLUS_MARK_HEAD-1)
+static const char MERAKIPLUS_MARK_V61[]="== merakiplus: config.json aendret";
 
 enum { SLOT_OTHER=0, SLOT_A, SLOT_B };
 enum { BL_OK=0, BL_NOMOUNT, BL_NOBIN, BL_VENDOR };
 #define STOCK_MAX 4
 static struct {
     int flag;                       /* /customer/new exists */
-    int b_mnt, b_bin, b_ours, lock; /* slot B: mounted / demo_v9 executable / is ourui / BL_* */
+    int b_mnt, b_bin, b_ours, lock; /* slot B: mounted / demo_v9 executable / is merakiplus / BL_* */
     int a_bin;                      /* /customer/demo_v9 exists and is executable */
     int self_pid, self_slot; char self_exe[128];
     int stock[STOCK_MAX], n_stock, stock_run;   /* /customer/demo_v9 processes; stock_run = number NOT stopped */
@@ -1813,16 +1814,16 @@ static int slot_b_mounted(void){
     while(fgets(ln,sizeof ln,f)) if(sscanf(ln,"%159s %159s",dev,mnt)==2&&!strcmp(mnt,SLOT_B_MNT)) hit=1;
     fclose(f); return hit;
 }
-/* does the file contain the ourui marker? (cached on dev/ino/size/mtime — the binary is only read when it has changed) */
-static int bin_is_ourui(const char*path){
+/* does the file contain the merakiplus marker? (cached on dev/ino/size/mtime — the binary is only read when it has changed) */
+static int bin_is_merakiplus(const char*path){
     struct stat st; if(stat(path,&st)!=0||!S_ISREG(st.st_mode)){ bs.m_valid=0; return 0; }
     if(bs.m_valid&&st.st_dev==bs.m_dev&&st.st_ino==bs.m_ino&&st.st_size==bs.m_size&&st.st_mtime==bs.m_mtime) return bs.m_ours;
     int ours=0, fd=open(path,O_RDONLY);
     if(fd>=0){
-        static char buf[65536+64]; int keep=0,n; const int ov=(int)sizeof OURUI_MARK_V61;
+        static char buf[65536+64]; int keep=0,n; const int ov=(int)sizeof MERAKIPLUS_MARK_V61;
         while((n=read(fd,buf+keep,65536))>0){
             int tot=keep+n;
-            if(memmem(buf,tot,OURUI_MARK,OURUI_MARK_N)||memmem(buf,tot,OURUI_MARK_V61,sizeof OURUI_MARK_V61-1)){ ours=1; break; }
+            if(memmem(buf,tot,MERAKIPLUS_MARK,MERAKIPLUS_MARK_N)||memmem(buf,tot,MERAKIPLUS_MARK_V61,sizeof MERAKIPLUS_MARK_V61-1)){ ours=1; break; }
             keep=tot<ov?tot:ov; memmove(buf,buf+tot-keep,keep);
         }
         close(fd);
@@ -1890,7 +1891,7 @@ static void boot_refresh(void){
     bs.flag=stat(rp(BOOT_FLAG),&st)==0;
     bs.b_mnt=slot_b_mounted();
     bs.b_bin=bs.b_mnt&&access(rp(SLOT_B_EXE),X_OK)==0;
-    bs.b_ours=bs.b_bin&&bin_is_ourui(rp(SLOT_B_EXE));
+    bs.b_ours=bs.b_bin&&bin_is_merakiplus(rp(SLOT_B_EXE));
     bs.lock=!bs.b_mnt?BL_NOMOUNT:(!bs.b_bin?BL_NOBIN:(!bs.b_ours?BL_VENDOR:BL_OK));
     bs.a_bin=access(rp(SLOT_A_EXE),X_OK)==0;
     ssize_t r=readlink(rp("/proc/self/exe"),bs.self_exe,sizeof bs.self_exe-1); bs.self_exe[r>0?r:0]=0;
@@ -1909,14 +1910,14 @@ static void boot_log(const char*fmt,...){
 static char boot_err[72]="";
 static int boot_flag_set(int want_b){
     boot_refresh(); boot_err[0]=0;
-    if(bs.lock!=BL_OK){ snprintf(boot_err,sizeof boot_err,"locked (%s)",bs.lock==BL_NOMOUNT?"/new_customer not mounted":(bs.lock==BL_NOBIN?"demo_v9 missing in slot B":"slot B is not ourui")); return 0; }
+    if(bs.lock!=BL_OK){ snprintf(boot_err,sizeof boot_err,"locked (%s)",bs.lock==BL_NOMOUNT?"/new_customer not mounted":(bs.lock==BL_NOBIN?"demo_v9 missing in slot B":"slot B is not merakiplus")); return 0; }
     int before=bs.flag; const char*p=rp(BOOT_FLAG); struct stat st;
     if(want_b){ int fd=open(p,O_WRONLY|O_CREAT,0644); if(fd<0){ snprintf(boot_err,sizeof boot_err,"touch: %s",strerror(errno)); return 0; } fsync(fd); close(fd); }
     else if(unlink(p)!=0&&errno!=ENOENT){ snprintf(boot_err,sizeof boot_err,"rm: %s",strerror(errno)); return 0; }
     fsync_dir(p); SYS_SYNC                                 /* BOOT.md §9.1: open(O_CREAT)/unlink + sync() (SIM: no global sync) */
     bs.flag=stat(p,&st)==0;
     if(bs.flag!=(want_b!=0)){ snprintf(boot_err,sizeof boot_err,"verification failed"); return 0; }
-    if(before!=bs.flag) boot_log("BOOT-UI: flag %s %s (%d->%d): %s at next reboot",BOOT_FLAG,bs.flag?"created":"removed",before,bs.flag,bs.flag?"OURUI (slot B)":"ORIGINAL (slot A)");
+    if(before!=bs.flag) boot_log("BOOT-UI: flag %s %s (%d->%d): %s at next reboot",BOOT_FLAG,bs.flag?"created":"removed",before,bs.flag,bs.flag?"MERAKIPLUS (slot B)":"ORIGINAL (slot A)");
     return 1;
 }
 /* is a stock UI with an old RAM mirror waiting? True when RESTART_NEEDED exists AND a
@@ -1954,20 +1955,20 @@ static void ld_path_for_a(const char*inh,char*out,size_t n){
     snprintf(out+o,n-o,"/customer/libs:/config/wifi");
 }
 /* ---- runtime switch B->A: BOOT.md §9.2 steps 2 + 3 ----
- * Called AFTER ourui has closed UART/fb/touch (step 1, see do_switch). The child: own session
+ * Called AFTER merakiplus has closed UART/fb/touch (step 1, see do_switch). The child: own session
  * (setsid), cwd /customer, slot A's LD_LIBRARY_PATH, stdio -> /dev/null and ALL other fds
  * closed (an inherited touch fd would keep EVIOCGRAB alive inside the stock UI), then
  * execl("/customer/demo_v9","./demo_v9") — argv0 contains "demo_v9", so the watchdog grep
  * matches. The parent waits 400 ms while A initialises fb/UART; if the child has already died,
- * an error is reported, and ourui takes the screen back. Returns: stock pid (>0) or 0 w. err set. */
+ * an error is reported, and merakiplus takes the screen back. Returns: stock pid (>0) or 0 w. err set. */
 #define SW_WAIT_MS 400
 enum { SWM_LAUNCH=0, SWM_CONT };
-static int sw_dry=0;                                       /* OURUI_SWITCH_DRY=1: log only */
+static int sw_dry=0;                                       /* MERAKIPLUS_SWITCH_DRY=1: log only */
 static char sw_ldp[512]="";                                /* LD_LIBRARY_PATH given to stock (log/selftest) */
 static int switch_mode(void){ return bs.n_stock>0?SWM_CONT:SWM_LAUNCH; }   /* SWM_CONT = run.sh mode: stock exists (paused) */
 static int switch_locked(void){ return bs.n_stock==0&&!bs.a_bin; }         /* no stock UI to switch to */
 /* what demo.sh starts at the next boot, given the flag + slot B's state. The flag alone is not
- * enough: without a mount slot A starts, and with a vendor binary in slot B it is NOT ourui. */
+ * enough: without a mount slot A starts, and with a vendor binary in slot B it is NOT merakiplus. */
 enum { BN_ORIGINAL=0, BN_OURS, BN_SLOTB };
 _Static_assert(TX_BN_OURS==TX_BN_ORIGINAL+BN_OURS&&TX_BN_SLOTB==TX_BN_ORIGINAL+BN_SLOTB,"TX_BN_* must follow BN_*");
 static int boot_next_kind(void){
@@ -2004,16 +2005,16 @@ static int switch_launch(char*err,size_t en){
  * range checks (PARITY §0.10) -> min/max/step are enforced here and in frame_policy().
  * All limits are reconciled against PARITY.md §2 / parity_spec.json (raw config units);
  * parity_check.py compares the table with the spec automatically (--dump-table).
- *   ptier = the spec's tier (1 core / 2 comfort / 3 system); tier = ourui page.
+ *   ptier = the spec's tier (1 core / 2 comfort / 3 system); tier = merakiplus page.
  *   SF_EST: min+step are proven, but max is an ESTIMATE (the stock picker's option count is
  *           not mapped, PARITY §6.6). The UI shows a visible hint, and a value that
  *           the stock UI itself has saved (<= hard) widens the interval.
  *   SF_LOCK: shown, but has no editor (reason in note).
  *   SF_SENSOR: read-only measured value from reg[def] — no config key, no write.
- *   SF_LOCAL (v6.3): ourui's OWN setting (UI language) — no config key, no MCU word,
+ *   SF_LOCAL (v6.3): merakiplus's OWN setting (UI language) — no config key, no MCU word,
  *           not a spec parameter (left out of --dump-table); saved in its own file.
- *   SF_OWN (v6.16): ourui's OWN time settings (pre-heat schedule + auto off) — like SF_LOCAL, saved in
- *           /new_customer/ourui/schedule (sched_save); SF_HHMM: the value is minutes after midnight, shown as a clock time.
+ *   SF_OWN (v6.16): merakiplus's OWN time settings (pre-heat schedule + auto off) — like SF_LOCAL, saved in
+ *           /new_customer/merakiplus/schedule (sched_save); SF_HHMM: the value is minutes after midnight, shown as a clock time.
  * label/unit/note/hint and enum names are string ids (TX_*), never text — see STR_TABLE. */
 enum { K_NUM=0, K_ENUM };
 enum { M_NONE=0, M_W4, M_W23, M_W11, M_W112, M_W113, M_W114, M_W25, M_W14, M_W17, M_W2 };
@@ -2051,7 +2052,7 @@ _Static_assert(TX_UL_DA==TX_UL_EN+LANG_DA,"TX_UL_* must follow LANG_*");
 enum { S_GRINDW=0, S_GRINDMODE, S_BREWW, S_BREWT, S_PISW, S_PITIME, S_PIPRESS, S_BREAK, S_HEADT,
        S_STEAMT, S_STEAMG, S_HOTW, S_HOTMODE, S_HOTT,
        S_UILANG, S_BL, S_VOL, S_TUNIT, S_LANG, S_HOTSC, S_DST, S_CLEARTIP, S_TIMEMODE, S_AUTOTIME, S_TZ,
-       S_PREHEAT, S_PHAT, S_PHREP, S_AUTOOFF, NSET };   /* v6.16: + the time rows (ourui's own file) */
+       S_PREHEAT, S_PHAT, S_PHREP, S_AUTOOFF, NSET };   /* v6.16: + the time rows (merakiplus's own file) */
 static Setting SET[NSET]={
  /*              key                   label            unit    page,spec-tier  min   max step dec kind   opts        mcu    flags                    def hard  note, hint */
  /* ---- page BREW (spec tier 1) ---- */
@@ -2070,7 +2071,7 @@ static Setting SET[NSET]={
  [S_HOTW]     ={"autoHotWaterTarget", TX_SL_HOTW,      TX_U_G,   1,1,  300,5000,100,-1,K_NUM, 0,         M_W17, 0,                     3600,5000,TX_SN_HOTW,0},
  [S_HOTMODE]  ={"hotWaterMode",       TX_SL_HOTMODE,   TX_NONE,  1,1,    1,   2,  1, 0,K_ENUM,OPT_HOTM,  M_NONE,0,                        1,   2,TX_SN_HOTMODE,0},
  [S_HOTT]     ={0,                    TX_SL_HOTT,      TX_U_C,   1,1,  200,1200,  1, 1,K_NUM, 0,         M_NONE,SF_SENSOR|SF_LOCK|SF_TEMP10,40,  0,TX_SN_HOTT,0},
- /* ---- page SYSTEM: first ourui's own UI language (v6.3; not a spec parameter), then
+ /* ---- page SYSTEM: first merakiplus's own UI language (v6.3; not a spec parameter), then
   *      spec tier 2 and tier 3 — all config only, no MCU write ---- */
  [S_UILANG]   ={0,                    TX_SL_UILANG,    TX_NONE,  2,0,    0,   1,  1, 0,K_ENUM,OPT_UILANG,M_NONE,SF_LOCAL,                 0,   1,TX_SN_UILANG,0},
  [S_BL]       ={"backlight",          TX_SL_BL,        TX_NONE,  2,2,    1,  10,  1, 0,K_NUM, 0,         M_NONE,SF_BL,                    8,  10,TX_SN_BL,0},
@@ -2083,7 +2084,7 @@ static Setting SET[NSET]={
  [S_TIMEMODE] ={"timemode",           TX_SL_TIMEMODE,  TX_NONE,  2,3,    0,   1,  1, 0,K_ENUM,OPT_TIME,  M_NONE,0,                        1,   1,TX_SN_TIMEFMT,0},
  [S_AUTOTIME] ={"Automatically",      TX_SL_AUTOTIME,  TX_NONE,  2,3,    0,   1,  1, 0,K_ENUM,OPT_OFFON, M_NONE,0,                        1,   1,TX_SN_AUTOTIME,0},
  [S_TZ]       ={"timeZone",           TX_SL_TZ,        TX_NONE,  2,3,    0,   0,  1, 0,K_NUM, 0,         M_NONE,SF_LOCK,                 44,   0,TX_SN_TZ,0},
- /* ---- v6.16: pre-heat schedule + auto off — ourui's OWN file (/new_customer/ourui/schedule), not config.json, no MCU word ---- */
+ /* ---- v6.16: pre-heat schedule + auto off — merakiplus's OWN file (/new_customer/merakiplus/schedule), not config.json, no MCU word ---- */
  [S_PREHEAT]  ={0,                    TX_SL_PREHEAT,   TX_NONE,  2,0,    0,   1,  1, 0,K_ENUM,OPT_OFFON, M_NONE,SF_OWN,                   0,   1,TX_SN_PREHEAT,0},
  [S_PHAT]     ={0,                    TX_SL_PHAT,      TX_NONE,  2,0,    0,1435,  5, 0,K_NUM, 0,         M_NONE,SF_OWN|SF_HHMM,         390,1435,TX_SN_PHAT,0},
  [S_PHREP]    ={0,                    TX_SL_PHREP,     TX_NONE,  2,0,    0,   3,  1, 0,K_ENUM,OPT_REPEAT,M_NONE,SF_OWN,                   1,   3,TX_SN_PHREP,0},
@@ -2107,11 +2108,11 @@ static int set_oor(const Setting*s){ return s->loaded && !(s->flags&SF_SENSOR) &
  * Reversed from the stock UI demo_v9 (symbols kept) and the MCU firmware:
  *  - TIME SOURCE: the SoC system clock, kept in UTC. Stock sets it only via an HTTP query (time_sync_thread 0x13FDEC, gated by
  *    config "Automatically") -> biz_set_system_time 0x1359B0 = `date -s <UTC>` + `hwclock -w`; no NTP, nothing from the MCU.
- *    ourui does NOT sync the clock (no network calls): it reads the same SoC clock. Before 2025 = "not set" -> "--:--", no alarm.
+ *    merakiplus does NOT sync the clock (no network calls): it reads the same SoC clock. Before 2025 = "not set" -> "--:--", no alarm.
  *  - LOCAL TIME: _refresh_systime 0x135548 = UTC + the time zone table entry 0x1A5890[timeZone].offset (136 entries x 12 bytes:
  *    offset s, "UTC±hh:mm", name; copied below verbatim, incl. two stock quirks: #30 Newfoundland -2:30 under the label -03:30
  *    and #135 Kiritimati +14:00 under the label +13:00) + 3600 if sumtime and is_dst 0x1354D4. Stock's DST window is date-only,
- *    comes from the HTTP answer (model+0x15B8..0x15CC, RAM only) and is never computed offline; ourui computes the window from the
+ *    comes from the HTTP answer (model+0x15B8..0x15CC, RAM only) and is never computed offline; merakiplus computes the window from the
  *    region's rule (the rules stock's calc_dst_dates_for_timezone 0x13BB14 uses: EU last Sun Mar -> last Sun Oct at 01:00 UTC;
  *    US/CA 2nd Sun Mar -> 1st Sun Nov; Levant last Fri Mar -> last Fri Oct; AU 1st Sun Oct -> 1st Sun Apr; NZ last Sun Sep ->
  *    1st Sun Apr; others none) — config "sumtime" stays the user's on/off switch (deliberate, documented deviation).
@@ -2132,10 +2133,10 @@ static int set_oor(const Setting*s){ return s->loaded && !(s->flags&SF_SENSOR) &
  *  - MCU (MEM03): cmd8 handler 0x9C88 copies the 10 bytes to 0x20000E18, echoes 0x88 and sets its RTC from them (0x9DCE -> 0x7494);
  *    the sleep task 0x2F52 compares RTC day/hour/minute with the alarm once per second and, if day+hour+minute != 0 and they match,
  *    resets the CPU (0x326) = wake: word 0 starts as 1 (heating), and on this hardware the display gets power again = cold boot.
- * ourui: the clock on HOME + DIAGNOSE (SoC UTC + zone + DST, 12/24 h per timemode), a pre-heat schedule (one entry: on/off, time,
- * once / every day / Mon-Fri / Sat-Sun) and auto off (off / 15 / 20 / 30 / 60 min) in ourui's own file; the alarm goes out with
+ * merakiplus: the clock on HOME + DIAGNOSE (SoC UTC + zone + DST, 12/24 h per timemode), a pre-heat schedule (one entry: on/off, time,
+ * once / every day / Mon-Fri / Sat-Sun) and auto off (off / 15 / 20 / 30 / 60 min) in merakiplus's own file; the alarm goes out with
  * the power-off frame exactly as stock (pw_off_begin), and — a documented addition — is PRE-ARMED with the same frame while the
- * machine is on, so a power-off ourui does not see (the button's kernel cut, §19) still wakes it. Never while off/turning off. */
+ * machine is on, so a power-off merakiplus does not see (the button's kernel cut, §19) still wakes it. Never while off/turning off. */
 enum { DR_NONE=0, DR_US, DR_EU, DR_LEV, DR_AU, DR_NZ };
 static void idle_kick(ms_t now);     /* auto off: every touch/button/SAVE restarts the idle timer (sched_step) */
 #define TZ_N 136
@@ -2280,7 +2281,7 @@ static const struct { int off; const char*utc,*name; unsigned char rule; } TZT[T
 _Static_assert(sizeof TZT/sizeof TZT[0]==TZ_N,"TZT must have the stock table's 136 entries");
 #define CLK_MIN_VALID 1735689600LL          /* 2025-01-01 00:00 UTC: before this the SoC clock has never been set */
 static int64_t clk_fake=-1;                 /* PREVIEW/selftest: a fixed UTC time */
-static int64_t clk_off=0;                   /* SIM: offset to time(NULL) (OURUI_SIM_CLOCK / ctrl "clock") */
+static int64_t clk_off=0;                   /* SIM: offset to time(NULL) (MERAKIPLUS_SIM_CLOCK / ctrl "clock") */
 static int64_t clk_utc(void){ return clk_fake>=0?clk_fake:(int64_t)time(NULL)+clk_off; }
 static int clk_valid(int64_t u){ return u>=CLK_MIN_VALID; }
 static int tz_idx(void){ int i=SET[S_TZ].val; return (i>=0&&i<TZ_N)?i:43; }      /* outside the table: #43 = UTC */
@@ -2319,11 +2320,11 @@ static void fmt_hm(char*b,size_t n,int h,int m,int ampm){
 }
 static const short WD_TX[7]={TX_WD_SUN,TX_WD_MON,TX_WD_TUE,TX_WD_WED,TX_WD_THU,TX_WD_FRI,TX_WD_SAT};
 
-/* ---- the schedule file: ourui's OWN settings (not config.json, not the stock UI's /customer/config.bin) ----
+/* ---- the schedule file: merakiplus's OWN settings (not config.json, not the stock UI's /customer/config.bin) ----
  * Text, one "key=value" per line: preheat=0|1, at=HH:MM, repeat=once|daily|mon-fri|sat-sun, autooff=0|15|20|30|60,
  * once_at=<UTC seconds of the one-shot occurrence, 0 = none>. Unknown lines are ignored, a bad value -> its default.
  * Written atomically like the language file (tmp + fsync + re-read/compare + rename + fsync of the directory). */
-static char sched_path[256]="/new_customer/ourui/schedule";
+static char sched_path[256]="/new_customer/merakiplus/schedule";
 static const char*const REP_KEY[4]={"once","daily","mon-fri","sat-sun"};
 static const unsigned char REP_MASK[4]={0x00,0x7F,0x3E,0x41};   /* bit k = weekday k (0 = Sunday), stock's Sun..Sat flags; 0 = one-shot */
 static const int AO_MIN[5]={0,15,20,30,60};
@@ -2514,15 +2515,15 @@ static int act_push_steam_stop(void){
  *   BREW  cmd6 sub22 len1: word 22 = 0   aa 55 06 16 01 00 00 c0 87
  *         MCU brew-ctl 0x1E9C: on every CHANGE of word 22, running = (word 22 != 0) (0x1F94..0x1FC6). The MCU's weight stop
  *         itself writes word 22 = 0 (0x1F92) — same path, incl. the valve pulse on bit 2 afterwards (0x20B2..0x20EC). Stock:
- *         onClick 0x109694 flips mirror word 22 to 0 and sends the WHOLE block usart_send(6,5,18); ourui writes only the word
+ *         onClick 0x109694 flips mirror word 22 to 0 and sends the WHOLE block usart_send(6,5,18); merakiplus writes only the word
  *         that changes (words 5..21 in stock's block are the MCU's own polled values — a no-op for the MCU; cmd6 = memcpy).
  *   WATER cmd6 sub16 len1: word 16 = 0   aa 55 06 10 01 00 00 c0 0f   (+ sub19 len1 word 19 = 0 — only if word 19 != 0)
  *         MCU hotwater-ctl 0x1B8C: active = (word 19 | word 16) != 0, recomputed every cycle (0x1C44..0x1C4E). The MCU's weight stop
- *         itself writes word 16 = 0 (0x1C80). Stock: hotWaterStartStop 0x11468C usart_send(6,16,1) (auto mode, = ourui's
- *         start) and 0x114720 usart_send(6,19,1) (manual mode; ourui never starts it, but stops it if it is seen).
+ *         itself writes word 16 = 0 (0x1C80). Stock: hotWaterStartStop 0x11468C usart_send(6,16,1) (auto mode, = merakiplus's
+ *         start) and 0x114720 usart_send(6,19,1) (manual mode; merakiplus never starts it, but stops it if it is seen).
  *   STEAM cmd6 sub24 len8: word 24 = 0   (unchanged from v6)
  * A stop frame contains only zeros: frame_policy does not reject it (start words <= 1, others == 0), and it can never start
- * anything. Same write queue as everything else: CRC + ACK wait + one retransmit. AUTO-STOP is unchanged: ourui sends nothing when the MCU
+ * anything. Same write queue as everything else: CRC + ACK wait + one retransmit. AUTO-STOP is unchanged: merakiplus sends nothing when the MCU
  * stops by itself. Confirmation (stop_step): the activity's work_sta bits are cleared — grind bit 6; brew bits 1+2 (bits 2 + 12 are cleared
  * in the first cycle after stop, 0x20C4); water bits 1+3 (bit 3 is always cleared, 0x1C9A; bits 1+9 are shared with boiler refill). */
 static int act_push_stop(int kind){
@@ -2700,7 +2701,7 @@ static const char* err_code(void){
 #define CD_HERO_JUMP 150     /* hero: median jump > 15.0 units (g / °) in 0.1 s = a real step (cup off/on) -> snap, no gliding */
 enum { CS_HOLD=0, CS_PCT, CS_MAX };
 static struct { float a_chart,a_hero,head; int med,hold,pct,scale,raw,gate; } cd={CD_A_CHART,CD_A_HERO,CD_HEAD,CD_MED,CD_HOLD,CD_PCT,CS_PCT,0,CD_GATE};
-#if defined(OURUI_SIM)||defined(OURUI_PREVIEW)
+#if defined(MERAKIPLUS_SIM)||defined(MERAKIPLUS_PREVIEW)
 static const char*const CS_KEY[]={"hold","pct","max"};     /* ctrl "cond" + state JSON (SIM/preview only) */
 #endif
 /* the weight deadband (display only; the RAW view from DIAGNOSE has no deadband) */
@@ -2741,7 +2742,7 @@ static Cond cf_p,cf_w,cf_m; static int cf_ph=-1, g_lsrc=39;
 static int g_prim=0;
 static struct { int resets,reanchors; ms_t t0; } gr={0,0,-100000};
 static void graph_clear(void){ g_n=0; g_head=0; cf_ph=-1; }   /* empty ring + the next sample snaps all three chart filters */
-#ifdef OURUI_PREVIEW
+#ifdef MERAKIPLUS_PREVIEW
 static int gr_off=0;                                           /* preview/selftest only: 1 = v6.14 behaviour (no reset) for the before/after proof */
 #define GR_ON (!gr_off)
 #else
@@ -2767,7 +2768,7 @@ static void graph_push(ms_t t,int p,int src){
     g_head=(g_head+1)%GN; if(g_n<GN)g_n++;
 }
 static struct { Cond f; int key,set,ok,n_snap; ms_t t; } hf;   /* the hero filter (hero_v() near the HOME model) */
-#if defined(OURUI_SIM)||defined(OURUI_PREVIEW)
+#if defined(MERAKIPLUS_SIM)||defined(MERAKIPLUS_PREVIEW)
 static void cond_reset(void){ cf_ph=-1; }                     /* the next sample snaps all three chart filters (ctrl "cond" / sim_reset) */
 #endif
 /* latest conditioned pressure (gauge + BAR field during brew); raw when the view is set to RAW or the history is empty/stale */
@@ -2803,10 +2804,10 @@ static void bl_set(int v){
 #endif
 }
 /* v6.14: backlight fully OFF / ON (the power button). Stock powerOff 0x1490C0: uikit_os_back_light_off (= pwm2/enable 0,
- * 0xC2278) and then blpwm_set_dutycycle(2,0). ourui writes duty 99 (= dimmest, mapping duty = 100 - 7v) BEFORE enable 0: with
+ * 0xC2278) and then blpwm_set_dutycycle(2,0). merakiplus writes duty 99 (= dimmest, mapping duty = 100 - 7v) BEFORE enable 0: with
  * "polarity inversed", stock's duty 0 is the BRIGHTEST light if enable 0 should fail to take effect. ON: duty from config's
  * brightness and then enable 1 (stock: app restart -> uikit_os_back_light_set + back_light_on 0xC2298). bl_is_off is the ground truth
- * for the exit paths: an ourui that exits with the light off turns it back on (otherwise the stock UI would be dark after run.sh). */
+ * for the exit paths: a merakiplus process that exits with the light off turns it back on (otherwise the stock UI would be dark after run.sh). */
 static int bl_is_off=0;
 static void bl_power(int on){
     bl_is_off=!on;
@@ -3099,7 +3100,7 @@ static const FStyle FS[NFONT]={
  [F_XXL]={66, 7.2f, 0.11f,0},
  [F_IC] ={20, 2.1f, 0.10f,0},
  [F_ICL]={30, 2.8f, 0.10f,0},
- [F_H]  ={34, 4.3f, 0.14f,0.2f},     /* v6.2: word hero between −/+ (OURUI / ORIGINAL) */
+ [F_H]  ={34, 4.3f, 0.14f,0.2f},     /* v6.2: word hero between −/+ (MERAKIPLUS / ORIGINAL) */
 };
 #define GSEG_MAX 128
 static float *gseg[NG]; static int gnseg[NG]; static char gparsed[NG];
@@ -3675,7 +3676,7 @@ static void save_begin(ms_t now){
         toast_show(TR(ok?TX_T_LANG_SAVED:TX_T_LANG_NOFILE),ok?C_OK:C_WARN,now); /* confirmation in the NEW language */
         detail_close(now); return;
     }
-    if(s->flags&SF_OWN){     /* v6.16: pre-heat schedule / auto off — ourui's own file; no MCU write, no config.json */
+    if(s->flags&SF_OWN){     /* v6.16: pre-heat schedule / auto off — merakiplus's own file; no MCU write, no config.json */
         s->val=edit_val;
         if(sel==S_PREHEAT) sch.on=edit_val; else if(sel==S_PHAT) sch.hm=edit_val; else if(sel==S_PHREP) sch.rep=edit_val; else sch.ao=edit_val;
         sch.once_at=(sch.on&&!REP_MASK[sch.rep])?sched_once_target(clk_utc()):0;   /* a one-shot is for the next hh:mm after now */
@@ -3768,14 +3769,14 @@ static void bye(int mode){ bye_mode=mode; view=V_BYE; xsel=-1; tr.type=TR_NONE; 
  *   (0) last frame on screen   (1) stop own activity: close UART, touch grab and fb
  *   (2) fork + setsid + chdir /customer + LD_LIBRARY_PATH + execl ./demo_v9   (3) wait 400 ms, exit
  *   (4) the flag is not touched; no signals   (5) exit releases the rest   (6) log w. time + reason.
- * If the stock UI cannot be started, ourui takes UART/fb/touch back and keeps running.
- * run.sh mode (stock exists, paused): nothing is started — ourui exits, run.sh SIGCONTs. */
+ * If the stock UI cannot be started, merakiplus takes UART/fb/touch back and keeps running.
+ * run.sh mode (stock exists, paused): nothing is started — merakiplus exits, run.sh SIGCONTs. */
 static const uint32_t* ui_frame(ms_t now);
 static void do_switch(ms_t now){
     char err[72]="", rn[340]; int mode=switch_mode();
     if(sw_sim){ bye(mode); return; }
     if(mode==SWM_CONT){
-        boot_log("RUNTIME SWITCH to original: reason=user-button, run.sh mode (stock UI pid %d is paused): ourui exits, nothing is started",bs.stock[0]);
+        boot_log("RUNTIME SWITCH to original: reason=user-button, run.sh mode (stock UI pid %d is paused): merakiplus exits, nothing is started",bs.stock[0]);
         bye(mode); return;
     }
     if(sw_dry){
@@ -3792,7 +3793,7 @@ static void do_switch(ms_t now){
         if(dev_reacquire) dev_reacquire();
         run=1; view=v0; xsel=x0; static_dirty=1; force_all=1;
         toast_show(TR(sw_fail==SWF_NOBIN?TX_T_SW_FAIL_NOBIN:(sw_fail==SWF_FORK?TX_T_SW_FAIL_FORK:TX_T_SW_FAIL_DIED)),C_ERR,now);   /* the detail (err) is in the log */
-        boot_log("RUNTIME SWITCH FAILED: %s — ourui continues",err);
+        boot_log("RUNTIME SWITCH FAILED: %s — merakiplus continues",err);
         return;
     }
     sw_child=hp;
@@ -3804,7 +3805,7 @@ static void sys_confirm(ms_t now){
         if(x_edit==x_orig){ sys_close(now); return; }
         int want=x_edit;
         if(boot_flag_set(want)){ toast_show(TR(want?TX_T_BOOT_SAVED_OURS:TX_T_BOOT_SAVED_ORIG),C_OK,now); sys_close(now); }
-        else { toast_show(TR(bs.lock!=BL_OK?TX_T_BOOT_LOCKED:TX_T_BOOT_ERR),C_ERR,now); x_edit=x_orig=bs.flag; static_dirty=1; fprintf(stderr,"ourui: BOOT-UI: %s\n",boot_err); }
+        else { toast_show(TR(bs.lock!=BL_OK?TX_T_BOOT_LOCKED:TX_T_BOOT_ERR),C_ERR,now); x_edit=x_orig=bs.flag; static_dirty=1; fprintf(stderr,"merakiplus: BOOT-UI: %s\n",boot_err); }
     } else if(xsel==X_SWITCH){
         const char*g=switch_guard(now); if(g){ toast_show(g,C_WARN,now); return; }
         boot_poll(now);
@@ -3934,7 +3935,7 @@ static int swipe_h(int axis,int dx,int dy){ return axis==1&&abs(dx)>=60&&10*abs(
  * the gesture started on −/+ (there the press-down has already changed the value) */
 static int swipe_down(int axis,int target,int dx,int dy){ return axis==2&&dy>=70&&10*dy>=17*abs(dx)&&target!=T_MINUS&&target!=T_PLUS; }
 /* ================= v6.14: the physical POWER BUTTON (UI_v6.md §19 + CHANGES-v6.14) =================
- * The bug: the button did nothing in ourui — only the touch node (event0) was read. The button is the k62091 node (/dev/input/event1,
+ * The bug: the button did nothing in merakiplus — only the touch node (event0) was read. The button is the k62091 node (/dev/input/event1,
  * "Handlers=kbd event1", EV=3 = SYN+KEY, one key). The stock semantics, reversed from demo_v9 (symbols preserved) + the MCU firmware:
  *  - app_powerKey_thread 0x140AB4: open("/dev/input/event1", O_RDWR) — NO EVIOCGRAB; reads struct input_event; for EVERY
  *    EV_KEY (the code is not checked) value is stored in app+0x15A8 (1 = down, 0 = released).
@@ -3951,19 +3952,19 @@ static int swipe_down(int axis,int target,int dx,int dy){ return axis==2&&dy>=70
  *  - MCU (MEM03_V514_260923.bin): the status task sees word 0 = 0 (0x29D4, every 500 ms) and starts "sleep" (0x2F52), which DELETES
  *    boiler_heat, head_heat, status (= RX parser + replies: the controller is silent while it sleeps) and run, sets work_sta = 0 and
  *    resets the outputs (0x2F0C). It wakes ONLY on a hold of the button (own GPIO PC.8; 8 x 100 ms low after a release) or
- *    the alarm -> 0x326 "reset muc" (CPU reset; word 0 starts as 1, the 0x89 round comes -> ourui's re-push sends config again).
- * ourui mirrors this: HOLD 1.5 s -> the same two frames (cmd8 w. alarm 0/0/0, 80 ms, cmd6 sub0 len2 = [0,0] w. I_POWEROFF) ->
+ *    the alarm -> 0x326 "reset muc" (CPU reset; word 0 starts as 1, the 0x89 round comes -> merakiplus's re-push sends config again).
+ * merakiplus mirrors this: HOLD 1.5 s -> the same two frames (cmd8 w. alarm 0/0/0, 80 ms, cmd6 sub0 len2 = [0,0] w. I_POWEROFF) ->
  * TURNING OFF… -> ACK -> OFF; the backlight is turned off 1.5 s after the press; keep-awake is paused while off.
  * Blocked as in stock (brew/steam/grind running: toast, nothing is sent) — and without link / with word 0 = 0 / read-only.
  * Power on: the button again -> light + TURNING ON… (the MCU wakes by itself from the same hold); if the controller answers with word 0 = 1 -> PowerOn
  * (sub0=[1] + sub1=[0], exactly as at startup) -> HOME. Otherwise back to OFF after 10 s. If the controller answers by itself
- * with word 0 = 1 while ourui is in OFF (alarm, or the button was held while ourui did not see it), it powers on the same way.
+ * with word 0 = 1 while merakiplus is in OFF (alarm, or the button was held while merakiplus did not see it), it powers on the same way.
  * A tap on the dark screen shows the OFF page for 8 s — no frames (the MCU cannot receive anything while it sleeps).
  * Deliberate deviation: no SoC suspend and no "killall" — only the backlight; the net guard and telnet keep running. */
 enum { PW_ON=0, PW_OFFING, PW_OFF, PW_WAKING };
 #define PW_HOLD_MS  1500    /* stock: 2 second ticks (1.0-2.0 s); the middle */
 #define PW_GAP_MS     80    /* stock performSleepActions: cmd8 ... usleep(80000) ... cmd6 sub0 len2 */
-#define PW_BL_MS    1500    /* stock: 1.5 s after powerOff -> fb/light/suspend (lv_tick_elaps > 0x5DC); ourui: the light is turned off */
+#define PW_BL_MS    1500    /* stock: 1.5 s after powerOff -> fb/light/suspend (lv_tick_elaps > 0x5DC); merakiplus: the light is turned off */
 #define PW_PEEK_MS  8000    /* tap on the dark screen: the OFF page is shown this long */
 #define PW_WAKE_MS 10000    /* TURNING ON…: how long to wait for word 0 = 1 from the controller */
 #define PW_SEEN_MS   600    /* word 0 = 1 seen (w. link) this long -> the controller is awake */
@@ -3973,7 +3974,7 @@ static struct { int state, key_down, key_fired, blk_shown, kbd_ok, key_code, key
                 uint8_t f8[15]; char node[64]; } pw;
 static void proto_keepawake(ms_t now,int first);
 /* stock isExtractionOrSteamSwitchOn 0x1481E0: GetMaichinState(0x1000) | GetMaichinState(0x4000) | mirror word 22 | 24 | 6.
- * ourui's own start in flight (act.pending) counts too, for the same three activities. */
+ * merakiplus's own start in flight (act.pending) counts too, for the same three activities. */
 static int pw_busy(void){
     uint16_t ws=reg_seen[33]?reg[33]:0;
     return (ws&0x1000)||(ws&0x4000)||(reg_seen[22]&&reg[22])||(reg_seen[24]&&reg[24])||(reg_seen[6]&&reg[6])
@@ -4029,7 +4030,7 @@ static void pw_key(int code,int val,ms_t now){
         pw.key_down=1; pw.t_press=pw.t_down=now; pw.key_fired=0; pw.blk_shown=0; pw.n_press++;
         if(pw.state==PW_OFF){ pw.key_fired=1; pw_wake(now); }
     } else if(val==0&&pw.key_down){
-        pw.key_down=0; if(pw.state==PW_ON&&!pw.key_fired) pw.n_short++;    /* short press: stock only wakes its screensaver — ourui has none */
+        pw.key_down=0; if(pw.state==PW_ON&&!pw.key_fired) pw.n_short++;    /* short press: stock only wakes its screensaver — merakiplus has none */
         pw.key_fired=0;
     }
 }
@@ -4121,7 +4122,7 @@ static void ui_touch(int ev,int x,int y,ms_t now){
         tch.target=hit_test(x,y,now); tch.scroll0=scroll[page];
         if(tch.target){ rip.x=x; rip.y=y; rip.t0=now; rip.on=1; }
         if((tch.target==T_MINUS||tch.target==T_PLUS)&&!sav.active){
-            if(view==V_SYS) x_edit=(tch.target==T_PLUS);               /* BOOT UI: − = ORIGINAL, + = OURUI */
+            if(view==V_SYS) x_edit=(tch.target==T_PLUS);               /* BOOT UI: − = ORIGINAL, + = MERAKIPLUS */
             else { edit_step(tch.target==T_PLUS?1:-1,1); tch.rep_next=now+420; }
         }
     } else if(ev==TE_MOVE&&tch.down){
@@ -4649,7 +4650,7 @@ static const char* boot_lock_text(int l,int lng){
     return TR(lng?TX_BL_VENDOR_L:TX_BL_VENDOR);
 }
 /* BOOT.md §9.1: "exists -> our UI (B) at boot; does not exist -> original (A) at boot" — but never
- * "our UI" if slot B is not mounted (then A starts) or does not contain ourui. From v6.3
+ * "our UI" if slot B is not mounted (then A starts) or does not contain merakiplus. From v6.3
  * the product name is shown instead of "our UI". */
 static const char* boot_state_text(void){
     int k=boot_next_kind();
@@ -4949,7 +4950,7 @@ static const short DG_LAB[DG_N+DG_NB]={TX_DL_LINK,TX_DL_PHASE,TX_DL_RXOK,TX_DL_R
 static void diag_boot_text(char v[DG_NB][28],uint32_t col[DG_NB],char*exe,size_t en,char*evt,size_t vn,char*pids,size_t pn){
     for(int i=0;i<DG_NB;i++) col[i]=C_TXT;
     snprintf(v[0],28,"%s",TR(bs.flag?TX_DV_FLAG_YES:TX_DV_FLAG_NO));
-    snprintf(v[1],28,"%s",boot_next_name()); if(bs.flag&&bs.lock!=BL_OK) col[1]=C_WARN;       /* flag set, but slot B is not ourui */
+    snprintf(v[1],28,"%s",boot_next_name()); if(bs.flag&&bs.lock!=BL_OK) col[1]=C_WARN;       /* flag set, but slot B is not merakiplus */
     snprintf(v[2],28,"%s",TR(bs.self_slot==SLOT_B?TX_DV_SLOTB:(bs.self_slot==SLOT_A?TX_DV_SLOTA:(bs.self_exe[0]?TX_DV_RUNSH:TX_DV_UNKNOWN))));
     snprintf(v[3],28,"%s",TR(bs.lock==BL_OK?TX_DV_B_OK:(bs.lock==BL_NOMOUNT?TX_DV_B_NOMOUNT:(bs.lock==BL_NOBIN?TX_DV_B_NOBIN:TX_DV_B_VENDOR)))); col[3]=bs.lock==BL_OK?C_OK:C_WARN;
     snprintf(v[4],28,"%s",TR(bs.sw_pid?TX_DV_RUNNING:TX_DV_NOTRUNNING)); col[4]=bs.sw_pid?C_OK:C_WARN;
@@ -5104,8 +5105,8 @@ static void draw_diag(ms_t now){
           if(y+30>=vr.y0&&y<=vr.y1){ text_c(CX,y,TR(TX_DG_L_LANG),F_XS,C_TXT3,255); text_c(CX,y+16,lng,F_S,(lang_src==LS_UNKNOWN||lang_src==LS_SESSION)?C_WARN:C_TXT,255); }   /* amber: the file has an unknown value / could not be written */
           y=DG_ABOUT+76-sc;
           if(y+36>=vr.y0&&y<=vr.y1){
-              float w=text_wf(PRODUCT " " OURUI_VERSION,F_S), x=brand_at(CX-w/2,y,F_S,C_TXT,255);
-              text_at(x,y," " OURUI_VERSION,F_S,C_TXT2,255);
+              float w=text_wf(PRODUCT " " MERAKIPLUS_VERSION,F_S), x=brand_at(CX-w/2,y,F_S,C_TXT,255);
+              text_at(x,y," " MERAKIPLUS_VERSION,F_S,C_TXT2,255);
               text_c(CX,y+24,TR(TX_TAGLINE),F_XS,C_TXT3,255);
           } }
         edge_fade(vr,sc>0,sc<(int)mx);
@@ -5117,7 +5118,7 @@ static void draw_diag(ms_t now){
 
 /* ================= boot splash ================= */
 #define SPLASH_W 300
-static void splash_status(char*b,size_t n){ snprintf(b,n,OURUI_VERSION " · %s",TR(cfg_ok?TX_SPL_CFG_OK:TX_SPL_CFG_MISSING)); }
+static void splash_status(char*b,size_t n){ snprintf(b,n,MERAKIPLUS_VERSION " · %s",TR(cfg_ok?TX_SPL_CFG_OK:TX_SPL_CFG_MISSING)); }
 static void draw_splash(ms_t now){
     float t=(now-ui_start)/(float)SPLASH_MS; int q=(int)(t*30);
     if(W_begin(W_SPL,R(CX-SPLASH_W/2,140,SPLASH_W,200),hi(hi(H0,q),ui_lang))){
@@ -5195,10 +5196,10 @@ static void proto_keepawake(ms_t now,int first){
 /* ---- BOOT-PUSH (PARITY §1.4) — v6.4: SIM/preview; v6.5: ALSO THE DEVICE ----
  * At startup the stock UI's fuart_thread sends its config mirror to the controller:
  *     cmd6 sub1 len30 (words 1..30)   +   cmd6 sub112 len3 (words 112..114)
- * ourui now does the same in all build types. Without it, after a slot B boot (where the stock UI
+ * merakiplus now does the same in all build types. Without it, after a slot B boot (where the stock UI
  * never starts) the controller sits on its own power-on defaults (REGISTERMAP §2: word 11 = 920,
  * word 114 = 50, word 14 = 4, word 25 = 550 …) instead of the config's. In run.sh mode the
- * paused stock UI has already sent the blocks; ourui then sends the same values again (no effect).
+ * paused stock UI has already sent the blocks; merakiplus then sends the same values again (no effect).
  * The word layout is stock's (model_data_init 0xcef40 + fuart_thread 0x146810): words 2/4/11/14/17/23/25
  * from config, words 5/13/15 = 60, all other words in 1..30 = 0, words 112/113 packed, word 114 = headTemper.
  * The blocks go through the SAME gate as everything else (wq_push without intent -> frame policy): start words
@@ -5209,7 +5210,7 @@ static void proto_keepawake(ms_t now,int first){
  *
  * ACTIVITY GUARD (guard, device): the block writes the start words 3/6/9/16/22/24 as 0 and could
  * thereby abort a brew that is already running — e.g. when run.sh is started in the middle of an activity,
- * or ourui is restarted during one. Hence it is decided ONCE, the first time the link is up and
+ * or merakiplus is restarted during one. Hence it is decided ONCE, the first time the link is up and
  * work_sta (word 33) has been read: if grind/brew/water/steam is running (phase_active), the push is SKIPPED
  * (BPR_SKIP) — it is not deferred and not repeated by a later SAVE. The controller then has the
  * values that activity was started with; every SAVE and every start block still writes its words.
@@ -5259,7 +5260,7 @@ static void boot_push_resave(void){ if(bp_on&&bp.state==BP_DONE&&(bp_failed(bp.r
 /* ---- MCU RESTART -> RE-PUSH (v6.6; the open item in CHANGES-v6.5 item 8) ----
  * The controller's register file lives in RAM and gets fixed power-on defaults at every MCU startup (REGISTERMAP §2:
  * word 4 = 180, 11 = 920, 14 = 4, 17 = 360, 23 = 360, 25 = 550, 112 = 0, 113 = 0, 114 = 50). If the MCU
- * restarts while ourui is running, the boot push is gone. The stock UI has the same gap; ourui closes it:
+ * restarts while merakiplus is running, the boot push is gone. The stock UI has the same gap; merakiplus closes it:
  *  (a) THE VERSION QUERY COMES BACK. The MCU sends cmd 0x89 every 20 ms from its startup until it
  *      has received a reply (PROTOCOL §2.2) — and only then (0 of them in 12 min of live traffic, STEAMLIVE §2). A 0x89
  *      arriving more than RP_STRAY_MS after the boot push left WAITING is therefore an MCU startup
@@ -5287,7 +5288,7 @@ static void boot_push_resave(void){ if(bp_on&&bp.state==BP_DONE&&(bp_failed(bp.r
 #define RP_WINDOW_MS 600000
 enum { RPC_NONE=0, RPC_VER, RPC_DEF };
 static struct { unsigned vn, sig_n0; int armed, sig_on, started, last, n_ver, n_def, def_k; ms_t t_start, def_t[RP_BUDGET]; } rps;
-static int bp_guard_cfg=1;             /* the guard for a re-push: device 1; SIM follows OURUI_SIM_BOOTPUSH_GUARD */
+static int bp_guard_cfg=1;             /* the guard for a re-push: device 1; SIM follows MERAKIPLUS_SIM_BOOTPUSH_GUARD */
 static int repush_count(void){ return rps.n_ver+rps.n_def; }
 static int repush_cfg_sane(void){ for(int i=0;i<NSET;i++){ const Setting*q=&SET[i]; if(q->mcu!=M_NONE&&(!q->loaded||set_oor(q))) return 0; } return 1; }
 static int mcu_defaults_sig(void){ return reg_seen[112]&&reg_seen[113]&&reg[112]==0&&reg[113]==0; }
@@ -5337,7 +5338,7 @@ static void loop_rendered(ms_t now,float ft){
 /* ====================================================================== */
 static void onsig(int s){ (void)s; SIM_SIG(s) run=0; }
 
-#ifndef OURUI_PREVIEW
+#ifndef MERAKIPLUS_PREVIEW
 /* ---- touch: raw events -> DOWN/MOVE/UP per SYN_REPORT ---- */
 static int ifd=-1;
 static int absx_min=0,absx_max=4095,absy_min=0,absy_max=4095;
@@ -5351,14 +5352,14 @@ static void inp_open(void){
     if(ioctl(ifd,EVIOCGABS(ABS_Y),&ai)==0){ absy_min=ai.minimum; absy_max=ai.maximum; }
     if(ioctl(ifd,EVIOCGABS(ABS_MT_POSITION_X),&ai)==0){ absx_min=ai.minimum; absx_max=ai.maximum; }
     if(ioctl(ifd,EVIOCGABS(ABS_MT_POSITION_Y),&ai)==0){ absy_min=ai.minimum; absy_max=ai.maximum; }
-    /* EVIOCGRAB: exclusive input while ourui runs, so the SIGSTOPped demo_v9 does not
+    /* EVIOCGRAB: exclusive input while merakiplus runs, so the SIGSTOPped demo_v9 does not
      * get our touches in its evdev queue and replay them after SIGCONT (phantom touches in
-     * the stock UI). Released automatically on close/exit. OURUI_NOGRAB=1 disables it
+     * the stock UI). Released automatically on close/exit. MERAKIPLUS_NOGRAB=1 disables it
      * (needed for tinj injection from another process). */
-    if(!getenv("OURUI_NOGRAB")){ if(ioctl(ifd,EVIOCGRAB,1)!=0) perror("EVIOCGRAB"); }
+    if(!getenv("MERAKIPLUS_NOGRAB")){ if(ioctl(ifd,EVIOCGRAB,1)!=0) perror("EVIOCGRAB"); }
 }
 /* v6.14: THE POWER BUTTON — the k62091 node, read-only and WITHOUT EVIOCGRAB (stock does not grab it either; app_powerKey_thread
- * 0x140AB4 opens /dev/input/event1). Selection: OURUI_KBD=<path> -> else the event node (not the touch node) whose name contains
+ * 0x140AB4 opens /dev/input/event1). Selection: MERAKIPLUS_KBD=<path> -> else the event node (not the touch node) whose name contains
  * "k62091" -> else the first one with EV_KEY and without EV_ABS -> else /dev/input/event1, if it can be opened. */
 static int kfd=-1;
 static int kbd_try(const char*path,int need_name,int*fdo,char*name,size_t nn){
@@ -5370,7 +5371,7 @@ static int kbd_try(const char*path,int need_name,int*fdo,char*name,size_t nn){
     *fdo=fd; return 1;
 }
 static void kbd_open(void){
-    char path[48], name[40]; const char*e=getenv("OURUI_KBD"); pw.kbd_ok=0; kfd=-1;
+    char path[48], name[40]; const char*e=getenv("MERAKIPLUS_KBD"); pw.kbd_ok=0; kfd=-1;
     if(e){ snprintf(path,sizeof path,"%s",e); if(!kbd_try(path,0,&kfd,name,sizeof name)) kfd=-1; }
     for(int pass=1;kfd<0&&!e&&pass<=2;pass++)
         for(int i=0;i<10&&kfd<0;i++){ snprintf(path,sizeof path,"/dev/input/event%d",i); if(!strcmp(path,INP)) continue; kbd_try(path,pass,&kfd,name,sizeof name); }
@@ -5393,13 +5394,13 @@ static int scaley(int v){ return (int)((long)(v-absy_min)*H/(absy_max-absy_min+1
 /* Everything from here to #endif exists ONLY in the SIM build. It replaces the device's three file nodes
  * (fb0, ttyS1, event0) and adds a test surface on top — the UI, protocol, save and drawing code
  * is the same as on the device:
- *   OURUI_SIM_TTY    pty slave instead of /dev/ttyS1              (uart_open: UART_DEV)
- *   OURUI_SIM_FB     fb buffer -> file (tmp+rename, <= 10 Hz + on change)
- *   OURUI_SIM_TOUCH  FIFO w/ raw 16-byte evdev records; played back according to the records' timestamps
- *   OURUI_SIM_STATE  state JSONL (one line per rendered frame whose content changed; at least ~10 Hz)
- *   OURUI_SIM_CTRL   unix socket w/ JSONL hooks (ping, fb_dump, exit, action, save, page, touch,
+ *   MERAKIPLUS_SIM_TTY    pty slave instead of /dev/ttyS1              (uart_open: UART_DEV)
+ *   MERAKIPLUS_SIM_FB     fb buffer -> file (tmp+rename, <= 10 Hz + on change)
+ *   MERAKIPLUS_SIM_TOUCH  FIFO w/ raw 16-byte evdev records; played back according to the records' timestamps
+ *   MERAKIPLUS_SIM_STATE  state JSONL (one line per rendered frame whose content changed; at least ~10 Hz)
+ *   MERAKIPLUS_SIM_CTRL   unix socket w/ JSONL hooks (ping, fb_dump, exit, action, save, page, touch,
  *                    boot_flag, runtime_switch, raw_write, config_reload, state_now, layout)
- *   OURUI_SIM_ROOT   sandbox root for /customer /new_customer /proc /tmp (required)
+ *   MERAKIPLUS_SIM_ROOT   sandbox root for /customer /new_customer /proc /tmp (required)
  * The hooks call the SAME functions a tap would (act_request, save_begin, sys_confirm …);
  * they bypass neither guards nor frame policy. The only exception is raw_write (stock emulation),
  * see sim_raw_push(). Nothing is written outside the sandbox besides the paths the runner itself designates. */
@@ -5411,7 +5412,7 @@ static int sim_tfd_w=-1, sim_lfd=-1, sim_bp_guard=0;
 /* the runner does not read stderr continuously (pipe): never a stream of error lines */
 static void sim_perr(const char*s){ static int n; if(n<3){ n++; perror(s); } }
 static void sim_die(int rc,const char*fmt,...){
-    va_list ap; va_start(ap,fmt); fputs("ourui-sim: ",stderr); vfprintf(stderr,fmt,ap); va_end(ap); fputc('\n',stderr); exit(rc);
+    va_list ap; va_start(ap,fmt); fputs("merakiplus-sim: ",stderr); vfprintf(stderr,fmt,ap); va_end(ap); fputc('\n',stderr); exit(rc);
 }
 
 /* ---- sandbox ---- */
@@ -5424,16 +5425,16 @@ static void sim_put(const char*rel,const char*data,int mode){   /* creates ONLY 
     sim_mkparents(p); int fd=open(p,O_WRONLY|O_CREAT|O_EXCL,mode); if(fd<0) return;
     int n=(int)strlen(data); if(n&&write(fd,data,n)!=n){} close(fd); chmod(p,mode);
 }
-/* The runner's sandbox (contract §8) has /customer, /new_customer/ourui/boot and three /proc files.
+/* The runner's sandbox (contract §8) has /customer, /new_customer/merakiplus/boot and three /proc files.
  * The BOOT UI guard and SWITCH NOW read more than that: /proc/mounts (is slot B mounted?), slot B's
- * demo_v9 (is it ourui?), slot A's demo_v9 (is there a stock UI?) and /proc/self/exe. Without them
+ * demo_v9 (is it merakiplus?), slot A's demo_v9 (is there a stock UI?) and /proc/self/exe. Without them
  * both would be LOCKED. Here whatever is missing is filled in — a slot B boot, like the preview's
- * mock_boot_b(). Nothing existing is overwritten; OURUI_SIM_NOPROVISION=1 skips it. */
+ * mock_boot_b(). Nothing existing is overwritten; MERAKIPLUS_SIM_NOPROVISION=1 skips it. */
 static void sim_provision(void){
     char mk[200], p[460]; struct stat st;
     sim_put("/proc/mounts","rootfs / rootfs rw 0 0\nmock-a /customer mockfs rw 0 0\nmock-b " SLOT_B_MNT " mockfs rw 0 0\n",0644);
     sim_put("/proc/sys/kernel/random/boot_id","6f757275-6973-4000-8000-73696d626f6f\n",0644);
-    snprintf(mk,sizeof mk,"#!/bin/sh\n# SIM mock of slot B's demo_v9: %s\nexit 0\n",OURUI_MARK); sim_put(SLOT_B_EXE,mk,0755);
+    snprintf(mk,sizeof mk,"#!/bin/sh\n# SIM mock of slot B's demo_v9: %s\nexit 0\n",MERAKIPLUS_MARK); sim_put(SLOT_B_EXE,mk,0755);
     sim_put(SLOT_A_EXE,"#!/bin/sh\n# SIM mock of the stock UI (slot A)\nexec sleep 3\n",0755);
     snprintf(p,sizeof p,"%s/proc/self/exe",sysroot);
     if(lstat(p,&st)!=0){ sim_mkparents(p); if(symlink(SLOT_B_EXE,p)!=0){} }
@@ -5453,32 +5454,32 @@ static void sim_env(void){
     const char*e; struct stat st;
     sim_t0=now_ms();
     signal(SIGPIPE,SIG_IGN);
-    if((e=getenv("OURUI_SIM_ROOT"))&&*e){ if(strlen(e)>=sizeof sysroot) sim_die(2,"OURUI_SIM_ROOT is too long"); snprintf(sysroot,sizeof sysroot,"%s",e); }
-    else if((e=getenv("OURUI_ROOT"))&&strlen(e)>=sizeof sysroot) sim_die(2,"OURUI_ROOT is too long");
+    if((e=getenv("MERAKIPLUS_SIM_ROOT"))&&*e){ if(strlen(e)>=sizeof sysroot) sim_die(2,"MERAKIPLUS_SIM_ROOT is too long"); snprintf(sysroot,sizeof sysroot,"%s",e); }
+    else if((e=getenv("MERAKIPLUS_ROOT"))&&strlen(e)>=sizeof sysroot) sim_die(2,"MERAKIPLUS_ROOT is too long");
     size_t L=strlen(sysroot); while(L>1&&sysroot[L-1]=='/') sysroot[--L]=0;
-    if(!sysroot[0]||!strcmp(sysroot,"/")) sim_die(2,"OURUI_SIM_ROOT missing: the SIM build must never touch the host's /customer, /new_customer, /proc or /tmp");
+    if(!sysroot[0]||!strcmp(sysroot,"/")) sim_die(2,"MERAKIPLUS_SIM_ROOT missing: the SIM build must never touch the host's /customer, /new_customer, /proc or /tmp");
     if(stat(sysroot,&st)!=0||!S_ISDIR(st.st_mode)) sim_die(2,"sandbox root does not exist: %s",sysroot);
-    /* paths without their own env follow the root (on the device the language file does NOT follow OURUI_ROOT — unchanged) */
-    if((e=getenv("OURUI_CONFIG"))){ if(strlen(e)>=sizeof cfg_path) sim_die(2,"OURUI_CONFIG is too long"); } else snprintf(cfg_path,sizeof cfg_path,"%s/customer/config.json",sysroot);
-    if((e=getenv("OURUI_BAKDIR"))){ if(strlen(e)>=sizeof cfg_bakdir) sim_die(2,"OURUI_BAKDIR is too long"); } else snprintf(cfg_bakdir,sizeof cfg_bakdir,"%s/new_customer/ourui/cfgbak",sysroot);
-    if((e=getenv("OURUI_LANGFILE"))){ if(strlen(e)>=sizeof lang_path) sim_die(2,"OURUI_LANGFILE is too long"); } else snprintf(lang_path,sizeof lang_path,"%s/new_customer/ourui/lang",sysroot);
-    if((e=getenv("OURUI_SCHEDFILE"))){ if(strlen(e)>=sizeof sched_path) sim_die(2,"OURUI_SCHEDFILE is too long"); snprintf(sched_path,sizeof sched_path,"%s",e); }
-    else snprintf(sched_path,sizeof sched_path,"%s/new_customer/ourui/schedule",sysroot);   /* v6.16 */
-    if((e=getenv("OURUI_SIM_CLOCK"))&&*e){ int64_t u=sim_parse_utc(e); if(u<0) sim_die(2,"OURUI_SIM_CLOCK: expected YYYY-MM-DDTHH:MM:SSZ"); clk_off=u-(int64_t)time(NULL); }   /* v6.16: the wall clock (UTC) */
-    sim_env_path("OURUI_SIM_TTY",sim_tty,sizeof sim_tty,1);
-    sim_env_path("OURUI_SIM_FB",sim_fb_path,sizeof sim_fb_path-8,1);
-    sim_env_path("OURUI_SIM_STATE",sim_state_path,sizeof sim_state_path,1);
-    sim_env_path("OURUI_SIM_TOUCH",sim_touch_path,sizeof sim_touch_path,0);
-    sim_env_path("OURUI_SIM_CTRL",sim_ctrl_path,sizeof sim_ctrl_path,0);
+    /* paths without their own env follow the root (on the device the language file does NOT follow MERAKIPLUS_ROOT — unchanged) */
+    if((e=getenv("MERAKIPLUS_CONFIG"))){ if(strlen(e)>=sizeof cfg_path) sim_die(2,"MERAKIPLUS_CONFIG is too long"); } else snprintf(cfg_path,sizeof cfg_path,"%s/customer/config.json",sysroot);
+    if((e=getenv("MERAKIPLUS_BAKDIR"))){ if(strlen(e)>=sizeof cfg_bakdir) sim_die(2,"MERAKIPLUS_BAKDIR is too long"); } else snprintf(cfg_bakdir,sizeof cfg_bakdir,"%s/new_customer/merakiplus/cfgbak",sysroot);
+    if((e=getenv("MERAKIPLUS_LANGFILE"))){ if(strlen(e)>=sizeof lang_path) sim_die(2,"MERAKIPLUS_LANGFILE is too long"); } else snprintf(lang_path,sizeof lang_path,"%s/new_customer/merakiplus/lang",sysroot);
+    if((e=getenv("MERAKIPLUS_SCHEDFILE"))){ if(strlen(e)>=sizeof sched_path) sim_die(2,"MERAKIPLUS_SCHEDFILE is too long"); snprintf(sched_path,sizeof sched_path,"%s",e); }
+    else snprintf(sched_path,sizeof sched_path,"%s/new_customer/merakiplus/schedule",sysroot);   /* v6.16 */
+    if((e=getenv("MERAKIPLUS_SIM_CLOCK"))&&*e){ int64_t u=sim_parse_utc(e); if(u<0) sim_die(2,"MERAKIPLUS_SIM_CLOCK: expected YYYY-MM-DDTHH:MM:SSZ"); clk_off=u-(int64_t)time(NULL); }   /* v6.16: the wall clock (UTC) */
+    sim_env_path("MERAKIPLUS_SIM_TTY",sim_tty,sizeof sim_tty,1);
+    sim_env_path("MERAKIPLUS_SIM_FB",sim_fb_path,sizeof sim_fb_path-8,1);
+    sim_env_path("MERAKIPLUS_SIM_STATE",sim_state_path,sizeof sim_state_path,1);
+    sim_env_path("MERAKIPLUS_SIM_TOUCH",sim_touch_path,sizeof sim_touch_path,0);
+    sim_env_path("MERAKIPLUS_SIM_CTRL",sim_ctrl_path,sizeof sim_ctrl_path,0);
     bl_enabled=0;                                          /* the backlight sysfs is never written in SIM */
-    if(getenv("OURUI_SIM_NOBOOTPUSH")) bp_on=0;
-    if(getenv("OURUI_SIM_BOOTPUSH_GUARD")) sim_bp_guard=1;   /* v6.5: the device's activity guard (skip instead of defer) */
+    if(getenv("MERAKIPLUS_SIM_NOBOOTPUSH")) bp_on=0;
+    if(getenv("MERAKIPLUS_SIM_BOOTPUSH_GUARD")) sim_bp_guard=1;   /* v6.5: the device's activity guard (skip instead of defer) */
     bp_guard_cfg=sim_bp_guard;                             /* v6.6: a re-push uses the same guard choice as the boot push */
-    if((e=getenv("OURUI_SIM_UPTIME_MS"))&&*e){ sim_clk_off=0; sim_clk_off=strtoll(e,NULL,0)-(int64_t)now_ms(); sim_t0=now_ms(); }   /* v6.6: the clock starts at a chosen value (wraparound test) */
-    if(!getenv("OURUI_SIM_NOPROVISION")) sim_provision();
+    if((e=getenv("MERAKIPLUS_SIM_UPTIME_MS"))&&*e){ sim_clk_off=0; sim_clk_off=strtoll(e,NULL,0)-(int64_t)now_ms(); sim_t0=now_ms(); }   /* v6.6: the clock starts at a chosen value (wraparound test) */
+    if(!getenv("MERAKIPLUS_SIM_NOPROVISION")) sim_provision();
     /* v6.7: the wifi MODEL. Default = healthy stack (like runtime B: stock's wpa_supplicant is alive); "cold" = slot B cold start
      * (no wlan0, no supplicant, no IP); "off" = the watchdog disabled. The log lives in the sandbox's /tmp. */
-    { e=getenv("OURUI_SIM_NET"); nm_reset(e&&!strcmp(e,"cold")); sim_net_on=!(e&&!strcmp(e,"off")); mkdir(rp("/tmp"),0755); mkdir(rp("/appconfigs"),0755); }
+    { e=getenv("MERAKIPLUS_SIM_NET"); nm_reset(e&&!strcmp(e,"cold")); sim_net_on=!(e&&!strcmp(e,"off")); mkdir(rp("/tmp"),0755); mkdir(rp("/appconfigs"),0755); }
 }
 
 /* ---- touch: FIFO w/ raw evdev records -> timed queue -> inp_poll() (same decoding as the device) ----
@@ -5570,7 +5571,7 @@ static const struct { const char*id; int idx; } SIM_PARAM[]={
  {"hotwater_mode",S_HOTMODE},{"hotwater_temp",S_HOTT},{"ui_language",S_UILANG},{"backlight",S_BL},{"volume",S_VOL},
  {"temp_unit",S_TUNIT},{"language",S_LANG},{"hotwater_shortcut",S_HOTSC},{"sumtime",S_DST},{"cleartip",S_CLEARTIP},
  {"timemode",S_TIMEMODE},{"automatically",S_AUTOTIME},{"timezone",S_TZ},
- {"preheat",S_PREHEAT},{"preheat_at",S_PHAT},{"preheat_repeat",S_PHREP},{"auto_off",S_AUTOOFF}};   /* v6.16: ourui's own (schedule file) */
+ {"preheat",S_PREHEAT},{"preheat_at",S_PHAT},{"preheat_repeat",S_PHREP},{"auto_off",S_AUTOOFF}};   /* v6.16: merakiplus's own (schedule file) */
 #define SIM_NPARAM ((int)(sizeof SIM_PARAM/sizeof SIM_PARAM[0]))
 static int sim_param_idx(const char*id){
     for(int k=0;k<SIM_NPARAM;k++) if(!strcmp(SIM_PARAM[k].id,id)) return SIM_PARAM[k].idx;
@@ -5627,7 +5628,7 @@ static void sim_state_emit(ms_t now,int force){   /* force=0: only if the line's
     static const char*const TAB[]={"home","brew","steam","system","diag"};
     static const short SHOWN[]={0,1,2,3,4,6,9,11,14,16,17,19,22,23,24,25,33,34,35,36,37,38,39,40,41,42,44,46,47,48,50,51,52,58,112,113,114};   /* v6.6: + 44, 46 (the wand switch) */
     int pr=phase_raw(now); struct stat st; char rn[340], stamp[160]="", a[40], b[40];
-    static uint32_t last_h; jb(&j,"\"client\":\"ourui-sim\",\"version\":\"" OURUI_VERSION "\"");
+    static uint32_t last_h; jb(&j,"\"client\":\"merakiplus-sim\",\"version\":\"" MERAKIPLUS_VERSION "\"");
     jb(&j,",\"view\":\"%s\",\"view_raw\":\"%s\",\"page\":\"%s\",\"tab\":\"%s\"",view==V_BYE?"bye":"main",VW[view],sim_page_key(),TAB[page]);
     jb(&j,",\"phase\":\"%s\",\"phase_ui\":\"%s\",\"work_sta\":%u,\"link_up\":%s",PH_KEY[pr],PH_KEY[act.ph],reg[33],link_up(now)?"true":"false");
     /* v6.6: phase = the contract's phase_raw() (steam first, unchanged); phase_main = HOME's main activity; steam = the steam path */
@@ -5728,7 +5729,7 @@ static void sim_state_emit(ms_t now,int force){   /* force=0: only if the line's
     char*tail=j.p; uint32_t h=H0; for(char*q=buf;q<tail;q++){ h^=(unsigned char)*q; h*=16777619u; }
     jb(&j,",\"crc_ok\":%u,\"frame_ms\":%.3f,\"frame_ms_max\":%.3f,\"frame_ms_avg\":%.3f,\"frame_ms_peak\":%.3f,\"frames\":%ld,\"fb_seq\":%ld}",
        rx_ok,ft_last,sim_ft_win>ft_last?sim_ft_win:ft_last,sim_frames?sim_ft_sum/sim_frames:0.0,sim_ft_peak,sim_frames,sim_fb_seq);
-    if(j.p>=j.e){ static int warned; if(!warned){ warned=1; fputs("ourui-sim: state line too long\n",stderr); } return; }
+    if(j.p>=j.e){ static int warned; if(!warned){ warned=1; fputs("merakiplus-sim: state line too long\n",stderr); } return; }
     if(!force&&h==last_h&&now-sim_state_last<90) return;
     last_h=h; *j.p++='\n'; fprintf(sim_sf,"{\"t_ms\":%lld,",(long long)(now-sim_t0)); fwrite(buf,1,(size_t)(j.p-buf),sim_sf); fflush(sim_sf); sim_state_last=now; sim_ft_win=0;
 }
@@ -5820,10 +5821,10 @@ static int sim_action_now(int kind,ms_t now){
     sim_go_main(); sim_set_page(PG_HOME);
     act_request(kind,now); return act.pending==kind;
 }
-/* raw_write: emulates a STOCK UI write (contract §5), e.g. MachSleep word1=1, which ourui itself never
+/* raw_write: emulates a STOCK UI write (contract §5), e.g. MachSleep word1=1, which merakiplus itself never
  * sends. Same band and trigger guard as the frame policy (words 26/27/30 and start words cannot
  * be set), and all other words must lie within their spec range — the only relaxation is word1 ∈ {0,1}.
- * word1=1 also pauses ourui's keep-awake (otherwise the UI wakes the controller again within
+ * word1=1 also pauses merakiplus's keep-awake (otherwise the UI wakes the controller again within
  * 3 s — that is the v6 behaviour); a raw_write w/ word1=0 lifts the pause. */
 static int sim_raw_push(int sub,const uint16_t*w,int len){
     if(ro_mode||wq.n>=WQ_MAX||len<1||len>WQ_WMAX||sub<0||sub>255) return 0;
@@ -5860,7 +5861,7 @@ static void sim_dispatch(const char*line,char*out,size_t on,ms_t now){
     JB j={out,out+on-48};
     if(n<0){ jb(&j,"{\"ok\":false,\"error\":\"invalid JSON\""); goto done; }
     js_str(kv,n,"cmd",cmd,sizeof cmd); js_str(kv,n,"name",name,sizeof name);
-    if(!strcmp(cmd,"ping")){ jb(&j,"{\"ok\":true,\"t\":%.3f,\"page\":\"%s\",\"phase\":\"%s\",\"client\":\"ourui-sim\",\"version\":\"" OURUI_VERSION "\"",(now-sim_t0)/1000.0,sim_page_key(),PH_KEY[phase_raw(now)]); }
+    if(!strcmp(cmd,"ping")){ jb(&j,"{\"ok\":true,\"t\":%.3f,\"page\":\"%s\",\"phase\":\"%s\",\"client\":\"merakiplus-sim\",\"version\":\"" MERAKIPLUS_VERSION "\"",(now-sim_t0)/1000.0,sim_page_key(),PH_KEY[phase_raw(now)]); }
     else if(!strcmp(cmd,"state_now")){ sim_state_emit(now,1); jb(&j,"{\"ok\":true"); }
     else if(!strcmp(cmd,"fb_dump")){
         if(!js_str(kv,n,"path",path,sizeof path-8)) snprintf(path,sizeof path,"%s",sim_fb_path);
@@ -5982,7 +5983,7 @@ static void sim_ctrl_open(void){
     struct sockaddr_un a; memset(&a,0,sizeof a); a.sun_family=AF_UNIX;
     for(int i=0;i<SIM_NCLI;i++) sim_cli[i].fd=-1;
     if(!sim_ctrl_path[0]) return;
-    if(strlen(sim_ctrl_path)>=sizeof a.sun_path) sim_die(2,"OURUI_SIM_CTRL is too long for a unix socket (%d chars, max %d)",(int)strlen(sim_ctrl_path),(int)sizeof a.sun_path-1);
+    if(strlen(sim_ctrl_path)>=sizeof a.sun_path) sim_die(2,"MERAKIPLUS_SIM_CTRL is too long for a unix socket (%d chars, max %d)",(int)strlen(sim_ctrl_path),(int)sizeof a.sun_path-1);
     unlink(sim_ctrl_path); snprintf(a.sun_path,sizeof a.sun_path,"%s",sim_ctrl_path);
     sim_lfd=socket(AF_UNIX,SOCK_STREAM,0);
     if(sim_lfd<0||bind(sim_lfd,(struct sockaddr*)&a,sizeof a)!=0||listen(sim_lfd,8)!=0) sim_die(2,"ctrl-socket %s: %s",sim_ctrl_path,strerror(errno));
@@ -6016,8 +6017,8 @@ static void sim_ctrl_io(ms_t now){
 
 /* ---- lifecycle (called from main via the SIM_* macros) ---- */
 static void sim_start(void){
-    sim_sf=fopen(sim_state_path,"a"); if(!sim_sf) sim_die(2,"cannot open OURUI_SIM_STATE %s: %s",sim_state_path,strerror(errno));
-    if(!sim_fb_write(sim_fb_path)) sim_die(4,"cannot write OURUI_SIM_FB %s: %s",sim_fb_path,strerror(errno));
+    sim_sf=fopen(sim_state_path,"a"); if(!sim_sf) sim_die(2,"cannot open MERAKIPLUS_SIM_STATE %s: %s",sim_state_path,strerror(errno));
+    if(!sim_fb_write(sim_fb_path)) sim_die(4,"cannot write MERAKIPLUS_SIM_FB %s: %s",sim_fb_path,strerror(errno));
     sim_ctrl_open();                                       /* listens BEFORE the first state line (the runner pings as soon as the line exists) */
     if(bp_on) boot_push_start(sim_bp_guard);
 }
@@ -6068,23 +6069,23 @@ static void dev_release_impl(void){
     if(fbmem){ munmap(fbmem,fblen); fbmem=NULL; }
     if(ffd>=0){ close(ffd); ffd=-1; }
 }
-static void dev_reacquire_impl(void){      /* the stock UI did not come up: ourui takes the screen back */
+static void dev_reacquire_impl(void){      /* the stock UI did not come up: merakiplus takes the screen back */
     uart_open(); fb_open(); inp_open(); kbd_open();
     RL full; full.n=1; full.r[0]=FULL; pres_prev=full;
 }
 /* v6.7: the net watchdog alone, without screen/UART/touch — for status and for the self-heal proof on the device:
- *   ourui --net-status            (read-only: probe + comparison of the conf file with what config.json yields)
- *   ourui --net-watch [seconds]   (same net_step() as the UI's main loop; also logs to stdout) */
+ *   merakiplus --net-status            (read-only: probe + comparison of the conf file with what config.json yields)
+ *   merakiplus --net-watch [seconds]   (same net_step() as the UI's main loop; also logs to stdout) */
 static int net_cli(int argc,char**argv){
     ms_t now=now_ms(); const char*e;
-    if((e=getenv("OURUI_CONFIG"))) snprintf(cfg_path,sizeof cfg_path,"%s",e);
+    if((e=getenv("MERAKIPLUS_CONFIG"))) snprintf(cfg_path,sizeof cfg_path,"%s",e);
     if(!strcmp(argv[1],"--net-status")){
         NetProbe p; char want[4096],have[4096],mw[33]="-",mh[33]="-",ipb[20]; int wn=-1;
         memset(&p,0,sizeof p); memset(&net,0,sizeof net); net_now=now; nh_probe(&p,now,1); net_cfg_load();
         if(net.cfg==NC_OK&&(wn=net_conf_build(want,sizeof want))>0) md5_hex((const uint8_t*)want,(size_t)wn,mw);
         int fd=open(NET_CONF,O_RDONLY); int hn=fd>=0?(int)read(fd,have,sizeof have):-1; if(fd>=0) close(fd);
         if(hn>0) md5_hex((const uint8_t*)have,(size_t)hn,mh);
-        printf("ourui " OURUI_VERSION " net-status (read-only)\n");
+        printf("merakiplus " MERAKIPLUS_VERSION " net-status (read-only)\n");
         printf("probe : " NET_IF " %s, wpa_supplicant pid %d, udhcpc pid %d, carrier %d, ip %s, default route %d\n",p.iface?(p.ifup?"present (UP)":"present (DOWN)"):"missing",p.wpa_pid,p.dhcp_pid,p.carrier,net_ipstr(p.ip,ipb,sizeof ipb),p.gw);
         printf("config: %s -> %s; ssid length %d, password length %d\n",cfg_path,NC_TXT[net.cfg],net.ssid_n,(int)strlen(net.psk));
         printf("conf  : " NET_CONF " on disk %d bytes md5 %s\n",hn,mh);
@@ -6094,16 +6095,16 @@ static int net_cli(int argc,char**argv){
     }
     if(!strcmp(argv[1],"--net-watch")){
         int secs=argc>2?atoi(argv[2]):0; net_echo=1;
-        net_start(now,!getenv("OURUI_NONET"));
+        net_start(now,!getenv("MERAKIPLUS_NONET"));
         ms_t end=secs>0?now+(ms_t)secs*1000:0;
         while(run&&(!end||now_ms()<end)){ net_step(now_ms()); struct timespec sl={0,20*1000*1000}; nanosleep(&sl,NULL); }
         net_now=now_ms(); net_log("net watchdog (--net-watch) done: heal %d, wpa starts %d, udhcpc starts %d, conf writes %d, errors %d",net.n_heal,net.n_wpa,net.n_dhcp,net.n_conf,net.n_fail);
         return 0;
     }
-    fprintf(stderr,"usage: ourui [--net-status | --net-watch [seconds]]\n"); return 2;
+    fprintf(stderr,"usage: merakiplus [--net-status | --net-watch [seconds]]\n"); return 2;
 }
 #define NET_CLI(argc,argv) if(argc>1) return net_cli(argc,argv);
-#define NET_ENABLED (!getenv("OURUI_NONET")&&!sysroot[0])      /* under a test root (OURUI_ROOT) the real network is not touched */
+#define NET_ENABLED (!getenv("MERAKIPLUS_NONET")&&!sysroot[0])      /* under a test root (MERAKIPLUS_ROOT) the real network is not touched */
 #endif
 #ifdef SIM_RT
 #define NET_CLI(argc,argv) (void)argc; (void)argv;
@@ -6114,15 +6115,15 @@ int main(int argc,char**argv){
     NET_CLI(argc,argv)
     dev_release=dev_release_impl; dev_reacquire=dev_reacquire_impl;
     const char*e;
-    if((e=getenv("OURUI_CONFIG"))) snprintf(cfg_path,sizeof cfg_path,"%s",e);
-    if((e=getenv("OURUI_BAKDIR"))) snprintf(cfg_bakdir,sizeof cfg_bakdir,"%s",e);
-    if(getenv("OURUI_NOBL")) bl_enabled=0;
-    if(getenv("OURUI_READONLY")) ro_mode=1;
-    if((e=getenv("OURUI_ROOT"))) snprintf(sysroot,sizeof sysroot,"%s",e);
-    if((e=getenv("OURUI_LANGFILE"))) snprintf(lang_path,sizeof lang_path,"%s",e);
-    if((e=getenv("OURUI_SCHEDFILE"))) snprintf(sched_path,sizeof sched_path,"%s",e);   /* v6.16 */
-    if(getenv("OURUI_SWITCH_DRY")) sw_dry=1;
-    if(getenv("OURUI_NOBOOTPUSH")) bp_on=0;
+    if((e=getenv("MERAKIPLUS_CONFIG"))) snprintf(cfg_path,sizeof cfg_path,"%s",e);
+    if((e=getenv("MERAKIPLUS_BAKDIR"))) snprintf(cfg_bakdir,sizeof cfg_bakdir,"%s",e);
+    if(getenv("MERAKIPLUS_NOBL")) bl_enabled=0;
+    if(getenv("MERAKIPLUS_READONLY")) ro_mode=1;
+    if((e=getenv("MERAKIPLUS_ROOT"))) snprintf(sysroot,sizeof sysroot,"%s",e);
+    if((e=getenv("MERAKIPLUS_LANGFILE"))) snprintf(lang_path,sizeof lang_path,"%s",e);
+    if((e=getenv("MERAKIPLUS_SCHEDFILE"))) snprintf(sched_path,sizeof sched_path,"%s",e);   /* v6.16 */
+    if(getenv("MERAKIPLUS_SWITCH_DRY")) sw_dry=1;
+    if(getenv("MERAKIPLUS_NOBOOTPUSH")) bp_on=0;
     SIM_ENV
     bs.self_pid=(int)getpid();
     lang_load();                           /* v6.3: UI language BEFORE the first frame (splash); missing/unreadable/unknown -> English */
@@ -6318,7 +6319,7 @@ static int mock_put(const char*root,const char*rel,const char*data,int n,int mod
 static int mock_exists(const char*root,const char*rel){ char p[520]; struct stat st; snprintf(p,sizeof p,"%s%s",root,rel); return lstat(p,&st)==0; }
 static void mock_rm(const char*root,const char*rel){ char p[520]; snprintf(p,sizeof p,"%s%s",root,rel); unlink(p); }
 static void mock_reset(const char*root){
-    if(!strstr(root,"_preview_root")&&!strstr(root,"ourui_v6_selftest")){ fprintf(stderr,"mock root: unexpected path %s\n",root); exit(2); }
+    if(!strstr(root,"_preview_root")&&!strstr(root,"merakiplus_v6_selftest")){ fprintf(stderr,"mock root: unexpected path %s\n",root); exit(2); }
     char c[640]; snprintf(c,sizeof c,"rm -rf '%s'",root); if(system(c)!=0){}
     mk_p(root,"/customer/libs"); mk_p(root,"/new_customer/libs"); mk_p(root,"/proc/self"); mk_p(root,"/proc/sys/kernel/random"); mk_p(root,"/tmp");
     static const char stock[]="\x7f" "ELF mock: vendor stock demo_v9 (slot A)\n";
@@ -6334,10 +6335,10 @@ static void mock_slot_b(const char*root,int mounted,int kind){
     mock_rm(root,SLOT_B_EXE); bs.m_valid=0;
     if(kind==MB_NONE) return;
     static char big[66000]; int bn;
-    if(kind==MB_VENDOR) bn=snprintf(big,sizeof big,"\x7f" "ELF mock: vendor demo_v9 in slot B (OTA) - no ourui marker\n");
-    else if(kind==MB_V61) bn=snprintf(big,sizeof big,"\x7f" "ELF mock: ourui V6.1 ... %s %%d gang(e) ...\n",OURUI_MARK_V61);
-    else if(kind==MB_OURS_EDGE){ memset(big,'.',sizeof big); bn=65530+snprintf(big+65530,sizeof big-65530,"%s\n",OURUI_MARK); }   /* the marker straddles the 64 KiB read limit */
-    else bn=snprintf(big,sizeof big,"\x7f" "ELF mock: ourui in slot B ... %s ...\n",OURUI_MARK);
+    if(kind==MB_VENDOR) bn=snprintf(big,sizeof big,"\x7f" "ELF mock: vendor demo_v9 in slot B (OTA) - no merakiplus marker\n");
+    else if(kind==MB_V61) bn=snprintf(big,sizeof big,"\x7f" "ELF mock: merakiplus V6.1 ... %s %%d gang(e) ...\n",MERAKIPLUS_MARK_V61);
+    else if(kind==MB_OURS_EDGE){ memset(big,'.',sizeof big); bn=65530+snprintf(big+65530,sizeof big-65530,"%s\n",MERAKIPLUS_MARK); }   /* the marker straddles the 64 KiB read limit */
+    else bn=snprintf(big,sizeof big,"\x7f" "ELF mock: merakiplus in slot B ... %s ...\n",MERAKIPLUS_MARK);
     mock_put(root,SLOT_B_EXE,big,bn,kind==MB_OURS_NOEXEC?0644:0755);
 }
 static void mock_flag(const char*root,int on){ if(on) mock_put(root,BOOT_FLAG,"",0,0644); else mock_rm(root,BOOT_FLAG); }
@@ -6367,24 +6368,24 @@ static const char MOCK_SWLOG[]=
  "[2026-11-17 12:40:41 UTC] input: /dev/input/event0 (name 'TECHWIN_TS', raw x 0..4095 y 0..4095) \xE2\x80\x94 READ-ONLY, no grab\n"
  "[2026-11-17 12:41:02 UTC] gesture: valid corner long-press counted (1/3)\n"
  "[2026-11-17 12:41:04 UTC] gesture: valid corner long-press counted (2/3)\n"
- "[2026-11-17 12:41:06 UTC] GESTURE TRIGGERED + mode A \xE2\x86\x92 runtime switch to ourui\n"
+ "[2026-11-17 12:41:06 UTC] GESTURE TRIGGERED + mode A \xE2\x86\x92 runtime switch to merakiplus\n"
  "[2026-11-17 12:41:06 UTC] switch A\xE2\x86\x92" "B: SIGSTOP pid 187 (watchdog still sees the PID)\n"
  "[2026-11-17 12:41:06 UTC] switch A\xE2\x86\x92" "B: launched B pid 412 (/new_customer/demo_v9)\n"
  "[2026-11-17 12:41:07 UTC] switch A\xE2\x86\x92" "B: B verified (exe link) \xE2\x80\x94 SIGKILL pid 187\n"
- "[2026-11-17 12:41:07 UTC] switch A\xE2\x86\x92" "B DONE: ourui running, stock A exited, no reboot\n";
-/* default state for previews: booted in slot B (flag set), ourui = /new_customer/demo_v9, switcher running */
+ "[2026-11-17 12:41:07 UTC] switch A\xE2\x86\x92" "B DONE: merakiplus running, stock A exited, no reboot\n";
+/* default state for previews: booted in slot B (flag set), merakiplus = /new_customer/demo_v9, switcher running */
 static void mock_boot_b(const char*root){
     mock_reset(root); mock_slot_b(root,1,MB_OURS); mock_flag(root,1); mock_self(root,SLOT_B_EXE);
-    mock_proc(root,MOCK_SW_PID,"/new_customer/ourui/boot/switcher","switcher",'S',12);
+    mock_proc(root,MOCK_SW_PID,"/new_customer/merakiplus/boot/switcher","switcher",'S',12);
     mock_proc(root,MOCK_SELF_PID,SLOT_B_EXE,"demo_v9",'R',95);
     mock_swlog(root,MOCK_SWLOG);
     bs.self_pid=MOCK_SELF_PID; bs.t=-100000;
 }
-/* run.sh mode: A boot (no flag), ourui run from /new_customer/ourui, stock UI SIGSTOPped, no switcher */
+/* run.sh mode: A boot (no flag), merakiplus run from /new_customer/merakiplus, stock UI SIGSTOPped, no switcher */
 static void mock_runsh(const char*root,int64_t stock_start_s){
-    mock_reset(root); mock_slot_b(root,1,MB_OURS); mock_flag(root,0); mock_self(root,"/new_customer/ourui/ourui");
+    mock_reset(root); mock_slot_b(root,1,MB_OURS); mock_flag(root,0); mock_self(root,"/new_customer/merakiplus/merakiplus");
     mock_proc(root,MOCK_STOCK_PID,SLOT_A_EXE,"demo_v9",'T',stock_start_s);
-    mock_proc(root,MOCK_SELF_PID,"/new_customer/ourui/ourui","ourui",'R',5200);
+    mock_proc(root,MOCK_SELF_PID,"/new_customer/merakiplus/merakiplus","merakiplus",'R',5200);
     mock_swlog(root,NULL);
     bs.self_pid=MOCK_SELF_PID; bs.t=-100000;
 }
@@ -6403,14 +6404,14 @@ static int copy_big(const char*src,const char*dst,int mode){
 /* mock "stock" for the launch selftest: a copy of this binary, placed as <root>/customer/demo_v9 and started
  * by switch_launch(). It reports what a real demo_v9 would inherit, and stays alive a little longer. */
 static int mock_stock_main(const char*argv0){
-    const char*out=getenv("OURUI_MOCK_STOCK"),*rel=getenv("OURUI_MOCK_RELEASED"),*ld=getenv("LD_LIBRARY_PATH");
+    const char*out=getenv("MERAKIPLUS_MOCK_STOCK"),*rel=getenv("MERAKIPLUS_MOCK_RELEASED"),*ld=getenv("LD_LIBRARY_PATH");
     char cwd[600]=""; if(!getcwd(cwd,sizeof cwd)) cwd[0]=0;
     int nfd=0; for(int fd=3;fd<256;fd++) if(fcntl(fd,F_GETFD)!=-1) nfd++;
     struct stat a,b; int nul=stat("/dev/null",&a)==0; for(int fd=0;fd<3&&nul;fd++) if(fstat(fd,&b)!=0||b.st_rdev!=a.st_rdev) nul=0;
     int released=rel&&access(rel,F_OK)==0;
     FILE*f=fopen(out,"w");
     if(f){ fprintf(f,"pid=%d sid=%d argv0=%s cwd=%s extra_fds=%d stdio_null=%d released_before_start=%d\nLD=%s\n",(int)getpid(),(int)getsid(0),argv0,cwd,nfd,nul,released,ld?ld:""); fclose(f); }
-    if(getenv("OURUI_MOCK_STOCK_FAIL")) return 3;
+    if(getenv("MERAKIPLUS_MOCK_STOCK_FAIL")) return 3;
     usleep(900000); return 0;
 }
 static const char*self_bin=NULL;
@@ -6537,7 +6538,7 @@ static void st_bootpush_device(const char*cfgsrc){
     printf("== selftest: v6.5 boot push on the device (activity guard ON; fixture config; ACKs through rx_feed) ==\n");
     __typeof__(wq) wq0=wq; uint16_t reg0[REGN]; int seen0[REGN]; memcpy(reg0,reg,sizeof reg); memcpy(seen0,reg_seen,sizeof reg_seen);
     ms_t rxl0=last_rx_ms, ok0=rx_ok, bad0=rx_bad; int tx0=txq_len, ro0=ro_mode, bpon0=bp_on;
-    char dir[300], fx[340]; snprintf(dir,sizeof dir,"/tmp/ourui_v6_selftest_%d",(int)getpid()); mkdir(dir,0755); snprintf(fx,sizeof fx,"%s/bootpush_fixture.json",dir);
+    char dir[300], fx[340]; snprintf(dir,sizeof dir,"/tmp/merakiplus_v6_selftest_%d",(int)getpid()); mkdir(dir,0755); snprintf(fx,sizeof fx,"%s/bootpush_fixture.json",dir);
     ms_t T=30000000L;
     /* --- the real config: the block is stock's, byte for byte --- */
     st_bp_reset(); boot_push_start(1); st_status(0x0101,T); boot_push_step(T); wq_step(T);
@@ -6616,7 +6617,7 @@ static void st_bootpush_device(const char*cfgsrc){
     st_check("fixture without brewTemper: NO CONFIG — nothing is sent (no guessed value to the controller)",bp.state==BP_DONE&&bp.ra==BPR_NOCFG&&bp.rb==BPR_NOCFG&&wq.n==0&&txq_len==0);
     st_fixture(fx,930,1); settings_load(); st_bp_reset(); ro_mode=1; boot_push_start(1); st_status(0x0101,T); boot_push_step(T); int ro=wq.n==0&&txq_len==0&&bp.ra==BPR_NONE; ro_mode=0;
     st_bp_reset(); bp_on=0; boot_push_resave(); st_status(0x0101,T); boot_push_step(T); int off=bp.state==BP_OFF&&wq.n==0&&txq_len==0; uint32_t c0; off&=(bp_text(0,&c0)==TR(TX_DV_BP_OFF));
-    st_check("OURUI_READONLY: nothing is sent; OURUI_NOBOOTPUSH (not started): nothing is sent, DIAGNOSE shows FRA / OFF",ro&&off);
+    st_check("MERAKIPLUS_READONLY: nothing is sent; MERAKIPLUS_NOBOOTPUSH (not started): nothing is sent, DIAGNOSE shows FRA / OFF",ro&&off);
     /* --- clean up: restore the real config --- */
     bp_on=bpon0; ro_mode=ro0; snprintf(cfg_path,sizeof cfg_path,"%s",cfgsrc); settings_load(); unlink(fx);
     wq=wq0; memset(&bp,0,sizeof bp); memcpy(reg,reg0,sizeof reg); memcpy(reg_seen,seen0,sizeof reg_seen); rx_zero(); last_rx_ms=rxl0; rx_ok=ok0; rx_bad=bad0; txq_len=tx0; last_tx_len=0;
@@ -6767,7 +6768,7 @@ static void st_phases(void){
     st_s33(0x2101,t+=239); ui_frame(t);                                            /* bits 5+14 cleared, word 24 still 1 */
     int stop1=stm.kind==SK_NONE&&stm.last_kind==SK_AUTO&&act.ph==PH_DONE&&act.last_ph==PH_STEAM&&!steam_stop_visible()&&hit_test(240,372,t)!=T_STOP;
     st_s0(0x0501,0,0x000C,0,652,t+=162); ui_frame(t);                              /* the MCU resets word 24 itself; milk 65.2° */
-    st_check("AUTO-STOP (STEAMLIVE §5.1: 6121 -> 2101 with word 24 = 1 -> 0501 with word 24 = 0): DONE, STOP button gone, and ourui has sent NOTHING (no stop write)",
+    st_check("AUTO-STOP (STEAMLIVE §5.1: 6121 -> 2101 with word 24 = 1 -> 0501 with word 24 = 0): DONE, STOP button gone, and merakiplus has sent NOTHING (no stop write)",
              on&&stop1&&act.ph==PH_DONE&&wq.n==0&&txq_len==0&&wq.n_ok==0);
     { char d[8]; fmt_fix(d,sizeof d,use_c()?MILK_RISE10:MILK_RISE10*9/5,-1); char need[16]; snprintf(need,sizeof need,"\xE2\x89\x88%s\xC2\xB0",d);
       int note=st_has(hm.sub,need)&&st_has(hm.label,a);
@@ -6796,7 +6797,7 @@ static void st_phases(void){
               if(stm.kind!=SK_WAND||hm.chip!=TR(TX_PH_STEAM_WAND)||strcmp(hm.sub,TR(TX_H_WAND_NOSTOP))||hm.gmark>=0||steam_stop_visible()) ok=0;
               if(act.ph!=PH_STEAM) never_done=0; if(wq.n||txq_len||toast.dur) sent=1; } }
       st_check("WAND OVER TARGET: probe 56.0 -> 69.5° (target 65.0°) in 4 s — STEAM·WAND the whole way, never DONE, never an auto-stop text or a target",ok&&never_done&&reg[48]>steam_target());
-      st_check("WAND OVER TARGET: a tap where the STOP button would be does nothing — ourui sends no frame (no stop write, no toast)",!sent&&wq.n_ok==0&&wq.n_block==0);
+      st_check("WAND OVER TARGET: a tap where the STOP button would be does nothing — merakiplus sends no frame (no stop write, no toast)",!sent&&wq.n_ok==0&&wq.n_block==0);
       st_s33(0x0101,t+=100); ui_frame(t);
       st_check("wand released (bits 5+14 cleared): DONE with a plain 'DONE IN …' — no post-stop rise note (that belongs to auto-stop)",
                act.ph==PH_DONE&&stm.kind==SK_NONE&&stm.last_kind==SK_WAND&&!st_has(hm.sub,"\xE2\x89\x88")&&!strcmp(hm.label,TR(TX_H_MILK_PROBE))); }
@@ -6962,7 +6963,7 @@ static void st_wrap(void){
       rx_bad=3; last_bad_ms=t0; int crc=(t0+D)-last_bad_ms<10000&&rx_bad>0; rx_bad=0; last_bad_ms=-100000;
       st_check("24.86 days after the last CRC error: the CRC warning on HOME does not come back",!crc); }
     /* ---- seconds since boot + /proc start time ---- */
-    { char root[300], p[400]; snprintf(root,sizeof root,"/tmp/ourui_v6_selftest_%d/wrap",(int)getpid()); snprintf(p,sizeof p,"%s/proc/4711",root); mk_p(root,"/proc/4711");
+    { char root[300], p[400]; snprintf(root,sizeof root,"/tmp/merakiplus_v6_selftest_%d/wrap",(int)getpid()); snprintf(p,sizeof p,"%s/proc/4711",root); mk_p(root,"/proc/4711");
       char ksr[sizeof sysroot]; strcpy(ksr,sysroot); snprintf(sysroot,sizeof sysroot,"%s",root);
       mock_put(root,"/proc/4711/stat","4711 (demo_v9) T 1 4711 4711 0 -1 4194560 0 0 0 0 0 0 0 0 20 0 1 0 300000000000 1404928 91 4294967295\n",120,0644);
       char stt='?'; int64_t s=proc_stat(4711,&stt); strcpy(sysroot,ksr);
@@ -7005,7 +7006,7 @@ static void rp_init(RpSim*r,ms_t T,int guard){
 static void st_repush(const char*cfgsrc){
     printf("== selftest: v6.6 MCU restart -> re-push (0x89 again / start-value signature; same blocks, same frame policy, same activity guard) ==\n");
     int bpon0=bp_on, g0=bp_guard_cfg, ro0=ro_mode; RpSim r; char nm[420]; const ms_t T=60000000;
-    char dir[300], fx[340]; snprintf(dir,sizeof dir,"/tmp/ourui_v6_selftest_%d",(int)getpid()); mkdir(dir,0755); snprintf(fx,sizeof fx,"%s/repush_fixture.json",dir);
+    char dir[300], fx[340]; snprintf(dir,sizeof dir,"/tmp/merakiplus_v6_selftest_%d",(int)getpid()); mkdir(dir,0755); snprintf(fx,sizeof fx,"%s/repush_fixture.json",dir);
     snprintf(cfg_path,sizeof cfg_path,"%s",cfgsrc); settings_load();
     /* ---- (1) the first handshake is NOT a restart ---- */
     rp_init(&r,T,1);
@@ -7056,7 +7057,7 @@ static void st_repush(const char*cfgsrc){
                notyet&&r.n_a==a0+1&&r.n_b==b0+1&&rps.n_def==1&&rps.last==RPC_DEF&&bp.ra==BPR_OK&&bp.rb==BPR_OK&&r.p[0]==0x0104); }
     /* ---- (5) the signature alone (0x89 round lost) ---- */
     rp_run(&r,6000); a0=r.n_a; int d0=rps.n_def;
-    r.p[0]=0; r.p[1]=0; r.p[2]=50;                               /* restart without ourui seeing a 0x89 */
+    r.p[0]=0; r.p[1]=0; r.p[2]=50;                               /* restart without merakiplus seeing a 0x89 */
     { ms_t ts=r.t; while(r.n_a==a0&&r.t<ts+10000) rp_tick(&r); ms_t took=r.t-ts; rp_run(&r,3000);
       snprintf(nm,sizeof nm,"restart WITHOUT 0x89 (round lost): the signature triggers the re-push after 3 fresh reads (%ld ms) — controller back on config, counter +1",(long)took);
       st_check(nm,r.n_a==a0+1&&rps.n_def==d0+1&&took>=3000&&took<=4100&&r.p[0]==0x0104&&r.p[1]==0x0600&&bp.ra==BPR_OK); }
@@ -7097,7 +7098,7 @@ static void st_repush(const char*cfgsrc){
       snprintf(cfg_path,sizeof cfg_path,"%s",cfgsrc); settings_load(); unlink(fx);
       rp_init(&r,T+50000000,1); ro_mode=1; rp_run(&r,3000); rp_reboot(&r,3); rp_run(&r,20000); if(r.n_a||r.n_b||repush_count()||r.n_vera!=3) ok=0; ro_mode=0;
       rp_init(&r,T+60000000,1); memset(&bp,0,sizeof bp); bp_on=0; rp_run(&r,3000); rp_reboot(&r,3); rp_run(&r,20000); if(r.n_a||r.n_b||repush_count()||r.n_vera!=3) ok=0; bp_on=1;
-      st_check("no re-push: config out of spec (the block would be rejected again — no stream of BLOCK counts), OURUI_READONLY, OURUI_NOBOOTPUSH; 0x89 is still answered",ok); }
+      st_check("no re-push: config out of spec (the block would be rejected again — no stream of BLOCK counts), MERAKIPLUS_READONLY, MERAKIPLUS_NOBOOTPUSH; 0x89 is still answered",ok); }
     { char la[48],lb[48]; int ok=1;
       for(int lg=0;lg<NLANG;lg++){ int kl=ui_lang; lang_set(lg); rps.n_ver=600; rps.n_def=600; diag_label(14,la,sizeof la); diag_label(15,lb,sizeof lb);
           float a=text_wf(la,F_XS), b2=text_wf(lb,F_XS); LAY(a/2+b2/2+8,DG_COL_R-DG_COL_L,"diagnose label pair with re-push counter",la); LAY(a,2*(DG_COL_L-40),"diagnose label L",la);
@@ -7213,7 +7214,7 @@ static void st_net(const char*dir){
       diag_net_text(t1,sizeof t1,&col);
       st_check("wifionoff = 0: OFF — 0 init, 0 wpa, 0 udhcpc, conf not written; DIAGNOSE 'OFF' (neutral)",net.state==NS_OFF&&nm.n_init==0&&nm.n_wpa==0&&nm.n_dhcp==0&&access(conf,F_OK)!=0&&st_has(t1,TR(TX_NS_OFF))&&col==C_TXT2);
       net_start(t,0); nm_reset(1); st_net_run(&t,30000);
-      st_check("OURUI_NONET / test root: the guard is fully disabled (no probe, nothing started)",!net.on&&nm.n_init==0&&nm.n_wpa==0); }
+      st_check("MERAKIPLUS_NONET / test root: the guard is fully disabled (no probe, nothing started)",!net.on&&nm.n_init==0&&nm.n_wpa==0); }
     /* --- the NET row fits in both languages, also in the worst case (5-digit pid, longest IP, longest state) --- */
     { int ok=1, kl=ui_lang;
       for(int lgx=0;lgx<NLANG;lgx++){ lang_set(lgx); for(int st=NS_OFF;st<=NS_UP;st++){ char w[96]; snprintf(w,sizeof w,"32767 / 255.255.255.255 / %s",TR(TX_NS_OFF+st)); LAY(text_wf(w,diag_net_font(w)),DG_FULL_W,"NET row",w); }
@@ -7698,7 +7699,7 @@ static void st_time(const char*dir){
       int a=st_own_save(S_PREHEAT,1,t)&&st_own_save(S_PHAT,395,t)&&st_own_save(S_PHREP,2,t)&&st_own_save(S_AUTOOFF,3,t);
       char rb[256]; int fd=open(sched_path,O_RDONLY); int rn=fd>=0?(int)read(fd,rb,sizeof rb-1):-1; if(fd>=0) close(fd); if(rn<0) rn=0; rb[rn]=0;
       cfg_read(); char tp[300]; snprintf(tp,sizeof tp,"%s.tmp",sched_path);
-      st_check("SAVE of the 4 time rows -> " LC "ourui/schedule" UC " = preheat=1, at=06:35, repeat=mon-fri, autooff=30; atomic (no tmp left); toast SAVED · MERAKI+ SCHEDULE",
+      st_check("SAVE of the 4 time rows -> " LC "merakiplus/schedule" UC " = preheat=1, at=06:35, repeat=mon-fri, autooff=30; atomic (no tmp left); toast SAVED · MERAKI+ SCHEDULE",
                a&&!strcmp(rb,"preheat=1\nat=06:35\nrepeat=mon-fri\nautooff=30\nonce_at=0\n")&&access(tp,F_OK)!=0&&!strcmp(toast.msg,TR(TX_T_OWN_SAVED)));
       st_check("... and config.json is NOT written (md5 unchanged, 0 config writes) and no cmd6 frame was queued for it",!strcmp(cfg_md5,m0)&&cfg_writes==w0&&wq.n==0);
       sch.on=0; sch.hm=0; sch.rep=0; sch.ao=0; settings_load();
@@ -7706,7 +7707,7 @@ static void st_time(const char*dir){
       put_bytes(sched_path,"preheat=7\nat=25:99\nrepeat=hourly\nautooff=45\n",44); settings_load();
       st_check("bad values -> defaults (pre-heat OFF, 06:30, EVERY DAY, auto off OFF) — never a surprise alarm",sch.on==0&&sch.hm==390&&sch.rep==1&&sch.ao==0);
       unlink(sched_path); settings_load(); st_check("no file -> defaults, source DEFAULT",sch.on==0&&sch.src==SCS_DEFAULT);
-      st_check("the 4 time rows are ourui's own (SF_OWN): no config key, no MCU word, not in --dump-table; the stepper for PRE-HEAT AT is 5 min, 00:00..23:55",
+      st_check("the 4 time rows are merakiplus's own (SF_OWN): no config key, no MCU word, not in --dump-table; the stepper for PRE-HEAT AT is 5 min, 00:00..23:55",
                !SET[S_PREHEAT].key&&!SET[S_PHAT].key&&SET[S_PHAT].mcu==M_NONE&&(SET[S_PHAT].flags&SF_OWN)&&SET[S_PHAT].step==5&&SET[S_PHAT].max==1435); }
     /* ---- (6) pre-arm while on ---- */
     t=st_pw_home(); txq_len=0; t=st_tm_loop(t,8000,1); n=st_cmd8_frames(NULL,16,fr);
@@ -7770,7 +7771,7 @@ static void st_power(void){
     { struct tm tm; pw_now_tm(&tm); pw_cmd8(b,&tm,0,0,0);
       st_check("cmd8 time/alarm frame = stock powerOffSend(0,0,0): " PW_V_CMD8 " (year u16 LE, month 1-12, day, hour, minute, second, alarm 0/0/0 = none; CRC-16/MODBUS over 13 bytes)",hexeq(b,15,PW_V_CMD8)); }
     { uint16_t w[2]={0,0}; int n=build_write(b,0,w,2); st_check("PowerOff = cmd6 sub0 len2 [word 0 = 0, word 1 = 0]: " PW_V_OFF " (stock powerOff: mirror word 0 = 0, usart_send(6,0,2); word 1 = awake)",hexeq(b,n,PW_V_OFF)); }
-    { uint16_t w=1; int n=build_write(b,0,&w,1); st_check("PowerOn = cmd6 sub0 len1 [word 0 = 1]: " PW_V_ON " (stock PowerOn 0x146EF8; same frame as ourui's startup)",hexeq(b,n,PW_V_ON)); }
+    { uint16_t w=1; int n=build_write(b,0,&w,1); st_check("PowerOn = cmd6 sub0 len1 [word 0 = 1]: " PW_V_ON " (stock PowerOn 0x146EF8; same frame as merakiplus's startup)",hexeq(b,n,PW_V_ON)); }
     /* ---- (2) frame policy: word 0 = 0 only with power-off intent ---- */
     { uint16_t z2[2]={0,0}; wq.n=0; int a=wq_push_t(0,z2,2,I_POWEROFF)==1&&wq.n==1; wq.n=0;
       st_check("policy: sub0 len2 [0,0] WITH I_POWEROFF is queued; WITHOUT intent it is rejected (WJ_TRIG) — also as sub0 len1 [0]",a&&rej(0,z2,2,0,WJ_TRIG)&&rej(0,W1(0),1,0,WJ_TRIG));
@@ -7791,7 +7792,7 @@ static void st_power(void){
     st_ack_last(t+5); t=st_pw_loop(t,40,1,0);
     st_check("ACK (0x86 with echo) -> OFF; HOME on the next power-on",pw.state==PW_OFF&&pw.n_off==1&&wq.n==0&&view==V_OFF);
     { uint8_t a[15]; memcpy(a,pw.f8,15); a[2]=0x88; uint16_t c=crc16(a,13); a[13]=c&0xFF; a[14]=c>>8; rx_feed(a,15,t); }
-    st_check("the controller's 0x88 receipt for cmd8 (echo) is counted for DIAGNOSE (stock does not wait for it — neither does ourui)",pw.n_ack8==1);
+    st_check("the controller's 0x88 receipt for cmd8 (echo) is counted for DIAGNOSE (stock does not wait for it — neither does merakiplus)",pw.n_ack8==1);
     int blon=!bl_is_off; t=st_pw_loop(t,treq+PW_BL_MS-t+10,0,0);
     st_check("the backlight is turned off 1.5 s after the power-off press (stock: lv_tick_elaps > 0x5DC) — not before",blon&&bl_is_off);
     nf=st_txq_frames(fr,16);
@@ -7824,7 +7825,7 @@ static void st_power(void){
     t=st_pw_home(); pw_key(116,1,t); t=st_pw_loop(t,1600,1,1); pw_key(116,0,t); t=st_pw_loop(t,2000,0,1); txq_len=0;
     pw_key(116,1,t); t=st_pw_loop(t,300,0,1); pw_key(116,0,t); t=st_pw_loop(t,PW_WAKE_MS,0,1);
     st_check("POWER ON, but the controller does not answer (button released too early): after 10 s back to OFF, light off, 0 frames",pw.state==PW_OFF&&pw.n_wto==1&&bl_is_off&&txq_len==0);
-    /* ---- (9) the controller wakes up by itself (alarm / button ourui did not see) ---- */
+    /* ---- (9) the controller wakes up by itself (alarm / button merakiplus did not see) ---- */
     reg[0]=1; t=st_pw_loop(t,PW_SEEN_MS+100,1,1); nf=st_txq_frames(fr,16);
     st_check("OFF, and the controller answers by itself with word 0 = 1 -> ON + PowerOn/awake (no eternal OFF screen)",pw.state==PW_ON&&pw.n_auto==1&&nf>=1&&!strcmp(fr[0],PW_V_ON)&&view==V_MAIN);
     /* ---- (10) blocked as in stock: brew / steam / grind; hot water does NOT block and is not stopped ---- */
@@ -7840,7 +7841,7 @@ static void st_power(void){
       st_check("BLOCKED during brew / steam / grind (stock isExtractionOrSteamSwitchOn 0x1481E0: work_sta bit 12/14, words 22/24/6): nothing is sent, toast 'STOP THE ACTIVITY FIRST'; once it has ended, a NEW full hold powers off",ok); }
     t=st_pw_home(); reg[16]=1; reg[33]=0x030B; pw_key(116,1,t); t=st_pw_loop(t,1600,1,1); pw_key(116,0,t); t=st_pw_loop(t,300,1,1); nf=st_txq_frames(fr,16);
     { int stop=0; for(int k=0;k<nf;k++) if(strstr(fr[k],"aa 55 06 10")||strstr(fr[k],"aa 55 06 16")||strstr(fr[k],"aa 55 06 06")) stop=1;
-      st_check("hot water does NOT block (not in stock either) and is not stopped by ourui: only cmd8 + sub0 len2 — the MCU's sleep task resets work_sta + outputs (0x2F52/0x2F0C)",
+      st_check("hot water does NOT block (not in stock either) and is not stopped by merakiplus: only cmd8 + sub0 len2 — the MCU's sleep task resets work_sta + outputs (0x2F52/0x2F0C)",
                nf==2&&!strcmp(fr[0],PW_V_CMD8)&&!strcmp(fr[1],PW_V_OFF)&&!stop&&pw.state==PW_OFF); }
     /* ---- (11) no connection / word 0 = 0 / read-only: nothing is sent ---- */
     t=st_pw_home(); pw_key(116,1,t); t=st_pw_loop(t,1600,0,1); pw_key(116,0,t); int nl=txq_len==0&&pw.state==PW_ON&&!strcmp(toast.msg,TR(TX_T_PW_NOLINK));
@@ -7969,14 +7970,14 @@ static void st_stop(void){
     t=st_tap(160,372,t); int lft=wq.n==1&&q_hex(0,ST_V_BREW)&&!strcmp(toast.msg,TR(TX_T_STOP_BREW)); wq_step(t); st_ack_last(t+20); ui_frame(t+=30);
     t=st_tap(320,372,t); int rgt=wq.n==1&&q_hex(0,ST_V_STEAM)&&!strcmp(toast.msg,TR(TX_T_STOP_SENT));
     st_check("the left button sends the brew stop (sub22), the right the steam stop (sub24) — a frame each",lft&&rgt);
-    /* ---- (10) AUTO-STOP is unchanged: the MCU stops by itself -> ourui sends nothing and shows no stop toast ---- */
+    /* ---- (10) AUTO-STOP is unchanged: the MCU stops by itself -> merakiplus sends nothing and shows no stop toast ---- */
     { int ok=1; static const uint16_t ws[]={0x030B,0x1307,0x0141};
       for(int q=0;q<3;q++){ t=st_home(); st_s0(ws[q],0,0x000C,0,300,t+=100); ui_frame(t); for(int k=0;k<5;k++){ st_s33(ws[q],t+=200); ui_frame(t); wq_step(t); }
           st_s0(0x0101,0,0x000C,0,300,t+=200); ui_frame(t); wq_step(t); if(!(act.ph==PH_DONE&&wq.n==0&&txq_len==0&&wq.n_ok==0&&stp.n_req==0&&toast.dur==0)) ok=0; }
-      st_check("AUTO-STOP unchanged (water / brew / grind): the MCU clears the bits itself -> DONE; ourui has not sent a single frame and shows no stop toast",ok); }
+      st_check("AUTO-STOP unchanged (water / brew / grind): the MCU clears the bits itself -> DONE; merakiplus has not sent a single frame and shows no stop toast",ok); }
     /* ---- (11) read-only mode ---- */
     t=st_home(); st_s0(0x030B,0,0x000C,0,300,t+=100); ui_frame(t); ro_mode=1; t=st_tap(240,372,t); ro_mode=0;
-    st_check("OURUI_READONLY=1: STOP sends nothing, the toast says why (read-only)",wq.n==0&&stp.n_req==0&&!strcmp(toast.msg,TR(TX_G_RO)));
+    st_check("MERAKIPLUS_READONLY=1: STOP sends nothing, the toast says why (read-only)",wq.n==0&&stp.n_req==0&&!strcmp(toast.msg,TR(TX_G_RO)));
     sim_reset();
 }
 static int selftest(const char*cfgsrc){
@@ -8186,7 +8187,7 @@ static int selftest(const char*cfgsrc){
     lang_set(base_lang);
 
     printf("== selftest: config persist (atomic, byte-exact, md5 log) ==\n");
-    char dir[300]; snprintf(dir,sizeof dir,"/tmp/ourui_v6_selftest_%d",(int)getpid()); mkdir(dir,0755);
+    char dir[300]; snprintf(dir,sizeof dir,"/tmp/merakiplus_v6_selftest_%d",(int)getpid()); mkdir(dir,0755);
     snprintf(cfg_path,sizeof cfg_path,"%s/config.json",dir); snprintf(cfg_bakdir,sizeof cfg_bakdir,"%s/cfgbak",dir);
     st_check("copy of config.json",copy_file(cfgsrc,cfg_path));
     cfg_read(); cfg_writes=0; char m0[33]; strcpy(m0,cfg_md5); char orig[CFG_MAX]; int on=cfglen; memcpy(orig,cfgbuf,on);
@@ -8200,7 +8201,7 @@ static int selftest(const char*cfgsrc){
     st_check("volume 31 -> 100 (longer token)",cfg_set_int("volume",100)&&cfglen==on+1);
     st_check("volume 100 -> 31",cfg_set_int("volume",31));
     st_check("hotWaterMode (field after presetStore) 1 -> 2 -> 1",cfg_set_int("hotWaterMode",2)&&cfg_set_int("hotWaterMode",1));
-    st_check("unknown field rejected (ourui never adds keys)",!cfg_set_int("doesNotExist",1)&&!cfg_set_int("theme",0));
+    st_check("unknown field rejected (merakiplus never adds keys)",!cfg_set_int("doesNotExist",1)&&!cfg_set_int("theme",0));
     st_check("string field (ssid) rejected",!cfg_set_int("ssid",1));
     st_check("brewTemper 880 -> 870 (revert)",cfg_set_int("brewTemper",870));
     st_check("md5 after revert == baseline",!strcmp(cfg_md5,m0));
@@ -8211,7 +8212,7 @@ static int selftest(const char*cfgsrc){
       st_check("md5 after a full table round trip == baseline",!strcmp(cfg_md5,m0)&&cfglen==on&&!memcmp(cfgbuf,orig,on)); }
     snprintf(p,sizeof p,"%s/config.json.orig",cfg_bakdir); fd=open(p,O_RDONLY); bn=fd>=0?read(fd,bb,sizeof bb):-1; if(fd>=0)close(fd);
     st_check("pristine backup still untouched",bn==on&&!memcmp(bb,orig,on));
-    snprintf(p,sizeof p,"%s/.ourui_cfg.tmp",dir); st_check("no tmp file left behind",access(p,F_OK)!=0);
+    snprintf(p,sizeof p,"%s/.merakiplus_cfg.tmp",dir); st_check("no tmp file left behind",access(p,F_OK)!=0);
     /* a key hidden inside presetStore must not be mistaken for the top level */
     const char*nest="{\n\t\"presetStore\":\t{\n\t\t\"a\":\t{\"brewTemper\":\t111}\n\t},\n\t\"brewTemper\":\t870\n}";
     int a,e2; st_check("nested key ignored (depth 1)",cfg_find(nest,strlen(nest),"brewTemper",&a,&e2)&&atoi(nest+a)==870);
@@ -8246,22 +8247,22 @@ static int selftest(const char*cfgsrc){
     snprintf(fl,sizeof fl,"%s%s",root,BOOT_FLAG); snprintf(bl,sizeof bl,"%s/boot_ui.log",cfg_bakdir);
     snprintf(rn,sizeof rn,"%s/RESTART_NEEDED",cfg_bakdir); snprintf(cdir,sizeof cdir,"%s/customer",root);
     bs.self_pid=MOCK_SELF_PID;
-    mock_reset(root); mock_slot_b(root,0,MB_NONE); mock_self(root,"/new_customer/ourui/ourui"); boot_refresh();
+    mock_reset(root); mock_slot_b(root,0,MB_NONE); mock_self(root,"/new_customer/merakiplus/merakiplus"); boot_refresh();
     st_check("mock root: the flag path is <root>/customer/new; the stock binary exists in slot A",!strcmp(rp(BOOT_FLAG),fl)&&bs.a_bin);
     st_check("slot B not mounted: LOCKED — touch rejected, the flag is not created",bs.lock==BL_NOMOUNT&&!boot_flag_set(1)&&access(fl,F_OK)!=0&&strstr(boot_err,"not mounted"));
     mock_slot_b(root,1,MB_NONE);
     st_check("mounted, but demo_v9 missing in slot B: LOCKED",!boot_flag_set(1)&&bs.lock==BL_NOBIN&&access(fl,F_OK)!=0);
     mock_slot_b(root,1,MB_OURS_NOEXEC);
-    st_check("ourui in slot B without the x bit (cannot boot): LOCKED",!boot_flag_set(1)&&bs.lock==BL_NOBIN&&access(fl,F_OK)!=0);
+    st_check("merakiplus in slot B without the x bit (cannot boot): LOCKED",!boot_flag_set(1)&&bs.lock==BL_NOBIN&&access(fl,F_OK)!=0);
     mock_slot_b(root,1,MB_VENDOR); mock_flag(root,1);
     { int a=boot_flag_set(0), e1=access(fl,F_OK)==0, b2=boot_flag_set(1);
       st_check("vendor binary in slot B: LOCKED in BOTH directions — the vendor's OTA flag is not touched; the next boot is shown as SLOT B",!a&&!b2&&e1&&bs.lock==BL_VENDOR&&boot_next_kind()==BN_SLOTB&&boot_next_name()==TR(TX_BN_SLOTB)); }
     mock_flag(root,0); mock_slot_b(root,1,MB_OURS); boot_refresh();
     int nc0=dir_count(cdir);
-    st_check("ourui in slot B + mounted: UNLOCKED; no flag = ORIGINAL on the next boot",bs.lock==BL_OK&&!bs.flag&&boot_next_kind()==BN_ORIGINAL);
+    st_check("merakiplus in slot B + mounted: UNLOCKED; no flag = ORIGINAL on the next boot",bs.lock==BL_OK&&!bs.flag&&boot_next_kind()==BN_ORIGINAL);
     { struct stat fs; int ok=boot_flag_set(1)&&stat(fl,&fs)==0&&S_ISREG(fs.st_mode)&&fs.st_size==0&&bs.flag==1&&dir_count(cdir)==nc0+1;
-      st_check("choose OURUI: touch /customer/new (empty file) — nothing else in /customer changed",ok&&boot_next_kind()==BN_OURS&&!strcmp(boot_next_name(),PRODUCT)); }
-    st_check("choose OURUI again: idempotent",boot_flag_set(1)&&bs.flag==1&&dir_count(cdir)==nc0+1);
+      st_check("choose MERAKIPLUS: touch /customer/new (empty file) — nothing else in /customer changed",ok&&boot_next_kind()==BN_OURS&&!strcmp(boot_next_name(),PRODUCT)); }
+    st_check("choose MERAKIPLUS again: idempotent",boot_flag_set(1)&&bs.flag==1&&dir_count(cdir)==nc0+1);
     st_check("choose ORIGINAL: rm /customer/new — /customer is exactly as before",boot_flag_set(0)&&access(fl,F_OK)!=0&&!bs.flag&&dir_count(cdir)==nc0);
     st_check("choose ORIGINAL again: idempotent (a missing file is not an error)",boot_flag_set(0)&&!bs.flag);
     { chmod(cdir,0555); int r1=boot_flag_set(1), f1=bs.flag, e1=boot_err[0]!=0; chmod(cdir,0755);
@@ -8278,18 +8279,18 @@ static int selftest(const char*cfgsrc){
     mock_slot_b(root,1,MB_V61); boot_refresh(); st_check("v6.1 binary in slot B is recognised (the exit string) -> unlocked",bs.lock==BL_OK);
     mock_slot_b(root,1,MB_OURS_EDGE); boot_refresh(); st_check("a marker straddling the 64 KiB read boundary is still found",bs.lock==BL_OK);
     { char vb[400]; snprintf(vb,sizeof vb,"%s",cfgsrc); char*q=strrchr(vb,'/'); char*t=q?q+1:vb; snprintf(t,sizeof vb-(size_t)(t-vb),"demo_v9");
-      if(access(vb,R_OK)==0){ bs.m_valid=0; st_check("the real vendor binary (artifacts/demo_v9) is NOT recognised as ourui",!bin_is_ourui(vb)); bs.m_valid=0; }
+      if(access(vb,R_OK)==0){ bs.m_valid=0; st_check("the real vendor binary (artifacts/demo_v9) is NOT recognised as merakiplus",!bin_is_merakiplus(vb)); bs.m_valid=0; }
       else printf("     (no demo_v9 next to config — check of the real vendor binary skipped)\n"); }
     mock_slot_b(root,1,MB_OURS);
-    { mock_self(root,SLOT_B_EXE); boot_refresh(); int sB=bs.self_slot; mock_self(root,SLOT_A_EXE); boot_refresh(); int sA=bs.self_slot; mock_self(root,"/new_customer/ourui/ourui"); boot_refresh();
-      st_check("exe slot via /proc/self/exe: /new_customer/demo_v9 = B, /customer/demo_v9 = A, anything else = run.sh/manual",sB==SLOT_B&&sA==SLOT_A&&bs.self_slot==SLOT_OTHER&&!strcmp(bs.self_exe,"/new_customer/ourui/ourui")); }
+    { mock_self(root,SLOT_B_EXE); boot_refresh(); int sB=bs.self_slot; mock_self(root,SLOT_A_EXE); boot_refresh(); int sA=bs.self_slot; mock_self(root,"/new_customer/merakiplus/merakiplus"); boot_refresh();
+      st_check("exe slot via /proc/self/exe: /new_customer/demo_v9 = B, /customer/demo_v9 = A, anything else = run.sh/manual",sB==SLOT_B&&sA==SLOT_A&&bs.self_slot==SLOT_OTHER&&!strcmp(bs.self_exe,"/new_customer/merakiplus/merakiplus")); }
     st_check("no stock process, no switcher -> a switch would START stock (launch)",bs.n_stock==0&&bs.sw_pid==0&&switch_mode()==SWM_LAUNCH);
-    mock_proc(root,MOCK_STOCK_PID,SLOT_A_EXE,"demo_v9",'T',40); mock_proc(root,MOCK_SW_PID,"/new_customer/ourui/boot/switcher","switcher",'S',12);
+    mock_proc(root,MOCK_STOCK_PID,SLOT_A_EXE,"demo_v9",'T',40); mock_proc(root,MOCK_SW_PID,"/new_customer/merakiplus/boot/switcher","switcher",'S',12);
     mock_proc(root,MOCK_SELF_PID,SLOT_A_EXE,"demo_v9",'R',95); mock_proc(root,77,"/bin/busybox","sh",'S',3); boot_refresh();
     st_check("SIGSTOPped stock process + switcher found (pidof); own pid and foreign processes do not count -> switch = SIGCONT only",bs.n_stock==1&&bs.stock[0]==MOCK_STOCK_PID&&bs.stock_run==0&&bs.sw_pid==MOCK_SW_PID&&switch_mode()==SWM_CONT);
     { mock_proc(root,MOCK_STOCK_PID,SLOT_A_EXE,"demo_v9",'S',40); boot_refresh(); int runs=bs.stock_run;
       mock_proc(root,MOCK_STOCK_PID,SLOT_A_EXE " (deleted)","demo_v9",'T',40); boot_refresh();
-      st_check("a RUNNING stock UI next to ourui is flagged; exe '... (deleted)' is still stock",runs==1&&bs.n_stock==1&&bs.stock_run==0); }
+      st_check("a RUNNING stock UI next to merakiplus is flagged; exe '... (deleted)' is still stock",runs==1&&bs.n_stock==1&&bs.stock_run==0); }
     mock_proc(root,MOCK_STOCK_PID,SLOT_B_EXE,"demo_v9",'S',40); boot_refresh();
     st_check("a demo_v9 from slot B is not stock",bs.n_stock==0);
     { mock_swlog(root,NULL); boot_refresh(); int g0=bs.sw_log;
@@ -8297,7 +8298,7 @@ static int selftest(const char*cfgsrc){
       mock_swlog(root,MOCK_SWLOG); boot_refresh();
       st_check("switcher.log: missing -> 'not readable'; no switch -> 'no event'; otherwise the last switch line with time of day",g0==0&&g1==1&&bs.sw_log==2&&!strncmp(bs.sw_evt,"12:41:07 switch A",17)&&strstr(bs.sw_evt,"no reboot"));
       printf("     event: %s\n",bs.sw_evt);
-      mock_swlog(root,"[2026-11-17 12:41:07 UTC] skift A\xE2\x86\x92" "B F\xC3\x86RDIG: ourui k\xC3\xB8rer, stock-A exit'et, ingen reboot\n"); boot_refresh();
+      mock_swlog(root,"[2026-11-17 12:41:07 UTC] skift A\xE2\x86\x92" "B F\xC3\x86RDIG: merakiplus k\xC3\xB8rer, stock-A exit'et, ingen reboot\n"); boot_refresh();
       st_check("switcher.log from a pre-English switcher build ('skift …'): still recognised as a switch event",bs.sw_log==2&&!strncmp(bs.sw_evt,"12:41:07 skift A",16)); }
     { static char big[9000]; int o=0,k=0; while(o<6000) o+=snprintf(big+o,sizeof big-o,"[2026-11-17 12:50:%02d UTC] gesture: valid corner long-press counted (1/3)\n",(k++)%60);
       o+=snprintf(big+o,sizeof big-o,"[2026-11-17 12:59:59 UTC] switch FAILED: B (pid 9) did not come up \xE2\x80\x94 fallback: SIGCONT A, kill B\n[2026-11-17 13:00:00 UTC] input: POLLERR/HUP \xE2\x80\x94 reopening\n");
@@ -8317,14 +8318,14 @@ static int selftest(const char*cfgsrc){
     char bid[64]; boot_id_read(bid,sizeof bid);
     unlink(rn); mock_proc(root,MOCK_STOCK_PID,SLOT_A_EXE,"demo_v9",'T',40); boot_refresh();
     st_check("no RESTART_NEEDED -> no reminder",bid[0]&&!restart_pending());
-    snprintf(tx,sizeof tx,"config.json changed by ourui.\nboot_id=%s mono_s=5000\n",bid); RN_PUT(tx);
+    snprintf(tx,sizeof tx,"config.json changed by merakiplus.\nboot_id=%s mono_s=5000\n",bid); RN_PUT(tx);
     st_check("stock UI started (t=40 s) BEFORE the latest SAVE (t=5000 s), same boot -> reminder",restart_pending());
     mock_proc(root,MOCK_STOCK_PID,SLOT_A_EXE,"demo_v9",'T',6000); boot_refresh();
     st_check("stock UI started AFTER the latest SAVE -> no reminder (it has read config itself)",!restart_pending());
     mock_proc(root,MOCK_STOCK_PID,SLOT_A_EXE,"demo_v9",'T',40); boot_refresh();
-    RN_PUT("config.json changed by ourui.\nboot_id=aaaaaaaa-0000-0000-0000-000000000000 mono_s=5000\n");
+    RN_PUT("config.json changed by merakiplus.\nboot_id=aaaaaaaa-0000-0000-0000-000000000000 mono_s=5000\n");
     st_check("the machine has rebooted since SAVE (different boot_id) -> no reminder",!restart_pending());
-    RN_PUT("config.json aendret af ourui. (v6.1 format, no stamp)\n");
+    RN_PUT("config.json aendret af merakiplus. (v6.1 format, no stamp)\n");
     st_check("v6.1 flag without a stamp -> assume the reminder applies",restart_pending());
     mock_proc_rm(root,MOCK_STOCK_PID); boot_refresh();
     st_check("no stock UI alive (slot B boot) -> no reminder, regardless of the flag",!restart_pending());
@@ -8344,39 +8345,39 @@ static int selftest(const char*cfgsrc){
         mock_boot_b(root); snprintf(tx,sizeof tx,"%s%s",root,SLOT_A_EXE); int cp=copy_big(self_bin,tx,0755);
         if(realpath(cdir,real)==NULL) snprintf(real,sizeof real,"%s",cdir);
         mkdir(cfg_bakdir,0755); snprintf(tx,sizeof tx,"x\nboot_id=%s mono_s=5000\n",bid); RN_PUT(tx); unlink(bl);
-        setenv("OURUI_MOCK_STOCK",ss,1); setenv("OURUI_MOCK_RELEASED",rel,1); setenv("LD_LIBRARY_PATH","/lib:/config/lib:/new_customer/libs:/config/wifi",1);
-        if(pipe(pp)!=0){} fcntl(pp[0],F_SETFL,O_NONBLOCK); st_relfd=pp[1];          /* pp[1] plays ourui's UART/fb/touch fd */
+        setenv("MERAKIPLUS_MOCK_STOCK",ss,1); setenv("MERAKIPLUS_MOCK_RELEASED",rel,1); setenv("LD_LIBRARY_PATH","/lib:/config/lib:/new_customer/libs:/config/wifi",1);
+        if(pipe(pp)!=0){} fcntl(pp[0],F_SETFL,O_NONBLOCK); st_relfd=pp[1];          /* pp[1] plays merakiplus's UART/fb/touch fd */
         SW_PREP(); sys_open(X_SWITCH,tn); tr.type=0;
         double t0=msnow(); sys_confirm(tn); double el=msnow()-t0;
         st_check("mock stock placed as <root>/customer/demo_v9; SWITCH NOW completed: run=0, last frame shown, stock pid known",cp&&run==0&&view==V_BYE&&bye_mode==SWM_LAUNCH&&sw_child>0);
         st_check("order (§9.2): last frame -> step 1 release UART/touch/fb -> step 2 start stock; fb is not taken back",sw_seq_frame==1&&sw_seq_release==2&&sw_seq_launch==3&&st_rel==1&&st_reacq==0);
-        { char nm[160]; snprintf(nm,sizeof nm,"step 3: ourui waits %d ms before exit (measured %.0f ms; requirement 300-500 ms)",SW_WAIT_MS,el); st_check(nm,el>=300&&el<=520&&SW_WAIT_MS>=300&&SW_WAIT_MS<=500); }
+        { char nm[160]; snprintf(nm,sizeof nm,"step 3: merakiplus waits %d ms before exit (measured %.0f ms; requirement 300-500 ms)",SW_WAIT_MS,el); st_check(nm,el>=300&&el<=520&&SW_WAIT_MS>=300&&SW_WAIT_MS<=500); }
         snprintf(want,sizeof want,"pid=%d sid=%d argv0=./demo_v9 cwd=%s extra_fds=0 stdio_null=1 released_before_start=1\n",sw_child,sw_child,real);
         st_check("the stock process: own session (setsid), argv0 = ./demo_v9, cwd = /customer, stdio = /dev/null, 0 inherited fds, started AFTER step 1",file_has(ss,want));
         st_check("LD_LIBRARY_PATH for stock: B's libs out, prefix kept, A's libs last",file_has(ss,"\nLD=/lib:/config/lib:/customer/libs:/config/wifi\n"));
-        { char c1; int r=(int)read(pp[0],&c1,1); st_check("ourui's 'device fd' is closed everywhere (EOF on the pipe) — touch grab/fb/UART cannot survive into the stock UI",r==0); }
+        { char c1; int r=(int)read(pp[0],&c1,1); st_check("merakiplus's 'device fd' is closed everywhere (EOF on the pipe) — touch grab/fb/UART cannot survive into the stock UI",r==0); }
         st_check("step 4: the flag /customer/new is untouched by the runtime switch",access(fl,F_OK)==0);
         st_check("step 6: boot_ui.log has the switch with time + reason=user-button; RESTART_NEEDED removed (stock started fresh)",file_has(bl,"RUNTIME SWITCH B->A: reason=user-button, stock UI pid")&&file_has(bl,"RESTART_NEEDED removed")&&access(rn,F_OK)!=0);
         file_print(ss,"     mock-stock: "); file_print(bl,"     boot_ui.log: ");
-        { int ws=0; waitpid(sw_child,&ws,0); st_check("mock stock kept running after ourui's 'exit' and ended by itself (rc 0) — no signals sent",WIFEXITED(ws)&&WEXITSTATUS(ws)==0); }
+        { int ws=0; waitpid(sw_child,&ws,0); st_check("mock stock kept running after merakiplus's 'exit' and ended by itself (rc 0) — no signals sent",WIFEXITED(ws)&&WEXITSTATUS(ws)==0); }
         close(pp[0]);
         /* without an inherited prefix: exactly the BOOT.md value */
         unsetenv("LD_LIBRARY_PATH"); SW_PREP(); st_relfd=-1; sys_open(X_SWITCH,tn); tr.type=0; sys_confirm(tn);
         st_check("without an inherited path stock gets EXACTLY LD_LIBRARY_PATH=/customer/libs:/config/wifi (BOOT.md §9.2)",run==0&&sw_child>0&&file_has(ss,"\nLD=/customer/libs:/config/wifi\n"));
         if(sw_child>0) waitpid(sw_child,NULL,0);
-        /* --- stock dies immediately: ourui must NOT exit --- */
-        setenv("OURUI_MOCK_STOCK_FAIL","1",1); RN_PUT("x\n"); unlink(bl);
+        /* --- stock dies immediately: merakiplus must NOT exit --- */
+        setenv("MERAKIPLUS_MOCK_STOCK_FAIL","1",1); RN_PUT("x\n"); unlink(bl);
         SW_PREP(); sys_open(X_SWITCH,tn); tr.type=0; sys_confirm(tn);
-        st_check("stock UI dies immediately: ourui does NOT exit, takes UART/fb/touch back, shows the error; RESTART_NEEDED untouched",run==1&&view==V_SYS&&xsel==X_SWITCH&&sw_child==0&&st_rel==1&&st_reacq==1&&sw_fail==SWF_DIED&&!strcmp(toast.msg,TR(TX_T_SW_FAIL_DIED))&&access(rn,F_OK)==0&&file_has(bl,"RUNTIME SWITCH FAILED"));
-        unsetenv("OURUI_MOCK_STOCK_FAIL");
-        /* --- OURUI_SWITCH_DRY --- */
+        st_check("stock UI dies immediately: merakiplus does NOT exit, takes UART/fb/touch back, shows the error; RESTART_NEEDED untouched",run==1&&view==V_SYS&&xsel==X_SWITCH&&sw_child==0&&st_rel==1&&st_reacq==1&&sw_fail==SWF_DIED&&!strcmp(toast.msg,TR(TX_T_SW_FAIL_DIED))&&access(rn,F_OK)==0&&file_has(bl,"RUNTIME SWITCH FAILED"));
+        unsetenv("MERAKIPLUS_MOCK_STOCK_FAIL");
+        /* --- MERAKIPLUS_SWITCH_DRY --- */
         sw_dry=1; unlink(bl); SW_PREP(); sys_open(X_SWITCH,tn); tr.type=0; sys_confirm(tn); sw_dry=0;
-        st_check("OURUI_SWITCH_DRY=1: nothing is released, nothing is started, ourui keeps running; the log says what WOULD happen",run==1&&st_rel==0&&sw_child==0&&access(ss,F_OK)!=0&&file_has(bl,"DRY-RUN: would close UART/touch/fb")&&!strcmp(toast.msg,TR(TX_T_DRYRUN)));
+        st_check("MERAKIPLUS_SWITCH_DRY=1: nothing is released, nothing is started, merakiplus keeps running; the log says what WOULD happen",run==1&&st_rel==0&&sw_child==0&&access(ss,F_OK)!=0&&file_has(bl,"DRY-RUN: would close UART/touch/fb")&&!strcmp(toast.msg,TR(TX_T_DRYRUN)));
         /* --- run.sh mode: stock exists (paused) -> nothing is started, no signal; clean exit --- */
         mock_runsh(root,6000); snprintf(tx,sizeof tx,"%s%s",root,SLOT_A_EXE); copy_big(self_bin,tx,0755); unlink(bl); unlink(rn);
         SW_PREP(); sys_open(X_SWITCH,tn); tr.type=0; sys_confirm(tn);
         st_check("run.sh mode: SWITCH NOW = clean exit like REVERT — NOTHING is started (never two demo_v9), run.sh SIGCONTs",run==0&&view==V_BYE&&bye_mode==SWM_CONT&&sw_child==0&&st_rel==0&&access(ss,F_OK)!=0&&file_has(bl,"run.sh mode"));
-        unsetenv("OURUI_MOCK_STOCK"); unsetenv("OURUI_MOCK_RELEASED");
+        unsetenv("MERAKIPLUS_MOCK_STOCK"); unsetenv("MERAKIPLUS_MOCK_RELEASED");
       }
       /* --- the stock binary is missing entirely --- */
       mock_boot_b(root); mock_rm(root,SLOT_A_EXE); boot_refresh();
@@ -8390,7 +8391,7 @@ static int selftest(const char*cfgsrc){
       sys_open(X_SWITCH,tn); tr.type=0;
       st_check("SWITCH TO ORIGINAL NOW in a slot B boot (no stock UI): the switch confirmation opens (SWITCH + BACK are hittable)",view==V_SYS&&xsel==X_SWITCH&&run==1&&switch_mode()==SWM_LAUNCH&&hit_test(310,316,tn)==T_SAVE&&hit_test(168,316,tn)==T_CANCEL);
       reg[33]=0x4121; sys_confirm(tn);
-      st_check("SWITCH NOW during an activity (steam): refused with a message, ourui keeps running",run==1&&view==V_SYS&&!strcmp(toast.msg,TR(TX_T_WAIT_ACT)));
+      st_check("SWITCH NOW during an activity (steam): refused with a message, merakiplus keeps running",run==1&&view==V_SYS&&!strcmp(toast.msg,TR(TX_T_WAIT_ACT)));
       reg[33]=0x0101; rip.on=1; sys_confirm(tn);
       st_check("SWITCH NOW: last frame (without ripple/toast) + run=0 — mode 'start stock'",run==0&&view==V_BYE&&bye_mode==SWM_LAUNCH&&!rip.on&&!toast.dur);
       run=1; view=V_MAIN; xsel=-1; tr.type=0; mock_runsh(root,6000); unlink(rn);
@@ -8409,7 +8410,7 @@ static int selftest(const char*cfgsrc){
       mock_boot_b(root); mock_rm(root,SLOT_A_EXE); sys_open(X_SWITCH,tn); tr.type=0;
       int lk=sys_locked()&&hit_test(310,316,tn)==T_NONE&&hit_test(240,316,tn)==T_CANCEL; sys_confirm(tn); lk&=run==1;
       sys_close(tn); tr.type=0;
-      st_check("the stock binary is missing: SWITCH is locked (BACK only), ourui keeps running",lk&&run==1&&view==V_MAIN);
+      st_check("the stock binary is missing: SWITCH is locked (BACK only), merakiplus keeps running",lk&&run==1&&view==V_MAIN);
       run=1; view=V_MAIN; xsel=-1; tr.type=0;
       { int z=1; page=PG_HOME; sel=-1; static const uint16_t ws[2]={0x0101,0x1307};          /* v6.8: the REVERT pill is gone */
         for(int q=0;q<2;q++){ reg[33]=ws[q]; for(int y=404;y<480;y+=2) for(int x=150;x<330;x+=2){ int t=hit_test(x,y,tn);
@@ -8420,7 +8421,7 @@ static int selftest(const char*cfgsrc){
       int yb=(int)(row_y0(PG_T2,ns+X_BOOTUI)-scroll[PG_T2])+25, ys=(int)(row_y0(PG_T2,ns+X_SWITCH)-scroll[PG_T2])+25;
       st_check("SYSTEM list: BOOT UI and SWITCH TO ORIGINAL NOW are rows 16 and 17 (after UI LANGUAGE + 10 config rows + v6.16's 4 time rows) — both hittable at the bottom of the list",ns==15&&hit_test(240,yb,tn)==T_ROW0+ns&&hit_test(240,ys,tn)==T_ROW0+ns+1&&ys+25<LIST_VY1&&hit_test(240,(int)(row_y0(PG_T2,0)-scroll[PG_T2])+25,tn)!=T_ROW0);
       activate(T_ROW0+ns,tn); tr.type=0;
-      st_check("BOOT UI opens with the current choice (flag set -> OURUI)",view==V_SYS&&xsel==X_BOOTUI&&x_edit==1&&x_orig==1);
+      st_check("BOOT UI opens with the current choice (flag set -> MERAKIPLUS)",view==V_SYS&&xsel==X_BOOTUI&&x_edit==1&&x_orig==1);
       ui_touch(TE_DOWN,84,184,tn); ui_touch(TE_UP,84,184,tn);
       st_check("− selects ORIGINAL; nothing is written before SAVE",x_edit==0&&x_orig==1&&access(fl,F_OK)==0);
       activate(T_SAVE,tn); tr.type=0;
@@ -8476,7 +8477,7 @@ static int selftest(const char*cfgsrc){
       for(int i=0;i<DG_NB;i++) LAY(text_wf(TR(DG_LAB[DG_N+i]),F_XS),KB[KDL].maxw,"diagnose label",TR(DG_LAB[DG_N+i]));
       for(int lock=0;lock<4;lock++) for(int f=0;f<2;f++) for(int sl=0;sl<3;sl++) for(int m=0;m<3;m++) for(int g=0;g<3;g++){
           bs.lock=lock; bs.flag=f; bs.self_slot=sl; bs.self_pid=32767; bs.sw_pid=m?32766:0; bs.n_stock=m?1:0; bs.stock[0]=32765; bs.stock_run=(m==2); bs.sw_log=g;
-          snprintf(bs.self_exe,sizeof bs.self_exe,"%s",sl==SLOT_B?SLOT_B_EXE:(g?"/new_customer/ourui/a/very/long/path/that/cannot/ever/fit/on/one/line/ourui_v6_testbuild":""));
+          snprintf(bs.self_exe,sizeof bs.self_exe,"%s",sl==SLOT_B?SLOT_B_EXE:(g?"/new_customer/merakiplus/a/very/long/path/that/cannot/ever/fit/on/one/line/merakiplus_v6_testbuild":""));
           snprintf(bs.sw_evt,sizeof bs.sw_evt,"12:59:59 switch FAILED: B (pid 32767) did not come up \xE2\x80\x94 fallback: SIGCONT A, kill B");
           bs.n_stock=m?(m==2?2:1):0;
           diag_boot_text(v,col,exe,sizeof exe,evt,sizeof evt,pids,sizeof pids);
@@ -8486,7 +8487,7 @@ static int selftest(const char*cfgsrc){
       }
       LAY(text_wf(TR(TX_DG_CAP),F_XS),250,"diagnose heading",TR(TX_DG_CAP)); LAY(text_wf(TR(TX_DG_ABOUT),F_XS),250,"diagnose heading",TR(TX_DG_ABOUT));
       { int ks=lang_src; for(lang_src=LS_DEFAULT;lang_src<=LS_SESSION;lang_src++){ diag_lang_text(lng,sizeof lng); LAY(text_wf(lng,F_S),DG_FULL_W,"ABOUT: UI language line",lng); } lang_src=ks; }
-      LAY(text_wf(PRODUCT " " OURUI_VERSION,F_S),DG_FULL_W,"ABOUT: wordmark + version",PRODUCT " " OURUI_VERSION);
+      LAY(text_wf(PRODUCT " " MERAKIPLUS_VERSION,F_S),DG_FULL_W,"ABOUT: wordmark + version",PRODUCT " " MERAKIPLUS_VERSION);
       /* v6.10: the PRESSURE · ESTIMATE block — anchor 1..15 bar, the now line with a 5-digit raw value in all three forms, the notes, the toast */
       { uint16_t k51=reg[51]; int kph=act.ph,kv=SET[S_PIPRESS].val; char anc[64],nw[64],n2[64],tb[96]; uint32_t c;
         LAY(text_wf(TR(TX_DG_PCAP),F_XS),250,"diagnose heading",TR(TX_DG_PCAP));
@@ -8541,12 +8542,12 @@ static int selftest(const char*cfgsrc){
         char vt[700];
         for(int i=0;i<NSTR;i++) for(int lg=0;lg<NLANG;lg++){ vis_text(STR[lg][i],vt,sizeof vt,1);
             for(unsigned q=0;q<sizeof ban/sizeof ban[0];q++) if(strstr(vt,ban[q])){ ok=0; printf("     %s [%s] contains '%s'\n",STR_ID[i],LANG_CODE[lg],ban[q]); } }
-        vis_text(OURUI_MARK,vt,sizeof vt,1); for(unsigned q=0;q<sizeof ban/sizeof ban[0];q++) if(strstr(vt,ban[q])) ok=0;
-        vis_text(PRODUCT " " OURUI_VERSION,vt,sizeof vt,1); for(unsigned q=0;q<sizeof ban/sizeof ban[0];q++) if(strstr(vt,ban[q])) ok=0; }
+        vis_text(MERAKIPLUS_MARK,vt,sizeof vt,1); for(unsigned q=0;q<sizeof ban/sizeof ban[0];q++) if(strstr(vt,ban[q])) ok=0;
+        vis_text(PRODUCT " " MERAKIPLUS_VERSION,vt,sizeof vt,1); for(unsigned q=0;q<sizeof ban/sizeof ban[0];q++) if(strstr(vt,ban[q])) ok=0; }
       st_check("no generation name (see the ban list) in any string, in the binary marker or in the product name — in both tables",ok&&!strcmp(PRODUCT,"MERAKI+"));
       ok=1; { char vt[700]; for(int i=0;i<NSTR;i++) for(int lg=0;lg<NLANG;lg++){ if(STR_K[i]==KCON) continue; vis_text(STR[lg][i],vt,sizeof vt,0);
-            if(strstr(vt,"OURUI")){ ok=0; printf("     %s [%s]: the code name appears in visible text\n",STR_ID[i],LANG_CODE[lg]); } } }
-      st_check("the product name is " PRODUCT ": the code name 'ourui' appears only in code spans (paths) and on the console",ok);
+            if(strstr(vt,"MERAKIPLUS")){ ok=0; printf("     %s [%s]: the identifier appears in visible text\n",STR_ID[i],LANG_CODE[lg]); } } }
+      st_check("the product name is " PRODUCT ": the identifier 'merakiplus' appears only in code spans (paths) and on the console",ok);
       ok=1; { char ex[700],bad[16]; for(int i=0;i<NSTR;i++) for(int lg=0;lg<NLANG;lg++){ if(STR_K[i]==KCON) continue; fmt_fill(STR[lg][i],ex,sizeof ex);
             if(!glyphs_ok(ex,bad,sizeof bad)){ ok=0; printf("     %s [%s]: the character '%s' does not exist in the stroke font\n",STR_ID[i],LANG_CODE[lg],bad); } } }
       st_check("every character in both tables has a glyph in the stroke font (nothing is drawn as '?')",ok);
@@ -8563,7 +8564,7 @@ static int selftest(const char*cfgsrc){
 
     printf("== selftest: i18n — the language file (%s; here: <work dir>/lang) ==\n",lang_path);
     { char lp[440],lt[460],keepl[256],nodir[460]; strcpy(keepl,lang_path); int keeps=lang_src;
-      st_check("default path = /new_customer/ourui/lang (ourui's own directory — not /customer, not config.json)",!strcmp(keepl,"/new_customer/ourui/lang")||getenv("OURUI_LANGFILE")!=NULL||strstr(keepl,"_preview_lang")!=NULL);
+      st_check("default path = /new_customer/merakiplus/lang (merakiplus's own directory — not /customer, not config.json)",!strcmp(keepl,"/new_customer/merakiplus/lang")||getenv("MERAKIPLUS_LANGFILE")!=NULL||strstr(keepl,"_preview_lang")!=NULL);
       snprintf(lp,sizeof lp,"%s/lang",dir); snprintf(lt,sizeof lt,"%s.tmp",lp); snprintf(lang_path,sizeof lang_path,"%s",lp);
       unlink(lp); ui_lang=LANG_DA; lang_load();
       st_check("file missing -> ENGLISH (default), source = default",ui_lang==LANG_EN&&lang_src==LS_DEFAULT);
@@ -8652,7 +8653,7 @@ static void dump_table(void){
     printf("#key\tlabel\tpage\tspec_tier\tmin\tmax\tstep\tdefault\thard\tlock\test\tsensor\tmcu\thint\n");
     static const char*const MW[]={"-","4","23","11","112","113","114","25","14","17","2"};
     for(int i=0;i<NSET;i++){ const Setting*s=&SET[i];
-        if(s->flags&(SF_LOCAL|SF_OWN)) continue;   /* ourui's own settings (UI language, v6.16 schedule) are not spec parameters */
+        if(s->flags&(SF_LOCAL|SF_OWN)) continue;   /* merakiplus's own settings (UI language, v6.16 schedule) are not spec parameters */
         printf("%s\t%s\t%s\t%d\t%d\t%d\t%d\t%d\t%d\t%d\t%d\t%d\t%s\t%s\n",s->key?s->key:"-",TR(s->label),TR(TIER_NAME[s->tier]),s->ptier,s->min,s->max,s->step,s->def,s->hard,
                !!(s->flags&SF_LOCK),!!(s->flags&SF_EST),!!(s->flags&SF_SENSOR),MW[s->mcu],s->hint?TR(s->hint):"-"); }
 }
@@ -8683,21 +8684,21 @@ static void bench(void){
     sim_reset(); sim_run(3000); t0=msnow(); for(int i=0;i<300;i++) sim_run(33); printf("bench idle (no change):               %.3f ms/frame (host)\n",(msnow()-t0)/300);
 }
 int main(int argc,char**argv){
-    if(getenv("OURUI_MOCK_STOCK")) return mock_stock_main(argv[0]);
+    if(getenv("MERAKIPLUS_MOCK_STOCK")) return mock_stock_main(argv[0]);
     self_bin=argv[0];
     int ai=1;
     if(argc>2&&!strcmp(argv[1],"--lang")){ int l=lang_parse(argv[2],(int)strlen(argv[2])); if(l<0){ fprintf(stderr,"usage: --lang en|da\n"); return 2; } pv_lang=l; ai=3; }
-    const char*out=argc>ai?argv[ai]:"/tmp/ourui_v6_preview_out";
+    const char*out=argc>ai?argv[ai]:"/tmp/merakiplus_v6_preview_out";
     const char*cfgsrc=argc>ai+1?argv[ai+1]:"artifacts/config.json";
     gfx_init(); lang_set(pv_lang);
     snprintf(sched_path,sizeof sched_path,"%s/_preview_schedule",out);   /* v6.16: never the host's /new_customer (the selftest uses its work dir) */
-    if(!strcmp(out,"--selftest")){ snprintf(sched_path,sizeof sched_path,"/nonexistent/ourui_preview_schedule"); return selftest(cfgsrc); }
+    if(!strcmp(out,"--selftest")){ snprintf(sched_path,sizeof sched_path,"/nonexistent/merakiplus_preview_schedule"); return selftest(cfgsrc); }
     if(!strcmp(out,"--dump-table")){ dump_table(); return 0; }
     if(!strcmp(out,"--dump-strings")){ dump_strings(); return 0; }
     if(!strcmp(out,"--textw")){ for(int i=ai+1;i<argc;i++) printf("%4d %4d %4d %4d %4d  %s\n",text_w(argv[i],F_XS),text_w(argv[i],F_S),text_w(argv[i],F_M),text_w(argv[i],F_L),text_w(argv[i],F_XL),argv[i]); return 0; }
     snprintf(cfg_path,sizeof cfg_path,"%s",cfgsrc);
     if(!strcmp(out,"--bench")){ bench(); return 0; }
-    if(!strcmp(out,"--is-ourui")){ int all=1; for(int i=ai+1;i<argc;i++){ bs.m_valid=0; int o=bin_is_ourui(argv[i]); printf("%d %s\n",o,argv[i]); all&=o; } return all?0:1; }
+    if(!strcmp(out,"--is-merakiplus")){ int all=1; for(int i=ai+1;i<argc;i++){ bs.m_valid=0; int o=bin_is_merakiplus(argv[i]); printf("%d %s\n",o,argv[i]); all&=o; } return all?0:1; }
     mkdir(out,0755);
     /* v6.2: the boot state is read from a mock root in the out directory — never from the host's file system */
     static char pvr[400]; snprintf(pvr,sizeof pvr,"%s/_preview_root",out); snprintf(sysroot,sizeof sysroot,"%s",pvr);
@@ -8770,13 +8771,13 @@ int main(int argc,char**argv){
 #define SYS_BOTTOM() do{ sim_reset(); page=PG_T2; scroll[PG_T2]=scroll_max(PG_T2); }while(0)
 #define ROW_TAP(k) tap(240,(int)(row_y0(PG_T2,(k))-scroll[PG_T2])+25)
     int nsys=tier_count(2);
-    mock_reset(pvr); mock_slot_b(pvr,0,MB_NONE); mock_flag(pvr,0); mock_self(pvr,"/new_customer/ourui/ourui"); mock_proc(pvr,MOCK_STOCK_PID,SLOT_A_EXE,"demo_v9",'T',40); mock_rm(pvr,SLOT_A_EXE);
+    mock_reset(pvr); mock_slot_b(pvr,0,MB_NONE); mock_flag(pvr,0); mock_self(pvr,"/new_customer/merakiplus/merakiplus"); mock_proc(pvr,MOCK_STOCK_PID,SLOT_A_EXE,"demo_v9",'T',40); mock_rm(pvr,SLOT_A_EXE);
     SYS_BOTTOM(); sim_run(600); dump(out,"39_list_system_boot_locked");
     mock_boot_b(pvr);
     SYS_BOTTOM(); sim_run(300); ROW_TAP(nsys+X_BOOTUI); sim_run(900); dump(out,"40_bootui_detail");
     tap(84,184); sim_run(500); dump(out,"41_bootui_changed");
     tap(310,316); sim_run(700); dump(out,"42_bootui_saved_toast");
-    printf("   (BOOT UI scenario: flag %s after SAVE, %s)\n",mock_exists(pvr,BOOT_FLAG)?"EXISTS":"removed",bs.flag?"OURUI":"ORIGINAL on next restart");
+    printf("   (BOOT UI scenario: flag %s after SAVE, %s)\n",mock_exists(pvr,BOOT_FLAG)?"EXISTS":"removed",bs.flag?"MERAKIPLUS":"ORIGINAL on next restart");
     mock_boot_b(pvr); mock_slot_b(pvr,1,MB_VENDOR);
     SYS_BOTTOM(); sim_run(300); ROW_TAP(nsys+X_BOOTUI); sim_run(900); dump(out,"43_bootui_locked");
     mock_boot_b(pvr);

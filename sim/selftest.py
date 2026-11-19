@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """selftest.py — mcu_sim selftests (DELIVERABLE 5): the protocol is proven WITHOUT
-an ourui SIM build and without the runner.
+a merakiplus SIM build and without the runner.
 
 Covers: CRC vectors, frame parsing (cmd9 byte-LEN, cmd8 fixed, cmd3 query),
 chunked reads ≤32 B + resync, write policy (band/trigger/range), ACK echo +

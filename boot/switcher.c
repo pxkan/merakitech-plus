@@ -1,6 +1,6 @@
 /* switcher.c — boot-persistence daemon for MerakiTech Gen 1 (Sanbon SAT62091M).
  *
- * PURPOSE: Observe touch READ-ONLY and trigger a runtime switch A→B (stock UI → ourui)
+ * PURPOSE: Observe touch READ-ONLY and trigger a runtime switch A→B (stock UI → merakiplus)
  * on a secret gesture. v6.12 (GESTUS-FIX.md): ONE continuous hold ≥5000 ms
  * in the screen CENTER (within radius R of (240,240)) — no multi-press.
  * The corner gesture (3× long-press ≥1.5 s at x<90,y<90 within 6 s) is kept as
@@ -24,11 +24,11 @@
  * DESIGN (see BOOT.md for full documentation):
  *  - Opens input nodes O_RDONLY|O_NONBLOCK. NEVER EVIOCGRAB, NEVER writes to
  *    input/UART/fb/config. The stock UI's input queue is not affected.
- *  - In B mode ourui grabs touch exclusively (EVIOCGRAB) → the switcher gets no events
- *    and idles naturally. Switching B→A is handled by ourui's own button (BOOT.md §UI-krav).
+ *  - In B mode merakiplus grabs touch exclusively (EVIOCGRAB) → the switcher gets no events
+ *    and idles naturally. Switching B→A is handled by merakiplus's own button (BOOT.md §UI-krav).
  *  - Mode is verified via readlink(/proc/<pid>/exe) for each pidof demo_v9:
  *      /customer/demo_v9     → A mode (stock)  → the gesture may switch to B
- *      /new_customer/demo_v9 → B mode (ourui)  → does nothing
+ *      /new_customer/demo_v9 → B mode (merakiplus)  → does nothing
  *      no demo_v9            → does nothing
  *  - The watchdog race is avoided with SIGSTOP-first: test.sh only checks ps-grep "demo_v9"
  *    (1 s loop). Kill→wait→launch would leave a window where the watchdog
@@ -40,7 +40,7 @@
  * RAW RANGE: auto-detected via EVIOCGABS on open (also works on a grabbed
  * node — a grab does not block ioctl). The device's actual range is 0..480 (FINDINGS
  * 'Gestus-debug'); the fallback constant is therefore 480 (not 4095). Same formula as
- * tinj.c/ourui: screen = (raw−min)·480/(max−min+1). The SIM keeps its declared
+ * tinj.c/merakiplus: screen = (raw−min)·480/(max−min+1). The SIM keeps its declared
  * 0..4095 (sim/proto.py) and passes SWITCHER_RAW_MAX=4095 in file mode.
  *
  * BUILD (ARM, static, 0 warnings):
@@ -472,13 +472,13 @@ static void do_switch(int pid_a)
         return;
     }
     if (child == 0) {
-        /* child: detach + start B's demo_v9 (ourui) with the B libs */
+        /* child: detach + start B's demo_v9 (merakiplus) with the B libs */
         setsid();
         if (chdir("/new_customer") != 0) _exit(126);
         setenv("LD_LIBRARY_PATH", "/new_customer/libs:/config/wifi", 1);
         int nul = open("/dev/null", O_RDONLY);
         if (nul >= 0) { dup2(nul, 0); close(nul); }
-        int out = open("/tmp/ourui_boot.log", O_WRONLY | O_CREAT | O_APPEND, 0644);
+        int out = open("/tmp/merakiplus_boot.log", O_WRONLY | O_CREAT | O_APPEND, 0644);
         if (out >= 0) { dup2(out, 1); dup2(out, 2); close(out); }
         execl("/new_customer/demo_v9", "./demo_v9", (char *)NULL);
         _exit(127);
@@ -492,7 +492,7 @@ static void do_switch(int pid_a)
         if (pid_alive(pid_a))
             logline("switch WARNING: pid %d still alive after SIGKILL", pid_a);
         else
-            logline("switch A→B DONE: ourui running, stock A exited, no reboot");
+            logline("switch A→B DONE: merakiplus running, stock A exited, no reboot");
     } else {
         logline("switch FAILED: B (pid %d) did not come up — fallback: SIGCONT A, kill B",
                 (int)child);
@@ -514,13 +514,13 @@ static void handle_trigger(void)
                 modes[i] == MODE_A ? "A" : modes[i] == MODE_B ? "B" : "unknown");
     switch (a) {
     case ACT_SWITCH_A:
-        logline("GESTURE TRIGGERED + mode A → runtime switch to ourui");
+        logline("GESTURE TRIGGERED + mode A → runtime switch to merakiplus");
         for (int i = 0; i < n; i++)
             if (modes[i] == MODE_A) { do_switch(pids[i]); break; }
         break;
     case ACT_IDLE_B:
-        logline("GESTURE TRIGGERED but mode B (ourui running) → no action "
-                "(ourui has its own switch button)");
+        logline("GESTURE TRIGGERED but mode B (merakiplus running) → no action "
+                "(merakiplus has its own switch button)");
         break;
     case ACT_IDLE_MIXED:
         logline("GESTURE TRIGGERED but A+B running at the same time → no action (safest)");
@@ -1127,7 +1127,7 @@ int main(void)
     Mode mAB[2] = { MODE_A, MODE_B };
     Mode mAA[2] = { MODE_A, MODE_A };
     CHECK(decide_action(mA, 1) == ACT_SWITCH_A,    "[A] → SWITCH_A");
-    CHECK(decide_action(mB, 1) == ACT_IDLE_B,      "[B] → IDLE_B (ourui has its own button)");
+    CHECK(decide_action(mB, 1) == ACT_IDLE_B,      "[B] → IDLE_B (merakiplus has its own button)");
     CHECK(decide_action(mAB, 2) == ACT_IDLE_MIXED, "[A,B] → IDLE_MIXED (safest)");
     CHECK(decide_action(mAA, 2) == ACT_IDLE_NONE,  "[A,A] (transient fork) → IDLE_NONE");
     CHECK(decide_action(NULL, 0) == ACT_IDLE_NONE, "[] → IDLE_NONE");

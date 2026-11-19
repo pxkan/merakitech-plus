@@ -12,7 +12,7 @@ marked *MCU*. Strings in `demo_v9`'s read-only data are at file offset = VA − 
 | Clock source | SoC system clock, kept in **UTC**. Set only by an HTTP query (`time_sync_thread` 0x13FDEC) → `date -s` + `hwclock -w` | Reads the same SoC clock. **No network sync of its own** |
 | Local time | UTC + zone table entry (`timeZone` index) + 1 h if `sumtime` and the DST window | Same. The DST window is computed from the region's rule (see §3.3) |
 | Clock display | Status bar, `"%02d:%02d"` or `"%02d:%02d A.M./P.M."` | HOME top line + DIAGNOSE → TIME · SCHEDULE, same format |
-| Pre-heat schedule | Up to 30 entries in the binary `/customer/config.bin` | One entry in `/new_customer/ourui/schedule` (not shared with stock) |
+| Pre-heat schedule | Up to 30 entries in the binary `/customer/config.bin` | One entry in `/new_customer/merakiplus/schedule` (not shared with stock) |
 | Arming | Only at power-off: the next occurrence goes out as the **cmd8 alarm** | The same frame at power-off, **plus** pre-armed while on |
 | Cancel | No entry → alarm 0/0/0 | Same; switching the schedule off sends 0/0/0 once |
 | Auto off | Fixed 30 min idle → power-off (with the alarm) | Optional: off / 15 / 20 / 30 / 60 min |
@@ -125,7 +125,7 @@ next start once that time has passed.
 ### 4.4 Meraki+ v6.16
 * **Settings → SYSTEM**: PRE-HEAT (off/on), PRE-HEAT AT (00:00–23:55, 5-min steps, shown per TIME FORMAT),
   REPEAT (once / every day / Mon–Fri / Sat–Sun), AUTO OFF (off / 15 / 20 / 30 / 60 min). Saved in
-  `/new_customer/ourui/schedule` (atomic), never in `config.json` or `config.bin`:
+  `/new_customer/merakiplus/schedule` (atomic), never in `config.json` or `config.bin`:
   ```
   preheat=1
   at=06:30

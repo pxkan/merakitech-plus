@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """rx_stall_repro.py — reproduces the rx_feed stall on a bit error in the length byte.
 
-Finding (UI_v6.md v6.4, code reading): ourui's rx_feed sees `AA 55` + a length field
+Finding (UI_v6.md v6.4, code reading): merakiplus's rx_feed sees `AA 55` + a length field
 L > REGN (129) in a non-special frame and breaks out WITHOUT advancing
 (`if(L>REGN||i+tot>rxlen) break;`). The parser stalls until the 8 kB buffer
 overflows (~3.5 s at normal poll traffic) — the UI shows OFFLINE meanwhile and
@@ -22,7 +22,7 @@ Status:
   * V6.4 binary (watchdog not landed): the stall is expected to reproduce (~3.5 s,
     documented bound = 8 kB buffer overflow) → the check is marked PENDING-V6.5.
   * V6.5+ with resync watchdog: recovery within the documented bound
-    (ourui_v6.c: an impossible length is discarded IMMEDIATELY; incomplete candidates
+    (merakiplus.c: an impossible length is discarded IMMEDIATELY; incomplete candidates
     after RX_RESYNC_MS = 400 ms < ACK budget 450 ms < OFFLINE 1500 ms)
     → VERIFIED. The check uses 1.0 s as a conservative upper limit (400 ms
     watchdog + poll cadence ~100 ms + measurement uncertainty).
@@ -32,8 +32,8 @@ a crc_ok rise after a 0.6 s plateau window (in-flight frames may complete
 right after the injection). Fast recovery (<0.6 s) is therefore reported as ~0.6-0.7 s.
 
 Local run only (no device contact). Usage:
-  python3 sim/rx_stall_repro.py                     # ourui SIM build + reference
-  python3 sim/rx_stall_repro.py --only ui           # ourui only
+  python3 sim/rx_stall_repro.py                     # merakiplus SIM build + reference
+  python3 sim/rx_stall_repro.py --only ui           # merakiplus only
   python3 sim/rx_stall_repro.py --run-name rx_stall_final
 """
 import argparse
@@ -203,7 +203,7 @@ def run_one(ui_bin, run_dir, label):
 def main():
     ap = argparse.ArgumentParser(description="rx_feed stall repro (bit error in length byte)")
     ap.add_argument("--only", choices=["ui", "ref"], help="only one client")
-    ap.add_argument("--ui-bin", help="ourui SIM build (default: auto-detect)")
+    ap.add_argument("--ui-bin", help="merakiplus SIM build (default: auto-detect)")
     ap.add_argument("--reports-dir", default=str(HERE / "reports" / "v6.5-scenarios"))
     ap.add_argument("--run-name", default="rx_stall-" + time.strftime("%Y%m%d-%H%M%S"))
     args = ap.parse_args()
@@ -213,10 +213,10 @@ def main():
     if args.only != "ref":
         ui_bin = find_ui_bin(args.ui_bin)
         if ui_bin is None:
-            print("no ourui SIM build found — skipping the ui part", file=sys.stderr)
+            print("no merakiplus SIM build found — skipping the ui part", file=sys.stderr)
         else:
-            print(f"[rx_stall] ourui: {ui_bin}", flush=True)
-            results.append(run_one(ui_bin, run_dir / "ui", "ourui"))
+            print(f"[rx_stall] merakiplus: {ui_bin}", flush=True)
+            results.append(run_one(ui_bin, run_dir / "ui", "merakiplus"))
     if args.only != "ui":
         print("[rx_stall] reference: sim/ref_client.py", flush=True)
         results.append(run_one(None, run_dir / "ref", "reference"))
@@ -250,7 +250,7 @@ def main():
               f"(tolerance ≤{V64_BOUND_S} s on host). OFFLINE is shown after 1.5 s. "
               "Measured baseline in this repro: see rx_stall_v64_baseline.md "
               "(Fable's independent baseline against the v6.4 binary: 3.98 s).",
-              f"- **v6.5 (landed):** resync watchdog (ourui_v6.c rx_feed): "
+              f"- **v6.5 (landed):** resync watchdog (merakiplus.c rx_feed): "
               f"(1) impossible length (L>REGN) discarded IMMEDIATELY (0 ms — same call); "
               f"(2) incomplete candidate discarded after RX_RESYNC_MS = 400 ms "
               f"(< ACK budget 450 ms < OFFLINE 1500 ms — 'a resync can never "

@@ -31,7 +31,7 @@ Thank you for wanting to help! Issues and pull requests are welcome. Please writ
 
 ```sh
 ./build.sh           # everything: device (ARM) + tools + host SIM + self-tests  -> build/
-./build.sh host      # only what CI uses: build/ourui_sim, switcher_host + self-tests
+./build.sh host      # only what CI uses: build/merakiplus_sim, switcher_host + self-tests
 ```
 
 ## Testing
@@ -57,7 +57,7 @@ python3 sim/run_e2e.py --all --parallel 4 --ui-lang da
 The UI's built-in self-test (layout, strings, frame policy, mutation probes) — requires the preview build:
 
 ```sh
-zig cc -DOURUI_PREVIEW -O2 -o build/ourui_preview src/ourui_v6.c -lm && ./build/ourui_preview --selftest sim/fixtures/config.json
+zig cc -DMERAKIPLUS_PREVIEW -O2 -o build/merakiplus_preview src/merakiplus.c -lm && ./build/merakiplus_preview --selftest sim/fixtures/config.json
 ```
 
 The simulator can also be played interactively in the browser: `python3 sim/play.py` (see `sim/PLAY.md`).
@@ -70,7 +70,7 @@ The simulator can also be played interactively in the browser: `python3 sim/play
   recipes, boot push) are only changed together with a test that proves the behavior.
 - **Python:** standard library, no dependencies, Python 3.8 compatible.
 - **Strings:** all visible UI text exists in English **and** Danish (the string table in
-  `ourui_v6.c`). The bilingual UI is a feature — keep both columns in sync.
+  `merakiplus.c`). The bilingual UI is a feature — keep both columns in sync.
 - **Language:** documentation, user-facing CLI messages and new code comments are in English. Some
   older code comments are still in Danish; translating them is a welcome contribution.
 
@@ -82,6 +82,9 @@ The simulator can also be played interactively in the browser: `python3 sim/play
 3. If you change the binaries in `bin/`, describe how they were built and update `bin/MD5SUMS`
    **and** `BIN_MD5` in `tools/merakiplus.py` (CI checks that they match).
 4. Update `CHANGELOG.md` and the relevant documentation.
+5. Use `merakiplus` for every technical name (paths, env vars `MERAKIPLUS_*`, binaries, logs). Names from
+   releases before the 2026-11-19 rebrand exist only in the *legacy-compat* block of
+   `tools/merakiplus.py` (install/revert migration); `tests/hygiene.py` fails if they appear elsewhere.
 
 ## Bug reports
 

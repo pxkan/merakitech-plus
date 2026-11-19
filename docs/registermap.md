@@ -62,7 +62,7 @@ Defaults from init `0x9966` (non-zero only): word 0=1, 2=1, 4=180, 5=60, 11=920,
 | n | Name | Direction | Evidence (address + excerpt) | Conf. |
 |---|---|---|---|---|
 | 0 | **power** (1=on, 0=off) | setup | init `0x9978` `strh r1=1,[r0]`; status `0x29D4` `ldrh [r5]`→if 0 start "sleep"; protocol `PowerOn/Off` cmd6 sub0 | high |
-| 1 | **sleep/drain state** (1=sleep/drain, 0=awake/normal) | setup | status `0x29DE` `ldrh [r5,#2]` cmp 1→start "drain" (`0x29E4`); protocol `MachSleep/Awaken` cmd6 sub1. *(Live 2026-11-17: v2/v3 active phases=0; sleep session=1. ourui v3/v4 keep-awake=1 is a BUG (sends the MCU to sleep); v5 writes 0.)* | high |
+| 1 | **sleep/drain state** (1=sleep/drain, 0=awake/normal) | setup | status `0x29DE` `ldrh [r5,#2]` cmp 1→start "drain" (`0x29E4`); protocol `MachSleep/Awaken` cmd6 sub1. *(Live 2026-11-17: v2/v3 active phases=0; sleep session=1. merakiplus v3/v4 keep-awake=1 is a BUG (sends the MCU to sleep); v5 writes 0.)* | high |
 
 ### 2.2 Grinder (2..8)
 | n | Name | Direction | Evidence | Conf. |

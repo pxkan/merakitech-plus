@@ -1,12 +1,12 @@
 #!/usr/bin/env python3
-"""install_v614_B.py — install ourui v6.14 (physical on/off button) in slot B and make it LIVE
+"""install_v614_B.py — install merakiplus v6.14 (physical on/off button) in slot B and make it LIVE
 without a reboot, without config/flag/vendor-OTA writes.
 
 Reuses boot_install.py's DeviceBackend (telnet_run + push_nc, md5 gates, fb capture)
 and the pattern from install_v613_B.py (same-fs atomic mv against ETXTBSY + watchdog exec-reload).
 Phases (run separately so the reload can be inspected before/after):
   baseline  read-only starting point + gates + before-fb
-  install   backup v6.13 -> demo_v9.v613.bak + ourui_v6_13.bin; stage v6.14;
+  install   backup v6.13 -> demo_v9.v613.bak + merakiplus_v6_13.bin; stage v6.14;
             atomic same-fs install as /new_customer/demo_v9 + run.sh target; invariant gates
   reload    watchdog exec-reload (kill B -> test.sh new_customer starts the NEW v6.14);
             fallback manual B launch; gate md5(/proc/<pid>/exe) == v6.14
@@ -14,7 +14,7 @@ Phases (run separately so the reload can be inspected before/after):
   status    read-only overview
 
 Policy: no reboot; no writes to config.json, /customer/new, /customer/demo.sh,
-/customer/demo_v9, vendor OTA. All writes limited to /new_customer (ourui's slot)
+/customer/demo_v9, vendor OTA. All writes limited to /new_customer (merakiplus's slot)
 + /tmp (tmpfs, cleaned up). Guard line/switcher untouched. v6.11 backups must stay intact.
 """
 import json
@@ -38,13 +38,13 @@ DEMO_SH = "b8e3a47a7cc3f222066154ce82f85ee9"        # v6.11 legacy guard (UNTOUC
 SWITCHER_V612 = "e6bcb460ddeec8504e45d664641cc4b3"
 VENDOR_A = "d44c2414b2ac6f0c9370ed6c9f549903"
 B_EXE = bi.B_EXE                                     # /new_customer/demo_v9
-BOOTDIR = bi.BOOTDIR                                 # /new_customer/ourui/boot
-OURUI_DIR = "/new_customer/ourui"
-STAGE = OURUI_DIR + "/ourui_v6_14.bin"               # v6.14 artifact on device (same-fs)
+BOOTDIR = bi.BOOTDIR                                 # /new_customer/merakiplus/boot
+MERAKIPLUS_DIR = "/new_customer/merakiplus"
+STAGE = MERAKIPLUS_DIR + "/merakiplus_v6_14.bin"               # v6.14 artifact on device (same-fs)
 BAK_B = BOOTDIR + "/demo_v9.v613.bak"                # v6.13 backup of B (revert)
-BAK_RUN = OURUI_DIR + "/ourui_v6_13.bin"             # v6.13 backup of the run.sh target
+BAK_RUN = MERAKIPLUS_DIR + "/merakiplus_v6_13.bin"             # v6.13 backup of the run.sh target
 BAK_B_V611 = BOOTDIR + "/demo_v9.v611.bak"           # earlier rounds (must be intact)
-BAK_RUN_V611 = OURUI_DIR + "/ourui_v6_11.bin"
+BAK_RUN_V611 = MERAKIPLUS_DIR + "/merakiplus_v6_11.bin"
 
 
 def log(msg):
@@ -70,7 +70,7 @@ def require_idle_b(be):
     st = demo_state(be)
     bi.gate(len(st) == 1 and st[0][1] == B_EXE, f"exactly one B UI running: {st}")
     pid = st[0][0]
-    # ourui's 100 ms poll loop sleeps in hrtimer_nanosleep; on this kernel it is
+    # merakiplus's 100 ms poll loop sleeps in hrtimer_nanosleep; on this kernel it is
     # sometimes sampled as D (uninterruptible) even though it is healthy. D is accepted ONLY if
     # wchan is nanosleep (a genuinely hung process would sit in an ubifs/wait wchan).
     state, wchan = "", ""
@@ -97,7 +97,7 @@ def phase_baseline(be):
     bi.gate(cfg == CONFIG_BASE, f"config == user baseline {CONFIG_BASE[:8]}… (must not be touched)")
     b_md5 = be.md5(B_EXE)
     bi.gate(b_md5 == V613, f"B runs v6.13 ({V613[:8]}…)")
-    run_md5 = be.md5(OURUI_DIR + "/ourui")
+    run_md5 = be.md5(MERAKIPLUS_DIR + "/merakiplus")
     bi.gate(run_md5 == V613, f"run.sh target == v6.13 ({V613[:8]}…)")
     live = demo_exe_md5(be, pid)
     bi.gate(live == V613, f"md5(/proc/{pid}/exe) == v6.13 (live-binary technique works)")
@@ -127,29 +127,29 @@ def phase_install(be):
     bi.gate(be.md5(B_EXE) == V613, "B == v6.13 before backup")
     bi.gate(be.md5("/customer/config.json") == CONFIG_BASE, "config at user baseline")
     # local source verification
-    src = bi.OURUI / "ourui"
+    src = bi.MERAKIPLUS / "merakiplus"
     bi.elf_arm_static(src)
     import hashlib
     src_md5 = hashlib.md5(src.read_bytes()).hexdigest()
-    bi.gate(src_md5 == V614, f"local ourui_v6 == v6.14 ({V614}) — md5 read at run time")
+    bi.gate(src_md5 == V614, f"local merakiplus_v6 == v6.14 ({V614}) — md5 read at run time")
     # 1. backup of the current B (v6.13) — same-fs cp -p + md5 gate
     be.cp(B_EXE, BAK_B)
     bi.gate(be.md5(BAK_B) == V613, f"backup demo_v9.v613.bak == v6.13 ({V613[:8]}…)")
-    # run.sh target backup: ourui_v6_13.bin may already exist (staged in the v6.13 round)
+    # run.sh target backup: merakiplus_v6_13.bin may already exist (staged in the v6.13 round)
     if be.md5(BAK_RUN) == V613:
         log(f"{BAK_RUN} already exists with the v6.13 md5 — kept as backup")
     else:
-        be.cp(OURUI_DIR + "/ourui", BAK_RUN)
-    bi.gate(be.md5(BAK_RUN) == V613, f"backup ourui_v6_13.bin == v6.13 ({V613[:8]}…)")
+        be.cp(MERAKIPLUS_DIR + "/merakiplus", BAK_RUN)
+    bi.gate(be.md5(BAK_RUN) == V613, f"backup merakiplus_v6_13.bin == v6.13 ({V613[:8]}…)")
     # 2. stage v6.14 on /new_customer (same fs as dest) — push_nc md5 round-trip
     be.push(src, STAGE)
-    bi.gate(be.md5(STAGE) == V614, f"stage ourui_v6_14.bin == v6.14 (round-trip)")
+    bi.gate(be.md5(STAGE) == V614, f"stage merakiplus_v6_14.bin == v6.14 (round-trip)")
     # 3. atomic same-fs install as B's demo_v9 (mv over a running exe = safe; the old inode is kept)
     be.install_verified(STAGE, B_EXE, V614, 0o755)
     bi.gate(be.md5(B_EXE) == V614, f"/new_customer/demo_v9 == v6.14 ({V614[:8]}…)")
     # 4. run.sh target (same pattern; not used at B boot but kept consistent)
-    be.install_verified(STAGE, OURUI_DIR + "/ourui", V614, 0o755)
-    bi.gate(be.md5(OURUI_DIR + "/ourui") == V614, "run.sh target ourui == v6.14")
+    be.install_verified(STAGE, MERAKIPLUS_DIR + "/merakiplus", V614, 0o755)
+    bi.gate(be.md5(MERAKIPLUS_DIR + "/merakiplus") == V614, "run.sh target merakiplus == v6.14")
     # 5. invariants: guard/switcher/demo.sh/config/flag/vendor must be untouched
     bi.gate(be.md5("/customer/demo.sh") == DEMO_SH, "demo.sh UNTOUCHED (guard line preserved)")
     bi.gate(be.md5(BOOTDIR + "/switcher") == SWITCHER_V612, "switcher UNTOUCHED (v6.12)")
@@ -160,7 +160,7 @@ def phase_install(be):
     # B still runs the OLD v6.13 (old inode) until reload — proof that install did not interfere
     live = demo_exe_md5(be, pid)
     bi.gate(live == V613, f"running B is still v6.13 (old inode, md5 {live[:8]}…) — reload pending")
-    save("install.json", {"b_md5": be.md5(B_EXE), "run_md5": be.md5(OURUI_DIR + "/ourui"),
+    save("install.json", {"b_md5": be.md5(B_EXE), "run_md5": be.md5(MERAKIPLUS_DIR + "/merakiplus"),
                           "bak_b": be.md5(BAK_B), "bak_run": be.md5(BAK_RUN),
                           "stage": be.md5(STAGE), "live_before_reload": live,
                           "demo_sh": be.md5("/customer/demo.sh"), "config": be.md5("/customer/config.json")})
@@ -192,7 +192,7 @@ def phase_reload(be):
     if newpid is None:
         log("watchdog restart not seen within 20 s -> manual B launch (fallback, still no reboot/stock)")
         be.telnet("cd /new_customer; export LD_LIBRARY_PATH=/new_customer/libs:/config/wifi; "
-                  "nohup ./demo_v9 >>/tmp/ourui_boot.log 2>&1 & sleep 2; echo NY=$(pidof demo_v9)", timeout=30)
+                  "nohup ./demo_v9 >>/tmp/merakiplus_boot.log 2>&1 & sleep 2; echo NY=$(pidof demo_v9)", timeout=30)
         st = demo_state(be)
         for p, e in st:
             if e == B_EXE and p != pid:
@@ -236,7 +236,7 @@ def phase_verify(be):
     # let the boot splash (1.5 s) finish so we land on HOME before capture/navigation
     time.sleep(2.5)
     # fb: home, then DIAGNOSE (the VERSION row) via one left-edge tap (wrap HOME->DIAG)
-    be.push(bi.OURUI / "tinj", "/tmp/tinj")
+    be.push(bi.MERAKIPLUS / "tinj", "/tmp/tinj")
     be.capture("v614B_efter_home")
     be.telnet("/tmp/tinj tap 20 240", timeout=15)   # HOME -> DIAGNOSE (T_EDGE_L, wrap)
     time.sleep(1.2)
@@ -253,7 +253,7 @@ def phase_verify(be):
         "config_md5": be.md5("/customer/config.json"),
         "demo_sh_md5": be.md5("/customer/demo.sh"),
         "b_md5": be.md5(B_EXE),
-        "run_md5": be.md5(OURUI_DIR + "/ourui"),
+        "run_md5": be.md5(MERAKIPLUS_DIR + "/merakiplus"),
         "bak_b_md5": be.md5(BAK_B),
         "bak_run_md5": be.md5(BAK_RUN),
         "bak_v611_b_md5": be.md5(BAK_B_V611),
@@ -281,7 +281,7 @@ def phase_verify(be):
 def phase_status(be):
     st = demo_state(be)
     log(f"status: demo={st} switcher={be.switcher_pids()} flag={'JA' if be.exists(bi.FLAG) else 'NEJ'}")
-    for p in (B_EXE, OURUI_DIR + "/ourui", "/customer/config.json", "/customer/demo.sh",
+    for p in (B_EXE, MERAKIPLUS_DIR + "/merakiplus", "/customer/config.json", "/customer/demo.sh",
               BAK_B, BAK_RUN, BAK_B_V611, BAK_RUN_V611, BOOTDIR + "/switcher"):
         log(f"  md5 {p}: {be.md5(p)}")
     for pid, e in st:

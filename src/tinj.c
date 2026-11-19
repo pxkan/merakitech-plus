@@ -1,7 +1,7 @@
-/* tinj.c — touch injector for TESTING ourui's touch zones (evdev write injection).
+/* tinj.c — touch injector for TESTING merakiplus's touch zones (evdev write injection).
  *
  * Linux evdev supports write() of struct input_event → input_inject_event,
- * so events are delivered to all readers of /dev/input/event0 (including ourui).
+ * so events are delivered to all readers of /dev/input/event0 (including merakiplus).
  * Used ONLY for page-switch tap/swipe + REVERT tap during the verification round.
  * Coordinates are chosen so they are also background on the original UI (between the four
  * round buttons / below them) → no actuator press if demo_v9 reads leftover events
@@ -22,7 +22,7 @@
 
 static int fd=-1;
 /* raw range auto via EVIOCGABS; fallback = the device's constant 0..480 (FINDINGS
- * 'Gestus-debug' — not 4095). Same formula as switcher/ourui/tinj_hold. */
+ * 'Gestus-debug' — not 4095). Same formula as switcher/merakiplus/tinj_hold. */
 static int xmin=0,xmax=480,ymin=0,ymax=480;
 static void send(__u16 type,__u16 code,__s32 val){
     struct input_event ev; memset(&ev,0,sizeof ev);

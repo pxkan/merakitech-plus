@@ -1,6 +1,6 @@
 /* tinj_hold.c — touch injector with LONG-PRESS for the boot test's gesture verification.
  *
- * Based on artifacts/ourui/tinj.c (same raw scaling via EVIOCGABS, same
+ * Based on workspace/tinj.c (same raw scaling via EVIOCGABS, same
  * event sequence). tinj.c's tap only holds 80 ms — the switcher gesture requires
  * ≥1.5 s per press, hence this variant. Does NOT touch tinj.c (shared artifact).
  *
@@ -17,14 +17,14 @@
  *                                          corner, background on stock home;
  *                                          span 5400 ms ≤ the switcher's 6 s window)
  *
- * ONLY for A mode (stock UI): in B mode ourui grabs event0 exclusively (EVIOCGRAB),
- * so injected events go to ourui, not to stock. The whole corner box x<90,y<90
+ * ONLY for A mode (stock UI): in B mode merakiplus grabs event0 exclusively (EVIOCGRAB),
+ * so injected events go to merakiplus, not to stock. The whole corner box x<90,y<90
  * is background on stock home (the Grinder circle centered ~(160,154) r≈72 does not
  * reach into it) → no actuator press. Center (240,240) is also background: the nearest
  * button edge is ~45 px away (measured: measure_stock_home.py) — keep the finger still.
  *
  * RAW RANGE: auto via EVIOCGABS; fallback = the device's constant 0..480 (FINDINGS
- * 'Gestus-debug'; not 4095). Same formula as switcher/ourui: raw = px*(max-min+1)/480.
+ * 'Gestus-debug'; not 4095). Same formula as switcher/merakiplus: raw = px*(max-min+1)/480.
  *
  * Build: zig cc -target arm-linux-musleabihf -mcpu=cortex_a7 -static -O2 \
  *            -Wall -Wextra -Werror -o tinj_hold tinj_hold.c

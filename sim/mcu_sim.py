@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """mcu_sim.py — complete SIMULATED powerMcu (MerakiTech Gen 1) for E2E tests.
 
-Speaks the UART protocol (PROTOCOL.md) over a pty that ourui's /dev/ttyS1
+Speaks the UART protocol (PROTOCOL.md) over a pty that merakiplus's /dev/ttyS1
 is redirected to in the SIM build. No contact with a physical device — local development only.
 
 Model:
@@ -68,7 +68,7 @@ from proto import (REGN, WS_IDLE, WS_SLEEP, WS_GRIND, WS_BREW_PRE, WS_BREW_EXT,
 TICK = 0.010            # 10 ms status task (PROTOCOL §6)
 VER_INTERVAL = 0.020    # 0x89 every 20 ms until a cmd9 reply
 POLL_LATENCY = 0.005    # ~5 ms reply time on polls (observed ~10 ms incl. UART)
-KEEPALIVE_MAX = 30.0    # word1=0 expected every ≤30 s (ourui keep-awake)
+KEEPALIVE_MAX = 30.0    # word1=0 expected every ≤30 s (merakiplus keep-awake)
 BOOT_PUSH_WINDOW = 6.0  # boot push expected within 6 s of the first RX
 DVALE_DELAY = 0.5       # v6.14: the status task checks word0 every 500 ms (0x29D4)
 POWER_KEY_HOLD_MIN = 0.8  # v6.14: PC.8 low for 8×100 ms followed by a release → wake/reset
@@ -715,7 +715,7 @@ class McuSim:
         self.alog.log(self.t, "reboot", factory=factory, cause=cause,
                       defaults=defaults)
         # v6.16: the cmd8 alarm lives in MCU RAM (0x20000E18) — a CPU reset clears it; the RTC
-        # peripheral keeps counting. The host re-arms it (ourui: pre-arm after the wake).
+        # peripheral keeps counting. The host re-arms it (merakiplus: pre-arm after the wake).
         if self.alarm is not None:
             self.alog.log(self.t, "alarm_cleared", alarm=list(self.alarm), cause="reset")
         self.alarm = None
@@ -1974,7 +1974,7 @@ class McuSim:
             # v6.5 scenarios (rx-stall-repro): one 0x83 frame with a BIT ERROR IN THE
             # LENGTH BYTE (default: set bit7 → L+128 > REGN). A parser that
             # blindly waits for 2*L+7 bytes stalls until the buffer overflows
-            # (UI_v6.md v6.4 finding: ~3.5 s in ourui's rx_feed). The CRC is still
+            # (UI_v6.md v6.4 finding: ~3.5 s in merakiplus's rx_feed). The CRC is still
             # valid for the ORIGINAL length — the error is only in LEN.
             sub = int(ev.get("sub", 33))
             ln = max(1, min(int(ev.get("len", 7)), 60))

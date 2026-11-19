@@ -3,6 +3,34 @@
 All notable changes to Meraki+. Details (with evidence, frames and test figures) are in
 [docs/dev/UI_v6.md](docs/dev/UI_v6.md) under *CHANGES-v6.x*. All dates are 2026.
 
+## [6.16, rebrand] — 2026-11-19
+Same UI version (V6.16); rebuilt binaries. Pure rename + migration: control logic, UART frames,
+thresholds and the EN/DA UI texts are unchanged except for the displayed file paths.
+### Changed
+- **One technical identifier: `merakiplus`.** The former internal code name is gone from the repository.
+  Source `src/merakiplus.c`; binaries `bin/merakiplus`, `bin/merakiplus_sim_arm`,
+  `bin/merakiplus_sim-linux-x86_64`, `bin/merakiplus_sim-macos-arm64`; install directory
+  `/new_customer/merakiplus/` (backups, state, gesture switcher, `lang`, `schedule`, `cfgbak/`); environment
+  variables `MERAKIPLUS_*`; build macros `-DMERAKIPLUS_SIM` / `-DMERAKIPLUS_PREVIEW`; `--is-merakiplus`;
+  binary marker `@(#)merakiplus `; logs `/tmp/merakiplus_net.log`, `/tmp/merakiplus_boot.log`; console
+  prefix `== merakiplus:`. The product name on screen stays **Meraki+**; the process stays `demo_v9`
+  (vendor watchdog contract).
+- On screen only the displayed paths change (`merakiplus/lang`, `merakiplus/schedule`); the schedule
+  footer reads `MERAKI+ · merakiplus/schedule` (without ONLY/KUN, so the longer path fits). A frame-by-frame
+  comparison of all 180 previews (EN + DA) against the pre-rename build differs only on those screens.
+### Added
+- **Migration of earlier installs** in `./install.sh` and `./revert.sh`: the old install directory is
+  moved to `/new_customer/merakiplus/` (same filesystem, atomic; merged without overwriting if both
+  exist), the old staged binary is dropped, a developer `run.sh` is rewritten, the `demo.sh` guard line
+  is rewritten by install (removed by revert, which still restores `demo.sh` byte-identically), and older
+  Meraki+ builds are recognised by their old marker. All legacy names live in one block of
+  `tools/merakiplus.py` marked *legacy migration only*; `tests/hygiene.py` fails if the old identifier
+  appears anywhere else (file names, text or binaries). `tests/test_installer.py` covers upgrade, revert,
+  dry-run and purge of a pre-rename install.
+- `bin/`: `merakiplus` `737db9b9…`, `merakiplus_sim_arm` `9c3f1fdb…` and `switcher` `a5e0128b…` rebuilt
+  (renamed strings only); `grab_shim.so`, `tinj_hold` and `keyinj` are byte-identical to before.
+  **Not yet verified on a machine** — an installed device migrates at its next `./install.sh`.
+
 ## [6.16] — 2026-11-19
 ### Fixed
 - **TIME FORMAT was inverted relative to the stock UI.** The stock `update_time` (0xD5944) XORs the
@@ -25,14 +53,14 @@ All notable changes to Meraki+. Details (with evidence, frames and test figures)
   next pre-heat.
 - **Optional auto off** (*SYSTEM → AUTO OFF*: off / 15 / 20 / 30 / 60 min, default off): the stock power-off
   sequence after that long without touch, button or activity, with a warning 30 s before.
-- The schedule and auto off are stored in Meraki+'s own file `/new_customer/ourui/schedule`; `config.json`
+- The schedule and auto off are stored in Meraki+'s own file `/new_customer/merakiplus/schedule`; `config.json`
   is written only by the existing TIME FORMAT / DAYLIGHT SAVING rows. TIME ZONE (still locked) shows the
   stock label and place names.
 - Simulator: scenarios `time_display`, `timemode_stock_parity`, `schedule_prewarm` (alarm wake end to end),
   scenario keys `ui_env` / `ui_only`, expect kind `state`, exact-alarm `time_sync_seen`; the sim's MCU now
   clears the cmd8 alarm on a CPU reset (as the firmware's RAM does).
 ### Changed
-- `bin/`: `ourui` is now **V6.16**; `ourui_sim_arm` and the host SIM builds rebuilt with it; `switcher`,
+- `bin/`: `merakiplus` is now **V6.16**; `merakiplus_sim_arm` and the host SIM builds rebuilt with it; `switcher`,
   `tinj_hold`, `keyinj` and `grab_shim.so` unchanged. Not yet verified on a machine.
 
 ## [6.15] — 2026-11-19
@@ -56,9 +84,9 @@ All notable changes to Meraki+. Details (with evidence, frames and test figures)
 ### Changed
 - Source comments, developer console/log output, simulator tooling and scenario descriptions are now
   English (the bilingual EN/DA UI string table is unchanged). Switcher log lines are English
-  (`GESTURE TRIGGERED`, `switch A→B DONE`); ourui's DIAGNOSTICS still recognises the old Danish lines.
+  (`GESTURE TRIGGERED`, `switch A→B DONE`); merakiplus's DIAGNOSTICS still recognises the old Danish lines.
 - `bin/`: plain `./build.sh` builds of these sources (md5s in `bin/MD5SUMS`, `tools/merakiplus.py` and
-  `bin/README.md`): `ourui` is now **V6.15**; `ourui_sim_arm` and the host SIM builds rebuilt with it;
+  `bin/README.md`): `merakiplus` is now **V6.15**; `merakiplus_sim_arm` and the host SIM builds rebuilt with it;
   `switcher`, `tinj_hold` and `keyinj` rebuilt from the translated sources (unchanged by the graph fix);
   `grab_shim.so` is still the on-device-verified build. The new builds are not yet verified on a machine.
 

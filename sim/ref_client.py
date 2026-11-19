@@ -1,15 +1,15 @@
 #!/usr/bin/env python3
 """ref_client.py — protocol-level REFERENCE CLIENT for the E2E test environment.
 
-Proves mcu_sim until Fable's ourui SIM build lands. Implements the same
+Proves mcu_sim until Fable's merakiplus SIM build lands. Implements the same
 SIM contract (CONTRACT.md): state JSONL per frame, fb buffer file, touch via
 evdev FIFO (tinj_hold format), ctrl socket, boot push, keep-awake (word1=0),
-poll rotation, write policy (band/trigger/range) and ourui v6's ACK/retransmit
+poll rotation, write policy (band/trigger/range) and merakiplus v6's ACK/retransmit
 policy (150 ms timeout, exactly one retransmit, then FAIL).
 
 The UI is a MINIMAL emulation (home + 4 activity buttons w/ 650 ms hold-for-
 start + settings save via ctrl) with a simple synthetic fb renderer (circle clip
-r234, phase colours, page/toast regions). It does NOT replace ourui's real
+r234, phase colours, page/toast regions). It does NOT replace merakiplus's real
 UI — but it proves the sim + runner + assertions pipeline.
 
 Python stdlib only. No device contact.
@@ -36,18 +36,18 @@ from proto import (REGN, FB_BYTES, W, H, crc16_modbus, build_frame, build_query,
 
 POLL_INTERVAL = 0.100       # stock: ~100 ms rotation
 POLL_ROTATION = [(0, 56), (33, 7), (56, 56), (33, 7)]
-EXT_INTERVAL = 1.0          # words 112..114 @ 1 s (as ourui v6)
+EXT_INTERVAL = 1.0          # words 112..114 @ 1 s (as merakiplus v6)
 KEEPALIVE_INTERVAL = 30.0
-ACK_TIMEOUT = 0.150         # ourui v6: 150 ms, exactly one retransmit
-LINK_TIMEOUT = 1.5          # ourui: link_up = now-last_rx < 1500 ms
-HOLD_START_MS = 650         # ourui: hold-for-start on activity buttons
-# v6.14 (UI_v6 §19): the power button — same semantics as ourui/stock
+ACK_TIMEOUT = 0.150         # merakiplus v6: 150 ms, exactly one retransmit
+LINK_TIMEOUT = 1.5          # merakiplus: link_up = now-last_rx < 1500 ms
+HOLD_START_MS = 650         # merakiplus: hold-for-start on activity buttons
+# v6.14 (UI_v6 §19): the power button — same semantics as merakiplus/stock
 PW_HOLD_S = 1.5             # stock: 2-second switch (1.0-2.0 s); the midpoint
 PW_GAP_S = 0.080            # cmd8 → usleep(80 ms) → cmd6 sub0 len2 [0,0]
 PW_WAKE_S = 10.0            # TÆNDER… (turning on): how long to wait for word0=1
 PW_SEEN_S = 0.6             # word0=1 seen this long (w/ link) → awake
 
-# ourui v6 phase colours (RGB) — used for fb rendering + region assertions
+# merakiplus v6 phase colours (RGB) — used for fb rendering + region assertions
 PHASE_RGB = {
     "OFFLINE": (90, 90, 96), "SLEEP": (70, 80, 120), "ERROR": (255, 96, 96),
     "HEAT": (255, 186, 84), "READY": (98, 222, 168), "GRIND": (174, 228, 112),
@@ -63,7 +63,7 @@ PHASE_BG = {
 PAGE_RGB = {"home": (40, 44, 52), "settings": (52, 44, 60),
             "detail": (60, 52, 44), "sys": (44, 52, 60), "diag": (36, 40, 44),
             "bye": (60, 40, 40), "off": (16, 16, 18)}
-# home buttons (x, y, r) — reference layout (not ourui's real layout)
+# home buttons (x, y, r) — reference layout (not merakiplus's real layout)
 BUTTONS = {"grind": (130, 160, 58), "brew": (350, 160, 58),
            "water": (130, 330, 58), "steam": (350, 330, 58)}
 SETTINGS_BTN = (240, 430, 26)
@@ -94,7 +94,7 @@ class RefClient:
         self.rx_ok = 0
         self.rx_bad = 0
         self.last_rx = -1e9
-        # write queue (ourui v6 policy)
+        # write queue (merakiplus v6 policy)
         self.wq = None            # {sub, words, sent, tries, raw}
         self.c6_ok = self.c6_retx = self.c6_fail = self.c6_block = 0
         # UI-state
@@ -104,14 +104,14 @@ class RefClient:
         self.save_state = None    # {state: pending|ok|fail, param, value}
         self.activity_pending = None
         self.activity_seen = False
-        # v6.13: manual STOP (same state field as ourui's stop:{req,ok,fail})
+        # v6.13: manual STOP (same state field as merakiplus's stop:{req,ok,fail})
         self.stop_req = self.stop_ok = self.stop_fail = 0
         self.stop_pending = None      # active stop request (kind)
         self.stop_last = None
         self.stop_t0 = 0.0
         self._stop_sw_followup = False  # water: sub19=[0] after the sub16 ACK
         self.view_bye = False
-        # v6.14: the power button (same state field as ourui's power:{...})
+        # v6.14: the power button (same state field as merakiplus's power:{...})
         self.pw_state = "on"          # on|turning_off|off|turning_on
         self.pw_key_down = False
         self.pw_fired = False
@@ -196,7 +196,7 @@ class RefClient:
         self.lang = int(self.cfg.get("language", 0))
 
     def config_set(self, field, value):
-        """Atomic config write (tmp+rename, like the ourui/REVERT pattern)."""
+        """Atomic config write (tmp+rename, like the merakiplus/REVERT pattern)."""
         cfg = dict(self.cfg)
         cfg[field] = value
         tmp = self.cfg_path.with_suffix(".json.tmp")
@@ -232,7 +232,7 @@ class RefClient:
         self.uart_send(build_query(sub, n))
 
     def wq_push(self, sub, words, intent=()):
-        """Frame policy before sending (ourui v6 wq_push_t): band + trigger + range.
+        """Frame policy before sending (merakiplus v6 wq_push_t): band + trigger + range.
         intent = set of words that may explicitly be start/trigger words."""
         n = len(words)
         end = sub + n
@@ -363,7 +363,7 @@ class RefClient:
 
     # ------------------------------------------------------------ actions
     def act_push(self, kind):
-        # STOP must never be blocked by an active phase (ourui v6 act_push_steam_stop)
+        # STOP must never be blocked by an active phase (merakiplus v6 act_push_steam_stop)
         if kind == "steam_stop":
             g = lambda k, d: int(self.cfg.get(k, d))
             mt = min(700, max(450, g("AtuoSteamTarge", 650)))
@@ -408,7 +408,7 @@ class RefClient:
         if kind == "grind":
             ok = self.wq_push(3, [1, g("autoGrindWeight", 185), 60, 1], intent=(3, 6))
         elif kind == "brew":
-            # sync only if the mirror differs from config (as ourui v6 act_push)
+            # sync only if the mirror differs from config (as merakiplus v6 act_push)
             if self.reg_seen[23] and self.regs[23] != g("autobrewWeight", 360):
                 if not self.wq_push(23, [g("autobrewWeight", 360)]):
                     return False
@@ -439,7 +439,7 @@ class RefClient:
         return ok
 
     def _stop_running(self, kind):
-        """v6.13: same bits as ourui's stop_running() (the confirmation guard)."""
+        """v6.13: same bits as merakiplus's stop_running() (the confirmation guard)."""
         ws = self.regs[33]
         if kind == "grind_stop":
             return bool(ws & 0x0040)
@@ -450,7 +450,7 @@ class RefClient:
         return False
 
     # ------------------------------------------------------------ v6.14: power on/off
-    # Same semantics as ourui v6.14 / stock (UI_v6 §19.1): HOLD 1.5 s →
+    # Same semantics as merakiplus v6.14 / stock (UI_v6 §19.1): HOLD 1.5 s →
     # cmd8 (alarm 0/0/0) → ≥80 ms → cmd6 sub0 len2 [0,0] → ACK → OFF.
     # Blocked during brew/steam/grind (stock NEVER stops an activity on
     # power-off; hot water does not block). Keep-awake pauses while off.
@@ -576,8 +576,8 @@ class RefClient:
         self.save_state = {"state": "pending", "param": pid, "value": value}
         wr = prm.get("write") or {}
         # hotwater_mode: parity_spec's write block (sub9 len11) is a START block,
-        # not a settings write — ourui v6 persists config ONLY (M_NONE,
-        # "OURUI STARTER KUN AUTO" / "STARTS AUTO ONLY"). Hence treated as config-only.
+        # not a settings write — merakiplus v6 persists config ONLY (M_NONE,
+        # "MERAKIPLUS STARTER KUN AUTO" / "STARTS AUTO ONLY"). Hence treated as config-only.
         config_only_override = {"hotwater_mode"}
         if wr.get("sub") is None or not prm.get("words") or pid in config_only_override:
             # config-only (tier 2): no MCU write
@@ -686,7 +686,7 @@ class RefClient:
                 pend_down = pend_up = False
 
     # ------------------------------------------------------------ fb-rendering
-    # The renderer is a simple synthetic emulation (NOT ourui's real UI):
+    # The renderer is a simple synthetic emulation (NOT merakiplus's real UI):
     # circle clip r234, phase ring + background, page region (top), buttons, toast.
     # Base frames are cached per (phase, page) so only small overlays are drawn per frame.
     def _build_base(self, ph, page):
@@ -782,7 +782,7 @@ class RefClient:
             return
         ph = phase_of(self.regs, self.link_up())
         # v6.6: now also mirrors the trigger/flag/wand words (3/6/9/16/19/22/24/
-        # 44/46) that ourui exports — so the scenarios' word checks measure
+        # 44/46) that merakiplus exports — so the scenarios' word checks measure
         # real values instead of the runner's missing-key=0 (additive).
         shown = [0, 1, 3, 4, 6, 9, 11, 14, 16, 17, 19, 22, 23, 24, 25, 33,
                  34, 35, 36, 38, 39, 40, 42, 44, 46, 47, 48, 50, 51, 52, 58,
@@ -826,7 +826,7 @@ class RefClient:
         if cmd == "action":
             return {"ok": self.act_push(req.get("name", ""))}
         if cmd == "key":
-            # v6.14: the power button (same hook as ourui's SIM build):
+            # v6.14: the power button (same hook as merakiplus's SIM build):
             # {"cmd":"key","value":1|0[,"code":116]}
             v = int(req.get("value", -1))
             if v not in (0, 1):
@@ -857,7 +857,7 @@ class RefClient:
             self.view_bye = True
             self.page = "bye"
             self.toast_set("SKIFT TIL ORIGINAL NU", "warn")
-            if os.environ.get("OURUI_SWITCH_DRY"):
+            if os.environ.get("MERAKIPLUS_SWITCH_DRY"):
                 self._bye_back_at = self.now + 1.0
                 return {"ok": True, "dry": True}
             self._exit_at = self.now + 0.3
@@ -872,9 +872,9 @@ class RefClient:
             self.emit_state()
             return {"ok": True}
         if cmd == "layout":
-            # v6.5-scenarios: same hook shape as ourui's SIM build (CONTRACT
+            # v6.5-scenarios: same hook shape as merakiplus's SIM build (CONTRACT
             # ADDENDUM v6.4 B), but with the REFERENCE layout (BUTTONS above) —
-            # not ourui's real geometry. Used by the scenarios' touch
+            # not merakiplus's real geometry. Used by the scenarios' touch
             # events with a "layout" name instead of synthetic coordinates.
             targets = [{"name": n, "x": bx, "y": by, "r": br}
                        for n, (bx, by, br) in BUTTONS.items()]
@@ -999,7 +999,7 @@ class RefClient:
                     self.toast_set(f"FÆRDIG: {self.activity_pending.upper()}", "ok")
                     self.activity_pending = None
                     self.activity_seen = False
-            # v6.13: stop confirmation (ourui stop_step): only once the MCU has
+            # v6.13: stop confirmation (merakiplus stop_step): only once the MCU has
             # cleared the bits — an ACK alone does not count. 5 s without clear = fail.
             if self.stop_pending:
                 if not self._stop_running(self.stop_pending):
@@ -1032,19 +1032,19 @@ class RefClient:
 
 def main():
     ap = argparse.ArgumentParser(description="Reference client for mcu_sim (E2E)")
-    ap.add_argument("--tty", default=os.environ.get("OURUI_SIM_TTY"))
-    ap.add_argument("--state", default=os.environ.get("OURUI_SIM_STATE"))
-    ap.add_argument("--fb", default=os.environ.get("OURUI_SIM_FB"))
-    ap.add_argument("--touch", default=os.environ.get("OURUI_SIM_TOUCH"))
-    ap.add_argument("--ctrl", default=os.environ.get("OURUI_SIM_CTRL"))
-    ap.add_argument("--config", default=os.environ.get("OURUI_CONFIG",
+    ap.add_argument("--tty", default=os.environ.get("MERAKIPLUS_SIM_TTY"))
+    ap.add_argument("--state", default=os.environ.get("MERAKIPLUS_SIM_STATE"))
+    ap.add_argument("--fb", default=os.environ.get("MERAKIPLUS_SIM_FB"))
+    ap.add_argument("--touch", default=os.environ.get("MERAKIPLUS_SIM_TOUCH"))
+    ap.add_argument("--ctrl", default=os.environ.get("MERAKIPLUS_SIM_CTRL"))
+    ap.add_argument("--config", default=os.environ.get("MERAKIPLUS_CONFIG",
                     str(proto.BASELINE_CONFIG)))
-    ap.add_argument("--root", default=os.environ.get("OURUI_SIM_ROOT",
-                    os.environ.get("OURUI_ROOT")))
+    ap.add_argument("--root", default=os.environ.get("MERAKIPLUS_SIM_ROOT",
+                    os.environ.get("MERAKIPLUS_ROOT")))
     ap.add_argument("--spec")
     args = ap.parse_args()
     if not args.tty:
-        print("OURUI_SIM_TTY/--tty missing", file=sys.stderr)
+        print("MERAKIPLUS_SIM_TTY/--tty missing", file=sys.stderr)
         sys.exit(2)
     try:
         client = RefClient(args)

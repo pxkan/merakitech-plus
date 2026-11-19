@@ -37,8 +37,8 @@ jobs:
         run: ./build.sh
       - name: UI self-test (preview build, 440+ checks)
         run: |
-          zig cc -DOURUI_PREVIEW -O2 -o build/ourui_preview src/ourui_v6.c -lm
-          ./build/ourui_preview --selftest sim/fixtures/config.json > build/ui_selftest.txt 2>&1 || { tail -50 build/ui_selftest.txt; exit 1; }
+          zig cc -DMERAKIPLUS_PREVIEW -O2 -o build/merakiplus_preview src/merakiplus.c -lm
+          ./build/merakiplus_preview --selftest sim/fixtures/config.json > build/ui_selftest.txt 2>&1 || { tail -50 build/ui_selftest.txt; exit 1; }
           tail -n 1 build/ui_selftest.txt
       - name: Simulator self-test
         run: python3 sim/selftest.py

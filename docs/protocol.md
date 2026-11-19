@@ -195,7 +195,7 @@ Supported by display call sites + MCU defaults + `config.json`. Values are typic
 | Word | Field | Default (MCU) | config.json | Source |
 |---|---|---|---|---|
 | 0 | **power** (1=on, 0=off) | 1 | — | `PowerOn/PowerOff` (cmd6 sub0) |
-| 1 | **sleep/drain** (1=sleep/drain, 0=awake) | — | sleepMode | `MachSleep/MachAwaken` (cmd6 sub1). *(Live correction 2026-11-17 [SESSION.md]: the values were swapped in the first edition — active captures (v2/v3) have word1=0, the sleep capture has word1=1 + the drain task. **ourui v3/v4's keep-awake wrongly writes 1 and sends the MCU to sleep; v5 must write 0.**)* |
+| 1 | **sleep/drain** (1=sleep/drain, 0=awake) | — | sleepMode | `MachSleep/MachAwaken` (cmd6 sub1). *(Live correction 2026-11-17 [SESSION.md]: the values were swapped in the first edition — active captures (v2/v3) have word1=0, the sleep capture has word1=1 + the drain task. **merakiplus v3/v4's keep-awake wrongly writes 1 and sends the MCU to sleep; v5 must write 0.**)* |
 | 2 | **grind mode** | 1 | grindMode | `grinderScaleUpdate` (cmd6 sub2 len2) |
 | 4 | **grind auto_weight** (0.1 g) | 180 | autoGrindWeight=185 | MCU default `[8]=180`; "grind: mode,auto_weight" |
 | 5 | grind over_time | 60 | — | MCU default `[0xA]=60` |

@@ -6,7 +6,7 @@ Scenario timelines are calibrated against mcu_sim's phase delays
 (BREW.md/HOTWATER.md/SESSION.md). The settings-save matrix is derived from
 parity_spec.json (min/max/step per parameter).
 
-v6.5-scenarios (RECONCILE.md): the expectations assert ourui's GUARDED
+v6.5-scenarios (RECONCILE.md): the expectations assert merakiplus's GUARDED
 behaviour (UI_v6.md §4.1/4.3/4.5/4.6 + frame policy): PRE-INF. TIME = sub113
 len1, GRIND MODE = sub2 len1, SAVE of an unchanged value = 'unchanged',
 PAUSE TIME locked, BRIGHTNESS 0 rejected, init/patch not exposed, error/blocked
@@ -65,7 +65,7 @@ SCENARIOS.append(base(
      {"kind": "sim_log", "assert": "no_writes_between", "t0": 1, "t1": 11.5,
       "except_subs": [0, 1, 112]},
      {"kind": "point", "t": 6, "point": [240, 8], "color": [98, 222, 168], "tol": 30},
-     # v6.5-scenarios: ourui's gauge arc (r 207-221) in the phase gradient — not
+     # v6.5-scenarios: merakiplus's gauge arc (r 207-221) in the phase gradient — not
      # the reference client's page band. Ref oracle: sim_ui_profile-ref.json.
      {"kind": "point", "t": 6, "point": [240, 20], "color": [61, 163, 130], "tol": 30},
      # v6.5-scenarios: dark vignette background w/ white hero text (the phase is
@@ -94,7 +94,7 @@ SCENARIOS.append(base(
 
 # ---------------------------------------------------------------- grind (touch)
 # v6.5-scenarios: touch target via the layout hook ("grind") — the SIM build gives
-# ourui's real GRIND button (150,372), the reference client its own (130,160).
+# merakiplus's real GRIND button (150,372), the reference client its own (130,160).
 SCENARIOS.append(base(
     "grind", "Grind via TOUCH hold-for-start (650 ms): weight ramp → auto-stop", 17,
     [ui(2, "touch", layout="grind", ms=700),
@@ -267,7 +267,7 @@ SCENARIOS.append(base(
       "t0": 3, "t1": 42}]))
 
 # ---------------------------------------------------------------- faults E1/E2/E3
-# v6.5-scenarios: ourui's act_guard blocks start during an active error (DA toast
+# v6.5-scenarios: merakiplus's act_guard blocks start during an active error (DA toast
 # 'FEJL AKTIV · START SPÆRRET') — no start frame is sent, so the sim has no brew to
 # safety-stop. Ref oracle (unguarded start → MCU stop): sim_ui_profile-ref.json.
 SCENARIOS.append(base(
@@ -343,7 +343,7 @@ SCENARIOS.append(base(
      {"kind": "phase", "t": 11, "window": 1.5, "value": "READY"}]))
 
 # ---------------------------------------------------------------- out-of-spec
-# v6.5-scenarios: ourui's frame policy rejects the WHOLE sub1 len30 block before
+# v6.5-scenarios: merakiplus's frame policy rejects the WHOLE sub1 len30 block before
 # the UART (BLOCK +1) — the sim never sees an out-of-spec value. Ref oracle
 # (boot push sends the values, sim logs range_violation): sim_ui_profile-ref.json.
 SCENARIOS.append(base(
@@ -367,7 +367,7 @@ SCENARIOS.append(base(
 
 # ---------------------------------------------------------------- language EN/DA
 SCENARIOS.append(base(
-    "language", "Language setting (config-only): stock index 0=EN..10; ourui's labels "
+    "language", "Language setting (config-only): stock index 0=EN..10; merakiplus's labels "
                 "are fixed Danish (DA is not among stock's 11 languages — documented)", 10,
     [ui(2, "save", param="language", value=1),
      ui(5, "save", param="language", value=0),
@@ -394,7 +394,7 @@ SCENARIOS.append(base(
 
 # ---------------------------------------------------------------- runtime switch
 SCENARIOS.append(base(
-    "runtime_switch", "SWITCH TO ORIGINAL NOW (OURUI_SWITCH_DRY=1): bye view → back, "
+    "runtime_switch", "SWITCH TO ORIGINAL NOW (MERAKIPLUS_SWITCH_DRY=1): bye view → back, "
                       "flag unchanged, process keeps running", 10,
     [ui(3, "runtime_switch"), snap(3.6, "bye"), snap(7, "back")],
     [{"kind": "view", "t": 3.6, "window": 0.9, "value": "bye"},
@@ -426,7 +426,7 @@ SCENARIOS.append(base(
      {"kind": "phase", "t": 16.5, "window": 1, "value": "EXT"},
      # v6.5-scenarios: window ends at 14.9 (not 15.0): the pressure jump to the
      # extraction plateau is measured at 14.99-15.02 s at 8× — 10-20 ms margin.
-     # ourui writes one state line per changed frame (up to 30/s), so lines
+     # merakiplus writes one state line per changed frame (up to 30/s), so lines
      # can land in the window's last milliseconds. Pure timing, not behaviour.
      {"kind": "word_hold", "word": 51, "t0": 14.5, "t1": 14.9, "min": 300, "max": 420},
      {"kind": "word_hold", "word": 51, "t0": 15.6, "t1": 17.5, "min": 1200, "max": 1500},
@@ -467,7 +467,7 @@ def gen_matrix():
     spec = load_spec()
     cfg = load_baseline_config()
     params = {p["id"]: p for p in spec["parameters"]}
-    # (param id, persist type as ourui v6 handles it)
+    # (param id, persist type as merakiplus v6 handles it)
     mcu_params = ["grind_weight", "brew_weight", "hotwater_weight", "brew_temp",
                   "head_temp", "steam_milk_target", "steam_gear",
                   "preinfusion_pressure", "preinfusion_switch", "preinfusion_time",
@@ -505,7 +505,7 @@ def gen_matrix():
                 "except_subs": [0, 1, 112]}
 
     def expected_words(pid, value, cfg_now):
-        """ourui's ACTUAL SAVE writes (UI_v6.md §4.1) — not parity_spec
+        """merakiplus's ACTUAL SAVE writes (UI_v6.md §4.1) — not parity_spec
         word-for-word. The ref oracle lives in sim/sim_ui_profile-ref.json."""
         p = params[pid]
         if pid == "preinfusion_time":
@@ -601,7 +601,7 @@ def gen_matrix():
     return base(
         "settings_save_matrix",
         "Settings SAVE matrix: min/max/step/original per parity_spec parameter "
-        "(ourui's guarded SAVE path: writes + config persist; config-only without "
+        "(merakiplus's guarded SAVE path: writes + config persist; config-only without "
         "writes; locked/omitted fields rejected; unchanged value = 'unchanged')",
         duration, events, expect)
 

@@ -1,17 +1,17 @@
 /* keyinj.c — EV_KEY injector for TESTING v6.14's power button on event1 (k62091).
  * Linux evdev write injection (same mechanism as tinj on event0): write() of a
- * struct input_event is delivered to all readers of the node — including ourui's kbd_poll.
+ * struct input_event is delivered to all readers of the node — including merakiplus's kbd_poll.
  * Code 28 = the k62091 button (B: KEY=10000000). No EVIOCGRAB, no hardware actuator.
  *
  * Why: on this device a PHYSICAL hold (>= ~1.5 s) cuts power to the display
- * (kernel/PMIC) WITHOUT delivering input events — so ourui's power-off path cannot be
+ * (kernel/PMIC) WITHOUT delivering input events — so merakiplus's power-off path cannot be
  * triggered physically here. Injected events prove the power-off path (cmd8 + cmd6 sub0 len2 [0,0] + deep sleep)
  * on the LIVE v6.14 binary with the REAL MCU while the display stays alive (telnet/fb intact).
  * The power-ON half still requires a physical hold (the MCU only wakes on its own GPIO).
  *
  * Usage: keyinj click <ms> | keyinj down | keyinj up   (node: KEYINJ_DEV, default /dev/input/event1;
  *       code: KEYINJ_CODE, default 28. NOTE: the input core discards injected codes the node does not
- *       declare in keybit — on event0 (touch) use a declared code, e.g. 10; ourui counts ALL EV_KEY codes.)
+ *       declare in keybit — on event0 (touch) use a declared code, e.g. 10; merakiplus counts ALL EV_KEY codes.)
  * Build: zig cc -target arm-linux-musleabihf -mcpu=cortex_a7 -static -O2 -o keyinj keyinj.c
  */
 #define _GNU_SOURCE

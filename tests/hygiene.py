@@ -5,6 +5,8 @@
   * no vendor firmware/binaries: the only ELF/Mach-O files tracked are our builds in bin/
   * no personal paths, private IP addresses (other than documented placeholders), MAC addresses
   * sim/fixtures/config.json carries placeholder Wi-Fi credentials only
+  * the pre-rename identifier (tools/merakiplus.py LEGACY_ID) appears nowhere — not in file names,
+    text or binaries — except inside the "legacy-compat" block of tools/merakiplus.py
 """
 import hashlib
 import json
@@ -102,6 +104,25 @@ for p in (ROOT / "bin").iterdir():
 cfg = json.loads((ROOT / "sim/fixtures/config.json").read_text())
 if (cfg.get("ssid"), cfg.get("password")) != ("ExampleAP", "notarealpw"):
     fail("sim/fixtures/config.json must keep the placeholder Wi-Fi credentials")
+
+# 5. the pre-rename identifier lives only in the legacy-compat block of tools/merakiplus.py
+OLD = merakiplus.LEGACY_ID.encode()
+BEGIN, END = b"# BEGIN legacy-compat", b"# END legacy-compat"
+for p in files:
+    rel = p.relative_to(ROOT).as_posix()
+    if OLD in rel.lower().encode():
+        fail(f"file name contains the pre-rename identifier: {rel}")
+    if not p.is_file():
+        continue
+    data = p.read_bytes()
+    if rel == "tools/merakiplus.py":
+        if data.count(BEGIN) != 1 or data.count(END) != 1 or data.index(BEGIN) > data.index(END):
+            fail("tools/merakiplus.py: exactly one legacy-compat BEGIN/END block expected")
+            continue
+        data = data[:data.index(BEGIN)] + data[data.index(END):]
+    n = data.lower().count(OLD)
+    if n:
+        fail(f"{rel}: {n} occurrence(s) of the pre-rename identifier outside the legacy-compat block")
 
 print("HYGIENE: " + ("OK" if not fails else f"{len(fails)} problem(s)"))
 sys.exit(1 if fails else 0)

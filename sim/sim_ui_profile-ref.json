@@ -1,6 +1,6 @@
 {
   "version": "v6.5-scenarios",
-  "description": "REF profile for the reference client (sim/ref_client.py): the scenarios assert ourui's guarded behaviour (the v6.5-scenarios reconciliation, sim/reports/v6.5-scenarios/RECONCILE.md). The reference client is the UNGUARDED ORACLE (parity_spec word-for-word, synthetic layout, no act_guard/frame policy) and proves the sim+runner pipeline. This profile replaces the 20 reconciled expectations 1:1 with the reference client's oracle behaviour, so --ui-bin ref_client (or no --ui-bin) still runs green. Each override hits exactly one expectation (otherwise the scenario fails). The two other v6.4 overrides are not here: the grind coordinate is replaced by the layout hook (both clients implement it), and the replay_v3 timing window is fixed in the scenario itself. --no-ui-profile runs raw (against the reference client the 20 checks are then expected to fail).",
+  "description": "REF profile for the reference client (sim/ref_client.py): the scenarios assert merakiplus's guarded behaviour (the v6.5-scenarios reconciliation, sim/reports/v6.5-scenarios/RECONCILE.md). The reference client is the UNGUARDED ORACLE (parity_spec word-for-word, synthetic layout, no act_guard/frame policy) and proves the sim+runner pipeline. This profile replaces the 20 reconciled expectations 1:1 with the reference client's oracle behaviour, so --ui-bin ref_client (or no --ui-bin) still runs green. Each override hits exactly one expectation (otherwise the scenario fails). The two other v6.4 overrides are not here: the grind coordinate is replaced by the layout hook (both clients implement it), and the replay_v3 timing window is fixed in the scenario itself. --no-ui-profile runs raw (against the reference client the 20 checks are then expected to fail).",
   "scenarios": {
     "idle": [
       {
@@ -15,7 +15,7 @@
           "color": [40, 44, 52],
           "tol": 30
         },
-        "why": "REF oracle: the reference client's synthetic layout has a page-coloured band at the top (y<44, PAGE_RGB home = (40,44,52)). ourui's gauge-arc colour (61,163,130) is the scenario default."
+        "why": "REF oracle: the reference client's synthetic layout has a page-coloured band at the top (y<44, PAGE_RGB home = (40,44,52)). merakiplus's gauge-arc colour (61,163,130) is the scenario default."
       },
       {
         "match": {
@@ -29,7 +29,7 @@
           "color": [24, 104, 92],
           "tol": 30
         },
-        "why": "REF oracle: the reference client fills the circle's interior with the phase background colour (PHASE_BG READY = (24,104,92)). ourui's dark vignette background (32,36,42) is the scenario default."
+        "why": "REF oracle: the reference client fills the circle's interior with the phase background colour (PHASE_BG READY = (24,104,92)). merakiplus's dark vignette background (32,36,42) is the scenario default."
       }
     ],
     "fault_e1": [
@@ -46,7 +46,7 @@
           "t0": 4,
           "t1": 6
         },
-        "why": "REF oracle: the reference client has no act_guard — it sends brew start during an active E1, and the MCU safety-stops (sim reason 'fault E1/E2/E3'). ourui blocks the start with the toast 'FEJL AKTIV · START SPÆRRET' (the scenario default)."
+        "why": "REF oracle: the reference client has no act_guard — it sends brew start during an active E1, and the MCU safety-stops (sim reason 'fault E1/E2/E3'). merakiplus blocks the start with the toast 'FEJL AKTIV · START SPÆRRET' (the scenario default)."
       }
     ],
     "out_of_spec": [
@@ -62,7 +62,7 @@
           "assert": "range_min",
           "min": 1
         },
-        "why": "REF oracle: the reference client boot-pushes out-of-spec config values straight onto the UART (no frame policy), and the sim logs range_violation. ourui rejects the whole block before sending (BLOCK≥1, the scenario default)."
+        "why": "REF oracle: the reference client boot-pushes out-of-spec config values straight onto the UART (no frame policy), and the sim logs range_violation. merakiplus rejects the whole block before sending (BLOCK≥1, the scenario default)."
       }
     ],
     "settings_save_matrix": [
@@ -80,7 +80,7 @@
           "words": [260, 1285]
         },
         "keep": ["t0", "t1"],
-        "why": "REF oracle: PRE-INF. TIME = 5 is written parity_spec word-for-word as sub112 len2 [0x0104, 0x0505]. ourui writes sub113 len1 (stock usart_send(6,113,1), UI_v6.md §4.1) — the scenario default."
+        "why": "REF oracle: PRE-INF. TIME = 5 is written parity_spec word-for-word as sub112 len2 [0x0104, 0x0505]. merakiplus writes sub113 len1 (stock usart_send(6,113,1), UI_v6.md §4.1) — the scenario default."
       },
       {
         "match": {
@@ -96,7 +96,7 @@
           "words": [260, 1541]
         },
         "keep": ["t0", "t1"],
-        "why": "REF oracle: PRE-INF. TIME = 6 as sub112 len2 [0x0104, 0x0605] (parity word-for-word). ourui: sub113 len1 — the scenario default."
+        "why": "REF oracle: PRE-INF. TIME = 6 as sub112 len2 [0x0104, 0x0605] (parity word-for-word). merakiplus: sub113 len1 — the scenario default."
       },
       {
         "match": {
@@ -111,7 +111,7 @@
           "words": [260, 1536]
         },
         "keep": ["t0", "t1"],
-        "why": "REF oracle: PAUSE TIME = 0 is an editable parameter in the reference client (sub112 len2 [0x0104, 0x0600]). In ourui PAUSE TIME is LOCKED (UI_v6.md §4.5) — the scenario default requires no write."
+        "why": "REF oracle: PAUSE TIME = 0 is an editable parameter in the reference client (sub112 len2 [0x0104, 0x0600]). In merakiplus PAUSE TIME is LOCKED (UI_v6.md §4.5) — the scenario default requires no write."
       },
       {
         "match": {
@@ -126,7 +126,7 @@
           "value": 0
         },
         "keep": ["t"],
-        "why": "REF oracle: the reference client persists breakTime=0. ourui: locked, config unchanged (5) — the scenario default."
+        "why": "REF oracle: the reference client persists breakTime=0. merakiplus: locked, config unchanged (5) — the scenario default."
       },
       {
         "match": {
@@ -140,7 +140,7 @@
           "param": "break_time"
         },
         "keep": ["t", "window"],
-        "why": "REF oracle: SAVE of break_time=0 succeeds (write+ACK+config). ourui: the hook rejects ('LOCKED') — the scenario default."
+        "why": "REF oracle: SAVE of break_time=0 succeeds (write+ACK+config). merakiplus: the hook rejects ('LOCKED') — the scenario default."
       },
       {
         "match": {
@@ -155,7 +155,7 @@
           "words": [260, 1537]
         },
         "keep": ["t0", "t1"],
-        "why": "REF oracle: PAUSE TIME = 1 as sub112 len2 [0x0104, 0x0601]. ourui: locked, no write — the scenario default."
+        "why": "REF oracle: PAUSE TIME = 1 as sub112 len2 [0x0104, 0x0601]. merakiplus: locked, no write — the scenario default."
       },
       {
         "match": {
@@ -170,7 +170,7 @@
           "value": 1
         },
         "keep": ["t"],
-        "why": "REF oracle: the reference client persists breakTime=1. ourui: locked, config unchanged (5) — the scenario default."
+        "why": "REF oracle: the reference client persists breakTime=1. merakiplus: locked, config unchanged (5) — the scenario default."
       },
       {
         "match": {
@@ -184,7 +184,7 @@
           "param": "break_time"
         },
         "keep": ["t", "window"],
-        "why": "REF oracle: SAVE of break_time=1 succeeds. ourui: 'LOCKED' — the scenario default."
+        "why": "REF oracle: SAVE of break_time=1 succeeds. merakiplus: 'LOCKED' — the scenario default."
       },
       {
         "match": {
@@ -199,7 +199,7 @@
           "words": [260, 1541]
         },
         "keep": ["t0", "t1"],
-        "why": "REF oracle: PAUSE TIME = 5 (the original value) as sub112 len2 [0x0104, 0x0605]. ourui: locked, no write — the scenario default."
+        "why": "REF oracle: PAUSE TIME = 5 (the original value) as sub112 len2 [0x0104, 0x0605]. merakiplus: locked, no write — the scenario default."
       },
       {
         "match": {
@@ -213,7 +213,7 @@
           "param": "break_time"
         },
         "keep": ["t", "window"],
-        "why": "REF oracle: SAVE of break_time=5 succeeds (the reference client does not distinguish an unchanged value). ourui: 'LOCKED' — the scenario default."
+        "why": "REF oracle: SAVE of break_time=5 succeeds (the reference client does not distinguish an unchanged value). merakiplus: 'LOCKED' — the scenario default."
       },
       {
         "match": {
@@ -228,7 +228,7 @@
           "words": [1, 0]
         },
         "keep": ["t0", "t1"],
-        "why": "REF oracle: GRIND MODE = 1 is written parity word-for-word as sub2 len2 [1, 0] — even when the value is already saved. ourui: SAVE without a change writes nothing ('unchanged') — the scenario default."
+        "why": "REF oracle: GRIND MODE = 1 is written parity word-for-word as sub2 len2 [1, 0] — even when the value is already saved. merakiplus: SAVE without a change writes nothing ('unchanged') — the scenario default."
       },
       {
         "match": {
@@ -242,7 +242,7 @@
           "param": "grind_mode"
         },
         "keep": ["t", "window"],
-        "why": "REF oracle: the reference client does not know 'unchanged' (an addition to the contract's pending|ok|fail) and reports ok. ourui: 'unchanged' — the scenario default."
+        "why": "REF oracle: the reference client does not know 'unchanged' (an addition to the contract's pending|ok|fail) and reports ok. merakiplus: 'unchanged' — the scenario default."
       },
       {
         "match": {
@@ -258,7 +258,7 @@
           "words": [2, 0]
         },
         "keep": ["t0", "t1"],
-        "why": "REF oracle: GRIND MODE = 2 as parity_spec's sub2 len2 [2, 0] (also sends start word 3=0). ourui deliberately writes sub2 len1 (UI_v6.md §4.1) — the scenario default."
+        "why": "REF oracle: GRIND MODE = 2 as parity_spec's sub2 len2 [2, 0] (also sends start word 3=0). merakiplus deliberately writes sub2 len1 (UI_v6.md §4.1) — the scenario default."
       },
       {
         "match": {
@@ -273,7 +273,7 @@
           "value": 0
         },
         "keep": ["t"],
-        "why": "REF oracle: the reference client allows backlight=0 (spec 0..10) and persists it. ourui deliberately omits 0 (min 1, UI_v6.md §4.3) — the scenario default requires an unchanged 9."
+        "why": "REF oracle: the reference client allows backlight=0 (spec 0..10) and persists it. merakiplus deliberately omits 0 (min 1, UI_v6.md §4.3) — the scenario default requires an unchanged 9."
       },
       {
         "match": {
@@ -288,7 +288,7 @@
           "value": 0
         },
         "keep": ["t"],
-        "why": "REF oracle: the reference client exposes init_state (a spec parameter) and persists 0. ourui: not a user setting, the hook rejects ('LOCKED', UI_v6.md §4.5) — the scenario default requires an unchanged 1."
+        "why": "REF oracle: the reference client exposes init_state (a spec parameter) and persists 0. merakiplus: not a user setting, the hook rejects ('LOCKED', UI_v6.md §4.5) — the scenario default requires an unchanged 1."
       },
       {
         "match": {
@@ -303,39 +303,39 @@
           "value": 0
         },
         "keep": ["t"],
-        "why": "REF oracle: the reference client exposes lang_patch and persists 0. ourui: not exposed, 'LOCKED' (UI_v6.md §4.5) — the scenario default requires an unchanged 1."
+        "why": "REF oracle: the reference client exposes lang_patch and persists 0. merakiplus: not exposed, 'LOCKED' (UI_v6.md §4.5) — the scenario default requires an unchanged 1."
       }
     ],
     "graph_reset": [
       {
         "match": {"kind": "chart", "label": "rest"},
         "replace": {"kind": "phase", "t": 5, "window": 1.5, "value": "READY"},
-        "why": "REF oracle: the reference client has no HOME graph (state.chart is ourui-only, v6.15). The graph-reset checks are replaced 1:1 by phase/word checks for the same window, which prove the sim side (cup at rest, tare at start, brew + flush) for the oracle."
+        "why": "REF oracle: the reference client has no HOME graph (state.chart is merakiplus-only, v6.15). The graph-reset checks are replaced 1:1 by phase/word checks for the same window, which prove the sim side (cup at rest, tare at start, brew + flush) for the oracle."
       },
       {
         "match": {"kind": "chart", "label": "cleared"},
         "replace": {"kind": "phase", "t": 10.5, "window": 1.0, "value": "PRE"},
-        "why": "REF oracle: the reference client has no HOME graph (state.chart is ourui-only, v6.15). The graph-reset checks are replaced 1:1 by phase/word checks for the same window, which prove the sim side (cup at rest, tare at start, brew + flush) for the oracle."
+        "why": "REF oracle: the reference client has no HOME graph (state.chart is merakiplus-only, v6.15). The graph-reset checks are replaced 1:1 by phase/word checks for the same window, which prove the sim side (cup at rest, tare at start, brew + flush) for the oracle."
       },
       {
         "match": {"kind": "chart", "label": "one-reset"},
         "replace": {"kind": "phase_hold", "t0": 23, "t1": 30, "value": "EXT", "min_ratio": 0.9},
-        "why": "REF oracle: the reference client has no HOME graph (state.chart is ourui-only, v6.15). The graph-reset checks are replaced 1:1 by phase/word checks for the same window, which prove the sim side (cup at rest, tare at start, brew + flush) for the oracle."
+        "why": "REF oracle: the reference client has no HOME graph (state.chart is merakiplus-only, v6.15). The graph-reset checks are replaced 1:1 by phase/word checks for the same window, which prove the sim side (cup at rest, tare at start, brew + flush) for the oracle."
       },
       {
         "match": {"kind": "chart", "label": "kept-under-flush"},
         "replace": {"kind": "phase", "t": 20.5, "window": 1.5, "value": "STEAM"},
-        "why": "REF oracle: the reference client has no HOME graph (state.chart is ourui-only, v6.15). The graph-reset checks are replaced 1:1 by phase/word checks for the same window, which prove the sim side (cup at rest, tare at start, brew + flush) for the oracle."
+        "why": "REF oracle: the reference client has no HOME graph (state.chart is merakiplus-only, v6.15). The graph-reset checks are replaced 1:1 by phase/word checks for the same window, which prove the sim side (cup at rest, tare at start, brew + flush) for the oracle."
       },
       {
         "match": {"kind": "chart", "label": "weight-axis"},
         "replace": {"kind": "word_hold", "word": 39, "t0": 28, "t1": 34, "min": -10, "max": 365, "signed": true},
-        "why": "REF oracle: the reference client has no HOME graph (state.chart is ourui-only, v6.15). The graph-reset checks are replaced 1:1 by phase/word checks for the same window, which prove the sim side (cup at rest, tare at start, brew + flush) for the oracle."
+        "why": "REF oracle: the reference client has no HOME graph (state.chart is merakiplus-only, v6.15). The graph-reset checks are replaced 1:1 by phase/word checks for the same window, which prove the sim side (cup at rest, tare at start, brew + flush) for the oracle."
       },
       {
         "match": {"kind": "chart", "label": "weight-curve"},
         "replace": {"kind": "word_min_seen", "word": 39, "t0": 28, "t1": 34, "min": 150, "signed": true},
-        "why": "REF oracle: the reference client has no HOME graph (state.chart is ourui-only, v6.15). The graph-reset checks are replaced 1:1 by phase/word checks for the same window, which prove the sim side (cup at rest, tare at start, brew + flush) for the oracle."
+        "why": "REF oracle: the reference client has no HOME graph (state.chart is merakiplus-only, v6.15). The graph-reset checks are replaced 1:1 by phase/word checks for the same window, which prove the sim side (cup at rest, tare at start, brew + flush) for the oracle."
       }
     ]
   }

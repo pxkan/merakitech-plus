@@ -1,6 +1,6 @@
 {
   "name": "language",
-  "description": "Language setting (config-only): stock index 0=EN..10; ourui's labels are fixed Danish (DA is not among stock's 11 languages — documented)",
+  "description": "Language setting (config-only): stock index 0=EN..10; merakiplus's labels are fixed Danish (DA is not among stock's 11 languages — documented)",
   "duration_s": 10,
   "events": [
     {

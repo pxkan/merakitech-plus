@@ -1,8 +1,8 @@
-# sim/ — E2E test environment for ourui (MerakiTech Gen 1 espresso display)
+# sim/ — E2E test environment for merakiplus (MerakiTech Gen 1 espresso display)
 
 > **Repository layout (public edition):** the notes below were written in the author's working
-> directory. In this repository: the UI source is `src/ourui_v6.c`; the SIM build is built by
-> `./build.sh` into `build/ourui_sim` (auto-detected; prebuilt: `bin/ourui_sim-*`); the switcher code
+> directory. In this repository: the UI source is `src/merakiplus.c`; the SIM build is built by
+> `./build.sh` into `build/merakiplus_sim` (auto-detected; prebuilt: `bin/merakiplus_sim-*`); the switcher code
 > lives in `boot/`; the config baseline (Wi-Fi fields replaced with placeholders) and the parity spec
 > live in `sim/fixtures/`; the UART recordings for replay are stored compressed in
 > `sim/fixtures/captures/*.csv.gz` (only the columns `ts,direction,raw_hex`). Other `artifacts/…`
@@ -15,13 +15,13 @@
 
 **Date:** 2026-11-17 · **Owner:** the test work stream · **Status:** COMPLETE AND VERIFIED LOCALLY
 **Policy:** local development only — **no contact with the physical device**. The UI work stream's
-files (`ourui_v6.c`, `UI_v6.md`, `REVERT.md`, `round_v6/`) were **not touched**. Python standard
+files (`merakiplus.c`, `UI_v6.md`, `REVERT.md`, `round_v6/`) were **not touched**. Python standard
 library only (no Pillow → our own PNG routines in `png.py`, the same method as
 `artifacts/write_test/fb2png.py`).
 
 The whole UI can be tested without hardware: a **simulated MCU** (`mcu_sim.py`) speaks the real UART
 protocol over a pty, a **scenario engine** drives timelines with fault injection, and a **runner**
-(`run_e2e.py`) launches ourui's SIM build (or the reference client until it landed), injects touch,
+(`run_e2e.py`) launches merakiplus's SIM build (or the reference client until it landed), injects touch,
 samples UI state + the framebuffer and runs assertions.
 
 ---
@@ -41,7 +41,7 @@ samples UI state + the framebuffer and runs assertions.
         ┌─────────────────────┘            │             └──────────────────┐
         │                                  │                                │
 ┌───────┴────────┐   evdev FIFO    ┌───────┴────────┐   JSONL ctrl   ┌───────┴────────┐
-│  run_e2e.py    │ ──────────────► │  ourui SIM     │ ◄────────────► │  mcu_sim.py    │
+│  run_e2e.py    │ ──────────────► │  merakiplus SIM     │ ◄────────────► │  mcu_sim.py    │
 │  (runner)      │   touch inject  │  build         │                │  (simulated    │
 │                │ ◄────────────── │  OR            │ ◄────────────► │   powerMcu)    │
 │  events/samples│   state+fb      │  ref_client.py │   pty (UART    │                │
@@ -66,7 +66,7 @@ samples UI state + the framebuffer and runs assertions.
   REJECT + log), ACK echo with latency/loss/retransmit profiles, boot push detection, version
   handshake, a phase machine with synthetic sensor curves, fault injection and a JSONL assertion log.
 * **`ref_client.py`** — a protocol-level reference client that implements **the same contract** as
-  ourui's SIM build (`CONTRACT.md`): boot push, keep-awake (word1=0!), poll rotation, frame policy,
+  merakiplus's SIM build (`CONTRACT.md`): boot push, keep-awake (word1=0!), poll rotation, frame policy,
   ACK/retransmit (150 ms + 1), hold-to-start touch, settings SAVE, a minimal fb renderer (circle clip
   r234, phase colors, page/toast regions). It proved the sim + runner + assertion pipeline before the
   real UI's SIM build existed.
@@ -91,8 +91,8 @@ python3 sim/run_e2e.py --scenario brew
 # 3. All scenarios:
 python3 sim/run_e2e.py --all
 
-# 4. Against a specific UI binary (build/ourui_sim is auto-detected):
-python3 sim/run_e2e.py --all --ui-bin build/ourui_sim
+# 4. Against a specific UI binary (build/merakiplus_sim is auto-detected):
+python3 sim/run_e2e.py --all --ui-bin build/merakiplus_sim
 
 # Reports: sim/reports/run-<timestamp>/report.md (+ report.json, contact_sheet.png per scenario)
 python3 sim/run_e2e.py --list          # list of scenarios
@@ -127,16 +127,16 @@ For an interactive browser view of the simulator, see [PLAY.md](PLAY.md).
 | `stop_control_auto` | 15 s | **v6.13 control:** WATER without a stop word → no stop writes, word16=1 during dispensing, MCU auto-stop at word39≥word17 (unchanged) |
 | `power_off_wake` | 55 s | **v6.14:** HOLD 1.6 s → cmd8 (alarm 0/0/0) + sub0 len2 [0,0] ACK → **sleep** (silent UART, registers frozen, keep-awake paused for 34 s) → sim button hold → **reboot to factory defaults** (word11=920/word114=50) → 0x89 → **re-push** restores the config → PowerOn + HOME + READY |
 | `power_during_activity` | 42 s | **v6.14:** a power HOLD during a brew is **blocked** (toast, no frames — the stock UI never stops an activity on power-off); the brew auto-stops undisturbed; a new full hold after the brew powers off normally |
-| `graph_reset` | 46 s | **v6.15 (ourui):** a 250 g cup on the brew scale at rest → BREW (the MCU tares word 39) → wand flush during the extraction → `state.chart`: no reset at rest, ONE reset at the start, ring cleared (`buf` ≤ 35 at 2–3 s), kept during the flush (`buf` ≥ 90), weight axis relative to the brew (`w_top` ≤ 420, not 2700). The REF profile replaces the 6 `chart` checks 1:1 |
-| `time_display` | 40 s | **v6.16 (ourui-only):** HOME clock = SoC UTC + zone #48 (+ DST when sumtime=1): 16:35 (24 h) → 04:35 P.M. (timemode=0) → a summer clock jump: 12:00 P.M. with DST, 11:00 A.M. without → 11:00 (timemode=1); no cmd8 sent |
-| `timemode_stock_parity` | 30 s | **v6.16 (ourui-only):** config timemode=1 = 24-HOUR row + 24 h clock (stock `update_time` XORs with 1); SAVE 12-HOUR writes 0 + A.M./P.M. clock; SAVE 24-HOUR writes 1 |
-| `schedule_prewarm` | 80 s | **v6.16 (ourui-only):** PRE-HEAT daily 06:30 → pre-armed cmd8 alarm [18,6,30] → HOLD → power-off with the same alarm → deep sleep → the sim RTC reaches 06:30 → **alarm wake** (factory reset) → re-push → ON → re-armed [19,6,30]; PRE-HEAT OFF → 0/0/0 |
+| `graph_reset` | 46 s | **v6.15 (merakiplus):** a 250 g cup on the brew scale at rest → BREW (the MCU tares word 39) → wand flush during the extraction → `state.chart`: no reset at rest, ONE reset at the start, ring cleared (`buf` ≤ 35 at 2–3 s), kept during the flush (`buf` ≥ 90), weight axis relative to the brew (`w_top` ≤ 420, not 2700). The REF profile replaces the 6 `chart` checks 1:1 |
+| `time_display` | 40 s | **v6.16 (merakiplus-only):** HOME clock = SoC UTC + zone #48 (+ DST when sumtime=1): 16:35 (24 h) → 04:35 P.M. (timemode=0) → a summer clock jump: 12:00 P.M. with DST, 11:00 A.M. without → 11:00 (timemode=1); no cmd8 sent |
+| `timemode_stock_parity` | 30 s | **v6.16 (merakiplus-only):** config timemode=1 = 24-HOUR row + 24 h clock (stock `update_time` XORs with 1); SAVE 12-HOUR writes 0 + A.M./P.M. clock; SAVE 24-HOUR writes 1 |
+| `schedule_prewarm` | 80 s | **v6.16 (merakiplus-only):** PRE-HEAT daily 06:30 → pre-armed cmd8 alarm [18,6,30] → HOLD → power-off with the same alarm → deep sleep → the sim RTC reaches 06:30 → **alarm wake** (factory reset) → re-push → ON → re-armed [19,6,30]; PRE-HEAT OFF → 0/0/0 |
 | `fault_e1/e2/e3` | 12–16 s | error bits words 34/35/36 → error UI + safety stop of the activity |
 | `crc_garbage` | 12 s | garbage stream + CRC corruption → resync, the link is kept |
 | `no_ack` | 12 s | **SAVE is blocked** (retransmit→FAIL, config unchanged) → recovery with the normal profile |
 | `offline` | 14 s | link silent → OFFLINE after 1.5 s → recovery. A real pty close (`link closed` → a new pty on reopen) is proven in selftest T10. |
 | `out_of_spec` | 14 s | config out of spec → start blocked, the sim logs boot push violations → fix → start |
-| `language` | 10 s | language is config-only (EN index 0..10; **Danish is not among the stock UI's 11 languages** — ourui's own UI language is a separate setting, a documented deviation) |
+| `language` | 10 s | language is config-only (EN index 0..10; **Danish is not among the stock UI's 11 languages** — merakiplus's own UI language is a separate setting, a documented deviation) |
 | `boot_flag_toggle` | 10 s | `/customer/new` touch/rm in the sandbox, no MCU writes |
 | `runtime_switch` | 10 s | "SWITCH TO ORIGINAL NOW" (dry run): bye view → back, flag unchanged |
 | `gesture_switcher` | 12 s | **the REAL `switcher_host`** in file mode: trigger gesture → trigger; incomplete gesture → none; the UI ignores the gesture |
@@ -201,7 +201,7 @@ Scenarios are JSON files in `sim/scenarios/` (they can be written by hand or gen
 `flag`, `save`, `save_rejected`, `config_oor_min`, `exit_code`, `crc_bad_min`, `offline_seen`,
 `link_up_at`, `cmd6`, `circle`, `region`, `point`, `gesture`, `contract`, `replay_truth`, `sim_log`,
 `power`, `power_hold`, `power_counter` (v6.14), `chart` (v6.15: `state.chart.<field>` within `[min,max]` over
-`[t0,t1]`, every sample or `"mode": "any"`; ourui SIM build only — the reference client has no chart).
+`[t0,t1]`, every sample or `"mode": "any"`; merakiplus SIM build only — the reference client has no chart).
 **sim_log asserts:** `boot_push`, `version`, `keepalive_ok`, `no_reboot`, `no_calib`,
 `no_band_rejects`, `range_max`, `range_min`, `write_words`, `ack_words` (v6.13: ACK echo sub+words),
 `no_write_word`, `no_writes_between`, `activity_start`, `activity_stop`, `sleep_write_seen`,
@@ -304,7 +304,7 @@ bit9 pre-pulses are filtered from the ws sequence (stochastic placement: v3 at 1
   ACKed protocol-correctly).
 * **Replay aliasing:** at high playback speed the UI mirror can miss brief peaks (see `replay_truth`
   above).
-* **ourui's real graphics/layout** with the reference client: the reference client's fb is a simple
+* **merakiplus's real graphics/layout** with the reference client: the reference client's fb is a simple
   emulation (phase ring + buttons + regions). The circle/color/region checks only become truly
   meaningful with the real UI's SIM build — the contract ensures that the same assertions then apply to
   the real UI.
@@ -322,7 +322,7 @@ bit9 pre-pulses are filtered from the ws sequence (stochastic placement: v3 at 1
 | No device contact; the UI work stream's files untouched; `sim/fixtures/config.json` md5 = baseline `<config-md5>…` | ✓ |
 
 **What could only be run once the UI's SIM build landed:** the same scenarios against the real UI
-(`--ui-bin`), i.e. real ourui graphics in the circle/color/region checks, the real stepper/settings UI
+(`--ui-bin`), i.e. real merakiplus graphics in the circle/color/region checks, the real stepper/settings UI
 in the matrix scenario, the real BOOT UI/SWITCH buttons, the real DIAGNOSTICS page. The contract
 (`CONTRACT.md`) is designed so the scenarios run **without changes**; the reference client is the
 oracle for field names and timing.
@@ -334,7 +334,7 @@ oracle for field names and timing.
 | `sim/selftest.py` | **120 PASS / 0 FAIL** (107 + wand/latch/overshoot/concurrency + steam-live verify) |
 | Replay verify **steam-live** (the calibration target) | **PASS 99.608 %** (exact 100 %, ws sequence + timing OK) — was 92.59 % FAIL |
 | Replay verify v3 / v2 / session | **PASS** (99.83 % / 99.90 % / 100.00 %) |
-| `run_e2e.py --all` against ourui V6.6 (raw EN/DA) + REF | **25/25 scenarios · 644/644 checks** |
+| `run_e2e.py --all` against merakiplus V6.6 (raw EN/DA) + REF | **25/25 scenarios · 644/644 checks** |
 | steam_auto deterministic 30× | **30/30 PASS** |
 | New scenarios | `steam_wand_flush` (31) + `steam_auto_overshoot` (24) |
 

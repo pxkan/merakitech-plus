@@ -21,7 +21,7 @@ Five pages in a ring; **a horizontal swipe** changes page (v6.11: the gesture mu
 | 0 | **HOME** | **v6.3:** the title line *MERAKI+* at the top inside the ring · gauge, phase chip, hero number, auto-stop line, chart (40 s), 3 stats, 4 activity buttons, page dots. **v6.8:** no REVERT button. **v6.15:** the chart starts over when an activity starts (the cup placed before a brew no longer sets the scale) |
 | 1 | **BREW** | 9 rows — espresso core (spec tier 1) |
 | 2 | **STEAM · WATER** | 5 rows — milk, steam, hot water + the water temperature **sensor** (spec tier 1) |
-| 3 | **SYSTEM** | 11 rows — **v6.3: UI LANGUAGE at the top** (ourui's own setting), then screen, sound, stock language, time (spec tier 2 + the tier 3 fields that are pure config flags) + **v6.2:** *STARTUP · UI CHOICE* with **BOOT UI** and **SWITCH TO ORIGINAL NOW** |
+| 3 | **SYSTEM** | 11 rows — **v6.3: UI LANGUAGE at the top** (merakiplus's own setting), then screen, sound, stock language, time (spec tier 2 + the tier 3 fields that are pure config flags) + **v6.2:** *STARTUP · UI CHOICE* with **BOOT UI** and **SWITCH TO ORIGINAL NOW** |
 | 4 | **DIAGNOSTICS** | link, RX OK / CRC errors, work_sta, E1–E3, cmd6 OK/retx/errors/**blocked**, awake, network, frame ms, mirror 112–114, config md5 + **v6.2:** boot block (flag, next boot, exe slot, slot B, switcher, stock process, PIDs, last switch) + **v6.3:** *ABOUT* block (UI language and where it comes from, wordmark with version, tagline) — the page scrolls vertically |
 
 Modal views: **splash** (boot), **stepper detail** (from a list row) and — from v6.2 — the **system
@@ -101,10 +101,10 @@ estimate · **LOCKED** = shown without an editor · **SENSOR** = read-only measu
 ### 4.3 SYSTEM page (config only — no MCU write)
 | Label | config field | Min..max | Shown as | Spec tier | Status |
 |---|---|---|---|---|---|
-| **UI LANGUAGE** (v6.3) | *(none — its own file `/new_customer/ourui/lang`)* | 0..1 | ENGLISH / DANSK (endonyms) | — | ourui's own setting; **not** a spec parameter and not in `--dump-table` (CHANGES-v6.3 item 2) |
+| **UI LANGUAGE** (v6.3) | *(none — its own file `/new_customer/merakiplus/lang`)* | 0..1 | ENGLISH / DANSK (endonyms) | — | merakiplus's own setting; **not** a spec parameter and not in `--dump-table` (CHANGES-v6.3 item 2) |
 | BRIGHTNESS | `backlight` | 1..10 | live preview (PWM `duty = 100 − 7·v`) | 2 | **PROVEN** 0..10; **0 deliberately left out** (duty 100 = a dark screen the user cannot find their way back from) |
 | VOLUME | `volume` | 0..100 | 0–100 | 2 | **PROVEN** for the slider; UI hint about the discrete selector (§4.4) |
-| TEMP UNIT | `Temperature` | 0..1 | 0 °F / 1 °C — also controls ourui's display | 2 | **PROVEN** |
+| TEMP UNIT | `Temperature` | 0..1 | 0 °F / 1 °C — also controls merakiplus's display | 2 | **PROVEN** |
 | STOCK LANG. (before v6.3: LANGUAGE) | `language` | 0..10 | 11 languages, Danish not among them (the names are shown in the UI language) | 2 | **PROVEN** — unlocked in v6.1; only controls the stock UI |
 | WATER SHORTCUT | `hotWaterShortcut` | 0..1 | OFF / ON | 2 | **PROVEN** |
 | DAYLIGHT SAVING | `sumtime` | 0..1 | OFF / ON | 2 | **PROVEN** |
@@ -112,7 +112,7 @@ estimate · **LOCKED** = shown without an editor · **SENSOR** = read-only measu
 | TIME FORMAT | `timemode` | 0..1 | **0 = 12-HOUR / 1 = 24-HOUR** (corrected in v6.16) | 3 | **PROVEN** [`update_time` 0xD5944: `eor model[0x59], #1` at 0xD5970] |
 | AUTO TIME | `Automatically` | 0..1 | OFF / ON | 3 | **PROVEN** |
 | TIME ZONE | `timeZone` | — | `UTC+01:00` + place names (v6.16) | 3 | **LOCKED** (set in the stock UI) |
-| PRE-HEAT · PRE-HEAT AT · REPEAT (v6.16) | *(none — `/new_customer/ourui/schedule`)* | off/on · 00:00–23:55 · once / every day / Mon–Fri / Sat–Sun | the next occurrence is sent as the controller's wake alarm | — | Meraki+'s own ([time-scheduling.md](time-scheduling.md)) |
+| PRE-HEAT · PRE-HEAT AT · REPEAT (v6.16) | *(none — `/new_customer/merakiplus/schedule`)* | off/on · 00:00–23:55 · once / every day / Mon–Fri / Sat–Sun | the next occurrence is sent as the controller's wake alarm | — | Meraki+'s own ([time-scheduling.md](time-scheduling.md)) |
 | AUTO OFF (v6.16) | *(same file)* | off / 15 / 20 / 30 / 60 min | power-off after that long without touch or activity | — | Meraki+'s own (stock: fixed 30 min) |
 
 ### 4.4 What is still estimated or locked
@@ -120,7 +120,7 @@ estimate · **LOCKED** = shown without an editor · **SENSOR** = read-only measu
 |---|---|---|---|
 | PRE-INF. TIME | the picker's number of options has not been mapped (PARITY §6.6); max 15 = the stock UI's own default | **`MAX = ESTIMATE`** in amber next to the range + `≈` in front of the value in the list | 5–15 s is harmless; the field is one byte |
 | GROUP HEAD | the same picker anomaly; the spec's max of 80 is itself a cautious estimate | **`MAX = ESTIMATE`** + `≈` | E1 only triggers at > 110 °C; 80 is far below |
-| VOLUME | the stock UI has two controls: a 0–100 slider (what ourui edits) and a discrete High/Medium/Low/Mute selector whose mapping has not been mapped | **`STEPS = ESTIMATE`** + `≈` (the note says *"… · 0-100 SLIDER"*) | config only, no MCU write |
+| VOLUME | the stock UI has two controls: a 0–100 slider (what merakiplus edits) and a discrete High/Medium/Low/Mute selector whose mapping has not been mapped | **`STEPS = ESTIMATE`** + `≈` (the note says *"… · 0-100 SLIDER"*) | config only, no MCU write |
 | PAUSE TIME | max unknown — and the value has no effect | locked, amber note *"NO EFFECT · PRE-INF. TIME IS USED"* | §4.5 |
 | TIME ZONE | the size and meaning of the index table | locked, *"THE SPEC HAS NO INDEX TABLE"* | an invalid index could break the stock UI's time/DST logic |
 
@@ -137,8 +137,8 @@ in the stock UI, and correct `max` in the two SF_EST rows.
 | hot water **temperature** | **sensor row**, not a setting | The stock UI has no setpoint: the temperature shown is the e-boiler's measured value (word 40, `hotWaterTemperUpdate` 0x112c9c). The row sits on STEAM · WATER, where you would look for the setting, and says *"NO SETPOINT EXISTS"* |
 | `breakTime` | **locked**, the value is shown | The MCU recipe 0x1E10 copies `preInfusionTime` into the low byte of word113 before the timing `word13 + word113_lo` is computed — the separate pause value is always replaced. An editor would be a button with no effect. The value is still packed into word113 lo, so the frames are identical to the stock UI's |
 | `brewMode` | **removed** | vestigial: `get/setExtractModeValue` has 0 callers |
-| `sleepMode`, `sleepModeSetting` | **removed** | no editor in the stock UI (the setters have 0 callers); sleep timing is hard-coded (~600 s screensaver / ~1800 s power-off). ourui keeps the machine awake itself (§7.1) |
-| `theme` | not exposed | the field does not exist in `config.json`, and `getTheme` has **0 callers** in `demo_v9` (`grep -c '<getTheme>' demo_v9.dis` = 1, only the definition) — a saved value would never be read. In addition, ourui never adds keys |
+| `sleepMode`, `sleepModeSetting` | **removed** | no editor in the stock UI (the setters have 0 callers); sleep timing is hard-coded (~600 s screensaver / ~1800 s power-off). merakiplus keeps the machine awake itself (§7.1) |
+| `theme` | not exposed | the field does not exist in `config.json`, and `getTheme` has **0 callers** in `demo_v9` (`grep -c '<getTheme>' demo_v9.dis` = 1, only the definition) — a saved value would never be read. In addition, merakiplus never adds keys |
 | `presetStore` / NFC | deferred | §9 |
 | Wi-Fi (`ssid`, `password`, `wifionoff`), `init`, `patch`, version fields | not exposed | must not be touched / not user settings |
 | calibration (words 26/27), reboot (word 30), drain (28/29), back-flush (20), self-test (8) | not exposed **and** impossible to send | §7a |
@@ -156,16 +156,16 @@ VALUE"*), and the first tap on −/+ brings it into range.
 
 ---
 
-## 4a. Quirks from the spec — and what ourui does about them
+## 4a. Quirks from the spec — and what merakiplus does about them
 
-| # | Quirk (PARITY) | Consequence in ourui |
+| # | Quirk (PARITY) | Consequence in merakiplus |
 |---|---|---|
 | 1 | Hot water has no temperature setting; the display is word 40 | sensor row (§4.5) |
 | 2 | `brewMode` vestigial | removed |
 | 3 | `sleepMode`/`sleepModeSetting` without an editor, timing hard-coded | removed |
 | 4 | word112 = `(switch<<8)\|pressure`, word113 = `(time<<8)\|pause`, word114 = `headTemper` in whole °C (MCU ×10) | `pack112`/`pack113` match exactly — tested for all combinations + 5 byte vectors (§10) |
 | 5 | MCU 0x1E10 only handles pressures 3 and 4; other values are ignored | range 3..4; the frame policy rejects word112 with any other pressure |
-| 6 | word13 = 60 at boot, overwritten by 0x1E10 (340/440 at 120 V, word15 = 300/350 at 220 V) | ourui sends word13/15 = 60 as observed and does not otherwise touch them; the policy rejects other values |
+| 6 | word13 = 60 at boot, overwritten by 0x1E10 (340/440 at 120 V, word15 = 300/350 at 220 V) | merakiplus sends word13/15 = 60 as observed and does not otherwise touch them; the policy rejects other values |
 | 7 | `breakTime` is overwritten by the MCU | locked (§4.5). Before BREW, word113 is only compared on the **high byte**, otherwise the mirror (e.g. `0606` after a brew) would trigger an unnecessary re-sync every time |
 | 8 | A boot push exists: `fuart_thread` sends `sub1 len30` + `sub112 len3` | the reload semantics in §5 have been corrected |
 | 9 | Trigger words 3/6/9/26/27/30 must be 0 in normal blocks; word30 = 1 reboots the MCU | §7a |
@@ -199,7 +199,7 @@ code path.
 
 | Activity | Stop frame (cmd6, CRC-16/MODBUS LE) | MCU firmware: what controls the activity | The MCU's own auto-stop | The stock UI's stop call | Bits cleared |
 |---|---|---|---|---|---|
-| **WATER** (auto, ourui's start) | `aa 55 06 10 01 00 00 c0 0f` — sub16 len1, word 16 = 0 | hot water ctl `0x1B8C`: `active = (word19 \| word16) != 0`, recomputed every round (`0x1C44..0x1C4E`); active → `work_sta \|= 0x20A` (`0x1C8A`) | weight stop `0x1C80`: `strh r4,[r6,#0x20]` (word 16 = 0) | `hotWaterStartStop` `0x11468C`: mirror word 16 = 0, `usart_send(6,16,1)` | bit 3 always (`0x1C9A`); bits 1+9 when the boiler refill is idle (`[0x2000002B] == 9`, `0x1CA2`) |
+| **WATER** (auto, merakiplus's start) | `aa 55 06 10 01 00 00 c0 0f` — sub16 len1, word 16 = 0 | hot water ctl `0x1B8C`: `active = (word19 \| word16) != 0`, recomputed every round (`0x1C44..0x1C4E`); active → `work_sta \|= 0x20A` (`0x1C8A`) | weight stop `0x1C80`: `strh r4,[r6,#0x20]` (word 16 = 0) | `hotWaterStartStop` `0x11468C`: mirror word 16 = 0, `usart_send(6,16,1)` | bit 3 always (`0x1C9A`); bits 1+9 when the boiler refill is idle (`[0x2000002B] == 9`, `0x1CA2`) |
 | WATER (manual mode) | `aa 55 06 13 01 00 00 c0 4b` — sub19 len1, word 19 = 0 | the same (`word19 \| word16`) | — | `hotWaterStartStop` `0x114720`: `usart_send(6,19,1)` | as above |
 | **BREW** | `aa 55 06 16 01 00 00 c0 87` — sub22 len1, word 22 = 0 | brew ctl `0x1E9C`: on every **change** of word 22, `running = (word22 != 0)` (`0x1F94..0x1FC6`) | weight stop `0x1F92`: `strh r5,[r6,#0x2c]` (word 22 = 0) | home `onClick` `0x109694`: mirror word 22 flipped to 0, `usart_send(6,5,18)` (the whole block) | bits 2+12 in the 1st round (`0x20C4`, `& 0xEFFB`), valve pulse on bit 2 after 10 rounds (`0x20D2`); bits 1+9 when the refill is idle (`0x20F0`) |
 | **GRIND** | `aa 55 06 06 01 00 00 c4 47` — sub6 len1, word 6 = 0 | grind ctl `0x19C6`: the grinder runs while word 6 ≠ 0 (`0x1AA2`: `work_sta \|= 0x40`, otherwise `&= ~0x40`) | weight `0x1A68`, timeout `0x1A72`, error `0x1A3E`/`0x1A8C`: all `word 6 = 0` | home `onClick` `0x10928C`: mirror word 6 = 0, `usart_send(6,6,1)` (the start branch `0x109278` sends `sub3 len4`) | bit 6 |
@@ -208,7 +208,7 @@ code path.
 **Brew — why only word 22 and not the stock UI's whole block?** The stock UI sends `sub5 len18` with
 the mirror's words 5..22, where only word 22 has changed; the other 17 words are the MCU's own polled
 values. cmd6 is `memcpy` + ACK (`0x99C6`, no sub-specific logic), so for the MCU the only thing that
-happens is that word 22 goes 1 → 0 — exactly what ourui's `sub22 len1` does. The narrow frame cannot
+happens is that word 22 goes 1 → 0 — exactly what merakiplus's `sub22 len1` does. The narrow frame cannot
 overwrite a recipe value with a stale mirror.
 
 **Words 9 and 3 are not stop words.** Word 9 (brew/water) and word 3 (grind) are tare triggers that
@@ -222,7 +222,7 @@ brew and grind buttons are toggles), and the MCU runs the same stop path as at t
 brewing this also means the valve pulse afterwards (pressure relief, BREW.md §4).
 
 **Known exception (not observed):** a brew started by the physical "e" switch (PA.15, the `0x1F52`
-branch) runs with word 22 = 0. There, word 22 = 0 cannot stop the brew. ourui reports this honestly
+branch) runs with word 22 = 0. There, word 22 = 0 cannot stop the brew. merakiplus reports this honestly
 as *"STOP NOT CONFIRMED · TRY AGAIN"* after 5 s. This path has never been seen on the machine.
 
 ### 18.2 The UI
@@ -244,7 +244,7 @@ as *"STOP NOT CONFIRMED · TRY AGAIN"* after 5 s. This path has never been seen 
 * **The sub-line** keeps the auto-stop expectation: *"AUTO-STOP AT 40.0 G · OR STOP"*.
 * **Frame policy:** stop frames only contain zeros and go through the same gate and write queue as
   everything else (CRC + ACK wait + one retransmit). They require no intent and cannot start anything.
-  `OURUI_READONLY=1` sends nothing, and the toast says why.
+  `MERAKIPLUS_READONLY=1` sends nothing, and the toast says why.
 * **SIM:** the state JSON has `stop: {btns, pending, last, req, ok, fail}`. The ctrl actions
   `grind_stop` / `brew_stop` / `water_stop` (+ `steam_stop`, as before) and the layout names
   `grind_stop` / `brew_stop` / `water_stop` / `steam_stop` are new.
@@ -264,24 +264,24 @@ ping, the ARP lookup was incomplete, and the telnet port was closed (2026-11-18 
 > [power.md](power.md). The section below describes the software implementation (which mirrors the
 > stock UI byte for byte).
 
-**The bug:** the physical power button did nothing while Meraki+ was running. ourui only opened the
+**The bug:** the physical power button did nothing while Meraki+ was running. merakiplus only opened the
 touch node (`/dev/input/event0`, TECHWIN_TS). The button sits on a different input node:
 `/dev/input/event1` = **k62091** (the GPIO key driver `k62091.ko`, "Handlers=kbd event1", EV=3 = SYN +
-KEY, one key). ourui never read that node.
+KEY, one key). merakiplus never read that node.
 
 ### 19.1 The stock semantics — reverse-engineered, with evidence
 
-| What | The stock UI does | Evidence (address) | ourui v6.14 |
+| What | The stock UI does | Evidence (address) | merakiplus v6.14 |
 |---|---|---|---|
-| Which node | `open("/dev/input/event1", O_RDWR)` in its own thread — **no EVIOCGRAB**. For every `EV_KEY` (the code is not checked) `value` is stored (1 = down, 0 = released) | `app_powerKey_thread` 0x140AB4 (string 0x17BCEC); stored in app+0x15A8 | the k62091 node, read-only, **without a grab**. Selection: `OURUI_KBD` → a node whose name contains `k62091` → the first node with EV_KEY and without EV_ABS → `/dev/input/event1`. All EV_KEY codes count as the button |
+| Which node | `open("/dev/input/event1", O_RDWR)` in its own thread — **no EVIOCGRAB**. For every `EV_KEY` (the code is not checked) `value` is stored (1 = down, 0 = released) | `app_powerKey_thread` 0x140AB4 (string 0x17BCEC); stored in app+0x15A8 | the k62091 node, read-only, **without a grab**. Selection: `MERAKIPLUS_KBD` → a node whose name contains `k62091` → the first node with EV_KEY and without EV_ABS → `/dev/input/event1`. All EV_KEY codes count as the button |
 | When it powers off | `SleepRefresh` (lv_timer 100 ms): only when the second changes, e60 is incremented while the button is down. `dealPowerState(1)` powers off when e60 > 1 — i.e. the button held across **two second boundaries = 1.0–2.0 s**. A short press only wakes the stock UI's screensaver | `SleepRefresh` 0x149268 (timer 100 ms at 0x1354A8), e60 = 0x1E0E60, `dealPowerState` 0x14911C | **HOLD 1.5 s** (in the middle of the stock UI's window). Short press: nothing (counted on DIAGNOSTICS) |
-| Blocking | While `isExtractionOrSteamSwitchOn()` is true, it does not count and does not power off: work_sta bit 12 (brew) or bit 14 (steam), mirror word 22 (brew active), 24 (steam) or 6 (grind). **Hot water does not block.** The stock UI NEVER stops an activity on power-off | `isExtractionOrSteamSwitchOn` 0x1481E0 (`GetMaichinState(0x1000/0x4000)`, words 22/24/6) | The same predicate (+ ourui's own start in progress for the three). Toast *STOP THE ACTIVITY FIRST · THEN OFF*. When the activity has ended, a **new full hold** powers off (the counter stands still, like e60). Hot water: power-off is sent, no stop frame |
+| Blocking | While `isExtractionOrSteamSwitchOn()` is true, it does not count and does not power off: work_sta bit 12 (brew) or bit 14 (steam), mirror word 22 (brew active), 24 (steam) or 6 (grind). **Hot water does not block.** The stock UI NEVER stops an activity on power-off | `isExtractionOrSteamSwitchOn` 0x1481E0 (`GetMaichinState(0x1000/0x4000)`, words 22/24/6) | The same predicate (+ merakiplus's own start in progress for the three). Toast *STOP THE ACTIVITY FIRST · THEN OFF*. When the activity has ended, a **new full hold** powers off (the counter stands still, like e60). Hot water: power-off is sent, no stop frame |
 | No connection | Only powers off if mirror word 0 ≠ 0 | 0x149210 | Only if the link is up and the controller has replied with word 0 ≠ 0. Otherwise toast *NO CONNECTION · CANNOT TURN OFF* — the button may be what just woke a sleeping controller. READ-ONLY: nothing |
-| Power-off frames | `powerOff`: mirror word 0 = 0 → `performSleepActions` → `powerOffSend(0,0,0)` = **cmd8** (15 bytes) → `usleep(80000)` → `usart_send(6,0,2)` = **cmd6 sub0 len2 [word 0 = 0, word 1 = the mirror]** | `powerOff` 0x149074, `performSleepActions` 0x148324 (0x148F50, 0x14905C), `powerOffSend` 0x14700C, buffer `powerSendBuf` 0x1A6030 | Exactly that: `aa 55 08 <year lo> <year hi> <month 1-12> <day> <h> <m> <s> 00 00 00 <crc>` (example 2026-11-18 16:35:28: `aa 55 08 ea 07 0b 12 10 23 1c 00 00 00 cc df`), **≥ 80 ms** later `aa 55 06 00 02 00 00 00 00 56 94` (word 1 = 0 = awake, as ourui's keep-awake keeps it). The cmd6 frame goes through the write queue (CRC, ACK, one retransmit) and the frame policy with the new intent `I_POWEROFF` |
+| Power-off frames | `powerOff`: mirror word 0 = 0 → `performSleepActions` → `powerOffSend(0,0,0)` = **cmd8** (15 bytes) → `usleep(80000)` → `usart_send(6,0,2)` = **cmd6 sub0 len2 [word 0 = 0, word 1 = the mirror]** | `powerOff` 0x149074, `performSleepActions` 0x148324 (0x148F50, 0x14905C), `powerOffSend` 0x14700C, buffer `powerSendBuf` 0x1A6030 | Exactly that: `aa 55 08 <year lo> <year hi> <month 1-12> <day> <h> <m> <s> 00 00 00 <crc>` (example 2026-11-18 16:35:28: `aa 55 08 ea 07 0b 12 10 23 1c 00 00 00 cc df`), **≥ 80 ms** later `aa 55 06 00 02 00 00 00 00 56 94` (word 1 = 0 = awake, as merakiplus's keep-awake keeps it). The cmd6 frame goes through the write queue (CRC, ACK, one retransmit) and the frame policy with the new intent `I_POWEROFF` |
 | cmd8's contents | year (u16), month (+1), day, hour, minute, second, alarm day/hour/minute = the next scheduled pre-heat (`performSleepActions`); no schedule = alarm 0/0/0 | 0x14703C–0x147148 (CRC_GetModbus16 over 13 bytes) | v6.16: stock's local time (UTC + zone + DST; v6.14 sent UTC) + the next pre-heat occurrence, or 0/0/0 without a schedule ([time-scheduling.md](time-scheduling.md)). The MCU's 0x88 acknowledgement is only counted for DIAGNOSTICS — the stock UI does not wait for it either |
-| The MCU | The status task sees word 0 = 0 (every 500 ms) and starts `sleep`. It deletes `boiler_heat`, `head_heat`, **`status`** (RX parser + replies) and `run`, sets work_sta = 0 and resets the outputs. It only wakes on a **hold of the button** (its own GPIO PC.8, 8 × 100 ms low after a release) or the alarm → `reset muc` (CPU reset) | MEM03 0x29D4/0x29D8, sleep task 0x2F52 (0x2E1E deletes tasks; 0x2F0C outputs 0), alarm comparison 0x2FE2–0x3036, reset 0x326 (SYS IPRST) | ourui sends nothing more: keep-awake stands still, and polls are not answered (the link goes down — expected). The cmd8 parser 0x9C88 stores the 10 bytes in 0x20000E18 |
-| Screen | Backlight off (`blpwm_set_enable(2,0)` + duty 0), off page. 1.5 s later: fb closed, `killall dispinit`, GPIOs released, **`echo mem > /sys/power/state`** (SoC suspend). After resume: mirror word 0 = 1, `killall demo_v9` → the watchdog restarts the stock UI → `PowerOn` | 0x1490C0–0x1490FC, 0x149494–0x14952C, `uikit_os_back_light_off` 0xC2278 | TURNING OFF… immediately, OFF after the ACK. The backlight is switched off 1.5 s after the press: duty 99 (dimmest) and then `pwm2/enable = 0` (ourui does not write the stock UI's duty 0 — with "polarity inversed" that is the brightest light if the enable did not take effect). **No SoC suspend and no killall** (a deliberate deviation: the network guard and telnet stay alive; ourui is not a restartable app behind a watchdog in run.sh mode) |
-| Power on | The SoC wakes from the same button press; the stock UI restarts and sends `PowerOn` (word 0 = 1) at startup. The MCU wakes by itself (reset; word 0 starts as 1) | `app_init` 0xD9170 → `PowerOn` 0x146EF8 | A button press in OFF → backlight on, *TURNING ON… · KEEP HOLDING THE BUTTON A MOMENT*. When the controller has replied with word 0 = 1 for 0.6 s → PowerOn `aa 55 06 00 01 01 00 c5 5f` + awake `aa 55 06 01 01 00 00 c5 33` (the same two frames as at startup) → HOME, toast *MACHINE IS ON*, keep-awake runs again. Without a reply within 10 s: back to OFF. If the controller replies by itself with word 0 = 1 while ourui is in OFF (alarm, or the button was held without ourui seeing it), it powers on the same way. After the MCU reset the controller is on its startup values — **ourui's re-push** (v6.6, the 0x89 round) puts the config's values back |
+| The MCU | The status task sees word 0 = 0 (every 500 ms) and starts `sleep`. It deletes `boiler_heat`, `head_heat`, **`status`** (RX parser + replies) and `run`, sets work_sta = 0 and resets the outputs. It only wakes on a **hold of the button** (its own GPIO PC.8, 8 × 100 ms low after a release) or the alarm → `reset muc` (CPU reset) | MEM03 0x29D4/0x29D8, sleep task 0x2F52 (0x2E1E deletes tasks; 0x2F0C outputs 0), alarm comparison 0x2FE2–0x3036, reset 0x326 (SYS IPRST) | merakiplus sends nothing more: keep-awake stands still, and polls are not answered (the link goes down — expected). The cmd8 parser 0x9C88 stores the 10 bytes in 0x20000E18 |
+| Screen | Backlight off (`blpwm_set_enable(2,0)` + duty 0), off page. 1.5 s later: fb closed, `killall dispinit`, GPIOs released, **`echo mem > /sys/power/state`** (SoC suspend). After resume: mirror word 0 = 1, `killall demo_v9` → the watchdog restarts the stock UI → `PowerOn` | 0x1490C0–0x1490FC, 0x149494–0x14952C, `uikit_os_back_light_off` 0xC2278 | TURNING OFF… immediately, OFF after the ACK. The backlight is switched off 1.5 s after the press: duty 99 (dimmest) and then `pwm2/enable = 0` (merakiplus does not write the stock UI's duty 0 — with "polarity inversed" that is the brightest light if the enable did not take effect). **No SoC suspend and no killall** (a deliberate deviation: the network guard and telnet stay alive; merakiplus is not a restartable app behind a watchdog in run.sh mode) |
+| Power on | The SoC wakes from the same button press; the stock UI restarts and sends `PowerOn` (word 0 = 1) at startup. The MCU wakes by itself (reset; word 0 starts as 1) | `app_init` 0xD9170 → `PowerOn` 0x146EF8 | A button press in OFF → backlight on, *TURNING ON… · KEEP HOLDING THE BUTTON A MOMENT*. When the controller has replied with word 0 = 1 for 0.6 s → PowerOn `aa 55 06 00 01 01 00 c5 5f` + awake `aa 55 06 01 01 00 00 c5 33` (the same two frames as at startup) → HOME, toast *MACHINE IS ON*, keep-awake runs again. Without a reply within 10 s: back to OFF. If the controller replies by itself with word 0 = 1 while merakiplus is in OFF (alarm, or the button was held without merakiplus seeing it), it powers on the same way. After the MCU reset the controller is on its startup values — **merakiplus's re-push** (v6.6, the 0x89 round) puts the config's values back |
 | Touch while off | (the SoC sleeps — touch does nothing) | — | Touches are swallowed (no navigation, no frames). The OFF page is shown for 8 s; then the backlight goes off again. Touch cannot switch the machine on: the controller cannot receive anything while it sleeps |
 
 ### 19.2 The UI

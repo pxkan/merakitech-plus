@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
-"""run_e2e.py — E2E runner for ourui's SIMULATED test environment.
+"""run_e2e.py — E2E runner for merakiplus's SIMULATED test environment.
 
 Orchestration per scenario (sim/scenarios/*.json):
   (a) sandbox root: config copy, flag file, /proc mocks, fb buffer, touch FIFO
   (b) mcu_sim on a pty (+ ctrl socket + assertions log)
-  (c) ourui SIM build if present (CONTRACT.md), otherwise the reference client
+  (c) merakiplus SIM build if present (CONTRACT.md), otherwise the reference client
       (sim/ref_client.py), which proves the sim
   (d) injects touch/scenario events (evdev FIFO / ctrl sockets)
   (e) samples UI state (JSONL) + fb frames (BGRA → PNG)
@@ -16,8 +16,8 @@ Python stdlib only. No device contact. Usage:
   python3 sim/run_e2e.py --list
   python3 sim/run_e2e.py --scenario brew
   python3 sim/run_e2e.py --all
-  python3 sim/run_e2e.py --scenario brew --ui-bin /path/to/ourui_v6_sim
-  python3 sim/run_e2e.py --all --no-ui-profile   # raw — the scenarios assert ourui's
+  python3 sim/run_e2e.py --scenario brew --ui-bin /path/to/merakiplus_v6_sim
+  python3 sim/run_e2e.py --all --no-ui-profile   # raw — the scenarios assert merakiplus's
                                                  # guarded behaviour (v6.5-scenarios)
   python3 sim/run_e2e.py --all --ref-client      # reference oracle with REF profile
 """
@@ -42,14 +42,14 @@ ROOT = HERE.parent
 SCEN_DIR = HERE / "scenarios"
 REPORTS = HERE / "reports"
 SWITCHER_HOST = ROOT / "build" / "switcher_host"
-# ./build.sh output first, then the prebuilt SIM binary for this platform (bin/ourui_sim-<os>-<arch>)
-SIM_BUILD_CANDIDATES = [ROOT / "build" / "ourui_sim",
-                        ROOT / "bin" / ("ourui_sim-%s-%s" % ({"darwin": "macos"}.get(sys.platform, sys.platform),
+# ./build.sh output first, then the prebuilt SIM binary for this platform (bin/merakiplus_sim-<os>-<arch>)
+SIM_BUILD_CANDIDATES = [ROOT / "build" / "merakiplus_sim",
+                        ROOT / "bin" / ("merakiplus_sim-%s-%s" % ({"darwin": "macos"}.get(sys.platform, sys.platform),
                                                               {"aarch64": "arm64", "amd64": "x86_64"}.get(
                                                                   os.uname().machine.lower(), os.uname().machine.lower())))]
 # v6.4 (CONTRACT.md "ADDENDUM v6.4"): UI profile = overrides between the reference client's
-# synthetic layout/behaviour and the real ourui. Disabled with --no-ui-profile.
-# v6.5-scenarios (RECONCILE.md): the scenarios now assert ourui's guarded behaviour
+# synthetic layout/behaviour and the real merakiplus. Disabled with --no-ui-profile.
+# v6.5-scenarios (RECONCILE.md): the scenarios now assert merakiplus's guarded behaviour
 # DIRECTLY. The UI profile is therefore EMPTY (the mechanism is backward compatible), and the
 # reference client gets its own REF profile with the inverse overrides (the oracle behaviour).
 # The historical v6.4 profile can still be given explicitly with --ui-profile.
@@ -108,7 +108,7 @@ def apply_ui_profile(scen, profile):
                             "replace": repl, "n": len(idx), "why": why})
     return out, applied, errors
 
-# circle check ported from artifacts/ourui/check_circle.py (same criteria)
+# circle check ported from workspace/check_circle.py (same criteria)
 CX = CY = 240.0
 R_PHYS, R_SAFE = 240.0, 234.0
 
@@ -185,7 +185,7 @@ def find_ui_bin(explicit=None):
     if explicit:
         p = Path(explicit)
         return p if p.exists() else None
-    env = os.environ.get("OURUI_SIM_BIN")
+    env = os.environ.get("MERAKIPLUS_SIM_BIN")
     if env and Path(env).exists():
         return Path(env)
     for p in SIM_BUILD_CANDIDATES:
@@ -233,7 +233,7 @@ class ScenarioRun:
         # AF_UNIX paths must be ≤104 bytes (macOS) — the scratch path is too long,
         # so ctrl sockets are placed in a short /tmp directory per run.
         import tempfile
-        self.sock_dir = Path(tempfile.mkdtemp(prefix=f"ourui_e2e_{os.getpid()}_",
+        self.sock_dir = Path(tempfile.mkdtemp(prefix=f"merakiplus_e2e_{os.getpid()}_",
                                               dir="/tmp"))
         self.sim_ctrl_path = self.sock_dir / f"{self.name[:24]}_sim.ctrl"
         self.ui_ctrl_path = self.sock_dir / f"{self.name[:24]}_ui.ctrl"
@@ -242,7 +242,7 @@ class ScenarioRun:
     def make_sandbox(self):
         sb = self.sandbox
         (sb / "customer").mkdir(parents=True, exist_ok=True)
-        (sb / "new_customer" / "ourui" / "boot").mkdir(parents=True, exist_ok=True)
+        (sb / "new_customer" / "merakiplus" / "boot").mkdir(parents=True, exist_ok=True)
         (sb / "tmp").mkdir(exist_ok=True)
         (sb / "proc").mkdir(exist_ok=True)
         (sb / "dev" / "input").mkdir(parents=True, exist_ok=True)
@@ -256,13 +256,13 @@ class ScenarioRun:
         self.flag_path = sb / "customer" / "new"
         if self.scen.get("boot_flag_initial"):
             self.flag_path.touch()
-        # /proc mocks (enough for ourui's slot/exe checks)
+        # /proc mocks (enough for merakiplus's slot/exe checks)
         (sb / "proc" / "uptime").write_text("12345.67 8901.23\n")
         (sb / "proc" / "meminfo").write_text("MemTotal: 128000 kB\nMemFree: 41000 kB\n")
         (sb / "proc" / "version").write_text("Linux version 4.9.84 (mock) #1 SMP\n")
         (sb / "sys" / "class" / "pwm" / "pwmchip0" / "pwm2" / "duty_cycle").write_text("37\n")
-        # v6.3/v6.4: ourui's UI language lives in its own file; in the sandbox (no file = English)
-        self.lang_path = sb / "new_customer" / "ourui" / "lang"
+        # v6.3/v6.4: merakiplus's UI language lives in its own file; in the sandbox (no file = English)
+        self.lang_path = sb / "new_customer" / "merakiplus" / "lang"
         if self.ui_lang:
             self.lang_path.write_text(self.ui_lang)
         # fb buffer + touch FIFO are created by client/sim; placeholder:
@@ -324,26 +324,26 @@ class ScenarioRun:
     def start_ui(self):
         env = dict(os.environ)
         env.update({
-            "OURUI_SIM": "1",
-            "OURUI_SIM_ROOT": str(self.sandbox),
-            "OURUI_ROOT": str(self.sandbox),
-            "OURUI_SIM_TTY": self.pty_path,
-            "OURUI_SIM_STATE": str(self.state_path),
-            "OURUI_SIM_FB": str(self.fb_path),
-            "OURUI_SIM_TOUCH": str(self.touch_path),
-            "OURUI_SIM_CTRL": str(self.ui_ctrl_path),
-            "OURUI_CONFIG": str(self.cfg_path),
-            "OURUI_BAKDIR": str(self.sandbox / "customer" / "bak"),
-            "OURUI_LANGFILE": str(self.lang_path),
+            "MERAKIPLUS_SIM": "1",
+            "MERAKIPLUS_SIM_ROOT": str(self.sandbox),
+            "MERAKIPLUS_ROOT": str(self.sandbox),
+            "MERAKIPLUS_SIM_TTY": self.pty_path,
+            "MERAKIPLUS_SIM_STATE": str(self.state_path),
+            "MERAKIPLUS_SIM_FB": str(self.fb_path),
+            "MERAKIPLUS_SIM_TOUCH": str(self.touch_path),
+            "MERAKIPLUS_SIM_CTRL": str(self.ui_ctrl_path),
+            "MERAKIPLUS_CONFIG": str(self.cfg_path),
+            "MERAKIPLUS_BAKDIR": str(self.sandbox / "customer" / "bak"),
+            "MERAKIPLUS_LANGFILE": str(self.lang_path),
             # v6.3+: UI language file ("en"/"da") outside the /new_customer default;
             # missing file = fallback EN (unchanged behaviour for older builds)
-            "OURUI_LANGFILE": str(self.sandbox / "new_customer" / "ourui" / "lang"),
-            "OURUI_NOGRAB": "1",
-            "OURUI_NOBL": "1",
-            "OURUI_SWITCH_DRY": "1",
+            "MERAKIPLUS_LANGFILE": str(self.sandbox / "new_customer" / "merakiplus" / "lang"),
+            "MERAKIPLUS_NOGRAB": "1",
+            "MERAKIPLUS_NOBL": "1",
+            "MERAKIPLUS_SWITCH_DRY": "1",
         })
         # v6.16 (additive): a scenario may set extra UI environment variables, e.g.
-        # OURUI_SIM_CLOCK (the UI's UTC wall clock). Not used by older scenarios.
+        # MERAKIPLUS_SIM_CLOCK (the UI's UTC wall clock). Not used by older scenarios.
         env.update({str(k): str(v) for k, v in (self.scen.get("ui_env") or {}).items()})
         if self.ui_bin:
             self.client_kind = "sim-build"
@@ -405,7 +405,7 @@ class ScenarioRun:
             if req.get("cmd") == "touch" and "layout" in req:
                 # v6.5-scenarios: the tap target is looked up in the client's layout hook
                 # (CONTRACT ADDENDUM v6.4 B) instead of synthetic coordinates.
-                # The SIM build returns ourui's real geometry; the reference
+                # The SIM build returns merakiplus's real geometry; the reference
                 # client returns its own reference layout.
                 name = req.pop("layout")
                 resp = self.ui_ctrl.call({"cmd": "layout"})
@@ -686,7 +686,7 @@ class ScenarioRun:
             self.add(f"work_sta={val:#x} seen in [{ex.get('t0', 0)},{ex.get('t1', 1e9)}]",
                      ok, f"seen={sorted({hex(int(s.get('work_sta', 0)) & ~mask) for s in sts})}")
         elif kind == "stop_ok":
-            # v6.13: state.stop.ok (ourui + reference client) — stop confirmation
+            # v6.13: state.stop.ok (merakiplus + reference client) — stop confirmation
             # once the MCU has cleared the activity's bits (not just ACK).
             sts = self.states_in(ex.get("t0", 0), ex.get("t1", 1e9))
             oks = [int((s.get("stop") or {}).get("ok", 0)) for s in sts]
@@ -718,7 +718,7 @@ class ScenarioRun:
             self.add(f"power.{ex['field']}≥{ex.get('min', 1)}", ok,
                      f"max={max(vals) if vals else '-'}")
         elif kind == "chart":
-            # v6.15: state.chart.<field> (ourui SIM build: the HOME graph — buf, resets, reanchors,
+            # v6.15: state.chart.<field> (merakiplus SIM build: the HOME graph — buf, resets, reanchors,
             # w_max, w_top, top, mode …) in [t0,t1]. "all" (default): every sample with the field
             # must be within [min,max]; "any": at least one. The reference client has no chart
             # (the REF profile replaces these 1:1).
@@ -1174,7 +1174,7 @@ def load_scenarios(scen_dir=None):
 
 
 def write_summary(reports, run_dir):
-    lines = ["# E2E report — ourui SIM environment", ""]
+    lines = ["# E2E report — merakiplus SIM environment", ""]
     lines.append(f"**Run:** {run_dir.name} · "
                  f"{time.strftime('%Y-%m-%d %H:%M:%S')} · "
                  f"client: {reports[0]['client'] if reports else '-'}"
@@ -1184,7 +1184,7 @@ def write_summary(reports, run_dir):
     if nov:
         lines.append("")
         lines.append(f"**UI profile:** {nov} documented overrides applied "
-                     "(reference layout/behaviour → real ourui; see the bottom and "
+                     "(reference layout/behaviour → real merakiplus; see the bottom and "
                      "CONTRACT.md ADDENDUM v6.4). Checks marked `[ui-profile]`.")
     lines.append("")
     npass = sum(1 for r in reports if r["pass"])
@@ -1250,18 +1250,18 @@ def write_summary(reports, run_dir):
 
 
 def main():
-    ap = argparse.ArgumentParser(description="E2E runner for the ourui SIM environment")
+    ap = argparse.ArgumentParser(description="E2E runner for the merakiplus SIM environment")
     ap.add_argument("--scenario", help="run one scenario (name)")
     ap.add_argument("--all", action="store_true", help="run all scenarios")
     ap.add_argument("--list", action="store_true", help="list scenarios")
-    ap.add_argument("--ui-bin", help="ourui SIM build (otherwise the reference client)")
+    ap.add_argument("--ui-bin", help="merakiplus SIM build (otherwise the reference client)")
     ap.add_argument("--ref-client", action="store_true",
                     help="use the reference client (sim/ref_client.py) even if a SIM build "
                          "exists — oracle run with the REF profile")
     ap.add_argument("--reports-dir", default=str(REPORTS))
     ap.add_argument("--keep-sandbox", action="store_true")
     ap.add_argument("--ui-lang", choices=["en", "da"],
-                    help="ourui's UI language (written to the sandbox's language file; default: no file = English)")
+                    help="merakiplus's UI language (written to the sandbox's language file; default: no file = English)")
     ap.add_argument("--ui-profile", help="profile w/ overrides (default: sim/sim_ui_profile-ui.json "
                                          "[empty] for the SIM build, sim/sim_ui_profile-ref.json for the reference client)")
     ap.add_argument("--no-ui-profile", action="store_true",
@@ -1301,11 +1301,11 @@ def main():
     if args.ref_client:
         ui_bin = None                     # --ref-client: force an oracle run
     if ui_bin:
-        print(f"[e2e] ourui SIM-build: {ui_bin}")
+        print(f"[e2e] merakiplus SIM-build: {ui_bin}")
     else:
-        print("[e2e] no ourui SIM build found — running the REFERENCE client "
+        print("[e2e] no merakiplus SIM build found — running the REFERENCE client "
               "(sim/ref_client.py). See CONTRACT.md for SIM build requirements.")
-    # v6.5-scenarios: the scenarios assert ourui's guarded behaviour. The SIM build
+    # v6.5-scenarios: the scenarios assert merakiplus's guarded behaviour. The SIM build
     # runs with the EMPTY UI profile; the reference client with the REF profile (the
     # inverse overrides, so oracle runs are still green). --no-ui-profile
     # runs fully raw; --ui-profile <file> selects explicitly (backward compatible).
@@ -1329,12 +1329,12 @@ def main():
         scen = scens[name]
         print(f"\n[e2e] === {name} ({scen.get('duration_s', '?')}s) ===", flush=True)
         if scen.get("ui_only") and not ui_bin:
-            # v6.16 (additive): an ourui-only scenario (clock/schedule state, pre-armed alarm) has no
+            # v6.16 (additive): a merakiplus-only scenario (clock/schedule state, pre-armed alarm) has no
             # oracle in the reference client — reported as skipped, not as a fake pass of its checks.
-            print(f"[e2e] {name}: SKIP (ourui-only scenario; reference client)", flush=True)
+            print(f"[e2e] {name}: SKIP (merakiplus-only scenario; reference client)", flush=True)
             return {"name": name, "pass": True, "client": "reference", "skipped": True,
                     "description": scen.get("description", ""),
-                    "checks": [{"name": "skipped: ourui-only scenario (no reference-client oracle)", "ok": True, "detail": ""}],
+                    "checks": [{"name": "skipped: merakiplus-only scenario (no reference-client oracle)", "ok": True, "detail": ""}],
                     "final_state": {}, "snapshots": [], "samples": 0, "contact_sheet": None,
                     "sim_stats": None, "gesture_results": {}, "duration_s": 0, "ui_bin": None,
                     "sandbox": "", "sim_assertions_log": "", "state_jsonl": ""}

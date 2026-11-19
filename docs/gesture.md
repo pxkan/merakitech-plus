@@ -7,7 +7,7 @@
 
 **Date:** 2026-11-18 · **Status:** PREPARED LOCALLY — **on-device verification PENDING**
 (the machine was switched off by the user; no contact with the device took place during preparation).
-**Owner:** the boot work stream (`artifacts/ourui/boot/`). The UI files (`ourui_v6.c`, `UI_v6.md`,
+**Owner:** the boot work stream (`workspace/boot/`). The UI files (`merakiplus.c`, `UI_v6.md`,
 `build_sim.sh`, `REVERT.md`) were **NOT changed**; `sim/mcu_sim.py`, `sim/scenarios/` and
 `sim/run_e2e.py` were **NOT changed** (as instructed).
 
@@ -103,14 +103,14 @@ symbols — only raw EABI syscalls (ioctl 54, readlink 85) → loads into the st
 without a libc dependency). The shim interposes `ioctl` and returns **0 for `EVIOCGRAB` without a
 kernel call** — but **ONLY** in processes whose `/proc/self/exe == /customer/demo_v9` (stock,
 including watchdog restarts and the runtime B→A launch). All other ioctls and all other processes
-(including ourui in B mode) get an unchanged pass-through → **ourui's own grab is preserved** (no
+(including merakiplus in B mode) get an unchanged pass-through → **merakiplus's own grab is preserved** (no
 phantom touches in the SIGSTOPped stock UI). The stock UI believes it is grabbing, but is not → the
 read-only switcher sees events.
 
 The export happens in demo.sh's **existing guard line** (exactly ONE line kept):
 
 ```sh
-[ -x /new_customer/ourui/boot/switcher ] && { [ -f /new_customer/ourui/boot/grab_shim.so ] && export LD_PRELOAD=/new_customer/ourui/boot/grab_shim.so${LD_PRELOAD:+:$LD_PRELOAD}; /new_customer/ourui/boot/switcher & }
+[ -x /new_customer/merakiplus/boot/switcher ] && { [ -f /new_customer/merakiplus/boot/grab_shim.so ] && export LD_PRELOAD=/new_customer/merakiplus/boot/grab_shim.so${LD_PRELOAD:+:$LD_PRELOAD}; /new_customer/merakiplus/boot/switcher & }
 ```
 
 The `-f` test makes a missing .so harmless; the export is inherited by the `test.sh` watchdog → a
@@ -119,7 +119,7 @@ upgrades a legacy guard line (v6.11) to the new one (md5 gates, still ONE line).
 
 **Risk (c):** the stock UI ONLY loses its exclusivity on event0 — evdev still delivers to the stock
 UI as before (a grab only takes events away from *other* readers). The stock UI's own input behavior
-is unchanged; ourui's grab in B mode is unchanged. If the preload failed in a process, glibc would
+is unchanged; merakiplus's grab in B mode is unchanged. If the preload failed in a process, glibc would
 reject the process — which is why the verify script loads the shim into `/bin/true` (rc=0 gate)
 BEFORE the guard line is changed, and the .so is verified to be self-contained (no UND/NEEDED,
 hard-float ABI like the stock `ld-linux-armhf.so.3`).
@@ -136,8 +136,8 @@ injection: `raw = px·(max−min+1)/480` (floor → ±1 px rounding, harmless fo
 | switcher (device) | `EVIOCGABS` (ST+MT, MT takes precedence) when opening each node | **0..480** (device constant) | ✅ automatic |
 | switcher (file mode) | `SWITCHER_RAW_MAX` | **0..480** (was 4095) | ✅ device default; sim-fed streams pass 4095 |
 | tinj / tinj_hold | `EVIOCGABS` | **0..480** (was 4095) | ✅ automatic + rebuilt |
-| ourui (device) | `EVIOCGABS` in `inp_open` (already present, proven rc=0 on the device) | 4095 (only if ALL ioctls fail — does not happen on the device) | ✅ source unchanged (UI parity gate; the SIM declares 0..4095) |
-| ourui (SIM) | declared 0..4095 (SIM HAL, no ioctl) | — | ✅ unchanged |
+| merakiplus (device) | `EVIOCGABS` in `inp_open` (already present, proven rc=0 on the device) | 4095 (only if ALL ioctls fail — does not happen on the device) | ✅ source unchanged (UI parity gate; the SIM declares 0..4095) |
+| merakiplus (SIM) | declared 0..4095 (SIM HAL, no ioctl) | — | ✅ unchanged |
 | sim/proto.py | `touch_raw(px, rmin, rmax)`; **`DEVICE_RAW_MAX = 480`** added as a constant | default 4095 = the SIM's declared range | ✅ the sim keeps its range |
 
 `pick_ranges()` (pure logic) is unit-tested: no ioctl replies → 0..480; MT takes precedence over ST;
@@ -174,7 +174,7 @@ Evidence: `boot/test-logs/` (selftest.log, v612_*.evdev/.switcher.log), `boot/in
 | `boot/switcher_host` (host) | `8704444e226699cea5cea6eefc9127d6` |
 | `boot/grab_shim_selftest` (host) | `67c88f7b333338741ced5144d5754b13` |
 | `boot/demo.sh.new` (vendor copy + new guard line) | `b295aa11f2a66593e50ff810a6b402c4` |
-| `ourui_v6` (the UI's v6.11, **unchanged**) | `725386ccadade594275f20cc998885eb` |
+| `merakiplus_v6` (the UI's v6.11, **unchanged**) | `725386ccadade594275f20cc998885eb` |
 
 Device md5s (v6.11 final state, for comparison during verification): switcher `6222d8c2…`,
 tinj_hold `32d04919…`, demo.sh with legacy guard `b8e3a47a…`, vendor original `c1ed3d66…`.
@@ -186,7 +186,7 @@ tinj_hold `32d04919…`, demo.sh with legacy guard `b8e3a47a…`, vendor origina
 Run (user at the machine, stock A idle):
 
 ```sh
-cd artifacts/ourui/boot/ondevice
+cd workspace/boot/ondevice
 python3 verify_gesture_v612.py          # --plan shows the plan without touching the device
 ```
 
@@ -194,7 +194,7 @@ The script (`verify_gesture_v612.py`, harness patterns from net_heal_proof_v611:
 pushed scripts, md5 round trips):
 
 1. **Preflight:** stock A exe link + config baseline md5; the user confirms the machine is idle.
-2. **Push:** switcher/tinj_hold/grab_shim.so/evprobe → `/new_customer/ourui/boot/` (md5 gates).
+2. **Push:** switcher/tinj_hold/grab_shim.so/evprobe → `/new_customer/merakiplus/boot/` (md5 gates).
 3. **Node inventory:** `evprobe info` → touch nodes + raw ranges (expected 0..480).
 4. **Grab diagnosis:** `evprobe cap` on all touch nodes at the same time (6 s) while the user touches
    the screen → which nodes deliver events while the stock UI is running?
@@ -210,11 +210,11 @@ pushed scripts, md5 round trips):
    switcher.log + exe link `/new_customer/demo_v9` (no reboot).
 9. **The USER taps SWITCH NOW** (gear → SYSTEM → SWITCH TO ORIGINAL NOW → SWITCH NOW, physically) →
    B→A is verified: exe link `/customer/demo_v9` + boot_ui.log.
-10. **Final gates:** config md5 untouched, flag gone, switcher running, `/tmp/ourui_g` cleaned up.
+10. **Final gates:** config md5 untouched, flag gone, switcher running, `/tmp/merakiplus_g` cleaned up.
 11. Writes `ondevice/gestus_v612/{result.json,GESTUS-VERIFY-v612.md,telnet_transcript.txt}` and
     updates the marker section below.
 
-No reboot, no writes to config/flag/UART/fb; device writes only for the boot binaries, `/tmp/ourui_g`
+No reboot, no writes to config/flag/UART/fb; device writes only for the boot binaries, `/tmp/merakiplus_g`
 and (only with bypass c) demo.sh + one stock kill with watchdog fallback.
 
 <!-- ONDEVICE-RESULT:BEGIN -->
@@ -230,7 +230,7 @@ On-device verification: ALL GATES GREEN (`GESTUS-VERIFY-v612.md`, `result.json`)
 **Bypass a/b (no demo.sh change):**
 ```sh
 kill $(pidof switcher) 2>/dev/null
-rm -f /new_customer/ourui/boot/switcher /new_customer/ourui/boot/grab_shim.so
+rm -f /new_customer/merakiplus/boot/switcher /new_customer/merakiplus/boot/grab_shim.so
 # (the guard line is harmless without the binary: the [ -x … ] gate; for the legacy line without
 #  the shim export, if it was upgraded: see below)
 kill $(pidof demo_v9)     # the watchdog restarts the stock UI without preload (only needed for c)
@@ -239,11 +239,11 @@ kill $(pidof demo_v9)     # the watchdog restarts the stock UI without preload (
 **Bypass c (shim + guard line):**
 ```sh
 # 1. demo.sh back to the v6.11 state (legacy guard, WITHOUT the shim export):
-cp /new_customer/ourui/boot/demo.sh.bak.v611 /customer/.demo_sh.tmp
+cp /new_customer/merakiplus/boot/demo.sh.bak.v611 /customer/.demo_sh.tmp
 md5sum /customer/.demo_sh.tmp     # must be b8e3a47a7cc3f222066154ce82f85ee9
 mv /customer/.demo_sh.tmp /customer/demo.sh && chmod 755 /customer/demo.sh && sync
 # 2. remove the shim + the switcher:
-rm -f /new_customer/ourui/boot/grab_shim.so
+rm -f /new_customer/merakiplus/boot/grab_shim.so
 kill $(pidof switcher) 2>/dev/null
 # 3. the stock UI is restarted without LD_PRELOAD (the watchdog inherits demo.sh's env):
 kill $(pidof demo_v9)             # or reboot
@@ -275,7 +275,7 @@ default, but the corner logic is unchanged and tested.
   `SWITCHER_RAW_MAX=4095` in `run_gesture`'s env (a one-line fix) or rewrite the scenarios to a
   center hold (1×5200 ms at (240,240)). Until then the gesture scenarios are known-red against v6.12;
   the rest of the suite is unaffected (UI/protocol routes use the SIM's own 4095 range).
-* `ourui_v6.c` was not changed: the device path already auto-detects the raw range via `EVIOCGABS`
+* `merakiplus.c` was not changed: the device path already auto-detects the raw range via `EVIOCGABS`
   (proven on the device), and the UI's `build_sim.sh` parity gate would flag any change. The 4095
   fallback there only applies if all four ioctls fail (does not happen on the device). A future UI
   round may set the fallback to 480.

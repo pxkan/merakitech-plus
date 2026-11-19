@@ -1,21 +1,21 @@
-# UI_v6 — Meraki+ (code name ourui) v6.16: clock + correct 24-hour flag + planned pre-heat and auto off + graph reset on activity start + the physical power button + manual STOP for water / brew / grind + settings parity (spec-aligned) + boot slot integration + EN/DA + design for the round screen + SIM build/E2E + boot push and RX resync on the device + live-proven phase semantics, 64-bit clock and re-push after an MCU restart + Wi-Fi at startup and self-healing (network guard) + HOME without REVERT + calm graph and stable weight (display conditioning, weight latch, dead band) + pressure as a ≈bar estimate (anchor: pre-infusion = config pressure) + UX review (plain language, contrast, start hint, gear, close chevron, swipe guard, DIAGNOSTICS groups)
+# UI_v6 — Meraki+ (identifier merakiplus) v6.16: clock + correct 24-hour flag + planned pre-heat and auto off + graph reset on activity start + the physical power button + manual STOP for water / brew / grind + settings parity (spec-aligned) + boot slot integration + EN/DA + design for the round screen + SIM build/E2E + boot push and RX resync on the device + live-proven phase semantics, 64-bit clock and re-push after an MCU restart + Wi-Fi at startup and self-healing (network guard) + HOME without REVERT + calm graph and stable weight (display conditioning, weight latch, dead band) + pressure as a ≈bar estimate (anchor: pre-infusion = config pressure) + UX review (plain language, contrast, start hint, gear, close chevron, swipe guard, DIAGNOSTICS groups)
 
 > **Note (public edition):** Development notes written during development. Paths such as
 > `artifacts/…`, `boot_install.py` steps and md5 tables refer to the author's working environment; as
 > an end user, use `./install.sh` and `./revert.sh` (see the [README](../../README.md)). The
 > manufacturer's files are not included; IP addresses and other personal data have been removed.
-> In this repository the UI source is `src/ourui_v6.c`; `REVERT.md` is published as
+> In this repository the UI source is `src/merakiplus.c`; `REVERT.md` is published as
 > [REVERT-v6-config.md](REVERT-v6-config.md), `boot/BOOT.md` as [docs/boot.md](../boot.md) and
 > `boot/GESTUS-FIX.md` as [docs/gesture.md](../gesture.md). References to `BREW.md`, `STEAMLIVE.md`,
 > `SESSION.md`, `HOTWATER.md`, `WRITETEST.md`, `FINDINGS` and `GROUND-TRUTH.md` are to the author's
 > capture/analysis notes.
 
-**Date:** 2026-11-19 · **Version:** v6.16 (v6.15 + **time & scheduling** — user bugs: the 24-hour flag was inverted relative to the stock UI, ourui showed no clock, and there was no planned pre-heat; the clock, the fixed TIME FORMAT, a pre-heat schedule sent as the stock cmd8 alarm and an optional auto off, see [CHANGES-v6.16](#changes-v616) + [time-scheduling.md](../time-scheduling.md)). v6.15 = (v6.14 + **the graph resets when an activity starts** — user bug: the cup placed before a brew dominated the graph scale, so the 0 → 36 g curve looked flat; display only, §14.7 + [CHANGES-v6.15](#changes-v615)). v6.14 = (v6.13 + **the physical power button** — user bug: the button did not work in ourui; the k62091 node (event1) is now read, and the stock UI's power-off/power-on semantics have been reverse-engineered and mirrored, §19 + [CHANGES-v6.14](#changes-v614)). v6.13 = (v6.12 + **manual STOP for WATER, BREW and GRIND** — user bug: hot water could not be stopped from the screen; the stop words were reverse-engineered from the MCU firmware and cross-checked against the stock UI's own stop calls; auto-stop is unchanged — see [§18](#18-manual-stop-v613) and [CHANGES-v6.13](#changes-v613); v6.12 = the v6.11 UI + the boot work stream's gesture fix ([gesture.md](../gesture.md)), source kept as `ourui_v6_12.c`; v6.11 = v6.10 + **UX review**: a critical design pass over all pages and states — plain language instead of word numbers and raw codes, raised contrast, a start hint in the empty chart field, a visible gear for the settings, a close chevron + swipe-down in the details, a swipe guard with axis lock, short stat labels and DIAGNOSTICS in sections; control logic and protocol are unchanged — see [§17](#17-ux-review-v611) and [CHANGES-v6.11](#changes-v611); v6.10 = v6.9 + **pressure estimate**: "PRESSURE\* UNCALIBRATED" has been replaced by **≈BAR · EST.** with a single linear anchor — the pre-infusion plateau of 358 raw in the recording = config `preInfusionPressure` (4 bar) — and a pulse limit of 20 bar; display only — see [§16](#16-pressure-estimate-v610) and [CHANGES-v6.10](#changes-v610); v6.9 = v6.8 + **display conditioning** of the graph and hero — median-3 + EMA, a robust scale, pulse gate, pressure curve only during brew/water —, a **stable weight source** (a latch instead of the phase per sample: the user's periodic weight spikes) and a **weight dead band** < 0.25 g; display only, all control logic reads raw values — see [§14](#14-display-conditioning-and-stable-weight-v69) and [CHANGES-v6.9](#changes-v69); v6.8 = v6.7 without the REVERT button on HOME — see [CHANGES-v6.8](#changes-v68); v6.7 = v6.6 + **network guard**: Wi-Fi at startup (a slot B boot had no network) and self-healing of the Wi-Fi stack, plus word 113 in the boot push as the stock UI's recorded value — see [CHANGES-v6.7](#changes-v67); v6.6 = v6.5 + phase semantics after the live session — two steam paths and concurrent phases —, a **64-bit clock** (v6.5's clock wrapped after 24.86 days on the device) and a **re-push of the boot push after an MCU restart** — see [CHANGES-v6.6](#changes-v66); v6.5 = v6.4 + a boot push from the config at startup **also on the device**, with an activity guard, and a resync watchdog in the RX parser — see [CHANGES-v6.5](#changes-v65); v6.4 = v6.3 + a SIM build against the simulated test environment — see [§13](#13-sim-build-and-e2e-v64) and [CHANGES-v6.4](#changes-v64); v6.3 = v6.2 + the product name **Meraki+** and two UI languages, English default / Danish — see [CHANGES-v6.3](#changes-v63); v6.2 = v6.1 + BOOT UI, runtime switch to the stock UI, exit reminder — see [CHANGES-v6.2](#changes-v62)) · **Status:** implemented, cross-compiled and **only verified locally** (offline previews + self-test + automated spec alignment). **Nothing has been run on the machine, and no network device has been contacted.** The on-device work belongs to the integration engineer (§11).
-**Source:** `ourui_v6.c` (one file, plain C, no new dependencies) · **Binary:** `ourui_v6` (static ARMv7 EABI5 musl) · **Previews:** `round_v6/` (English; contact sheet) + `round_v6/da/` (Danish; contact sheet) · `EN | DA side by side` · **Revert:** `REVERT.md` · **Boot integration:** `boot/BOOT.md` (the boot work stream's; §9 = the UI requirements for v6.2) · **Spec:** [PARITY.md](PARITY.md) / `parity_spec.json` · **Predecessor:** `ROUNDUI.md` (v4)
+**Date:** 2026-11-19 · **Version:** v6.16 (v6.15 + **time & scheduling** — user bugs: the 24-hour flag was inverted relative to the stock UI, merakiplus showed no clock, and there was no planned pre-heat; the clock, the fixed TIME FORMAT, a pre-heat schedule sent as the stock cmd8 alarm and an optional auto off, see [CHANGES-v6.16](#changes-v616) + [time-scheduling.md](../time-scheduling.md)). v6.15 = (v6.14 + **the graph resets when an activity starts** — user bug: the cup placed before a brew dominated the graph scale, so the 0 → 36 g curve looked flat; display only, §14.7 + [CHANGES-v6.15](#changes-v615)). v6.14 = (v6.13 + **the physical power button** — user bug: the button did not work in merakiplus; the k62091 node (event1) is now read, and the stock UI's power-off/power-on semantics have been reverse-engineered and mirrored, §19 + [CHANGES-v6.14](#changes-v614)). v6.13 = (v6.12 + **manual STOP for WATER, BREW and GRIND** — user bug: hot water could not be stopped from the screen; the stop words were reverse-engineered from the MCU firmware and cross-checked against the stock UI's own stop calls; auto-stop is unchanged — see [§18](#18-manual-stop-v613) and [CHANGES-v6.13](#changes-v613); v6.12 = the v6.11 UI + the boot work stream's gesture fix ([gesture.md](../gesture.md)), source kept as `merakiplus_v6_12.c`; v6.11 = v6.10 + **UX review**: a critical design pass over all pages and states — plain language instead of word numbers and raw codes, raised contrast, a start hint in the empty chart field, a visible gear for the settings, a close chevron + swipe-down in the details, a swipe guard with axis lock, short stat labels and DIAGNOSTICS in sections; control logic and protocol are unchanged — see [§17](#17-ux-review-v611) and [CHANGES-v6.11](#changes-v611); v6.10 = v6.9 + **pressure estimate**: "PRESSURE\* UNCALIBRATED" has been replaced by **≈BAR · EST.** with a single linear anchor — the pre-infusion plateau of 358 raw in the recording = config `preInfusionPressure` (4 bar) — and a pulse limit of 20 bar; display only — see [§16](#16-pressure-estimate-v610) and [CHANGES-v6.10](#changes-v610); v6.9 = v6.8 + **display conditioning** of the graph and hero — median-3 + EMA, a robust scale, pulse gate, pressure curve only during brew/water —, a **stable weight source** (a latch instead of the phase per sample: the user's periodic weight spikes) and a **weight dead band** < 0.25 g; display only, all control logic reads raw values — see [§14](#14-display-conditioning-and-stable-weight-v69) and [CHANGES-v6.9](#changes-v69); v6.8 = v6.7 without the REVERT button on HOME — see [CHANGES-v6.8](#changes-v68); v6.7 = v6.6 + **network guard**: Wi-Fi at startup (a slot B boot had no network) and self-healing of the Wi-Fi stack, plus word 113 in the boot push as the stock UI's recorded value — see [CHANGES-v6.7](#changes-v67); v6.6 = v6.5 + phase semantics after the live session — two steam paths and concurrent phases —, a **64-bit clock** (v6.5's clock wrapped after 24.86 days on the device) and a **re-push of the boot push after an MCU restart** — see [CHANGES-v6.6](#changes-v66); v6.5 = v6.4 + a boot push from the config at startup **also on the device**, with an activity guard, and a resync watchdog in the RX parser — see [CHANGES-v6.5](#changes-v65); v6.4 = v6.3 + a SIM build against the simulated test environment — see [§13](#13-sim-build-and-e2e-v64) and [CHANGES-v6.4](#changes-v64); v6.3 = v6.2 + the product name **Meraki+** and two UI languages, English default / Danish — see [CHANGES-v6.3](#changes-v63); v6.2 = v6.1 + BOOT UI, runtime switch to the stock UI, exit reminder — see [CHANGES-v6.2](#changes-v62)) · **Status:** implemented, cross-compiled and **only verified locally** (offline previews + self-test + automated spec alignment). **Nothing has been run on the machine, and no network device has been contacted.** The on-device work belongs to the integration engineer (§11).
+**Source:** `merakiplus.c` (one file, plain C, no new dependencies) · **Binary:** `merakiplus_v6` (static ARMv7 EABI5 musl) · **Previews:** `round_v6/` (English; contact sheet) + `round_v6/da/` (Danish; contact sheet) · `EN | DA side by side` · **Revert:** `REVERT.md` · **Boot integration:** `boot/BOOT.md` (the boot work stream's; §9 = the UI requirements for v6.2) · **Spec:** [PARITY.md](PARITY.md) / `parity_spec.json` · **Predecessor:** `ROUNDUI.md` (v4)
 
 > **Status of the caveat in v6:** the spec was missing when v6 was written, and all limits were assumptions. v6.1 has replaced them with the spec's proven ranges. The alignment is automated: `parity_check.py` compares `SET[]` in the binary with `parity_spec.json` and fails on any unjustified deviation (`round_v6/parity_check.txt`: **41 spec parameters → 24 rows, 17 left out with a rationale, ALL ALIGNED**). What is still estimated or locked is in §4.4. All changes are listed in [CHANGES-v6.1](#changes-v61).
 
-> **Names and languages (v6.3):** the product is called **Meraki+** in the UI. `ourui` is still the code name — source file, binary, process, the directory `/new_customer/ourui/`, environment variables and logs — and is therefore also used in this document when the program is meant. The UI exists in **English (default) and Danish**. This English edition refers to screen elements by their **English** text; the Danish wording is in [Appendix A](#appendix-a--string-table-id--en--da), and a few Danish labels are given in parentheses where the history depends on them. Some texts were renamed in v6.3 (CHANGES-v6.3 item 5): sections 1–12 use the new names, CHANGES-v6.1 and -v6.2 quote the names of the time.
+> **Names and languages (v6.3):** the product is called **Meraki+** in the UI. `merakiplus` is the technical identifier — source file, binary, the directory `/new_customer/merakiplus/`, environment variables and logs — and is therefore also used in this document when the program is meant. The UI exists in **English (default) and Danish**. This English edition refers to screen elements by their **English** text; the Danish wording is in [Appendix A](#appendix-a--string-table-id--en--da), and a few Danish labels are given in parentheses where the history depends on them. Some texts were renamed in v6.3 (CHANGES-v6.3 item 5): sections 1–12 use the new names, CHANGES-v6.1 and -v6.2 quote the names of the time.
 
 ---
 
@@ -82,7 +82,7 @@ Five pages in a ring; **a horizontal swipe** changes page (v6.11: the gesture mu
 | 0 | **HOME** | **v6.3:** the title line *MERAKI+* at the top inside the ring · gauge, phase chip, hero number, auto-stop line, chart (40 s), 3 stats, 4 activity buttons, page dots. **v6.8:** no REVERT button |
 | 1 | **BREW** | 9 rows — espresso core (spec tier 1) |
 | 2 | **STEAM · WATER** | 5 rows — milk, steam, hot water + the water temperature **sensor** (spec tier 1) |
-| 3 | **SYSTEM** | 11 rows — **v6.3: UI LANGUAGE at the top** (ourui's own setting), then screen, sound, stock language, time (spec tier 2 + the tier 3 fields that are pure config flags) + **v6.2:** *STARTUP · UI CHOICE* with **BOOT UI** and **SWITCH TO ORIGINAL NOW** |
+| 3 | **SYSTEM** | 11 rows — **v6.3: UI LANGUAGE at the top** (merakiplus's own setting), then screen, sound, stock language, time (spec tier 2 + the tier 3 fields that are pure config flags) + **v6.2:** *STARTUP · UI CHOICE* with **BOOT UI** and **SWITCH TO ORIGINAL NOW** |
 | 4 | **DIAGNOSTICS** | link, RX OK / CRC errors, work_sta, E1–E3, cmd6 OK/retx/errors/**blocked**, awake, network, frame ms, mirror 112–114, config md5 + **v6.2:** boot block (flag, next boot, exe slot, slot B, switcher, stock process, PIDs, last switch) + **v6.3:** *ABOUT* block (UI language and where it comes from, wordmark with version, tagline) — the page scrolls vertically |
 
 Modal views: **splash** (boot), **stepper detail** (from a list row) and — from v6.2 — the **system
@@ -162,10 +162,10 @@ estimate · **LOCKED** = shown without an editor · **SENSOR** = read-only measu
 ### 4.3 SYSTEM page (config only — no MCU write)
 | Label | config field | Min..max | Shown as | Spec tier | Status |
 |---|---|---|---|---|---|
-| **UI LANGUAGE** (v6.3) | *(none — its own file `/new_customer/ourui/lang`)* | 0..1 | ENGLISH / DANSK (endonyms) | — | ourui's own setting; **not** a spec parameter and not in `--dump-table` (CHANGES-v6.3 item 2) |
+| **UI LANGUAGE** (v6.3) | *(none — its own file `/new_customer/merakiplus/lang`)* | 0..1 | ENGLISH / DANSK (endonyms) | — | merakiplus's own setting; **not** a spec parameter and not in `--dump-table` (CHANGES-v6.3 item 2) |
 | BRIGHTNESS | `backlight` | 1..10 | live preview (PWM `duty = 100 − 7·v`) | 2 | **PROVEN** 0..10; **0 deliberately left out** (duty 100 = a dark screen the user cannot find their way back from) |
 | VOLUME | `volume` | 0..100 | 0–100 | 2 | **PROVEN** for the slider; UI hint about the discrete selector (§4.4) |
-| TEMP UNIT | `Temperature` | 0..1 | 0 °F / 1 °C — also controls ourui's display | 2 | **PROVEN** |
+| TEMP UNIT | `Temperature` | 0..1 | 0 °F / 1 °C — also controls merakiplus's display | 2 | **PROVEN** |
 | STOCK LANG. (before v6.3: LANGUAGE) | `language` | 0..10 | 11 languages, Danish not among them (the names are shown in the UI language) | 2 | **PROVEN** — unlocked in v6.1; only controls the stock UI |
 | WATER SHORTCUT | `hotWaterShortcut` | 0..1 | OFF / ON | 2 | **PROVEN** |
 | DAYLIGHT SAVING | `sumtime` | 0..1 | OFF / ON | 2 | **PROVEN** |
@@ -173,17 +173,17 @@ estimate · **LOCKED** = shown without an editor · **SENSOR** = read-only measu
 | TIME FORMAT | `timemode` | 0..1 | **0 = 12-HOUR / 1 = 24-HOUR** (corrected in v6.16) | 3 | **PROVEN** [`update_time` 0xD5944: `eor model[0x59], #1` at 0xD5970] |
 | AUTO TIME | `Automatically` | 0..1 | OFF / ON | 3 | **PROVEN** |
 | TIME ZONE | `timeZone` | — | `UTC+01:00` (v6.16: the stock label; the detail shows the place names) | 3 | **LOCKED** (set in the stock UI; table 0x1A5890 copied in v6.16) |
-| **PRE-HEAT** (v6.16) | *(none — `/new_customer/ourui/schedule`)* | 0..1 | OFF / ON | — | ourui's own; the alarm goes out as the stock cmd8 alarm ([time-scheduling.md](../time-scheduling.md)) |
-| **PRE-HEAT AT** (v6.16) | *(same file)* | 00:00..23:55, step 5 min | per TIME FORMAT | — | ourui's own |
-| **REPEAT** (v6.16) | *(same file)* | 0..3 | ONCE / EVERY DAY / MON-FRI / SAT-SUN | — | ourui's own (stock: Never / Everyday / Workday / Weekend) |
-| **AUTO OFF** (v6.16) | *(same file)* | 0..4 | OFF / 15 / 20 / 30 / 60 MIN | — | ourui's own (stock: fixed 30 min; `sleepModeSetting`'s table is 15/20/30/60) |
+| **PRE-HEAT** (v6.16) | *(none — `/new_customer/merakiplus/schedule`)* | 0..1 | OFF / ON | — | merakiplus's own; the alarm goes out as the stock cmd8 alarm ([time-scheduling.md](../time-scheduling.md)) |
+| **PRE-HEAT AT** (v6.16) | *(same file)* | 00:00..23:55, step 5 min | per TIME FORMAT | — | merakiplus's own |
+| **REPEAT** (v6.16) | *(same file)* | 0..3 | ONCE / EVERY DAY / MON-FRI / SAT-SUN | — | merakiplus's own (stock: Never / Everyday / Workday / Weekend) |
+| **AUTO OFF** (v6.16) | *(same file)* | 0..4 | OFF / 15 / 20 / 30 / 60 MIN | — | merakiplus's own (stock: fixed 30 min; `sleepModeSetting`'s table is 15/20/30/60) |
 
 ### 4.4 What is still estimated or locked
 | Row | What is uncertain | How the UI shows it | Why it is justifiable |
 |---|---|---|---|
 | PRE-INF. TIME | the picker's number of options has not been mapped (PARITY §6.6); max 15 = the stock UI's own default | **`MAX = ESTIMATE`** in amber next to the range + `≈` in front of the value in the list | 5–15 s is harmless; the field is one byte |
 | GROUP HEAD | the same picker anomaly; the spec's max of 80 is itself a cautious estimate | **`MAX = ESTIMATE`** + `≈` | E1 only triggers at > 110 °C; 80 is far below |
-| VOLUME | the stock UI has two controls: a 0–100 slider (what ourui edits) and a discrete High/Medium/Low/Mute selector whose mapping has not been mapped | **`STEPS = ESTIMATE`** + `≈` (the note says *"… · 0-100 SLIDER"*) | config only, no MCU write |
+| VOLUME | the stock UI has two controls: a 0–100 slider (what merakiplus edits) and a discrete High/Medium/Low/Mute selector whose mapping has not been mapped | **`STEPS = ESTIMATE`** + `≈` (the note says *"… · 0-100 SLIDER"*) | config only, no MCU write |
 | PAUSE TIME | max unknown — and the value has no effect | locked, amber note *"NO EFFECT · PRE-INF. TIME IS USED"* | §4.5 |
 | TIME ZONE | the size and meaning of the index table | locked, *"THE SPEC HAS NO INDEX TABLE"* | an invalid index could break the stock UI's time/DST logic |
 
@@ -200,8 +200,8 @@ in the stock UI, and correct `max` in the two SF_EST rows.
 | hot water **temperature** | **sensor row**, not a setting | The stock UI has no setpoint: the temperature shown is the e-boiler's measured value (word 40, `hotWaterTemperUpdate` 0x112c9c). The row sits on STEAM · WATER, where you would look for the setting, and says *"NO SETPOINT EXISTS"* |
 | `breakTime` | **locked**, the value is shown | The MCU recipe 0x1E10 copies `preInfusionTime` into the low byte of word113 before the timing `word13 + word113_lo` is computed — the separate pause value is always replaced. An editor would be a button with no effect. The value is still packed into word113 lo, so the frames are identical to the stock UI's |
 | `brewMode` | **removed** | vestigial: `get/setExtractModeValue` has 0 callers |
-| `sleepMode`, `sleepModeSetting` | **removed** | no editor in the stock UI (the setters have 0 callers); sleep timing is hard-coded (~600 s screensaver / ~1800 s power-off). ourui keeps the machine awake itself (§7.1) |
-| `theme` | not exposed | the field does not exist in `config.json`, and `getTheme` has **0 callers** in `demo_v9` (`grep -c '<getTheme>' demo_v9.dis` = 1, only the definition) — a saved value would never be read. In addition, ourui never adds keys |
+| `sleepMode`, `sleepModeSetting` | **removed** | no editor in the stock UI (the setters have 0 callers); sleep timing is hard-coded (~600 s screensaver / ~1800 s power-off). merakiplus keeps the machine awake itself (§7.1) |
+| `theme` | not exposed | the field does not exist in `config.json`, and `getTheme` has **0 callers** in `demo_v9` (`grep -c '<getTheme>' demo_v9.dis` = 1, only the definition) — a saved value would never be read. In addition, merakiplus never adds keys |
 | `presetStore` / NFC | deferred | §9 |
 | Wi-Fi (`ssid`, `password`, `wifionoff`), `init`, `patch`, version fields | not exposed | must not be touched / not user settings |
 | calibration (words 26/27), reboot (word 30), drain (28/29), back-flush (20), self-test (8) | not exposed **and** impossible to send | §7a |
@@ -219,16 +219,16 @@ VALUE"*), and the first tap on −/+ brings it into range.
 
 ---
 
-## 4a. Quirks from the spec — and what ourui does about them
+## 4a. Quirks from the spec — and what merakiplus does about them
 
-| # | Quirk (PARITY) | Consequence in ourui |
+| # | Quirk (PARITY) | Consequence in merakiplus |
 |---|---|---|
 | 1 | Hot water has no temperature setting; the display is word 40 | sensor row (§4.5) |
 | 2 | `brewMode` vestigial | removed |
 | 3 | `sleepMode`/`sleepModeSetting` without an editor, timing hard-coded | removed |
 | 4 | word112 = `(switch<<8)\|pressure`, word113 = `(time<<8)\|pause`, word114 = `headTemper` in whole °C (MCU ×10) | `pack112`/`pack113` match exactly — tested for all combinations + 5 byte vectors (§10) |
 | 5 | MCU 0x1E10 only handles pressures 3 and 4; other values are ignored | range 3..4; the frame policy rejects word112 with any other pressure |
-| 6 | word13 = 60 at boot, overwritten by 0x1E10 (340/440 at 120 V, word15 = 300/350 at 220 V) | ourui sends word13/15 = 60 as observed and does not otherwise touch them; the policy rejects other values |
+| 6 | word13 = 60 at boot, overwritten by 0x1E10 (340/440 at 120 V, word15 = 300/350 at 220 V) | merakiplus sends word13/15 = 60 as observed and does not otherwise touch them; the policy rejects other values |
 | 7 | `breakTime` is overwritten by the MCU | locked (§4.5). Before BREW, word113 is only compared on the **high byte**, otherwise the mirror (e.g. `0606` after a brew) would trigger an unnecessary re-sync every time |
 | 8 | A boot push exists: `fuart_thread` sends `sub1 len30` + `sub112 len3` | the reload semantics in §5 have been corrected |
 | 9 | Trigger words 3/6/9/26/27/30 must be 0 in normal blocks; word30 = 1 reboots the MCU | §7a |
@@ -252,26 +252,26 @@ SAVE is **all-or-nothing** and runs in this order (the same as the stock UI's on
 
 1. **Guards:** value within the range, config loaded, no activity in progress, link up (for MCU parameters), write queue empty.
 2. **MCU write** (if the parameter has a word): a cmd6 block through the frame policy → wait for the `0x86` ACK with echo. No ACK after one retransmit → toast *"SAVE FAILED · NO ACK · NOT SAVED"* (v6.4; before *"NO ACK · NOT SAVED"*), the config is not touched.
-3. **config.json persistence** (`cfg_set_int`): fresh read → md5 → `cfgbak/config.json.orig` is created if it is missing (**pristine, never overwritten**) → `cfgbak/config.json.bak` (rolling) → new contents where **only the number token** of the one top-level field has been replaced → `/customer/.ourui_cfg.tmp` → `fsync` → reread and compared → `rename()` → `fsync` of the directory → a line in `cfgbak/config_writes.log` → the flag file `cfgbak/RESTART_NEEDED`.
+3. **config.json persistence** (`cfg_set_int`): fresh read → md5 → `cfgbak/config.json.orig` is created if it is missing (**pristine, never overwritten**) → `cfgbak/config.json.bak` (rolling) → new contents where **only the number token** of the one top-level field has been replaced → `/customer/.merakiplus_cfg.tmp` → `fsync` → reread and compared → `rename()` → `fsync` of the directory → a line in `cfgbak/config_writes.log` → the flag file `cfgbak/RESTART_NEEDED`.
 4. If step 3 fails, the **old** value is sent to the MCU again (rollback), and the UI shows *"CONFIG ERROR · NOT SAVED"*.
 
-**Format parity with the stock UI.** The stock UI's `setNumber` immediately writes the whole tree with `cJSON_Print` (`fseek/ftruncate/fwrite/fflush/fsync`, PARITY §1.2). ourui keeps the safer pattern (tmp + rename + backup + md5), but the result is **byte-identical** to what the stock UI would have written itself: `cjson_canon.py` recreates the `cJSON_Print` format independently and shows that (a) the baseline file is in exactly that format, (b) ourui's file after a SAVE equals `cJSON_Print(baseline with the field changed)`, (c) the field order is unchanged and no field has been added (`round_v6/config_format_check.txt`). ourui never adds keys and never touches strings or `presetStore`.
+**Format parity with the stock UI.** The stock UI's `setNumber` immediately writes the whole tree with `cJSON_Print` (`fseek/ftruncate/fwrite/fflush/fsync`, PARITY §1.2). merakiplus keeps the safer pattern (tmp + rename + backup + md5), but the result is **byte-identical** to what the stock UI would have written itself: `cjson_canon.py` recreates the `cJSON_Print` format independently and shows that (a) the baseline file is in exactly that format, (b) merakiplus's file after a SAVE equals `cJSON_Print(baseline with the field changed)`, (c) the field order is unchanged and no field has been added (`round_v6/config_format_check.txt`). merakiplus never adds keys and never touches strings or `presetStore`.
 
 **Reload semantics (corrected in v6.1 after PARITY §1.4):**
 
 | Who | When a SAVE takes effect |
 |---|---|
 | **The controller (MCU)** | **immediately** — the cmd6 write is ACKed before the config is touched |
-| **ourui** | immediately |
+| **merakiplus** | immediately |
 | **The stock UI (demo_v9)** | **only after a restart** (`kill $(pidof demo_v9)`; the watchdog starts it again in < 4 s). At startup it reads `config.json` and **boot-pushes** the values to the controller itself: `cmd6 sub1 len30` (words 1..30) + `cmd6 sub112 len3` (words 112..114) |
 
 This means:
 * After a restart the config, the stock UI and the controller are **automatically in sync** — also for a field whose MCU write might have been lost.
-* **Without** a restart (only exit → SIGCONT; v6.8: *SWITCH TO ORIGINAL NOW* in run.sh mode) the stock UI keeps running with its **old RAM mirror**. It shows old values, and its next block write (e.g. a brew start `sub5 len18`, which sends words 11/14/17 along) sends the **old** values to the controller again. Its own next config write also writes out its old tree. Therefore: **restart demo_v9 after an ourui SAVE, before the stock UI is used.** `RESTART_NEEDED` marks that this is pending, and ourui prints a reminder on stdout on exit.
-* **ourui never kills demo_v9 itself** — that would break the run.sh contract (run.sh SIGCONTs the PID it started with). The restart is a manual step.
+* **Without** a restart (only exit → SIGCONT; v6.8: *SWITCH TO ORIGINAL NOW* in run.sh mode) the stock UI keeps running with its **old RAM mirror**. It shows old values, and its next block write (e.g. a brew start `sub5 len18`, which sends words 11/14/17 along) sends the **old** values to the controller again. Its own next config write also writes out its old tree. Therefore: **restart demo_v9 after an merakiplus SAVE, before the stock UI is used.** `RESTART_NEEDED` marks that this is pending, and merakiplus prints a reminder on stdout on exit.
+* **merakiplus never kills demo_v9 itself** — that would break the run.sh contract (run.sh SIGCONTs the PID it started with). The restart is a manual step.
 * The UI text in the detail view therefore says *"CONTROLLER NOW + CONFIG"* / *"STOCK UI: AFTER RESTART"* (v6 just wrote *"TAKES EFFECT NOW"*, which was an exaggeration as far as the stock UI is concerned).
 
-Paths can be redirected: `OURUI_CONFIG` (default `/customer/config.json`), `OURUI_BAKDIR` (default `/new_customer/ourui/cfgbak`), and from v6.3 `OURUI_LANGFILE` (default `/new_customer/ourui/lang`; the UI language, which does **not** go through the save path here — see CHANGES-v6.3 item 2).
+Paths can be redirected: `MERAKIPLUS_CONFIG` (default `/customer/config.json`), `MERAKIPLUS_BAKDIR` (default `/new_customer/merakiplus/cfgbak`), and from v6.3 `MERAKIPLUS_LANGFILE` (default `/new_customer/merakiplus/lang`; the UI language, which does **not** go through the save path here — see CHANGES-v6.3 item 2).
 
 ---
 
@@ -291,7 +291,7 @@ Frames are built by `act_push()`; only the config-derived fields are substituted
 * **Intent:** every start frame declares which start words it may set (GRIND 3+6, BREW 9+22, WATER 9+16, STEAM 24). Everything else is rejected (§7a).
 * **The auto-stop expectation** is shown in the sub-line (*"AUTO-STOP AT 36.0 G · OR STOP"* — v6.13; *"AUTO-STOP AT 65.0° · OR STOP"*) and as a marker/inner ring.
 * **Manual STOP (v6.13):** while grind, brew or water is running, **STOP GRIND / STOP BREW / STOP WATER** is shown where the start icons are (touch area 180 × 56 px). Tap → *"STOPPING WATER…"* → stop frame → *"WATER STOPPED"* once the MCU has cleared the bits. Details: [§18](#18-manual-stop-v613).
-* **Steam (v6.6, proven live in STEAMLIVE.md):** after the start, *"STARTING STEAM…"* is shown; the steam starts by itself about 0.2 s after the write, without the wand being opened. The chip is then **STEAM·AUTO** with the target (word 25), the auto-stop expectation and a STOP button. If the wand is opened without a start from the screen (flush), the chip is **STEAM·WAND**: no auto-stop expectation, no STOP button — it stops when the wand is released, and ourui sends nothing. Steam on top of a brew (work_sta `5327`) is shown as the brew's page with a steam badge and the milk temperature in the stat row. Details: [CHANGES-v6.6](#changes-v66) item 2.
+* **Steam (v6.6, proven live in STEAMLIVE.md):** after the start, *"STARTING STEAM…"* is shown; the steam starts by itself about 0.2 s after the write, without the wand being opened. The chip is then **STEAM·AUTO** with the target (word 25), the auto-stop expectation and a STOP button. If the wand is opened without a start from the screen (flush), the chip is **STEAM·WAND**: no auto-stop expectation, no STOP button — it stops when the wand is released, and merakiplus sends nothing. Steam on top of a brew (work_sta `5327`) is shown as the brew's page with a steam badge and the milk temperature in the stat row. Details: [CHANGES-v6.6](#changes-v66) item 2.
 * **v6.8:** HOME has no REVERT button. The way back to the stock UI is SYSTEM → *SWITCH TO ORIGINAL NOW* (blocked during an activity; the MCU auto-stops by itself), the switcher gesture and run.sh's trap.
 
 ---
@@ -301,12 +301,12 @@ Frames are built by `act_push()`; only the config-derived fields are substituted
 1. **Keep-awake:** `AA 55 06 01 01 00 00 C5 33` (word1=0). Start sequence: `sub0=[1]`, `sub1=[0]`.
 2. **Phase detection** (`phase_raw`): `0x4020` → STEAM · bit 6 → GRINDING · bits 1+2 → brew (bit 9 = extraction) · bits 1+3 → HOT WATER · E1/E2/E3 ≠ 0 → ERROR · `word1==1` or bit 8 cleared → ASLEEP · word40 < word11 − 2.0 °C → HEATING UP · otherwise READY. (v4's brew mask `0x206` could never match pre-infusion `0x1107`; fixed.) **v6.6:** `phase_raw` is unchanged and is what the guards and the state contract use. HOME shows `phase_main`: grind / brew / water take precedence over steam, and the steam path is decided by word 24 while `0x4020` is set (≠ 0 → AUTO, sticky; = 0 → WAND; word 44 bit0 / word 46 confirm).
 3. **Error/empty states:** OFFLINE after 1.5 s without a valid frame · CRC chip for 10 s after a CRC error · error codes decoded into plain language (registermap §2.7; v6.11: the code E1/E2/E3 is shown dimmed in the chart field with a reference to DIAGNOSTICS) · v6.11: the empty chart says what you can do (*HOLD AN ICON TO START* / *SWIPE FOR SETTINGS*, or the reason why the start is blocked) instead of "NO ACTIVITY".
-4. **`EVIOCGRAB`:** while demo_v9 is SIGSTOPped, the kernel still puts every touch into its evdev queue, and it replays them after SIGCONT. In v4 that was harmless (few touches, on the background). v6 has many touches in the middle of the screen — exactly where the stock UI's Grinder/Brew/Steam/Hot Water buttons are — so ourui takes an exclusive grab of the input device and releases it on exit. **Side effect:** `tinj` (another process) cannot inject while the grab is held. `OURUI_NOGRAB=1` disables the grab for tinj runs.
-5. **Read-only:** `OURUI_READONLY=1` blocks all cmd6 writes (also keep-awake and the boot push) — for the first screen/touch round.
-6. **Boot push (v6.5):** after the start sequence, when the link is up and work_sta has been read: `cmd6 sub1 len30` + `cmd6 sub112 len3` from config.json — the stock UI's own two blocks — through the frame policy and the write queue. If an activity is already running at startup, it is skipped (activity guard). `OURUI_NOBOOTPUSH=1` disables it. Details: [CHANGES-v6.5](#changes-v65) item 2.
+4. **`EVIOCGRAB`:** while demo_v9 is SIGSTOPped, the kernel still puts every touch into its evdev queue, and it replays them after SIGCONT. In v4 that was harmless (few touches, on the background). v6 has many touches in the middle of the screen — exactly where the stock UI's Grinder/Brew/Steam/Hot Water buttons are — so merakiplus takes an exclusive grab of the input device and releases it on exit. **Side effect:** `tinj` (another process) cannot inject while the grab is held. `MERAKIPLUS_NOGRAB=1` disables the grab for tinj runs.
+5. **Read-only:** `MERAKIPLUS_READONLY=1` blocks all cmd6 writes (also keep-awake and the boot push) — for the first screen/touch round.
+6. **Boot push (v6.5):** after the start sequence, when the link is up and work_sta has been read: `cmd6 sub1 len30` + `cmd6 sub112 len3` from config.json — the stock UI's own two blocks — through the frame policy and the write queue. If an activity is already running at startup, it is skipped (activity guard). `MERAKIPLUS_NOBOOTPUSH=1` disables it. Details: [CHANGES-v6.5](#changes-v65) item 2.
 7. **RX parser (v6.5):** a frame is only accepted with its full length and a valid CRC; a candidate with an impossible length is discarded immediately, and an incomplete candidate is discarded after 400 ms (`RX_RESYNC_MS`), so the parser finds the next `AA 55`. Counted on DIAGNOSTICS (*RX CRC / RESYNC*). Details: [CHANGES-v6.5](#changes-v65) item 3.
 8. **Clock (v6.6):** all times are `ms_t` (`int64_t`), derived from `CLOCK_MONOTONIC`. Up to and including v6.5 the clock was a `long` (32 bits on the device) and wrapped after 24.86 days. The main loop's timers are in `lt`. Details: [CHANGES-v6.6](#changes-v66) item 3.
-9. **Re-push after an MCU restart (v6.6):** if the version request (`0x89`) arrives again more than 200 ms after the boot push, or words 112 and 113 are both 0 in three reads in a row on an idle machine, the boot push is sent again — the same blocks, the same frame policy, the same activity guard; at least 5 s between two, at most 3 signature-triggered ones per 10 min. DIAGNOSTICS: *RE-PUSH n · 1-30*. `OURUI_NOBOOTPUSH=1` also disables it. Details: [CHANGES-v6.6](#changes-v66) item 4.
+9. **Re-push after an MCU restart (v6.6):** if the version request (`0x89`) arrives again more than 200 ms after the boot push, or words 112 and 113 are both 0 in three reads in a row on an idle machine, the boot push is sent again — the same blocks, the same frame policy, the same activity guard; at least 5 s between two, at most 3 signature-triggered ones per 10 min. DIAGNOSTICS: *RE-PUSH n · 1-30*. `MERAKIPLUS_NOBOOTPUSH=1` also disables it. Details: [CHANGES-v6.6](#changes-v66) item 4.
 
 ---
 
@@ -321,9 +321,9 @@ The MCU has **no range checks** (cmd6 = `memcpy` + ACK), and some words are trig
 | **TRIG_START** = words 3, 6, 9, 16, 22, 24 | may only be ≠ 0 in a frame if the caller has explicitly named the word (`I_GRIND`, `I_BREW`, `I_WATER`, `I_STEAM`) | runtime + compile time (intent ⊆ TRIG_START) |
 | Per-word range (`word_ok`) | words 4/11/14/17/23/25/2/112/113/114 must lie within the `SET[]` range · words 5/13/15 = 60 · word 0 = 1 · word 1 = 0 · **all other words = 0** (7, 8, 10, 12, 18–21, 26–31) | runtime |
 
-Consequences: ourui cannot send calibration, reboot, drain (28/29), back-flush (20), self-test (8), sleep/drain (word1 = 1), power-off (word0 = 0) or the manual water switch (19) — not even through a future code bug. A settings SAVE can never start an activity. The one exception that is built in: **STOP STEAM** clamps the target word into the range, so a stop can never be rejected. *(v6.14 adds power-off via the new intent `I_POWEROFF`, only from the physical power button — §19.)*
+Consequences: merakiplus cannot send calibration, reboot, drain (28/29), back-flush (20), self-test (8), sleep/drain (word1 = 1), power-off (word0 = 0) or the manual water switch (19) — not even through a future code bug. A settings SAVE can never start an activity. The one exception that is built in: **STOP STEAM** clamps the target word into the range, so a stop can never be rejected. *(v6.14 adds power-off via the new intent `I_POWEROFF`, only from the physical power button — §19.)*
 
-A rejected frame is not queued, is counted in `wq.n_block` (DIAGNOSTICS: the fourth number in **CMD6 OK·RTX·ERR·BLOCK**, amber if ≠ 0) and gives the toast *"REJECTED BY FRAME POLICY"* / *"WRITE REJECTED"*. On exit ourui prints the count on stdout. **Expected value in all normal use: 0.**
+A rejected frame is not queued, is counted in `wq.n_block` (DIAGNOSTICS: the fourth number in **CMD6 OK·RTX·ERR·BLOCK**, amber if ≠ 0) and gives the toast *"REJECTED BY FRAME POLICY"* / *"WRITE REJECTED"*. On exit merakiplus prints the count on stdout. **Expected value in all normal use: 0.**
 
 **Audit of v6's frames against the write atlas (PARITY §3)** — no deviations found; v6 already sent 0 in words 26/27/30:
 
@@ -337,7 +337,7 @@ A rejected frame is not queued, is counted in `wq.n_block` (DIAGNOSTICS: the fou
 | settings SAVE (10 word types) | §3.7–3.8 | **never covers** words 3/6/9/16/22/24/26/27/30 | ok — `grindMode` is sent as `sub2 len1`; the stock UI's `sub2 len2` would also send start word 3 |
 | keep-awake `sub0=[1]`, `sub1=[0]` | §3.8 | none | ok |
 
-`sub18 len14` (steam mirror sync, §3.5) and `sub4 len21/22` (NFC/preset, §3.6) are not used by ourui.
+`sub18 len14` (steam mirror sync, §3.5) and `sub4 len21/22` (NFC/preset, §3.6) are not used by merakiplus.
 
 ---
 
@@ -365,16 +365,16 @@ Even with a pessimistic factor of 100 for the Cortex-A7 this is below the 30 ms 
 
 **Assumptions that remain after the alignment:**
 * The two ESTIMATE maxima and the volume selector's mapping (§4.4).
-* `grindMode` is written as `sub2 len1`. The stock UI uses `sub2 len2`, which also writes word 3 (the grind start trigger); ourui deliberately keeps the trigger word out of the frame. The MCU is a plain `memcpy`, so word 2 gets the same value.
+* `grindMode` is written as `sub2 len1`. The stock UI uses `sub2 len2`, which also writes word 3 (the grind start trigger); merakiplus deliberately keeps the trigger word out of the frame. The MCU is a plain `memcpy`, so word 2 gets the same value.
 * The meaning of `Temperature` (0 = °F, 1 = °C) is the spec's; `timemode` is now proven from the code (§4a).
-* The language names were shown in Danish (ENGELSK, TYSK, FRANSK, ITALIENSK, SPANSK, POLSK, ARABISK, KINESISK FORENKL., KINESISK TRAD., KOREANSK, JAPANSK) in the spec's index order 0..10. ourui itself stayed Danish at the time — the field only controls the stock UI after its restart. *(From v6.3 the names are shown in the UI language.)*
+* The language names were shown in Danish (ENGELSK, TYSK, FRANSK, ITALIENSK, SPANSK, POLSK, ARABISK, KINESISK FORENKL., KINESISK TRAD., KOREANSK, JAPANSK) in the spec's index order 0..10. merakiplus itself stayed Danish at the time — the field only controls the stock UI after its restart. *(From v6.3 the names are shown in the UI language.)*
 
 **Item 8 of the alignment — language, time zone, presets:**
 | Topic | Decision | Why |
 |---|---|---|
 | **STOCK LANG.** (v6.1: LANGUAGE) | **unlocked**, 0..10 | The spec proves the table: 11 language strings @ 0x166d84..0x166df4, index 0..10, confidence H. The handler [0xe1c78] is only `setLangType(idx)`. I have also checked that the language choice does not affect OTA: `GetUpdateLatestVersion` [0x1375b4] uses a **hard-coded** `"English"` in the manifest URL |
 | **TIME ZONE** | still **locked** | The spec gives `min`/`max` = null: "UTC offset index" without a table size. The field drives `time_sync_thread` + the DST calculation; an index outside the table has not been proven harmless |
-| **Presets** (`presetStore`) | still **deferred** | The spec gives the block frame (`sub4 len22`, words 4..25) and the field names (`name, iconId, grind, dose, brewTemp, yield, steamLevel, milkTemp`, `currentIndex`, `presetAppliedIndex`), but **not** a complete proven format: `template_words` is null, there are 6 numeric fields vs. 5 words (4/11/23/14/25) without a field→word mapping or units, and the current `presetStore` is `{}`, so there is no example of the serialization. Saving a preset also requires writing a nested object and adding the key `presetAppliedIndex` — ourui's writer deliberately only replaces one number token and never adds keys. Guessing here would write a structure the stock UI might not be able to parse |
+| **Presets** (`presetStore`) | still **deferred** | The spec gives the block frame (`sub4 len22`, words 4..25) and the field names (`name, iconId, grind, dose, brewTemp, yield, steamLevel, milkTemp`, `currentIndex`, `presetAppliedIndex`), but **not** a complete proven format: `template_words` is null, there are 6 numeric fields vs. 5 words (4/11/23/14/25) without a field→word mapping or units, and the current `presetStore` is `{}`, so there is no example of the serialization. Saving a preset also requires writing a nested object and adding the key `presetAppliedIndex` — merakiplus's writer deliberately only replaces one number token and never adds keys. Guessing here would write a structure the stock UI might not be able to parse |
 | **NFC** | deferred | requires the MF522 driver + card format; the spec itself recommends leaving it out |
 
 **Other deferred items:**
@@ -382,7 +382,7 @@ Even with a pessimistic factor of 100 for the Cortex-A7 this is below the 30 ms 
 |---|---|
 | Manual stop of grind / brew / water | The spec mentions candidates for water (`sub16 len1` + `sub19 len1` = 0), but only from static analysis. Should be captured from the stock UI's stop before it gets a button. *(Done in v6.13 — §18.)* |
 | Grinding by time (`grindMode=2`), manual water (`hotWaterMode=2`) | no observed start recipe; the start is blocked with an explanation. The setting can still be saved — it then applies to the stock UI |
-| Volume preview, ourui's own auto-sleep | sound is owned by demo_v9; ourui keeps the machine awake by design |
+| Volume preview, merakiplus's own auto-sleep | sound is owned by demo_v9; merakiplus keeps the machine awake by design |
 | Calibrated pressure | requires a physical reference (BREW.md §7) |
 | Kinetic scrolling | direct dragging is enough for 5–10 rows |
 
@@ -391,9 +391,9 @@ Even with a pessimistic factor of 100 for the Cortex-A7 this is below the 30 ms 
 ## 10. Build and preview
 
 ```sh
-cd artifacts/ourui
+cd workspace
 # device (static ARMv7 musl) — zig 0.17.1 used; 0 warnings
-zig cc -target arm-linux-musleabihf -mcpu=cortex_a7 -static -O2 -o ourui_v6 ourui_v6.c
+zig cc -target arm-linux-musleabihf -mcpu=cortex_a7 -static -O2 -o merakiplus_v6 merakiplus.c
 # device binary + SIM build (host + static ARM) + a list of what changed in the device build vs. v6.5
 # + (if the local ARMv7 container exists) the whole self-test as a real 32-bit ARM binary
 sh build_sim.sh
@@ -401,12 +401,12 @@ sh build_sim.sh
 # + comparison with v6.5 + mutation probes + config format check + circle check + contact sheet
 sh round_v6/build_previews.sh
 # per iteration (§15 DEV-ITERATION-POLICY): sim self-test + quick core subset, one language, parallel (about 45 s)
-python3 ../../sim/selftest.py && (cd ../.. && python3 sim/run_e2e.py --all --quick --parallel 4 --ui-bin artifacts/ourui/ourui_v6_sim)
+python3 ../../sim/selftest.py && (cd ../.. && python3 sim/run_e2e.py --all --quick --parallel 4 --ui-bin workspace/merakiplus_v6_sim)
 # the FULL E2E verification (> 35 min) — ONLY in CI/CD or at a release milestone (§15)
 python3 sim_e2e.py                   # -> sim/reports/v6.9/ (individual parts: --only calm | net | ref | …)
 ```
 In this repository: `./build.sh` / `./build.sh host` (see [CONTRIBUTING.md](../../CONTRIBUTING.md)).
-Individually: `/tmp/ourui_v6_preview [--lang en|da] <outdir> <config.json>` · `[--lang en|da] --selftest <config.json>` · `--bench <config.json>` · `--dump-table` (SET[] as TSV) · `--dump-strings` (the string table as TSV: id, class, EN, DA) · `--textw "TEXT"…` (pixel widths) · `--is-ourui <file>…` (the BOOT UI guard's binary recognition; exit 0 = all are ourui). PNG: `python3 round_v6/fb2png.py <file.bin>…`.
+Individually: `/tmp/merakiplus_v6_preview [--lang en|da] <outdir> <config.json>` · `[--lang en|da] --selftest <config.json>` · `--bench <config.json>` · `--dump-table` (SET[] as TSV) · `--dump-strings` (the string table as TSV: id, class, EN, DA) · `--textw "TEXT"…` (pixel widths) · `--is-merakiplus <file>…` (the BOOT UI guard's binary recognition; exit 0 = all are merakiplus). PNG: `python3 round_v6/fb2png.py <file.bin>…`.
 
 **Local results v6.9** (the whole table in [CHANGES-v6.9](#changes-v69) item 6): self-test **354 checks, 0 errors** in English and Danish — and **353 / 0** as a real 32-bit ARM binary; previews 67 × 2, circle check 0 violations, 90 of 126 byte-identical with v6.8 (the rest intended); mutation probes 10/10; spec alignment ALL ALIGNED; 0 warnings.
 
@@ -440,7 +440,7 @@ Individually: `/tmp/ourui_v6_preview [--lang en|da] <outdir> <config.json>` · `
   * *Config persistence:* as v6 + **all 21 editable fields saved as min → max → original**, md5 back at the baseline `<config-md5-redacted>`, pristine backup untouched, one log line per write (69), unknown keys (`theme`) are rejected.
   * *Out of spec:* proven limits are not extended, estimates are only extended up to the ceiling, an enum outside the table gives no lookup outside the name array, the start is blocked, and the frame policy rejects the brew block even if the UI guard is bypassed.
 * **Spec alignment** (`round_v6/parity_check.txt`): 41 spec parameters → 19 proven, 2 estimated, 2 locked, 1 sensor, 17 left out with a rationale. **ALL ALIGNED.**
-* **Config format** (`round_v6/config_format_check.txt`): 4/4 PASS — ourui's file is byte-identical to `cJSON_Print` of the same change.
+* **Config format** (`round_v6/config_format_check.txt`): 4/4 PASS — merakiplus's file is byte-identical to `cJSON_Print` of the same change.
 * **Circle check** (`round_v6/check_circle.txt`): **51/51 previews OK, 0 violations**, max non-black radius 234.67.
 * **Static build:** 0 warnings, 0 errors.
 * The save scenarios in the preview run the real persistence code against **copies** (`round_v6/_preview_config*.json`); `artifacts/config.json` is untouched (md5 unchanged).
@@ -457,10 +457,10 @@ None of this has been carried out. The order goes from harmless to running actua
 
 **A. Preparation**
 - [ ] Baseline: `pidof demo_v9`, `md5sum /customer/config.json` (expected `<config-md5-redacted>`), `cat /sys/class/pwm/pwmchip0/pwm2/duty_cycle` (expected 37), fb capture.
-- [ ] Fetch a local copy of `/customer/config.json` (independent of ourui's own backups).
-- [ ] Upload `ourui_v6` to `/tmp`, md5 round trip. Install only after B–F: v4 → `ourui_v4.bin`, v6 → `ourui` (run.sh unchanged).
+- [ ] Fetch a local copy of `/customer/config.json` (independent of merakiplus's own backups).
+- [ ] Upload `merakiplus_v6` to `/tmp`, md5 round trip. Install only after B–F: v4 → `merakiplus_v4.bin`, v6 → `merakiplus` (run.sh unchanged).
 
-**B. Read-only round** — `OURUI_READONLY=1 OURUI_NOGRAB=1`
+**B. Read-only round** — `MERAKIPLUS_READONLY=1 MERAKIPLUS_NOGRAB=1`
 - [ ] Splash → HOME is shown; fb capture of all 5 pages; `check_circle.py` = 0 violations.
 - [ ] DIAGNOSTICS: LINK OK, RX OK increases, RX CRC / RESYNC = 0 / 0, CMD6 = 0/0/0/0, **FRAME MS MAX < 30**; scroll one row: BOOT PUSH = OFF / OFF (read-only sends nothing).
 - [ ] The values in the three lists match `config.json`; no row is red (out of spec); `MIRROR 112-114` shows `0104 0605 70` (or `0104 0606 70` if there has been a brew since the stock UI's boot — see L).
@@ -469,12 +469,12 @@ None of this has been carried out. The order goes from harmless to running actua
 - [ ] Swipe + edge tap change the page; SYSTEM → *SWITCH TO ORIGINAL NOW* → SWITCH NOW (v6.8; before: REVERT) → demo_v9 SIGCONT, the stock UI redraws itself.
 
 **C. Write round without actuators**
-- [ ] Start without `OURUI_READONLY`. DIAGNOSTICS: AWAKE = YES, WORK_STA = `0101`, CMD6 OK ≥ 4 (PowerOn, awake and from v6.5 the two boot push blocks — see Q), ERR = 0, **BLOCK = 0**. The boilers hold their temperature for 5 min (the v4 bug would let them cool down).
+- [ ] Start without `MERAKIPLUS_READONLY`. DIAGNOSTICS: AWAKE = YES, WORK_STA = `0101`, CMD6 OK ≥ 4 (PowerOn, awake and from v6.5 the two boot push blocks — see Q), ERR = 0, **BLOCK = 0**. The boilers hold their temperature for 5 min (the v4 bug would let them cool down).
 - [ ] FRAME MS during slide, scroll and hold repeat: read MAX.
 
-**D. EVIOCGRAB** (a physical finger, without `OURUI_NOGRAB`)
+**D. EVIOCGRAB** (a physical finger, without `MERAKIPLUS_NOGRAB`)
 - [ ] Tap around on HOME and in the lists, then *SWITCH TO ORIGINAL NOW* (v6.8; before: REVERT): the stock UI must **not** react to any of the touches.
-- [ ] `kill -9` on ourui: the grab is released, the stock UI reacts normally to touch after SIGCONT.
+- [ ] `kill -9` on merakiplus: the grab is released, the stock UI reacts normally to touch after SIGCONT.
 
 **E. Settings matrix** — for each row: open → change → SAVE → verify → set back → SAVE → verify
 
@@ -497,13 +497,13 @@ For **every** SAVE:
 - [ ] `md5sum /customer/config.json` = `md5_after` in the last line of `cfgbak/config_writes.log`.
 - [ ] A `diff` against the previous version shows **only** the one number changed.
 - [ ] `cfgbak/config.json.orig` still has the baseline md5; `config.json.bak` = the version before.
-- [ ] No `/customer/.ourui_cfg.tmp` left behind.
+- [ ] No `/customer/.merakiplus_cfg.tmp` left behind.
 - [ ] After the whole matrix: `md5sum /customer/config.json` = baseline.
 - [ ] Error path: a stopped MCU reply cannot be provoked safely — skip; covered by the self-test.
 
 **F. Reload semantics**
-- [ ] Save one change, *SWITCH TO ORIGINAL NOW* (v6.8; before: REVERT): the stock UI still shows the **old** value (expected), and ourui has printed the restart reminder on stdout.
-- [ ] `kill $(pidof demo_v9)` → the watchdog restarts it → the stock UI shows the **new** value → set it back via ourui or the stock UI, verify the baseline md5.
+- [ ] Save one change, *SWITCH TO ORIGINAL NOW* (v6.8; before: REVERT): the stock UI still shows the **old** value (expected), and merakiplus has printed the restart reminder on stdout.
+- [ ] `kill $(pidof demo_v9)` → the watchdog restarts it → the stock UI shows the **new** value → set it back via merakiplus or the stock UI, verify the baseline md5.
 - [ ] Optional: STOCK LANG. → GERMAN, restart demo_v9, the stock UI is in German; set back to ENGLISH + restart.
 
 **G. Activities** (supervised, water in the tank, hand on the switch)
@@ -512,7 +512,7 @@ For **every** SAVE:
 - [ ] BREW: PRE-INFUSION (blue) ≈ 6 s → EXTRACTION (copper) → auto-stop ≈ 34–37 g; the inner ring reaches 100 %.
 - [ ] A short tap on an activity button does **not** start anything.
 
-**H. Steam session with milk** (the recipe has since been proven live with **the stock UI** — STEAMLIVE.md; with ourui it has still not been run. Use **R2–R6** for what v6.6 shows; the items here are still valid for the frames and the stop)
+**H. Steam session with milk** (the recipe has since been proven live with **the stock UI** — STEAMLIVE.md; with merakiplus it has still not been run. Use **R2–R6** for what v6.6 shows; the items here are still valid for the frames and the stop)
 - [ ] Cold milk in the jug, probe/nozzle down. Hold STEAM → *"STARTING STEAM…"* (v6.5 and older: *"STEAM ARMED · OPEN THE STEAM VALVE"*).
 - [ ] ~~Note: does the steam start on the write alone, or only when the valve is opened?~~ Answered live: on the write alone, after about 0.2 s. If the wand is opened without a write, it is a flush (R4).
 - [ ] During steam: WORK_STA has bits 5+14 (`4121`), phase STEAM, hero = milk temp rising, marker at 65 °C.
@@ -521,47 +521,47 @@ For **every** SAVE:
 - [ ] Timeout behavior if the steam does not start (the UI resets after 15 s; what does the MCU do with word 24 = 1? — still open, CHANGES-v6.6 item 8). **If word 24 stays at 1, do not just carry on — write 0 via STOP or the stock UI.**
 
 **J. Trigger word audit on the device** (PARITY §6.2 — words 26/27/30 must never be ≠ 0)
-- [ ] Record ourui's TX during all of E + G + H (UART sniff or `strace -e write` on ourui's PID). Decode every `AA 55 06 SUB LEN …` frame and confirm: no frame has word 26, 27 or 30 ≠ 0; words 3/6/9 ≠ 0 **only** occur in the three start blocks (`sub3 len4`, `sub5 len18`, `sub9 len11`); no settings SAVE covers a start word.
+- [ ] Record merakiplus's TX during all of E + G + H (UART sniff or `strace -e write` on merakiplus's PID). Decode every `AA 55 06 SUB LEN …` frame and confirm: no frame has word 26, 27 or 30 ≠ 0; words 3/6/9 ≠ 0 **only** occur in the three start blocks (`sub3 len4`, `sub5 len18`, `sub9 len11`); no settings SAVE covers a start word.
 - [ ] DIAGNOSTICS after the whole session: **BLOCK = 0** (the policy has had nothing to reject) and ERR = 0.
 - [ ] No MCU reboot: RX OK increases continuously, LINK has not been DOWN, the boiler temperatures have not had a dip.
 - [ ] No unintended calibration: put a known weight on before and after the session — WEIGHT on HOME shows the same.
 
 **K. Boot push sync** (PARITY §1.4 — the first live confirmation of the statically found boot push)
-- [ ] Save BREW TEMP 87.0 → 88.0 and GROUP HEAD 70 → 80 in ourui (the controller + config now have 880 / 80). *SWITCH TO ORIGINAL NOW* (v6.8; before: REVERT).
-- [ ] While ourui is **not** running: restore the config from `cfgbak/config.json.orig` with tmp+mv (REVERT.md), but do **not** restart demo_v9 yet. Now the config = 870/70, the controller = 880/80.
+- [ ] Save BREW TEMP 87.0 → 88.0 and GROUP HEAD 70 → 80 in merakiplus (the controller + config now have 880 / 80). *SWITCH TO ORIGINAL NOW* (v6.8; before: REVERT).
+- [ ] While merakiplus is **not** running: restore the config from `cfgbak/config.json.orig` with tmp+mv (REVERT.md), but do **not** restart demo_v9 yet. Now the config = 870/70, the controller = 880/80.
 - [ ] `kill $(pidof demo_v9)` and record the UART during startup: expect `AA 55 06 01 1E …` (sub1 len30) and shortly after `AA 55 06 70 03 04 01 05 06 46 00 C7 02` (sub112 len3).
-- [ ] Start ourui with `OURUI_READONLY=1` (no writes from ourui): the HOME sub-line shows *"BREW TEMP SET TO 87.0°"* (word 11 = 870) and `MIRROR …/114` = 70. The controller has therefore been synced from the config by the stock UI's boot, not by ourui.
+- [ ] Start merakiplus with `MERAKIPLUS_READONLY=1` (no writes from merakiplus): the HOME sub-line shows *"BREW TEMP SET TO 87.0°"* (word 11 = 870) and `MIRROR …/114` = 70. The controller has therefore been synced from the config by the stock UI's boot, not by merakiplus.
 - [ ] If word 11 is still 880: the boot push does not exist in the form the spec describes — report back; §5 must then be corrected.
 
 **L. The breakTime quirk** (PARITY §4 — MCU 0x1E10 overwrites word113 lo)
 - [ ] After a fresh demo_v9 startup: `MIRROR 113` = `0605` (time 6, pause 5).
 - [ ] Brew once with PRE-INFUSION = ON. During or after the brew: `MIRROR 113` = **`0606`** — the low byte has become the pre-inf. time. Note the duration of the PRE-INFUSION phase (the TIME field).
-- [ ] Set the pause time to e.g. 9 s in **the stock UI** (ourui deliberately has no editor), restart ourui: PAUSE TIME shows 9, `MIRROR 113` = `0609`. Brew again: `MIRROR 113` = `0606`, and PRE-INFUSION lasts the same as before. That is the quirk demonstrated.
-- [ ] Counter-test: set PRE-INF. TIME 6 → 8 in ourui and brew: `MIRROR 113` = `0808`, and PRE-INFUSION lasts about 2 s longer.
+- [ ] Set the pause time to e.g. 9 s in **the stock UI** (merakiplus deliberately has no editor), restart merakiplus: PAUSE TIME shows 9, `MIRROR 113` = `0609`. Brew again: `MIRROR 113` = `0606`, and PRE-INFUSION lasts the same as before. That is the quirk demonstrated.
+- [ ] Counter-test: set PRE-INF. TIME 6 → 8 in merakiplus and brew: `MIRROR 113` = `0808`, and PRE-INFUSION lasts about 2 s longer.
 - [ ] PRE-INFUSION = OFF and brew: `MIRROR 113` low byte = `00`, no blue phase. Set everything back.
 
 **M. Close the estimates** (PARITY §6.6)
 - [ ] In the stock UI: count the options in the pickers for pre-inf. time, pre-inf. pressure, pause and group temp, and note the highest value. Also note which config values the discrete sound selector (High/Medium/Low/Mute) writes. The result closes the two SF_EST rows and the volume hint.
 
 **N. Boot slot and runtime switch (v6.2)** — after `boot_install.py install` (BOOT.md §4); none of it has been run
-- [ ] **N1 · Guard in an A boot via run.sh:** the bottom of SYSTEM shows BOOT UI = ORIGINAL (editable if ourui is installed as `/new_customer/demo_v9`). The bottom of DIAGNOSTICS: FLAG = NOT PRESENT, STARTED FROM = RUN.SH, SLOT B = MERAKI+ FOUND, SWITCHER DAEMON = RUNNING, STOCK PROCESS = PAUSED.
-- [ ] **N2 · Flag:** choose MERAKI+ → SAVE; `ls -l /customer/new` (empty file), `cat /new_customer/ourui/cfgbak/boot_ui.log`. Choose ORIGINAL → SAVE; the file is gone. `md5sum /customer/demo.sh /customer/config.json` unchanged. Restart with the flag set → ourui boots (DIAGNOSTICS: STARTED FROM = SLOT B, STOCK PROCESS = NONE).
-- [ ] **N3 · `LD_LIBRARY_PATH` (closes the deviation in CHANGES-v6.2 item 2):** in a slot B boot: `tr '\0' '\n' </proc/$(pidof demo_v9)/environ | grep LD_LIBRARY`. If there is a prefix in front of `/new_customer/libs`, that is what ourui preserves. Then run with `OURUI_SWITCH_DRY=1`, tap SWITCH NOW and read the path in `boot_ui.log`.
-- [ ] **N4 · Runtime switch B→A:** in a slot B boot, HOME = READY: SYSTEM → SWITCH TO ORIGINAL NOW → SWITCH NOW. Expect *"SWITCHING TO ORIGINAL"*, then the stock UI without a restart. `for p in $(pidof demo_v9); do readlink /proc/$p/exe; done` = only `/customer/demo_v9`; `ls /proc/$(pidof demo_v9)/fd` contains no fd inherited from ourui; **touch works in the stock UI** (that is the grab test); `cat /new_customer/ourui/cfgbak/boot_ui.log`. Record the UART during the switch: expect the stock UI's boot push (`AA 55 06 01 1E …`), no half frames from ourui.
-- [ ] **N5 · The watchdog race:** repeat N4 ten times (back with the gesture). Two `demo_v9` must never be running afterwards, and ourui must not come back by itself.
-- [ ] **N6 · Back with the gesture:** 3 × 1.6 s at (75,75) (from v6.12: a 5 s center hold) → ourui; DIAGNOSTICS shows the event from `/tmp/switcher.log`.
-- [ ] **N7 · Known consequence:** after N4, `kill $(pidof demo_v9)` → the watchdog starts **ourui** (slot B), not the stock UI. Expected.
+- [ ] **N1 · Guard in an A boot via run.sh:** the bottom of SYSTEM shows BOOT UI = ORIGINAL (editable if merakiplus is installed as `/new_customer/demo_v9`). The bottom of DIAGNOSTICS: FLAG = NOT PRESENT, STARTED FROM = RUN.SH, SLOT B = MERAKI+ FOUND, SWITCHER DAEMON = RUNNING, STOCK PROCESS = PAUSED.
+- [ ] **N2 · Flag:** choose MERAKI+ → SAVE; `ls -l /customer/new` (empty file), `cat /new_customer/merakiplus/cfgbak/boot_ui.log`. Choose ORIGINAL → SAVE; the file is gone. `md5sum /customer/demo.sh /customer/config.json` unchanged. Restart with the flag set → merakiplus boots (DIAGNOSTICS: STARTED FROM = SLOT B, STOCK PROCESS = NONE).
+- [ ] **N3 · `LD_LIBRARY_PATH` (closes the deviation in CHANGES-v6.2 item 2):** in a slot B boot: `tr '\0' '\n' </proc/$(pidof demo_v9)/environ | grep LD_LIBRARY`. If there is a prefix in front of `/new_customer/libs`, that is what merakiplus preserves. Then run with `MERAKIPLUS_SWITCH_DRY=1`, tap SWITCH NOW and read the path in `boot_ui.log`.
+- [ ] **N4 · Runtime switch B→A:** in a slot B boot, HOME = READY: SYSTEM → SWITCH TO ORIGINAL NOW → SWITCH NOW. Expect *"SWITCHING TO ORIGINAL"*, then the stock UI without a restart. `for p in $(pidof demo_v9); do readlink /proc/$p/exe; done` = only `/customer/demo_v9`; `ls /proc/$(pidof demo_v9)/fd` contains no fd inherited from merakiplus; **touch works in the stock UI** (that is the grab test); `cat /new_customer/merakiplus/cfgbak/boot_ui.log`. Record the UART during the switch: expect the stock UI's boot push (`AA 55 06 01 1E …`), no half frames from merakiplus.
+- [ ] **N5 · The watchdog race:** repeat N4 ten times (back with the gesture). Two `demo_v9` must never be running afterwards, and merakiplus must not come back by itself.
+- [ ] **N6 · Back with the gesture:** 3 × 1.6 s at (75,75) (from v6.12: a 5 s center hold) → merakiplus; DIAGNOSTICS shows the event from `/tmp/switcher.log`.
+- [ ] **N7 · Known consequence:** after N4, `kill $(pidof demo_v9)` → the watchdog starts **merakiplus** (slot B), not the stock UI. Expected.
 - [ ] **N8 · (v6.8: dropped — the REVERT button has been removed.)** Replaced by: HOME has no touch zone where the pill was (taps on 150..330 × 404..480 do nothing); *SWITCH TO ORIGINAL NOW* starts the stock UI in a slot B boot and is a clean exit in run.sh mode.
 - [ ] **N9 · Exit reminder:** run.sh mode, save one setting, *SWITCH TO ORIGINAL NOW* → SWITCH NOW (v6.8; before: REVERT) → the reminder is shown; EXIT → the stock UI shows the old value; `kill $(pidof demo_v9)` → the new one. Repeat without SAVE: no reminder. Repeat after a machine restart (the file is still there): no reminder.
-- [ ] **N10 · Blocking:** start steam, try SWITCH NOW → *"WAIT UNTIL THE ACTIVITY ENDS"*, ourui keeps running.
+- [ ] **N10 · Blocking:** start steam, try SWITCH NOW → *"WAIT UNTIL THE ACTIVITY ENDS"*, merakiplus keeps running.
 - [ ] **N11 · Error path (optional, if you dare):** `chmod -x /customer/demo_v9` makes the row locked; restore the x bit right afterwards.
 
 **O. Language and product name (v6.3)** — none of it has been run on the device
-- [ ] **O1 · Default:** the first start without `/new_customer/ourui/lang` (`ls` shows that the file does not exist): the splash shows the wordmark MERAKI with a "+" badge, *"ADVANCED BREWING INTERFACE"* and *"V6.4 · CONFIG LOADED"*; HOME is in English with the title line MERAKI+ above the phase chip; the bottom of DIAGNOSTICS (ABOUT): *"ENGLISH · DEFAULT (NO FILE)"*.
-- [ ] **O2 · Live switch:** SYSTEM → UI LANGUAGE (top row) → **+**: the whole screen switches to Danish immediately (title UI-SPROG, buttons ANNULLER / GEM) → GEM → toast *"SPROG GEMT · DANSK"*. No restart. `cat /new_customer/ourui/lang` = `da`, `wc -c` = 2. Go through all 5 pages in Danish; fb captures of them + `check_circle.py` = 0 violations.
+- [ ] **O1 · Default:** the first start without `/new_customer/merakiplus/lang` (`ls` shows that the file does not exist): the splash shows the wordmark MERAKI with a "+" badge, *"ADVANCED BREWING INTERFACE"* and *"V6.4 · CONFIG LOADED"*; HOME is in English with the title line MERAKI+ above the phase chip; the bottom of DIAGNOSTICS (ABOUT): *"ENGLISH · DEFAULT (NO FILE)"*.
+- [ ] **O2 · Live switch:** SYSTEM → UI LANGUAGE (top row) → **+**: the whole screen switches to Danish immediately (title UI-SPROG, buttons ANNULLER / GEM) → GEM → toast *"SPROG GEMT · DANSK"*. No restart. `cat /new_customer/merakiplus/lang` = `da`, `wc -c` = 2. Go through all 5 pages in Danish; fb captures of them + `check_circle.py` = 0 violations.
 - [ ] **O3 · Independent of the stock UI:** after O2 `md5sum /customer/config.json` is unchanged, `grep language /customer/config.json` unchanged, `cfgbak/config_writes.log` has no new line, there is no new `RESTART_NEEDED`, and the DIAGNOSTICS CMD6 counters are the same (no frame sent).
 - [ ] **O4 · Remembered:** exit (v6.8: *SWITCH TO ORIGINAL NOW*) and start again (or restart in a slot B boot): Danish from the first frame (splash: *"AVANCERET BRYGGE-INTERFACE"*); DIAGNOSTICS / ABOUT (OM): *"DANSK · FRA FIL"*.
-- [ ] **O5 · Fallback:** `echo de > /new_customer/ourui/lang` → start: English, ABOUT shows *"ENGLISH · UNKNOWN FILE VALUE"* in amber. `rm` the file → *"DEFAULT (NO FILE)"*. `echo da > …` (with a newline) → Danish.
+- [ ] **O5 · Fallback:** `echo de > /new_customer/merakiplus/lang` → start: English, ABOUT shows *"ENGLISH · UNKNOWN FILE VALUE"* in amber. `rm` the file → *"DEFAULT (NO FILE)"*. `echo da > …` (with a newline) → Danish.
 - [ ] **O6 · CANCEL:** UI LANGUAGE → change → CANCEL: the language goes back, the file is unchanged.
 - [ ] **O7 · STOCK LANG. is something else:** STOCK LANG. → GERMAN → SAVE only changes `language` in the config (as in E); Meraki+ stays in its own language. Set it back.
 - [ ] **O8 · Product name:** go through fb captures of all pages in both languages: the name is Meraki+ everywhere, and there is no generation designation anywhere.
@@ -569,33 +569,33 @@ For **every** SAVE:
 - [ ] **O10 · Frame time:** read FRAME MS MAX right after a language switch (full redraw + new glyphs in the cache).
 
 **P. v6.4** — the device binary does the same as v6.3; only two texts are new
-- [ ] **P1 · Version:** the splash and DIAGNOSTICS show *V6.5* (O1 mentions v6.4's string; from v6.5 it says *V6.5 · CONFIG LOADED*). `strings /new_customer/demo_v9 | grep -c OURUI_SIM` = 0 (it is the device binary, not the SIM build).
+- [ ] **P1 · Version:** the splash and DIAGNOSTICS show *V6.5* (O1 mentions v6.4's string; from v6.5 it says *V6.5 · CONFIG LOADED*). `strings /new_customer/demo_v9 | grep -c MERAKIPLUS_SIM` = 0 (it is the device binary, not the SIM build).
 - [ ] **P2 · Toast:** provoke a SAVE without an ACK if it can be done safely (otherwise skip): the toast is *"SAVE FAILED · NO ACK · NOT SAVED"*, and the config is unchanged.
 - [ ] **P3 · (v6.4; the decision was taken in v6.5 — use it as a counter-test, Q6) Measure before the decision on the boot push (CHANGES-v6.4 item 6):** a cold start in a slot B boot; before anything has been saved or brewed: read words 4, 11, 14, 17, 23, 25 and 112–114 (`sdump.py`, or HOME: *BREW TEMP SET TO …*) and compare with the config. Expected without a boot push: the MCU's start values (word 11 = 920, word 114 = 50), not the config's (870 / 70).
 
 **Q. v6.5: boot push and RX resync** — none of it has been run on the device
 - [ ] **Q1 · Version and new cells:** the splash and DIAGNOSTICS show *V6.5*. DIAGNOSTICS: *RX CRC / RESYNC* = `0 / 0`; scroll down one row: *BOOT PUSH 1-30* = OK and *BOOT PUSH 112-114* = OK (green).
-- [ ] **Q2 · run.sh mode, idle machine — record ourui's TX** (UART sniff or `strace -e write` on ourui's PID) from the start: after `aa 55 06 00 01 01 00 c5 5f` and `aa 55 06 01 01 00 00 c5 33` come **`aa 55 06 01 1e 00 00 01 00 00 00 b9 00 3c 00 … 62 3e`** (67 bytes, sub1 len30) and **`aa 55 06 70 03 04 01 05 06 46 00 c7 02`** (sub112 len3) — with the baseline config. Each has one ACK (`aa 55 86 …` with the same payload). DIAGNOSTICS: CMD6 = `4 / 0 / 0 / 0`. Note the ACK latency for the 30-word block, and whether RTX is 0.
-- [ ] **Q3 · The same block as the stock UI:** compare Q2's two frames byte for byte with the stock UI's own from test plan K (same config). If a word differs, PARITY §1.3–1.4 is incomplete: report back, and run with `OURUI_NOBOOTPUSH=1` for now.
+- [ ] **Q2 · run.sh mode, idle machine — record merakiplus's TX** (UART sniff or `strace -e write` on merakiplus's PID) from the start: after `aa 55 06 00 01 01 00 c5 5f` and `aa 55 06 01 01 00 00 c5 33` come **`aa 55 06 01 1e 00 00 01 00 00 00 b9 00 3c 00 … 62 3e`** (67 bytes, sub1 len30) and **`aa 55 06 70 03 04 01 05 06 46 00 c7 02`** (sub112 len3) — with the baseline config. Each has one ACK (`aa 55 86 …` with the same payload). DIAGNOSTICS: CMD6 = `4 / 0 / 0 / 0`. Note the ACK latency for the 30-word block, and whether RTX is 0.
+- [ ] **Q3 · The same block as the stock UI:** compare Q2's two frames byte for byte with the stock UI's own from test plan K (same config). If a word differs, PARITY §1.3–1.4 is incomplete: report back, and run with `MERAKIPLUS_NOBOOTPUSH=1` for now.
 - [ ] **Q4 · No side effect in run.sh mode:** after Q2 WORK_STA is still `0101`, the boiler temperatures hold, RX OK increases continuously (no MCU reboot), WEIGHT on HOME is unchanged (no calibration), `MIRROR 112-114` = `0104 0605 70`.
 - [ ] **Q5 · Slot B boot, cold start (what the fix is for):** set the flag, switch off and on. When HOME is shown: the sub-line does **not** say *BREW TEMP SET TO 92.0°*; `sdump.py` (or DIAGNOSTICS) shows word 11 = 870, word 4 = 185, word 14 = 3, word 17 = 400, word 23 = 360, word 25 = 650 and `MIRROR 112-114` = `0104 0605 70`; BOOT PUSH = OK / OK. The brew boiler heats towards 87.0 °C. Note work_sta during the heating — are there bits beyond `0101`?
-- [ ] **Q6 · Counter-test (optional):** the same cold start with the v6.4 binary (`ourui_v6_4.bin`) — expected word 11 = 920 and word 114 = 50 (test plan P3). That is the difference v6.5 closes.
-- [ ] **Q7 · The activity guard:** start a brew in **the stock UI**, and start `run.sh` while it runs. The brew continues to its target weight without interruption; DIAGNOSTICS: BOOT PUSH = SKIPPED / SKIPPED, CMD6 OK = 2. Repeat with steam (nozzle in milk): the steam does not stop when ourui starts.
-- [ ] **Q8 · Config out of spec:** with a copy of the config where `brewTemper` = 1200 (`OURUI_CONFIG=<copy>`): BOOT PUSH 1-30 = REJECTED, 112-114 = OK, BLOCK = 1, and word 11 on the controller is unchanged. Fix the value with a SAVE in ourui: BOOT PUSH 1-30 changes to OK.
-- [ ] **Q9 · Disable:** `OURUI_NOBOOTPUSH=1` → BOOT PUSH = OFF / OFF, CMD6 OK = 2 (the v6.4 behavior).
-- [ ] **Q10 · RESYNC over a long session:** let ourui run through E + G + H and read *RX CRC / RESYNC* at the end. Expected `0 / 0`. If RESYNC is above 0, note both numbers, and whether LINK has been DOWN — after v6.5 a single count there must not cause OFFLINE.
+- [ ] **Q6 · Counter-test (optional):** the same cold start with the v6.4 binary (`merakiplus_v6_4.bin`) — expected word 11 = 920 and word 114 = 50 (test plan P3). That is the difference v6.5 closes.
+- [ ] **Q7 · The activity guard:** start a brew in **the stock UI**, and start `run.sh` while it runs. The brew continues to its target weight without interruption; DIAGNOSTICS: BOOT PUSH = SKIPPED / SKIPPED, CMD6 OK = 2. Repeat with steam (nozzle in milk): the steam does not stop when merakiplus starts.
+- [ ] **Q8 · Config out of spec:** with a copy of the config where `brewTemper` = 1200 (`MERAKIPLUS_CONFIG=<copy>`): BOOT PUSH 1-30 = REJECTED, 112-114 = OK, BLOCK = 1, and word 11 on the controller is unchanged. Fix the value with a SAVE in merakiplus: BOOT PUSH 1-30 changes to OK.
+- [ ] **Q9 · Disable:** `MERAKIPLUS_NOBOOTPUSH=1` → BOOT PUSH = OFF / OFF, CMD6 OK = 2 (the v6.4 behavior).
+- [ ] **Q10 · RESYNC over a long session:** let merakiplus run through E + G + H and read *RX CRC / RESYNC* at the end. Expected `0 / 0`. If RESYNC is above 0, note both numbers, and whether LINK has been DOWN — after v6.5 a single count there must not cause OFFLINE.
 
 **R. v6.6: phase semantics, clock and re-push** — none of it has been run on the device
-- [ ] **R1 · Version and unchanged DIAGNOSTICS:** the splash and DIAGNOSTICS show *V6.6*. The boot push row is called *BOOT PUSH 1-30* / *BOOT PUSH 112-114* (OK / OK) — **not** *RE-PUSH …*. `strings /new_customer/demo_v9 | grep -c OURUI_SIM` = 0.
-- [ ] **R2 · Latched steam** (nozzle in cold milk; start with the STEAM button, **do not touch the wand**): the sub-line briefly shows *STARTING STEAM…*; within about 0.3 s the chip is **STEAM·AUTO**, the label *MILK · TARGET 65.0°*, the sub-line *AUTO-STOP AT 65.0° · OR STOP*, and STOP STEAM is visible. The chip must never show *STEAM·WAND*. The steam stops by itself at about 65 °C; CMD6 OK has only increased by 1 (the start write) — ourui has not sent any stop. Then DONE with *DONE IN … S · RISES ≈4° MORE*. Note how high the hero gets over the next ~12 s (STEAMLIVE: 68.9 °C).
+- [ ] **R1 · Version and unchanged DIAGNOSTICS:** the splash and DIAGNOSTICS show *V6.6*. The boot push row is called *BOOT PUSH 1-30* / *BOOT PUSH 112-114* (OK / OK) — **not** *RE-PUSH …*. `strings /new_customer/demo_v9 | grep -c MERAKIPLUS_SIM` = 0.
+- [ ] **R2 · Latched steam** (nozzle in cold milk; start with the STEAM button, **do not touch the wand**): the sub-line briefly shows *STARTING STEAM…*; within about 0.3 s the chip is **STEAM·AUTO**, the label *MILK · TARGET 65.0°*, the sub-line *AUTO-STOP AT 65.0° · OR STOP*, and STOP STEAM is visible. The chip must never show *STEAM·WAND*. The steam stops by itself at about 65 °C; CMD6 OK has only increased by 1 (the start write) — merakiplus has not sent any stop. Then DONE with *DONE IN … S · RISES ≈4° MORE*. Note how high the hero gets over the next ~12 s (STEAMLIVE: 68.9 °C).
 - [ ] **R3 · Manual STOP during latched steam:** start again, tap STOP STEAM at about 40 °C: toast *STOP SENT · WORD 24 = 0*; the chip stays *STEAM·AUTO* until the steam has stopped (no *STEAM·WAND* flash); then DONE.
 - [ ] **R4 · Wand / flush alone** (do not touch the screen; open the wand for 3–4 s): the chip is **STEAM·WAND**, the label *MILK PROBE · NO TARGET*, the sub-line *NO AUTO-STOP · RELEASE WAND*; **no STOP button** — the four buttons are there, STEAM highlighted; the CMD6 counters stand still. Release: DONE with *DONE IN … S* (without a note). On DIAGNOSTICS during the flush: PHASE = *STEAM·WAND*, WORK_STA = `4121` (possibly with pulses).
-- [ ] **R5 · Wand above the target:** hold the wand open towards the probe until the hero shows above 65 °C: the steam continues (as in STEAMLIVE §6.2); ourui still shows *STEAM·WAND*, no DONE, no frame. The start buttons answer *ACTIVITY IN PROGRESS*.
+- [ ] **R5 · Wand above the target:** hold the wand open towards the probe until the hero shows above 65 °C: the steam continues (as in STEAMLIVE §6.2); merakiplus still shows *STEAM·WAND*, no DONE, no frame. The start buttons answer *ACTIVITY IN PROGRESS*.
 - [ ] **R6 · Concurrent phases:** start a brew; open the wand for about 3 s in the middle of the extraction. Chip **EXTRACTION**, right below it the badge **STEAM·WAND**; the hero is the weight and keeps rising; the stat row is *TIME · ≈BAR · EST. · MILK*; BREW **and** STEAM are highlighted; no STOP button. Release: the badge disappears, FLOW is back, the brew runs to its target, and *DONE IN …* is the whole brew time. Note WORK_STA if DIAGNOSTICS can be reached (`5327`).
 - [ ] **R7 · No false re-push:** after the whole session (E + G + H + R2–R6): the DIAGNOSTICS row is still called *BOOT PUSH 1-30*. If it says *RE-PUSH n · 1-30*: note the number, the cells' outcome, WORK_STA, and what happened right before — it means an MCU restart, or that the controller also sends `0x89` outside its startup (not seen in any capture).
-- [ ] **R8 · Slot B boot with the wand open (optional):** a cold start in a slot B boot, hold the wand open while ourui starts: BOOT PUSH = SKIPPED (the guard). Release the wand: within about 5 s the row is called *RE-PUSH 1 · 1-30* with OK / OK, word 11 = 870, and `MIRROR 112-114` = `0104 0605 70`. The sub-line on HOME no longer says *BREW TEMP SET TO 92.0°*.
-- [ ] **R9 · Long running (the clock):** cannot be forced on the device. Let ourui run as long as possible in a slot B boot (preferably more than 25 days); note `cat /proc/uptime`, and that HOME still updates, RX OK increases, FRAME MS is as before, and keep-awake keeps the machine awake. **v6.5 and older must not be used for a permanent slot B boot.**
-- [ ] **R10 · Counter-test (optional):** R2 with `ourui_v6_5.bin` shows the chip *STEAM* and the sub-line *STEAM ARMED · OPEN THE STEAM VALVE*; R4 shows *STEAM* with *AUTO-STOP AT 65.0° · OR STOP* and a STOP button that does nothing.
+- [ ] **R8 · Slot B boot with the wand open (optional):** a cold start in a slot B boot, hold the wand open while merakiplus starts: BOOT PUSH = SKIPPED (the guard). Release the wand: within about 5 s the row is called *RE-PUSH 1 · 1-30* with OK / OK, word 11 = 870, and `MIRROR 112-114` = `0104 0605 70`. The sub-line on HOME no longer says *BREW TEMP SET TO 92.0°*.
+- [ ] **R9 · Long running (the clock):** cannot be forced on the device. Let merakiplus run as long as possible in a slot B boot (preferably more than 25 days); note `cat /proc/uptime`, and that HOME still updates, RX OK increases, FRAME MS is as before, and keep-awake keeps the machine awake. **v6.5 and older must not be used for a permanent slot B boot.**
+- [ ] **R10 · Counter-test (optional):** R2 with `merakiplus_v6_5.bin` shows the chip *STEAM* and the sub-line *STEAM ARMED · OPEN THE STEAM VALVE*; R4 shows *STEAM* with *AUTO-STOP AT 65.0° · OR STOP* and a STOP button that does nothing.
 
 **I. Wrap-up**
 - [ ] Exit (v6.8: *SWITCH TO ORIGINAL NOW*), `pidof demo_v9` unchanged (unless F/K/L restarted it), config md5 = baseline, PWM duty = 37, `/tmp` cleaned up, `cfgbak/` reviewed, `RESTART_NEEDED` removed after the last demo_v9 restart.
@@ -606,14 +606,14 @@ For **every** SAVE:
 Run `python3 verify_stop_v613.py --plan` (no contact with the machine) and then `python3 verify_stop_v613.py`.
 
 What the script does:
-* puts the v6.13 binary and a copy of run.sh in `/tmp/ourui_s/` and starts ourui with `OURUI_NOBOOTPUSH=1` and `OURUI_NONET=1`; the stock UI is SIGSTOPped
-* attaches strace (passive) to ourui's `read`/`write` of `/dev/ttyS1`
-* asks a person at the machine to hold the WATER icon and tap **STOP WATER** after about 2 s (no touch injection; ourui grabs touch as always)
-* stops ourui, so run.sh's trap SIGCONTs the stock UI
-* fetches the log and deletes `/tmp/ourui_s/`
+* puts the v6.13 binary and a copy of run.sh in `/tmp/merakiplus_s/` and starts merakiplus with `MERAKIPLUS_NOBOOTPUSH=1` and `MERAKIPLUS_NONET=1`; the stock UI is SIGSTOPped
+* attaches strace (passive) to merakiplus's `read`/`write` of `/dev/ttyS1`
+* asks a person at the machine to hold the WATER icon and tap **STOP WATER** after about 2 s (no touch injection; merakiplus grabs touch as always)
+* stops merakiplus, so run.sh's trap SIGCONTs the stock UI
+* fetches the log and deletes `/tmp/merakiplus_s/`
 * afterwards decides the checks in [§18.1](#181-stop-frames--byte-for-byte-with-evidence): the stop frame byte for byte, ACK, work_sta bits cleared, flow dropped, no other writes, stock PID unchanged, config and flag unchanged
 
-There is no reboot and no write to the config, flag or slots. A safety net stops ourui after 240 s. The result ends up in `stop_v613_ondevice/<activity>_<time>/PROOF.md`.
+There is no reboot and no write to the config, flag or slots. A safety net stops merakiplus after 240 s. The result ends up in `stop_v613_ondevice/<activity>_<time>/PROOF.md`.
 
 - [ ] **S1 · water** (cup under the spout): `verify_stop_v613.py`. Expected: `aa 55 06 10 01 00 00 c0 0f` → ACK ~20–280 ms → work_sta `030B` → `0101` (bit 3 cleared) within ~0.5 s, flow (word 52) → 0, toast *WATER STOPPED*.
 - [ ] **S2 · grind** (optional; beans + cup): `--activity grind`. Expected: `aa 55 06 06 01 00 00 c4 47` → bit 6 cleared, grinder current (word 58) drops.
@@ -621,13 +621,13 @@ There is no reboot and no write to the config, flag or slots. A safety net stops
 
 ### T · The power button (v6.14) — run once the machine is on and idle
 
-Run `python3 verify_power_v614.py --plan` (no contact) and then `python3 verify_power_v614.py`. Requires `ourui_v6_14.bin` (built by `build_v614.sh`).
+Run `python3 verify_power_v614.py --plan` (no contact) and then `python3 verify_power_v614.py`. Requires `merakiplus_v6_14.bin` (built by `build_v614.sh`).
 
 What the script does:
-* puts `ourui_v6_14.bin` and a copy of run.sh in `/tmp/ourui_p/` and starts ourui with `OURUI_NONET=1`; the stock UI is SIGSTOPped. **Boot/re-push is ON** (the MCU wakes with a reset and must get the config back)
+* puts `merakiplus_v6_14.bin` and a copy of run.sh in `/tmp/merakiplus_p/` and starts merakiplus with `MERAKIPLUS_NONET=1`; the stock UI is SIGSTOPped. **Boot/re-push is ON** (the MCU wakes with a reset and must get the config back)
 * notes the open input nodes (expected `/dev/input/event0` + `/dev/input/event1`) and attaches strace (passive) to `/dev/ttyS1`
 * asks a person at the machine to **hold the power button for ~2 s** (TURNING OFF… → OFF), reads `pwm2/enable`, and after ≥ 10 s to **hold it again** (TURNING ON… → HOME)
-* stops ourui (run.sh SIGCONTs the stock UI; ourui turns the backlight on at exit), fetches the log and deletes `/tmp/ourui_p/`
+* stops merakiplus (run.sh SIGCONTs the stock UI; merakiplus turns the backlight on at exit), fetches the log and deletes `/tmp/merakiplus_p/`
 
 No reboot, no config/flag/slot writes. Safety net: 300 s. Result: `power_v614_ondevice/<time>/PROOF.md`. *(The actual on-device run found that the hardware cuts the display's power — see [power.md](../power.md).)*
 
@@ -640,76 +640,76 @@ No reboot, no config/flag/slot writes. Safety net: 300 s. Result: `power_v614_on
 
 ## 12. Files
 
-*(Files in the author's working directory; in this repository the source is `src/ourui_v6.c` and the shipped binaries are in `bin/` — see [bin/README.md](../../bin/README.md).)*
+*(Files in the author's working directory; in this repository the source is `src/merakiplus.c` and the shipped binaries are in `bin/` — see [bin/README.md](../../bin/README.md).)*
 
 | File | Contents |
 |---|---|
-| `ourui_v6.c` / `ourui_v6` | **v6.13** (manual STOP) — the source and binary md5s are in [CHANGES-v6.13](#changes-v613) item 7 |
-| `ourui_v6_12.c` / `ourui_v6_12.bin` | **new (v6.13):** v6.12 kept unchanged for comparison/rollback — source `e9eea8caebfa5d832884d96996dbd2c7`, binary `725386ccadade594275f20cc998885eb` (= the deployed v6.11/v6.12 binary). SIM: `ourui_v6_12_sim` / `ourui_v6_12_sim_arm` |
+| `merakiplus.c` / `merakiplus_v6` | **v6.13** (manual STOP) — the source and binary md5s are in [CHANGES-v6.13](#changes-v613) item 7 |
+| `merakiplus_v6_12.c` / `merakiplus_v6_12.bin` | **new (v6.13):** v6.12 kept unchanged for comparison/rollback — source `e9eea8caebfa5d832884d96996dbd2c7`, binary `725386ccadade594275f20cc998885eb` (= the deployed v6.11/v6.12 binary). SIM: `merakiplus_v6_12_sim` / `merakiplus_v6_12_sim_arm` |
 | `verify_stop_v613.py` | **new (v6.13):** on-device proof of STOP (water; `--activity grind|brew`): run.sh mode in `/tmp`, passive strace, a physical tap; `--plan`, `--selftest`, `--decode` |
 | `round_v6/v612_compare.py` | **new (v6.13):** previews against v6.12 — only HOME's action row, sub-line and toast may differ |
-| `ourui_v6.c` (history) | all of **v6.9** (7095 lines), md5 `440be5124c0d986ec23e4c3b08f84149` |
-| `ourui_v6` | static ARM binary **v6.9** (the device), md5 **`2dce4eba0b4ce68dcd0369e955cf3b77`** (reproducible with zig 0.17.1 in the same directory and with the default cache) |
-| `ourui_v6_9wip.c` / `ourui_v6_9wip.bin` | **new (v6.9):** the state at the start of the v6.9 round (v6.8 + the predecessor's partial conditioning) — source `048a40ea7894dab5b57a58f6d9af8ead`, binary `bcb1b50c913700c64a6cfc39bb5a5776`. Must not be installed |
-| `ourui_v6_8wip.c` / `ourui_v6_8wip.bin` | v6.8 (network guard, without the REVERT button) — source `5cdcc14b0503c67b939e27b6579655ff`, binary `75887fb154ffef20cc72696064e16c39`; reference for the build and preview comparison |
-| `ourui_v6_6.c` / `ourui_v6_6.bin` | v6.6 — source `3369e228fa36c42988b7f0421ff6eef4`, binary `c22153af54069d9d1fcbe43fcb118c99` |
+| `merakiplus.c` (history) | all of **v6.9** (7095 lines), md5 `440be5124c0d986ec23e4c3b08f84149` |
+| `merakiplus_v6` | static ARM binary **v6.9** (the device), md5 **`2dce4eba0b4ce68dcd0369e955cf3b77`** (reproducible with zig 0.17.1 in the same directory and with the default cache) |
+| `merakiplus_v6_9wip.c` / `merakiplus_v6_9wip.bin` | **new (v6.9):** the state at the start of the v6.9 round (v6.8 + the predecessor's partial conditioning) — source `048a40ea7894dab5b57a58f6d9af8ead`, binary `bcb1b50c913700c64a6cfc39bb5a5776`. Must not be installed |
+| `merakiplus_v6_8wip.c` / `merakiplus_v6_8wip.bin` | v6.8 (network guard, without the REVERT button) — source `5cdcc14b0503c67b939e27b6579655ff`, binary `75887fb154ffef20cc72696064e16c39`; reference for the build and preview comparison |
+| `merakiplus_v6_6.c` / `merakiplus_v6_6.bin` | v6.6 — source `3369e228fa36c42988b7f0421ff6eef4`, binary `c22153af54069d9d1fcbe43fcb118c99` |
 | `round_v6/fbcrop.py` | **new (v6.9):** crops of fb dumps/PNGs in a grid (chart before/after sheets) |
 | `sim_scenarios/ui_calm_graph.json` | **new (v6.9):** graph + weight through idle with pulses, grind, brew, idle after a brew, steam and tare — run against v6.8 and v6.9 (`sim_e2e.py --only calm`) |
-| `ourui_v6_sim` / `ourui_v6_sim_arm` | the SIM build for the host (the one `sim/run_e2e.py` starts; the md5 changes on every link) / static ARMv7 (the contract's build line; v6.9: `cbebc8b128f413c1d40a83de2bd6343a`; previous md5 `61d69f8489634a16739da14ada213bf3`). **Must not go on the device** |
-| `ourui_v6_5.c` / `ourui_v6_5.bin` | **new:** v6.5 kept unchanged for comparison/rollback — source md5 `f6e502b3d4cb7d212d1a1786520b2de4`, binary md5 `e84785d514c11ef88705ac97240b98c1`. **Not for a permanent slot B boot** (the 32-bit clock, CHANGES-v6.6 item 3) |
-| `ourui_v6_4.c` / `ourui_v6_4.bin` | **new:** v6.4 kept unchanged for comparison/rollback — source md5 `5bdaf341f77dcec3554707cf6cd9df70`, binary md5 `1fe0b5b8c3b24abf0cadcde7b099076a` |
-| `ourui_v6_3.c` / `ourui_v6_3.bin` | **new:** v6.3 kept unchanged for comparison/rollback — source md5 `4ac62cd08de36f7fea026eec5a3494ab`, binary md5 `5815176d0e766c7a6532b88014e932fb` |
+| `merakiplus_v6_sim` / `merakiplus_v6_sim_arm` | the SIM build for the host (the one `sim/run_e2e.py` starts; the md5 changes on every link) / static ARMv7 (the contract's build line; v6.9: `cbebc8b128f413c1d40a83de2bd6343a`; previous md5 `61d69f8489634a16739da14ada213bf3`). **Must not go on the device** |
+| `merakiplus_v6_5.c` / `merakiplus_v6_5.bin` | **new:** v6.5 kept unchanged for comparison/rollback — source md5 `f6e502b3d4cb7d212d1a1786520b2de4`, binary md5 `e84785d514c11ef88705ac97240b98c1`. **Not for a permanent slot B boot** (the 32-bit clock, CHANGES-v6.6 item 3) |
+| `merakiplus_v6_4.c` / `merakiplus_v6_4.bin` | **new:** v6.4 kept unchanged for comparison/rollback — source md5 `5bdaf341f77dcec3554707cf6cd9df70`, binary md5 `1fe0b5b8c3b24abf0cadcde7b099076a` |
+| `merakiplus_v6_3.c` / `merakiplus_v6_3.bin` | **new:** v6.3 kept unchanged for comparison/rollback — source md5 `4ac62cd08de36f7fea026eec5a3494ab`, binary md5 `5815176d0e766c7a6532b88014e932fb` |
 | `build_sim.sh` | builds the device and SIM binaries; warnings with a fresh cache; **v6.6:** comparison of the device build with v6.5 per function/data object against a list of intended changes (time type differences separately); a file access review; exit codes; a smoke test of the ARM SIM binary and **the whole self-test as a 32-bit ARM binary** in a local ARMv7 container → `round_v6/sim_build_check.txt`, `round_v6/selftest_arm32.txt` |
-| `sim_e2e.py` | runs `sim/selftest.py`, all scenarios (EN + DA), ourui's own touch scenarios, the runtime switch without dry run, the boot push against the simulated MCU, the RX stall repro and the targeted scenarios and — **v6.6** — the phase semantics line by line against the LIVE recording (`phases`), the clock wraparound in real time (`wrap`) and MCU restart → re-push (`repush`); notes for each part whether the test work stream's files changed along the way; collects everything in `sim/reports/v6.6/` |
-| `sim_ui_profile.json` | v6.4's 22 overrides. **Out of use from v6.5:** the test work stream's scenarios now assert ourui's behavior directly, and the runner has its own (empty) default profile |
-| `sim_scenarios/` | 4 scenarios with real FIFO touch on ourui's own coordinates (v6.4: navigation + stepper + SAVE + hold-to-start; the deviating rows' real frames; auto-wake; blocked/allowed switch) + **new (v6.6):** `ui_replay_steam_live_x4.json` — the LIVE recording (steam with auto-stop, grind, brew, wand flush during a brew) played back at 4× |
-| `ourui_v6_2.c` / `ourui_v6_2.bin` | **new:** v6.2 kept unchanged for comparison/rollback — source md5 `c2dc02caf271097e6b4e65e598db0af1`, binary md5 `0bb93da0ed0824c424f1e16530f07022` |
-| `ourui_v6_1.c` / `ourui_v6_1.bin` | v6.1 kept unchanged — source md5 `7ff7d9d497e3c74cc2a4ac477ac01728`, binary md5 `4d927802cbeb69cc949f463021b29b99` (v6.0 was `90bcf094…`) |
+| `sim_e2e.py` | runs `sim/selftest.py`, all scenarios (EN + DA), merakiplus's own touch scenarios, the runtime switch without dry run, the boot push against the simulated MCU, the RX stall repro and the targeted scenarios and — **v6.6** — the phase semantics line by line against the LIVE recording (`phases`), the clock wraparound in real time (`wrap`) and MCU restart → re-push (`repush`); notes for each part whether the test work stream's files changed along the way; collects everything in `sim/reports/v6.6/` |
+| `sim_ui_profile.json` | v6.4's 22 overrides. **Out of use from v6.5:** the test work stream's scenarios now assert merakiplus's behavior directly, and the runner has its own (empty) default profile |
+| `sim_scenarios/` | 4 scenarios with real FIFO touch on merakiplus's own coordinates (v6.4: navigation + stepper + SAVE + hold-to-start; the deviating rows' real frames; auto-wake; blocked/allowed switch) + **new (v6.6):** `ui_replay_steam_live_x4.json` — the LIVE recording (steam with auto-stop, grind, brew, wand flush during a brew) played back at 4× |
+| `merakiplus_v6_2.c` / `merakiplus_v6_2.bin` | **new:** v6.2 kept unchanged for comparison/rollback — source md5 `c2dc02caf271097e6b4e65e598db0af1`, binary md5 `0bb93da0ed0824c424f1e16530f07022` |
+| `merakiplus_v6_1.c` / `merakiplus_v6_1.bin` | v6.1 kept unchanged — source md5 `7ff7d9d497e3c74cc2a4ac477ac01728`, binary md5 `4d927802cbeb69cc949f463021b29b99` (v6.0 was `90bcf094…`) |
 | `boot/` | the boot work stream's deliverable (switcher daemon, `boot_install.py`, `BOOT.md`). **Not touched by v6.2, v6.3, v6.4, v6.5 or v6.6.** |
 | `parity_check.py` | **new:** SET[] ↔ `parity_spec.json` (limits, steps, tiers, words); exit 1 on an unjustified deviation |
-| `cjson_canon.py` | proves that ourui's config file is byte-identical to `cJSON_Print` |
+| `cjson_canon.py` | proves that merakiplus's config file is byte-identical to `cJSON_Print` |
 | `i18n_appendix.py` | **new (v6.3):** generates Appendix A from the binary's string table (`--write`) and fails if the appendix is not in sync (`--check`, run by `build_previews.sh`) |
 | `round_v6/` | **v6.6:** 62 scenarios per language; new files `v65_compare.txt`, `mutation_check.txt`, `selftest_arm32.txt` · **English:** `.bin` + `.png`, `contact_sheet.png` · **Danish:** `da/` with the same + `contact_sheet_da.png` · `contact_sheet_en_da.png` (EN \| DA side by side) · `selftest.txt` + **`selftest_da.txt`**, `parity_check.txt`, `config_format_check.txt`, `check_circle.txt` + **`check_circle_da.txt`**, `bench.txt`, `boot_check.txt`, **`i18n_check.txt`**, **`strings.tsv`** (the string table: id, class, EN, DA), `build_previews.sh`, `fb2png.py`; `_preview_root/` is the mock root, `_preview_lang` the language file in the preview run |
-| `REVERT.md` | updated: boot push semantics, restart before stock settings, frame policy, flag, runtime switch, `boot_ui.log` + **v6.3:** the language file `lang` + **v6.4:** nothing new on the device; back to v6.3 + **v6.5:** boot push at startup, `OURUI_NOBOOTPUSH`, back to v6.4 + **v6.6:** re-push after an MCU restart, back to v6.5 |
+| `REVERT.md` | updated: boot push semantics, restart before stock settings, frame policy, flag, runtime switch, `boot_ui.log` + **v6.3:** the language file `lang` + **v6.4:** nothing new on the device; back to v6.3 + **v6.5:** boot push at startup, `MERAKIPLUS_NOBOOTPUSH`, back to v6.4 + **v6.6:** re-push after an MCU restart, back to v6.5 |
 | run.sh | **unchanged** (md5 `3d799859549d2b8ba32245453022c20d`) |
 
 ---
 
 ## 13. SIM build and E2E (v6.4)
 
-From v6.4 the UI can run **without hardware** against the test work stream's simulated MCU ([sim/](../../sim/), contract: [sim/CONTRACT.md](../../sim/CONTRACT.md)). It is the same source file; `-DOURUI_SIM` only swaps out the three file nodes and adds a test surface on top. The device build contains none of it (CHANGES-v6.4 item 2).
+From v6.4 the UI can run **without hardware** against the test work stream's simulated MCU ([sim/](../../sim/), contract: [sim/CONTRACT.md](../../sim/CONTRACT.md)). It is the same source file; `-DMERAKIPLUS_SIM` only swaps out the three file nodes and adds a test surface on top. The device build contains none of it (CHANGES-v6.4 item 2).
 
 ### 13.1 Build and run
 
 ```sh
-cd artifacts/ourui
+cd workspace
 sh build_sim.sh                      # device binary + SIM (host + static ARM) + all build checks -> round_v6/sim_build_check.txt
 python3 sim_e2e.py                   # the whole E2E verification -> sim/reports/v6.5/SUMMARY.md (about 30 min)
 python3 sim_e2e.py --only bootpush   # v6.5: only the boot push against the simulated MCU (also: rxstall, targeted)
-python3 ../../sim/run_e2e.py --all   # only the scenarios (finds ourui_v6_sim itself); --ui-lang da for Danish
+python3 ../../sim/run_e2e.py --all   # only the scenarios (finds merakiplus_v6_sim itself); --ui-lang da for Danish
 ```
 
 | Binary | Built with | Used for |
 |---|---|---|
-| `ourui_v6` | `zig cc -target arm-linux-musleabihf -mcpu=cortex_a7 -static -O2` | the device (unchanged contract) |
-| `ourui_v6_sim` | `zig cc -DOURUI_SIM -O2 … -lm` (the host; macOS has no static libc) | **the one `run_e2e.py` starts** (auto-detected) |
-| `ourui_v6_sim_arm` | as the device + `-DOURUI_SIM` (static ARMv7) | the contract's build line; smoke-tested in a local ARMv7 container |
-| `/tmp/ourui_v6_preview` | `-DOURUI_PREVIEW` (also together with `-DOURUI_SIM`) | previews + self-test, as before |
+| `merakiplus_v6` | `zig cc -target arm-linux-musleabihf -mcpu=cortex_a7 -static -O2` | the device (unchanged contract) |
+| `merakiplus_v6_sim` | `zig cc -DMERAKIPLUS_SIM -O2 … -lm` (the host; macOS has no static libc) | **the one `run_e2e.py` starts** (auto-detected) |
+| `merakiplus_v6_sim_arm` | as the device + `-DMERAKIPLUS_SIM` (static ARMv7) | the contract's build line; smoke-tested in a local ARMv7 container |
+| `/tmp/merakiplus_v6_preview` | `-DMERAKIPLUS_PREVIEW` (also together with `-DMERAKIPLUS_SIM`) | previews + self-test, as before |
 
 ### 13.2 HAL: what the SIM build swaps out
 
 | On the device | In the SIM | Environment |
 |---|---|---|
-| `/dev/ttyS1` | a pty slave from `mcu_sim.py`; the same `uart_open()`/`uart_flush()` (raw 8N1, non-blocking) | `OURUI_SIM_TTY` (required) |
-| `/dev/fb0` + page flip | one 480×480 BGRA buffer in memory. `fb_present()` copies **only the rects the compositor reports as changed** — like the device — and the buffer is written to a file (tmp + rename; at most 10 Hz, always on a page/phase/toast change) | `OURUI_SIM_FB` (required) |
-| `/dev/input/event0` + `EVIOCGRAB` | a FIFO with raw 16-byte evdev records (the same as `tinj_hold`). No grab, no `EVIOCGABS`. Records are processed according to their **timestamps**, and the decoding is the device's own `inp_poll()` | `OURUI_SIM_TOUCH` |
-| `/customer`, `/new_customer`, `/proc`, `/tmp` | under the sandbox root (`rp()`); the config, backup directory and language file follow the root unless their own variable is set | `OURUI_SIM_ROOT` (required; `/` is rejected), `OURUI_CONFIG`, `OURUI_BAKDIR`, `OURUI_LANGFILE` |
+| `/dev/ttyS1` | a pty slave from `mcu_sim.py`; the same `uart_open()`/`uart_flush()` (raw 8N1, non-blocking) | `MERAKIPLUS_SIM_TTY` (required) |
+| `/dev/fb0` + page flip | one 480×480 BGRA buffer in memory. `fb_present()` copies **only the rects the compositor reports as changed** — like the device — and the buffer is written to a file (tmp + rename; at most 10 Hz, always on a page/phase/toast change) | `MERAKIPLUS_SIM_FB` (required) |
+| `/dev/input/event0` + `EVIOCGRAB` | a FIFO with raw 16-byte evdev records (the same as `tinj_hold`). No grab, no `EVIOCGABS`. Records are processed according to their **timestamps**, and the decoding is the device's own `inp_poll()` | `MERAKIPLUS_SIM_TOUCH` |
+| `/customer`, `/new_customer`, `/proc`, `/tmp` | under the sandbox root (`rp()`); the config, backup directory and language file follow the root unless their own variable is set | `MERAKIPLUS_SIM_ROOT` (required; `/` is rejected), `MERAKIPLUS_CONFIG`, `MERAKIPLUS_BAKDIR`, `MERAKIPLUS_LANGFILE` |
 | backlight sysfs | never written; the preview value is in the state JSON | — |
 | `sync()` after a flag change | left out (no global sync on the host) | — |
-| — | state JSONL: one line per rendered frame if the contents have changed; otherwise at least every 90 ms | `OURUI_SIM_STATE` (required) |
-| — | a ctrl socket with test hooks (§13.4) | `OURUI_SIM_CTRL` |
+| — | state JSONL: one line per rendered frame if the contents have changed; otherwise at least every 90 ms | `MERAKIPLUS_SIM_STATE` (required) |
+| — | a ctrl socket with test hooks (§13.4) | `MERAKIPLUS_SIM_CTRL` |
 
-Exit codes: 0 normal · 2 environment error · 3 the pty cannot be opened · 4 fb/touch cannot be opened · 130 SIGINT. `OURUI_SIM_NOBOOTPUSH=1` disables the boot push; `OURUI_SIM_BOOTPUSH_GUARD=1` (v6.5) gives the SIM build the device's activity guard (skip instead of defer); `OURUI_SIM_NOPROVISION=1` leaves the sandbox as the runner made it (then BOOT UI and SWITCH NOW are locked).
+Exit codes: 0 normal · 2 environment error · 3 the pty cannot be opened · 4 fb/touch cannot be opened · 130 SIGINT. `MERAKIPLUS_SIM_NOBOOTPUSH=1` disables the boot push; `MERAKIPLUS_SIM_BOOTPUSH_GUARD=1` (v6.5) gives the SIM build the device's activity guard (skip instead of defer); `MERAKIPLUS_SIM_NOPROVISION=1` leaves the sandbox as the runner made it (then BOOT UI and SWITCH NOW are locked).
 
 **File access:** `build_sim.sh` reviews all file calls in the SIM build after the preprocessor: the only fixed path without the sandbox root is `/dev/null`, and there is no reference to `/dev/fb0`, `/dev/input`, `/dev/ttyS1`, `/sys/class`, `EVIOCGRAB` or `FBIO*`.
 
@@ -726,7 +726,7 @@ The contract's fields (`t_ms`, `view`, `page`, `phase`, `work_sta`, `regs`, `lan
 | `shown` | what the screen shows: HOME = chip, hero, unit, label, sub-line and the three stat pairs; editor = label, value, saved value, range, locked/saving |
 | `toast` | `text` = the table's **Danish** text (the assertion language), `shown` = the text on the screen, `id` = string id, `kind` = ok/err/warn/info |
 | `lang` / `ui_lang` / `lang_src` | `config.language` (the stock UI's language) / Meraki+'s own language (`en`/`da`) / where it comes from |
-| `boot_flag`, `next_boot`, `boot_lock`, `exe_slot`, `self_exe` | the flag (read fresh), what the next restart gives, the BOOT UI lock, which slot ourui runs from |
+| `boot_flag`, `next_boot`, `boot_lock`, `exe_slot`, `self_exe` | the flag (read fresh), what the next restart gives, the BOOT UI lock, which slot merakiplus runs from |
 | `switch` | `mode` (launch/cont), `locked`, `dry`, `bye`, `stock_n`, `switcher_pid`, `child`, `last_evt` |
 | `restart_needed` | `file`, `pending` (is a stock UI with an old mirror waiting?), `stamp` (`boot_id=… mono_s=…`) |
 | `cmd6` + `blok`, `wq_n` | ok / retx / fail / block; `blok` = frames rejected by the frame policy (DIAGNOSTICS "BLOCK") |
@@ -751,10 +751,10 @@ The hooks call the **same functions as a tap** and bypass neither the guards nor
 | `page {name,…}` | navigation; `detail` takes `param`, `settings` takes `tab`, `sys` takes `x` |
 | `boot_flag {value}` | BOOT UI → choose → SAVE (`sys_confirm` → `boot_flag_set` with the guard) |
 | `runtime_switch` | SWITCH TO ORIGINAL NOW → SWITCH NOW (`sys_confirm` → `do_switch`). The dry run shows the goodbye screen for 1 s |
-| `raw_write {sub,words}` | emulates a **stock UI write**. The only relaxation of the frame policy: word1 ∈ {0,1}. word1=1 pauses ourui's keep-awake until a `raw_write` with word1=0 |
+| `raw_write {sub,words}` | emulates a **stock UI write**. The only relaxation of the frame policy: word1 ∈ {0,1}. word1=1 pauses merakiplus's keep-awake until a `raw_write` with word1=0 |
 | `config_reload` | the language file + config are read again, and the boot push is repeated |
 | `layout` | the real touch targets in the current view (for e.g. `sim/play.py`). **v6.8:** `revert` is gone (the button has been removed) |
-| `net {name}` | **v6.7:** the Wi-Fi MODEL (the SIM build has no real stack): `kill` (wpa_supplicant + udhcpc die, the IP/route remain), `ip_drop`, `if_down` (the IP remains, the routes are gone), `cold` (no wlan0), `ap_down` / `ap_up`, `status`. The network guard reacts as on the device; `OURUI_SIM_NET=cold\|off` at start. State JSON: `net{state, iface, ifup, wpa_pid, dhcp_pid, carrier, ip, gw, heals, boots, heal_ms, init_runs, wpa_starts, dhcp_starts, conf_writes, fails}` |
+| `net {name}` | **v6.7:** the Wi-Fi MODEL (the SIM build has no real stack): `kill` (wpa_supplicant + udhcpc die, the IP/route remain), `ip_drop`, `if_down` (the IP remains, the routes are gone), `cold` (no wlan0), `ap_down` / `ap_up`, `status`. The network guard reacts as on the device; `MERAKIPLUS_SIM_NET=cold\|off` at start. State JSON: `net{state, iface, ifup, wpa_pid, dhcp_pid, carrier, ip, gw, heals, boots, heal_ms, init_runs, wpa_starts, dhcp_starts, conf_writes, fails}` |
 | `ping`, `state_now`, `fb_dump {path}`, `exit {code}` | as in the contract |
 
 If the write queue is busy at the moment an `action`/`save` hook arrives (e.g. with a keep-awake), the hook waits up to 600 ms — like a tap a moment later.
@@ -763,7 +763,7 @@ If the write queue is busy at the moment an `action`/`save` hook arrives (e.g. w
 
 | | SIM build | Device build |
 |---|---|---|
-| **Boot push** `sub1 len30` + `sub112 len3` | at startup **and** on `config_reload`; an activity **defers** it (contract behavior, unchanged from v6.4). `OURUI_SIM_BOOTPUSH_GUARD=1` gives the device's guard | **v6.5:** at startup; if an activity is already running, **it is skipped** (activity guard, CHANGES-v6.5 item 2). (v6.4: no boot push) |
+| **Boot push** `sub1 len30` + `sub112 len3` | at startup **and** on `config_reload`; an activity **defers** it (contract behavior, unchanged from v6.4). `MERAKIPLUS_SIM_BOOTPUSH_GUARD=1` gives the device's guard | **v6.5:** at startup; if an activity is already running, **it is skipped** (activity guard, CHANGES-v6.5 item 2). (v6.4: no boot push) |
 | Dry run of SWITCH NOW | goodbye screen for 1 s + toast | log + toast only |
 | `sync()`, backlight, `EVIOCGRAB` | no | yes |
 
@@ -910,7 +910,7 @@ and grows to the right, as before.
 
 | When | What is run | Time |
 |---|---|---|
-| **Every iteration** | `sh round_v6/build_previews.sh` (self-test EN + DA, previews in both languages + circle check, spec alignment, mutation probes) · `sh build_sim.sh` (0 warnings, static ARM, SIM builds) · `python3 sim/selftest.py` · `python3 sim/run_e2e.py --all --quick --parallel 4 --ui-bin artifacts/ourui/ourui_v6_sim` (5 core scenarios, English only) | about 3–4 min in total; the quick run about 45 s |
+| **Every iteration** | `sh round_v6/build_previews.sh` (self-test EN + DA, previews in both languages + circle check, spec alignment, mutation probes) · `sh build_sim.sh` (0 warnings, static ARM, SIM builds) · `python3 sim/selftest.py` · `python3 sim/run_e2e.py --all --quick --parallel 4 --ui-bin workspace/merakiplus_v6_sim` (5 core scenarios, English only) | about 3–4 min in total; the quick run about 45 s |
 | **Targeted, when the change requires it** | one single part of `sim_e2e.py`, e.g. `--only calm` (graph/weight before/after, about 6 min) or `--only net`, or one scenario with `run_e2e.py --scenario <name>` | minutes |
 | **Only in CI/CD or at a release milestone** | `run_e2e.py --all` in EN **and** DA, the REF client, steam30, the replay scenarios, the UI scenarios in both languages — i.e. `python3 sim_e2e.py` without `--only` | > 35 min |
 
@@ -1042,7 +1042,7 @@ code path.
 
 | Activity | Stop frame (cmd6, CRC-16/MODBUS LE) | MCU firmware: what controls the activity | The MCU's own auto-stop | The stock UI's stop call | Bits cleared |
 |---|---|---|---|---|---|
-| **WATER** (auto, ourui's start) | `aa 55 06 10 01 00 00 c0 0f` — sub16 len1, word 16 = 0 | hot water ctl `0x1B8C`: `active = (word19 \| word16) != 0`, recomputed every round (`0x1C44..0x1C4E`); active → `work_sta \|= 0x20A` (`0x1C8A`) | weight stop `0x1C80`: `strh r4,[r6,#0x20]` (word 16 = 0) | `hotWaterStartStop` `0x11468C`: mirror word 16 = 0, `usart_send(6,16,1)` | bit 3 always (`0x1C9A`); bits 1+9 when the boiler refill is idle (`[0x2000002B] == 9`, `0x1CA2`) |
+| **WATER** (auto, merakiplus's start) | `aa 55 06 10 01 00 00 c0 0f` — sub16 len1, word 16 = 0 | hot water ctl `0x1B8C`: `active = (word19 \| word16) != 0`, recomputed every round (`0x1C44..0x1C4E`); active → `work_sta \|= 0x20A` (`0x1C8A`) | weight stop `0x1C80`: `strh r4,[r6,#0x20]` (word 16 = 0) | `hotWaterStartStop` `0x11468C`: mirror word 16 = 0, `usart_send(6,16,1)` | bit 3 always (`0x1C9A`); bits 1+9 when the boiler refill is idle (`[0x2000002B] == 9`, `0x1CA2`) |
 | WATER (manual mode) | `aa 55 06 13 01 00 00 c0 4b` — sub19 len1, word 19 = 0 | the same (`word19 \| word16`) | — | `hotWaterStartStop` `0x114720`: `usart_send(6,19,1)` | as above |
 | **BREW** | `aa 55 06 16 01 00 00 c0 87` — sub22 len1, word 22 = 0 | brew ctl `0x1E9C`: on every **change** of word 22, `running = (word22 != 0)` (`0x1F94..0x1FC6`) | weight stop `0x1F92`: `strh r5,[r6,#0x2c]` (word 22 = 0) | home `onClick` `0x109694`: mirror word 22 flipped to 0, `usart_send(6,5,18)` (the whole block) | bits 2+12 in the 1st round (`0x20C4`, `& 0xEFFB`), valve pulse on bit 2 after 10 rounds (`0x20D2`); bits 1+9 when the refill is idle (`0x20F0`) |
 | **GRIND** | `aa 55 06 06 01 00 00 c4 47` — sub6 len1, word 6 = 0 | grind ctl `0x19C6`: the grinder runs while word 6 ≠ 0 (`0x1AA2`: `work_sta \|= 0x40`, otherwise `&= ~0x40`) | weight `0x1A68`, timeout `0x1A72`, error `0x1A3E`/`0x1A8C`: all `word 6 = 0` | home `onClick` `0x10928C`: mirror word 6 = 0, `usart_send(6,6,1)` (the start branch `0x109278` sends `sub3 len4`) | bit 6 |
@@ -1051,7 +1051,7 @@ code path.
 **Brew — why only word 22 and not the stock UI's whole block?** The stock UI sends `sub5 len18` with
 the mirror's words 5..22, where only word 22 has changed; the other 17 words are the MCU's own polled
 values. cmd6 is `memcpy` + ACK (`0x99C6`, no sub-specific logic), so for the MCU the only thing that
-happens is that word 22 goes 1 → 0 — exactly what ourui's `sub22 len1` does. The narrow frame cannot
+happens is that word 22 goes 1 → 0 — exactly what merakiplus's `sub22 len1` does. The narrow frame cannot
 overwrite a recipe value with a stale mirror.
 
 **Words 9 and 3 are not stop words.** Word 9 (brew/water) and word 3 (grind) are tare triggers that
@@ -1065,7 +1065,7 @@ brew and grind buttons are toggles), and the MCU runs the same stop path as at t
 brewing this also means the valve pulse afterwards (pressure relief, BREW.md §4).
 
 **Known exception (not observed):** a brew started by the physical "e" switch (PA.15, the `0x1F52`
-branch) runs with word 22 = 0. There, word 22 = 0 cannot stop the brew. ourui reports this honestly
+branch) runs with word 22 = 0. There, word 22 = 0 cannot stop the brew. merakiplus reports this honestly
 as *"STOP NOT CONFIRMED · TRY AGAIN"* after 5 s. This path has never been seen on the machine.
 
 ### 18.2 The UI
@@ -1087,7 +1087,7 @@ as *"STOP NOT CONFIRMED · TRY AGAIN"* after 5 s. This path has never been seen 
 * **The sub-line** keeps the auto-stop expectation: *"AUTO-STOP AT 40.0 G · OR STOP"*.
 * **Frame policy:** stop frames only contain zeros and go through the same gate and write queue as
   everything else (CRC + ACK wait + one retransmit). They require no intent and cannot start anything.
-  `OURUI_READONLY=1` sends nothing, and the toast says why.
+  `MERAKIPLUS_READONLY=1` sends nothing, and the toast says why.
 * **SIM:** the state JSON has `stop: {btns, pending, last, req, ok, fail}`. The ctrl actions
   `grind_stop` / `brew_stop` / `water_stop` (+ `steam_stop`, as before) and the layout names
   `grind_stop` / `brew_stop` / `water_stop` / `steam_stop` are new.
@@ -1107,24 +1107,24 @@ ping, the ARP lookup was incomplete, and the telnet port was closed (2026-11-18 
 > [power.md](../power.md). The section below describes the software implementation (which mirrors the
 > stock UI byte for byte).
 
-**The bug:** the physical power button did nothing while Meraki+ was running. ourui only opened the
+**The bug:** the physical power button did nothing while Meraki+ was running. merakiplus only opened the
 touch node (`/dev/input/event0`, TECHWIN_TS). The button sits on a different input node:
 `/dev/input/event1` = **k62091** (the GPIO key driver `k62091.ko`, "Handlers=kbd event1", EV=3 = SYN +
-KEY, one key). ourui never read that node.
+KEY, one key). merakiplus never read that node.
 
 ### 19.1 The stock semantics — reverse-engineered, with evidence
 
-| What | The stock UI does | Evidence (address) | ourui v6.14 |
+| What | The stock UI does | Evidence (address) | merakiplus v6.14 |
 |---|---|---|---|
-| Which node | `open("/dev/input/event1", O_RDWR)` in its own thread — **no EVIOCGRAB**. For every `EV_KEY` (the code is not checked) `value` is stored (1 = down, 0 = released) | `app_powerKey_thread` 0x140AB4 (string 0x17BCEC); stored in app+0x15A8 | the k62091 node, read-only, **without a grab**. Selection: `OURUI_KBD` → a node whose name contains `k62091` → the first node with EV_KEY and without EV_ABS → `/dev/input/event1`. All EV_KEY codes count as the button |
+| Which node | `open("/dev/input/event1", O_RDWR)` in its own thread — **no EVIOCGRAB**. For every `EV_KEY` (the code is not checked) `value` is stored (1 = down, 0 = released) | `app_powerKey_thread` 0x140AB4 (string 0x17BCEC); stored in app+0x15A8 | the k62091 node, read-only, **without a grab**. Selection: `MERAKIPLUS_KBD` → a node whose name contains `k62091` → the first node with EV_KEY and without EV_ABS → `/dev/input/event1`. All EV_KEY codes count as the button |
 | When it powers off | `SleepRefresh` (lv_timer 100 ms): only when the second changes, e60 is incremented while the button is down. `dealPowerState(1)` powers off when e60 > 1 — i.e. the button held across **two second boundaries = 1.0–2.0 s**. A short press only wakes the stock UI's screensaver | `SleepRefresh` 0x149268 (timer 100 ms at 0x1354A8), e60 = 0x1E0E60, `dealPowerState` 0x14911C | **HOLD 1.5 s** (in the middle of the stock UI's window). Short press: nothing (counted on DIAGNOSTICS) |
-| Blocking | While `isExtractionOrSteamSwitchOn()` is true, it does not count and does not power off: work_sta bit 12 (brew) or bit 14 (steam), mirror word 22 (brew active), 24 (steam) or 6 (grind). **Hot water does not block.** The stock UI NEVER stops an activity on power-off | `isExtractionOrSteamSwitchOn` 0x1481E0 (`GetMaichinState(0x1000/0x4000)`, words 22/24/6) | The same predicate (+ ourui's own start in progress for the three). Toast *STOP THE ACTIVITY FIRST · THEN OFF*. When the activity has ended, a **new full hold** powers off (the counter stands still, like e60). Hot water: power-off is sent, no stop frame |
+| Blocking | While `isExtractionOrSteamSwitchOn()` is true, it does not count and does not power off: work_sta bit 12 (brew) or bit 14 (steam), mirror word 22 (brew active), 24 (steam) or 6 (grind). **Hot water does not block.** The stock UI NEVER stops an activity on power-off | `isExtractionOrSteamSwitchOn` 0x1481E0 (`GetMaichinState(0x1000/0x4000)`, words 22/24/6) | The same predicate (+ merakiplus's own start in progress for the three). Toast *STOP THE ACTIVITY FIRST · THEN OFF*. When the activity has ended, a **new full hold** powers off (the counter stands still, like e60). Hot water: power-off is sent, no stop frame |
 | No connection | Only powers off if mirror word 0 ≠ 0 | 0x149210 | Only if the link is up and the controller has replied with word 0 ≠ 0. Otherwise toast *NO CONNECTION · CANNOT TURN OFF* — the button may be what just woke a sleeping controller. READ-ONLY: nothing |
-| Power-off frames | `powerOff`: mirror word 0 = 0 → `performSleepActions` → `powerOffSend(0,0,0)` = **cmd8** (15 bytes) → `usleep(80000)` → `usart_send(6,0,2)` = **cmd6 sub0 len2 [word 0 = 0, word 1 = the mirror]** | `powerOff` 0x149074, `performSleepActions` 0x148324 (0x148F50, 0x14905C), `powerOffSend` 0x14700C, buffer `powerSendBuf` 0x1A6030 | Exactly that: `aa 55 08 <year lo> <year hi> <month 1-12> <day> <h> <m> <s> 00 00 00 <crc>` (example 2026-11-18 16:35:28: `aa 55 08 ea 07 0b 12 10 23 1c 00 00 00 cc df`), **≥ 80 ms** later `aa 55 06 00 02 00 00 00 00 56 94` (word 1 = 0 = awake, as ourui's keep-awake keeps it). The cmd6 frame goes through the write queue (CRC, ACK, one retransmit) and the frame policy with the new intent `I_POWEROFF` |
+| Power-off frames | `powerOff`: mirror word 0 = 0 → `performSleepActions` → `powerOffSend(0,0,0)` = **cmd8** (15 bytes) → `usleep(80000)` → `usart_send(6,0,2)` = **cmd6 sub0 len2 [word 0 = 0, word 1 = the mirror]** | `powerOff` 0x149074, `performSleepActions` 0x148324 (0x148F50, 0x14905C), `powerOffSend` 0x14700C, buffer `powerSendBuf` 0x1A6030 | Exactly that: `aa 55 08 <year lo> <year hi> <month 1-12> <day> <h> <m> <s> 00 00 00 <crc>` (example 2026-11-18 16:35:28: `aa 55 08 ea 07 0b 12 10 23 1c 00 00 00 cc df`), **≥ 80 ms** later `aa 55 06 00 02 00 00 00 00 56 94` (word 1 = 0 = awake, as merakiplus's keep-awake keeps it). The cmd6 frame goes through the write queue (CRC, ACK, one retransmit) and the frame policy with the new intent `I_POWEROFF` |
 | cmd8's contents | year (u16), month (+1), day, hour, minute, second, alarm day/hour/minute = the next scheduled pre-heat (`performSleepActions`); no schedule = alarm 0/0/0 | 0x14703C–0x147148 (CRC_GetModbus16 over 13 bytes) | v6.16: stock's local time (UTC + zone + DST; v6.14 sent UTC) + the next pre-heat occurrence, or 0/0/0 without a schedule ([time-scheduling.md](../time-scheduling.md)). The MCU's 0x88 acknowledgement is only counted for DIAGNOSTICS — the stock UI does not wait for it either |
-| The MCU | The status task sees word 0 = 0 (every 500 ms) and starts `sleep`. It deletes `boiler_heat`, `head_heat`, **`status`** (RX parser + replies) and `run`, sets work_sta = 0 and resets the outputs. It only wakes on a **hold of the button** (its own GPIO PC.8, 8 × 100 ms low after a release) or the alarm → `reset muc` (CPU reset) | MEM03 0x29D4/0x29D8, sleep task 0x2F52 (0x2E1E deletes tasks; 0x2F0C outputs 0), alarm comparison 0x2FE2–0x3036, reset 0x326 (SYS IPRST) | ourui sends nothing more: keep-awake stands still, and polls are not answered (the link goes down — expected). The cmd8 parser 0x9C88 stores the 10 bytes in 0x20000E18 |
-| Screen | Backlight off (`blpwm_set_enable(2,0)` + duty 0), off page. 1.5 s later: fb closed, `killall dispinit`, GPIOs released, **`echo mem > /sys/power/state`** (SoC suspend). After resume: mirror word 0 = 1, `killall demo_v9` → the watchdog restarts the stock UI → `PowerOn` | 0x1490C0–0x1490FC, 0x149494–0x14952C, `uikit_os_back_light_off` 0xC2278 | TURNING OFF… immediately, OFF after the ACK. The backlight is switched off 1.5 s after the press: duty 99 (dimmest) and then `pwm2/enable = 0` (ourui does not write the stock UI's duty 0 — with "polarity inversed" that is the brightest light if the enable did not take effect). **No SoC suspend and no killall** (a deliberate deviation: the network guard and telnet stay alive; ourui is not a restartable app behind a watchdog in run.sh mode) |
-| Power on | The SoC wakes from the same button press; the stock UI restarts and sends `PowerOn` (word 0 = 1) at startup. The MCU wakes by itself (reset; word 0 starts as 1) | `app_init` 0xD9170 → `PowerOn` 0x146EF8 | A button press in OFF → backlight on, *TURNING ON… · KEEP HOLDING THE BUTTON A MOMENT*. When the controller has replied with word 0 = 1 for 0.6 s → PowerOn `aa 55 06 00 01 01 00 c5 5f` + awake `aa 55 06 01 01 00 00 c5 33` (the same two frames as at startup) → HOME, toast *MACHINE IS ON*, keep-awake runs again. Without a reply within 10 s: back to OFF. If the controller replies by itself with word 0 = 1 while ourui is in OFF (alarm, or the button was held without ourui seeing it), it powers on the same way. After the MCU reset the controller is on its startup values — **ourui's re-push** (v6.6, the 0x89 round) puts the config's values back |
+| The MCU | The status task sees word 0 = 0 (every 500 ms) and starts `sleep`. It deletes `boiler_heat`, `head_heat`, **`status`** (RX parser + replies) and `run`, sets work_sta = 0 and resets the outputs. It only wakes on a **hold of the button** (its own GPIO PC.8, 8 × 100 ms low after a release) or the alarm → `reset muc` (CPU reset) | MEM03 0x29D4/0x29D8, sleep task 0x2F52 (0x2E1E deletes tasks; 0x2F0C outputs 0), alarm comparison 0x2FE2–0x3036, reset 0x326 (SYS IPRST) | merakiplus sends nothing more: keep-awake stands still, and polls are not answered (the link goes down — expected). The cmd8 parser 0x9C88 stores the 10 bytes in 0x20000E18 |
+| Screen | Backlight off (`blpwm_set_enable(2,0)` + duty 0), off page. 1.5 s later: fb closed, `killall dispinit`, GPIOs released, **`echo mem > /sys/power/state`** (SoC suspend). After resume: mirror word 0 = 1, `killall demo_v9` → the watchdog restarts the stock UI → `PowerOn` | 0x1490C0–0x1490FC, 0x149494–0x14952C, `uikit_os_back_light_off` 0xC2278 | TURNING OFF… immediately, OFF after the ACK. The backlight is switched off 1.5 s after the press: duty 99 (dimmest) and then `pwm2/enable = 0` (merakiplus does not write the stock UI's duty 0 — with "polarity inversed" that is the brightest light if the enable did not take effect). **No SoC suspend and no killall** (a deliberate deviation: the network guard and telnet stay alive; merakiplus is not a restartable app behind a watchdog in run.sh mode) |
+| Power on | The SoC wakes from the same button press; the stock UI restarts and sends `PowerOn` (word 0 = 1) at startup. The MCU wakes by itself (reset; word 0 starts as 1) | `app_init` 0xD9170 → `PowerOn` 0x146EF8 | A button press in OFF → backlight on, *TURNING ON… · KEEP HOLDING THE BUTTON A MOMENT*. When the controller has replied with word 0 = 1 for 0.6 s → PowerOn `aa 55 06 00 01 01 00 c5 5f` + awake `aa 55 06 01 01 00 00 c5 33` (the same two frames as at startup) → HOME, toast *MACHINE IS ON*, keep-awake runs again. Without a reply within 10 s: back to OFF. If the controller replies by itself with word 0 = 1 while merakiplus is in OFF (alarm, or the button was held without merakiplus seeing it), it powers on the same way. After the MCU reset the controller is on its startup values — **merakiplus's re-push** (v6.6, the 0x89 round) puts the config's values back |
 | Touch while off | (the SoC sleeps — touch does nothing) | — | Touches are swallowed (no navigation, no frames). The OFF page is shown for 8 s; then the backlight goes off again. Touch cannot switch the machine on: the controller cannot receive anything while it sleeps |
 
 ### 19.2 The UI
@@ -1212,23 +1212,23 @@ Every alignment delta, numbered after the task's items. *(UI texts of the time a
 
 ## CHANGES-v6.2
 
-Boot slot integration: ourui can now choose the boot UI itself, switch to the stock UI without a restart and say honestly when the stock UI must be restarted. The requirements come from the task and from the boot work stream's `boot/BOOT.md` **§9 (UI requirements)**, which has been followed point by point. Protocol, frame policy, keep-awake, `EVIOCGRAB`, circle clip and `run.sh` are unchanged (35 of the 39 v6.1 previews are byte-identical; the four that differ are splash/DIAGNOSTICS (version text) and the two SYSTEM lists).
+Boot slot integration: merakiplus can now choose the boot UI itself, switch to the stock UI without a restart and say honestly when the stock UI must be restarted. The requirements come from the task and from the boot work stream's `boot/BOOT.md` **§9 (UI requirements)**, which has been followed point by point. Protocol, frame policy, keep-awake, `EVIOCGRAB`, circle clip and `run.sh` are unchanged (35 of the 39 v6.1 previews are byte-identical; the four that differ are splash/DIAGNOSTICS (version text) and the two SYSTEM lists).
 
-> **About the order:** BOOT.md did not exist when the work began, and was written along the way. The runtime switch was first built as the task described it (a `/tmp` shell helper that waits for ourui's exit and then starts the stock UI). When BOOT.md §9.2 arrived, it was reworked to its sequence, because the §UI requirements take precedence. **There is therefore no helper process and no script in `/tmp` in v6.2.**
+> **About the order:** BOOT.md did not exist when the work began, and was written along the way. The runtime switch was first built as the task described it (a `/tmp` shell helper that waits for merakiplus's exit and then starts the stock UI). When BOOT.md §9.2 arrived, it was reworked to its sequence, because the §UI requirements take precedence. **There is therefore no helper process and no script in `/tmp` in v6.2.**
 
 **1 · SYSTEM row BOOT UI** (BOOT.md §9.1)
-* At the bottom of SYSTEM, under the heading *STARTUP · UI CHOICE*: the row **BOOT UI** with the value **OURUI** / **ORIGINAL** and the sub-line *"APPLIES AT NEXT RESTART"*.
-* A tap opens a view with −/+ (− = ORIGINAL, + = OURUI), CANCEL and SAVE. At the top is the current state, read live from the disk every second: *"NOW: OUR UI (B) AT BOOT"* or *"NOW: ORIGINAL (A) AT BOOT"*. The help text is §9.1's, verbatim: *"APPLIES AT NEXT RESTART"* · *"OTA CAN OVERWRITE THIS CHOICE — SEE BOOT.md §7"*.
-* SAVE does exactly one thing: OURUI = `open("/customer/new", O_CREAT|O_WRONLY, 0644)` + `sync()`; ORIGINAL = `unlink("/customer/new")` + `sync()`. Nothing else in `/customer` is touched. The calls are idempotent. No restart from the button.
+* At the bottom of SYSTEM, under the heading *STARTUP · UI CHOICE*: the row **BOOT UI** with the value **MERAKIPLUS** / **ORIGINAL** and the sub-line *"APPLIES AT NEXT RESTART"*.
+* A tap opens a view with −/+ (− = ORIGINAL, + = MERAKIPLUS), CANCEL and SAVE. At the top is the current state, read live from the disk every second: *"NOW: OUR UI (B) AT BOOT"* or *"NOW: ORIGINAL (A) AT BOOT"*. The help text is §9.1's, verbatim: *"APPLIES AT NEXT RESTART"* · *"OTA CAN OVERWRITE THIS CHOICE — SEE BOOT.md §7"*.
+* SAVE does exactly one thing: MERAKIPLUS = `open("/customer/new", O_CREAT|O_WRONLY, 0644)` + `sync()`; ORIGINAL = `unlink("/customer/new")` + `sync()`. Nothing else in `/customer` is touched. The calls are idempotent. No restart from the button.
 * **Error** (e.g. a read-only file system): toast *"FLAG ERROR · NOTHING CHANGED"*, the view stays with the old state.
-* **Guard** (task requirement, stricter than BOOT.md): the row is only editable when `/new_customer` is in `/proc/mounts`, and `/new_customer/demo_v9` is executable and **is ourui**. Otherwise it is locked with the reason: *"SLOT B NOT MOUNTED"*, *"SLOT B HAS NO demo_v9"* or *"SLOT B IS NOT OURUI"*. The guard applies in both directions: if there is a vendor binary in slot B, the flag belongs to the vendor's OTA mechanism, and ourui does not touch it.
-* The recognition of ourui is a `what(1)` tag in the binary (`@(#)ourui …`); a v6.1 binary is recognized by a string from its exit message. `build_previews.sh` tests it against the real files: `ourui_v6` and `ourui_v6_1.bin` = ourui; the vendor `demo_v9` (both copies) and `boot/switcher` = not ourui.
-* The value shown is what `demo.sh` will actually start: *OURUI* only if the flag exists **and** slot B is mounted **and** contains ourui; *SLOT B* if the flag exists but the binary is a different one; otherwise *ORIGINAL*.
+* **Guard** (task requirement, stricter than BOOT.md): the row is only editable when `/new_customer` is in `/proc/mounts`, and `/new_customer/demo_v9` is executable and **is merakiplus**. Otherwise it is locked with the reason: *"SLOT B NOT MOUNTED"*, *"SLOT B HAS NO demo_v9"* or *"SLOT B IS NOT MERAKIPLUS"*. The guard applies in both directions: if there is a vendor binary in slot B, the flag belongs to the vendor's OTA mechanism, and merakiplus does not touch it.
+* The recognition of merakiplus is a `what(1)` tag in the binary (`@(#)merakiplus …`); a v6.1 binary is recognized by a string from its exit message. `build_previews.sh` tests it against the real files: `merakiplus_v6` and `merakiplus_v6_1.bin` = merakiplus; the vendor `demo_v9` (both copies) and `boot/switcher` = not merakiplus.
+* The value shown is what `demo.sh` will actually start: *MERAKIPLUS* only if the flag exists **and** slot B is mounted **and** contains merakiplus; *SLOT B* if the flag exists but the binary is a different one; otherwise *ORIGINAL*.
 
 **2 · SYSTEM action SWITCH TO ORIGINAL NOW** (BOOT.md §9.2 — runtime B→A, no restart)
 The row opens a confirmation (CANCEL / SWITCH NOW). SWITCH NOW runs §9.2's six steps in the prescribed order:
 
-| §9.2 | What ourui does | Where in the source |
+| §9.2 | What merakiplus does | Where in the source |
 |---|---|---|
 | — | draws the last frame *"SWITCHING TO ORIGINAL"* (stays until the stock UI draws) | `do_switch()` |
 | 1 | stops its own activity: the UART is flushed and **closed**, the touch grab is released and the input closed, the fb is unmapped and **closed** | `dev_release_impl()` |
@@ -1239,18 +1239,18 @@ The row opens a confirmation (CANCEL / SWITCH NOW). SWITCH NOW runs §9.2's six 
 | 6 | a log line in `cfgbak/boot_ui.log` with the time, `reason=user-button`, the stock pid and the path used | `boot_log()` |
 
 * **One addition to step 2:** the child closes *all* inherited fds, not just stdio. An inherited touch fd would otherwise keep `EVIOCGRAB` alive inside the stock process, and the stock UI would never get a touch. The self-test measures it from the inside: the mock "stock" reports `extra_fds=0`.
-* **One deviation from the letter of §9.2 — `LD_LIBRARY_PATH`:** §9.2 says `"/customer/libs:/config/wifi"`. `demo.sh`'s A branch sets `"$LD_LIBRARY_PATH:/customer/libs:/config/wifi"`, i.e. the boot environment's prefix is kept. ourui does the same: takes its own inherited path, removes the slot components and appends A's. Without a prefix (e.g. when the switcher has started ourui) the value is **exactly** §9.2's; with a prefix it is what a real A boot would give the stock UI. Rationale: if one of the stock binary's libraries were in a prefix directory, the pure §9.2 value would make the stock UI die at startup. Whether the prefix exists on the device has not been measured — see on-device item N3. If the pure value is wanted, it is one line in `ld_path_for_a()`.
-* **The stock UI does not come up** (the child dies within the 400 ms): ourui does **not** exit, reopens UART/fb/touch, shows *"SWITCH FAILED · …"* and logs it.
+* **One deviation from the letter of §9.2 — `LD_LIBRARY_PATH`:** §9.2 says `"/customer/libs:/config/wifi"`. `demo.sh`'s A branch sets `"$LD_LIBRARY_PATH:/customer/libs:/config/wifi"`, i.e. the boot environment's prefix is kept. merakiplus does the same: takes its own inherited path, removes the slot components and appends A's. Without a prefix (e.g. when the switcher has started merakiplus) the value is **exactly** §9.2's; with a prefix it is what a real A boot would give the stock UI. Rationale: if one of the stock binary's libraries were in a prefix directory, the pure §9.2 value would make the stock UI die at startup. Whether the prefix exists on the device has not been measured — see on-device item N3. If the pure value is wanted, it is one line in `ld_path_for_a()`.
+* **The stock UI does not come up** (the child dies within the 400 ms): merakiplus does **not** exit, reopens UART/fb/touch, shows *"SWITCH FAILED · …"* and logs it.
 * **Blocked during an activity:** if grind/brew/water/steam is running, or a write is waiting for an ACK, SWITCH NOW is rejected with a toast. The stock UI's boot push (`cmd6 sub1 len30`) writes, among other things, the start words to 0, and that must not happen in the middle of a brew. This is an addition to §9.2.
 * **Locked** if `/customer/demo_v9` is missing or not executable (BACK only).
 * The stock UI starts fresh and reads `config.json` itself, so `RESTART_NEEDED` is removed on a successful switch.
 * The screen shows the way back: *"BACK HERE: 3 LONG PRESSES · TOP LEFT (1.5 S)"* (the switcher gesture, BOOT.md §2), or — if `pidof switcher` is empty — *"SWITCHER DAEMON NOT RUNNING"* and *"BACK HERE: RESTART"* / *"TELNET ONLY"*, depending on whether the flag is set.
-* `OURUI_SWITCH_DRY=1`: SWITCH NOW releases nothing and starts nothing; the log says what would have happened.
+* `MERAKIPLUS_SWITCH_DRY=1`: SWITCH NOW releases nothing and starts nothing; the log says what would have happened.
 
-**Known consequence (BOOT.md §9.2, §1.2):** the watchdog's slot is fixed at boot. If the machine was booted in B, `test.sh new_customer` is running; if the stock UI dies after a runtime switch — also if you run `kill $(pidof demo_v9)` yourself — the watchdog starts **ourui** again, not the stock UI. The next restart follows the flag. It is a safe fallback and requires no action.
+**Known consequence (BOOT.md §9.2, §1.2):** the watchdog's slot is fixed at boot. If the machine was booted in B, `test.sh new_customer` is running; if the stock UI dies after a runtime switch — also if you run `kill $(pidof demo_v9)` yourself — the watchdog starts **merakiplus** again, not the stock UI. The next restart follows the flag. It is a safe fallback and requires no action.
 
-**3 · The reverse path (only documented — not part of ourui)**
-Stock → ourui without a restart is done by the switcher daemon on the gesture (BOOT.md §3.2): SIGSTOP the stock UI → start `/new_customer/demo_v9` with `LD_LIBRARY_PATH=/new_customer/libs:/config/wifi` → verify the exe link → SIGKILL the stock UI; if ourui does not come up, the stock UI is SIGCONTed. For testing without the gesture the same pattern exists in `boot_install.py` (`launch_a_stopfirst` is the B→A direction; `boot-test` step c is A→B via `tinj_hold`). While ourui is running, it holds touch exclusively, so the switcher sees no touches and does nothing.
+**3 · The reverse path (only documented — not part of merakiplus)**
+Stock → merakiplus without a restart is done by the switcher daemon on the gesture (BOOT.md §3.2): SIGSTOP the stock UI → start `/new_customer/demo_v9` with `LD_LIBRARY_PATH=/new_customer/libs:/config/wifi` → verify the exe link → SIGKILL the stock UI; if merakiplus does not come up, the stock UI is SIGCONTed. For testing without the gesture the same pattern exists in `boot_install.py` (`launch_a_stopfirst` is the B→A direction; `boot-test` step c is A→B via `tinj_hold`). While merakiplus is running, it holds touch exclusively, so the switcher sees no touches and does nothing.
 
 **4 · Exit reminder** (the v6.1 integration note)
 * REVERT now shows a full-screen reminder **before** exit when it is true: *"CONFIG HAS CHANGED"* · *"STOCK UI NEEDS A RESTART OF demo_v9 FOR NEW VALUES"* · the command `kill $(pidof demo_v9)` in a field of its own · *"RUN VIA TELNET · WATCHDOG RESTARTS IT"* · *"OTHERWISE THE STOCK UI SENDS OLD VALUES WHEN BREWING"*. Buttons: BACK / EXIT. It must be a screen and not a toast: after the exit the stock UI owns the screen.
@@ -1258,23 +1258,23 @@ Stock → ourui without a restart is done by the switcher daemon on the gesture 
 * The stdout message on exit follows the same rule and uses the same wording.
 * Paths and commands are shown in lower case (the shell is case-sensitive). The stroke font has been given a–z, `$`, `'` and `§`; they are only used in marked code spans, the rest of the UI is upper case as before.
 
-**5 · The REVERT button now depends on how ourui was started**
+**5 · The REVERT button now depends on how merakiplus was started**
 * **run.sh mode** (there is a paused stock UI): unchanged — exit, `run.sh` SIGCONTs. The only difference is the reminder in item 4, if it is true.
-* **Slot B boot** (ourui *is* `/new_customer/demo_v9`, no stock UI): a plain exit would just make the watchdog start ourui again. REVERT therefore opens the confirmation from item 2. This is not in BOOT.md; it was chosen because the button would otherwise have no effect.
+* **Slot B boot** (merakiplus *is* `/new_customer/demo_v9`, no stock UI): a plain exit would just make the watchdog start merakiplus again. REVERT therefore opens the confirmation from item 2. This is not in BOOT.md; it was chosen because the button would otherwise have no effect.
 * SWITCH TO ORIGINAL NOW in run.sh mode does the same as REVERT (nothing is started — two `demo_v9` must never run).
 
 **6 · DIAGNOSTICS**
 * The page can now **scroll vertically** (the same gesture and indicator as the lists); the 14 existing fields are unchanged at the top.
-* A new block *BOOT · SLOT · SWITCHER*: `FLAG /customer/new` (EXISTS / NOT PRESENT) · NEXT BOOT (OURUI / ORIGINAL / SLOT B) · OURUI STARTED FROM (SLOT B / RUN.SH / SLOT A, from `/proc/self/exe`) · SLOT B (OURUI FOUND / NOT MOUNTED / NO DEMO_V9 / NOT OURUI) · SWITCHER DAEMON (RUNNING / NOT RUNNING, `comm == switcher` in `/proc`) · STOCK PROCESS (NONE / PAUSED / **ALSO RUNNING!** in red) · a PID line (ourui / stock UI / switcher) · the full exe path · the latest switch event from `/tmp/switcher.log` (the last line with `skift` or `GESTUS`, with the time; *"LOG NOT READABLE"* / *"NO SWITCH EVENT IN THE LOG"* otherwise). Long paths and events are truncated with `…`.
+* A new block *BOOT · SLOT · SWITCHER*: `FLAG /customer/new` (EXISTS / NOT PRESENT) · NEXT BOOT (MERAKIPLUS / ORIGINAL / SLOT B) · MERAKIPLUS STARTED FROM (SLOT B / RUN.SH / SLOT A, from `/proc/self/exe`) · SLOT B (MERAKIPLUS FOUND / NOT MOUNTED / NO DEMO_V9 / NOT MERAKIPLUS) · SWITCHER DAEMON (RUNNING / NOT RUNNING, `comm == switcher` in `/proc`) · STOCK PROCESS (NONE / PAUSED / **ALSO RUNNING!** in red) · a PID line (merakiplus / stock UI / switcher) · the full exe path · the latest switch event from `/tmp/switcher.log` (the last line with `skift` or `GESTUS`, with the time; *"LOG NOT READABLE"* / *"NO SWITCH EVENT IN THE LOG"* otherwise). Long paths and events are truncated with `…`.
 * The boot state is only read while it is shown (SYSTEM, DIAGNOSTICS, the system views), once per second.
 
 **7 · New persistent writes** — see `REVERT.md`: `/customer/new` (only on SAVE of BOOT UI) and `cfgbak/boot_ui.log` (one line per flag change and per runtime switch). `RESTART_NEEDED` has gained the stamp line. Nothing in `/tmp`.
 
 **8 · Local verification**
-* **Self-test: 87 → 152 checks, 0 errors** (`round_v6/selftest.txt`). New, all against a mock root (`/tmp/ourui_v6_selftest_*/root` with `/customer`, `/new_customer`, `/proc`, `/tmp`):
+* **Self-test: 87 → 152 checks, 0 errors** (`round_v6/selftest.txt`). New, all against a mock root (`/tmp/merakiplus_v6_selftest_*/root` with `/customer`, `/new_customer`, `/proc`, `/tmp`):
   * *Flag logic (25):* all four lock reasons, the vendor flag untouched in both directions, touch/rm/idempotency, nothing else in `/customer` changed, a read-only directory, live reading, slot B disappearing after the flag has been set, v6.1 recognition, a tag across a 64 KiB read boundary, the real vendor binary, exe slot, process scan (paused / running / `(deleted)` / slot B `demo_v9` / own pid), `switcher.log` (missing / without a switch / a large file), `LD_LIBRARY_PATH` derivation.
   * *The reminder's truth (7):* the six combinations of flag, stamp, boot id and start time + that SAVE stamps the flag.
-  * *Runtime switch (14):* the whole §9.2 sequence run for real, with a **copy of the test binary** as the mock "stock" in `<root>/customer/demo_v9`. It reports back itself: `argv0=./demo_v9`, its own session, cwd `/customer`, stdio = `/dev/null`, **0 inherited fds**, started **after** step 1, the path it got. In addition: the measured wait (about 400 ms; 403–412 ms in the runs), the flag untouched, the log line, `RESTART_NEEDED` removed, a stock UI that dies immediately (ourui stays and takes the screen back), dry run, run.sh mode (nothing is started), a missing binary. No real UI process is started, and no signal is sent.
+  * *Runtime switch (14):* the whole §9.2 sequence run for real, with a **copy of the test binary** as the mock "stock" in `<root>/customer/demo_v9`. It reports back itself: `argv0=./demo_v9`, its own session, cwd `/customer`, stdio = `/dev/null`, **0 inherited fds**, started **after** step 1, the path it got. In addition: the measured wait (about 400 ms; 403–412 ms in the runs), the flag untouched, the log line, `RESTART_NEEDED` removed, a stock UI that dies immediately (merakiplus stays and takes the screen back), dry run, run.sh mode (nothing is started), a missing binary. No real UI process is started, and no signal is sent.
   * *UI routes (15):* REVERT in all three situations, SWITCH NOW during steam, reminder → EXIT/BACK, locked views in the hit test, BOOT UI through real touch events (−, +, SAVE, CANCEL, write error).
   * *Layout (4):* all texts in all states measured against the gauge ring's inner edge, the field widths and the distance to the gauge ends; rows and DIAGNOSTICS cells against their columns (also with 5-digit PIDs and 80-character paths).
 * **Previews: 39 → 51**, all re-rendered; **circle check 51/51, 0 violations**. New: `39_list_system_boot_locked` · `40_bootui_detail` · `41_bootui_changed` · `42_bootui_saved_toast` · `43_bootui_locked` · `44_switch_confirm_boot` · `45_switch_confirm_runsh` · `46_switch_blocked_activity` · `47_switching_bye` · `48_exit_banner` · `49_diag_boot` · `50_diag_boot_runsh`. `35_list_system_scrolled` now shows the bottom of SYSTEM with the two new rows.
@@ -1299,30 +1299,30 @@ Product name and language. The UI is now called **Meraki+**, and every visible t
 * **Splash:** the wordmark *MERAKI* with a "+" badge (a crema disc with a dark plus, raised like a superscript), the tagline *"ADVANCED BREWING INTERFACE"* / *"AVANCERET BRYGGE-INTERFACE"* and the line *"V6.3 · CONFIG LOADED"* / *"… INDLÆST"*.
 * **HOME:** a discreet title line *MERAKI+* at the top inside the gauge ring (the plus in the accent color). It lives in the static layer and costs nothing per frame.
 * **DIAGNOSTICS:** the VERSION cell shows *MERAKI+ V6.3*; at the bottom there is a new *ABOUT* block with the UI language, wordmark, version and tagline.
-* **All texts that used to say OURUI** now say MERAKI+: the BOOT UI choice (MERAKI+ / ORIGINAL), *"NOW: MERAKI+ (B) AT BOOT"*, *"MERAKI+ CLOSES · STOCK UI STARTS"*, *"MERAKI+ HAS EXITED"*, the lock reasons, the DIAGNOSTICS cells and the notes in the settings.
-* **No generation name** in any UI string — the same software runs on several machine generations. The binary's `what(1)` tag has changed from `… merakitech-gen1 display-ui` to `@(#)ourui V6.3 meraki-plus display-ui`; the BOOT UI guard only recognizes the first 10 characters (`@(#)ourui `), so v6.1, v6.2 and v6.3 binaries are all recognized (`boot_check.txt`).
-* **The code name is unchanged `ourui`:** source file, binary, process name, `/new_customer/ourui/`, the `OURUI_*` variables, the `cfgbak/` logs and the stdout prefix `== ourui:`. `run.sh` and `boot_install.py` depend on them. In the UI `ourui` only appears inside displayed paths (e.g. `ourui/lang`).
+* **All texts that used to say MERAKIPLUS** now say MERAKI+: the BOOT UI choice (MERAKI+ / ORIGINAL), *"NOW: MERAKI+ (B) AT BOOT"*, *"MERAKI+ CLOSES · STOCK UI STARTS"*, *"MERAKI+ HAS EXITED"*, the lock reasons, the DIAGNOSTICS cells and the notes in the settings.
+* **No generation name** in any UI string — the same software runs on several machine generations. The binary's `what(1)` tag has changed from `… merakitech-gen1 display-ui` to `@(#)merakiplus V6.3 meraki-plus display-ui`; the BOOT UI guard only recognizes the first 10 characters (`@(#)merakiplus `), so v6.1, v6.2 and v6.3 binaries are all recognized (`boot_check.txt`).
+* **The technical identifier is `merakiplus`:** source file, binary, `/new_customer/merakiplus/`, the `MERAKIPLUS_*` variables, the `cfgbak/` logs and the stdout prefix `== merakiplus:`. `run.sh` and `boot_install.py` depend on them. In the UI `merakiplus` only appears inside displayed paths (e.g. `merakiplus/lang`).
 * **Deviation from the wording of BOOT.md §9.1:** the help text *"Our UI (B) at boot"* has become *"MERAKI+ (B) AT BOOT"*. The meaning is the same; the product name takes precedence.
 
 **2 · UI language: a new SYSTEM row UI LANGUAGE / UI-SPROG**
 * **At the top of SYSTEM**, so it can be found without being able to read the rest. The options are always shown as *ENGLISH* and *DANSK* (endonyms, the same in both languages).
 * **Live:** a tap on −/+ switches the whole UI immediately (like the brightness preview). CANCEL goes back to the saved language; SAVE makes it permanent. The confirmation comes in the new language: *"SPROG GEMT · DANSK"* / *"LANGUAGE SAVED · ENGLISH"*. No restart.
-* **Stored in ourui's own file `/new_customer/ourui/lang`:** plain text, exactly `en` or `da` (2 bytes). Written atomically: a temp file in the same directory → `fsync` → reread and compare → `rename()` → `fsync` of the directory.
-* **Read once at startup**, before the first frame. If the file is missing, cannot be read, or contains anything other than `en`/`da`: **English**. The reading tolerates whitespace, newlines and capitals, so `echo da > /new_customer/ourui/lang` also works. Everything else (`de`, `dansk`, an empty file, binary, too long) gives English.
+* **Stored in merakiplus's own file `/new_customer/merakiplus/lang`:** plain text, exactly `en` or `da` (2 bytes). Written atomically: a temp file in the same directory → `fsync` → reread and compare → `rename()` → `fsync` of the directory.
+* **Read once at startup**, before the first frame. If the file is missing, cannot be read, or contains anything other than `en`/`da`: **English**. The reading tolerates whitespace, newlines and capitals, so `echo da > /new_customer/merakiplus/lang` also works. Everything else (`de`, `dansk`, an empty file, binary, too long) gives English.
 * **If the file cannot be written** (e.g. a read-only file system), the language still applies for the rest of the session, and the toast says so: *"LANGUAGE ACTIVE · FILE NOT SAVED"*. This is a deliberate exception to the all-or-nothing rule for settings: a user who cannot read English must not be locked out of their language by a write error.
 * **Does not touch the stock UI:** the row has no config key and no MCU word. SAVE does not write to `config.json`, sends no cmd6 frame, makes no backup and no `RESTART_NEEDED`. The self-test measures all four parts.
 * **The stock UI's language is a different row:** *STOCK LANG.* (`config.language`, 11 languages without Danish) works as in v6.1. It has been renamed from *LANGUAGE*, so the two cannot be confused, and its note points to UI LANGUAGE.
 * **DIAGNOSTICS / ABOUT** shows the active language and where it comes from: *FROM FILE* · *DEFAULT (NO FILE)* · *UNKNOWN FILE VALUE* (amber) · *NOT SAVED* (amber).
-* `OURUI_LANGFILE=<file>` moves the file (for testing and for v6.4's SIM run).
+* `MERAKIPLUS_LANGFILE=<file>` moves the file (for testing and for v6.4's SIM run).
 * In the code the row is an ordinary `SET[]` row with the flag `SF_LOCAL`. `--dump-table` leaves it out, so the spec alignment still sees 24 rows.
 
 **3 · The string table**
-* **One place:** `STR_TABLE` in `ourui_v6.c` — 324 ids, each with an English and a Danish text and a class. No drawing code contains a text any more; `SET[]` refers to ids for the label, unit, note, hint and enum names.
+* **One place:** `STR_TABLE` in `merakiplus.c` — 324 ids, each with an English and a Danish text and a class. No drawing code contains a text any more; `SET[]` refers to ids for the label, unit, note, hint and enum names.
 * **Lookup per render:** `TR(id)` looks up in the active language every time a text is drawn. Nothing is cached across a language switch; a switch simply marks the static layer for redrawing. An unknown language gives English.
 * **Class = the field the text sits in** (toast, note, footer, button, title, DIAGNOSTICS cell …). The self-test measures every classified string in both languages against the field's pixel budget; texts with placeholders are measured in their context by the layout tests.
-* **Rules the self-test enforces for the whole table:** both languages filled in · the same printf conversions in the same order · the same numbers and decimal separator · units identical · every character exists in the stroke font · no generation name · the code name `ourui` only in displayed paths and on the console.
+* **Rules the self-test enforces for the whole table:** both languages filled in · the same printf conversions in the same order · the same numbers and decimal separator · units identical · every character exists in the stroke font · no generation name · the code name `merakiplus` only in displayed paths and on the console.
 * **Appendix A is generated** from the binary's own table (`--dump-strings` → `strings.tsv` → `i18n_appendix.py`); `build_previews.sh` fails if the two do not match.
-* **Not translated (deliberately):** the log files `cfgbak/config_writes.log` and `cfgbak/boot_ui.log`, the contents of `RESTART_NEEDED` and the stderr diagnostics — they are read by tests and tools and are unchanged. *LAST SWITCH* on DIAGNOSTICS shows the switcher daemon's log line verbatim (the boot work stream's text, Danish). The stdout lines on exit **are** translated (ASCII, the same `== ourui:` prefix).
+* **Not translated (deliberately):** the log files `cfgbak/config_writes.log` and `cfgbak/boot_ui.log`, the contents of `RESTART_NEEDED` and the stderr diagnostics — they are read by tests and tools and are unchanged. *LAST SWITCH* on DIAGNOSTICS shows the switcher daemon's log line verbatim (the boot work stream's text, Danish). The stdout lines on exit **are** translated (ASCII, the same `== merakiplus:` prefix).
 
 **4 · Numbers and units are the same in both languages**
 * The decimal point, `°C`/`°F`, `G`, `S`, `BAR`, `V`, `HZ` and all numbers are identical; only words are translated. The units are in the table with the same text in both columns, and the self-test compares them.
@@ -1333,7 +1333,7 @@ Product name and language. The UI is now called **Meraki+**, and every visible t
 
 | Before (v6.2) | Now | Why |
 |---|---|---|
-| OURUI (everywhere) | MERAKI+ | product name |
+| MERAKIPLUS (everywhere) | MERAKI+ | product name |
 | NU: VORES UI (B) VED BOOT | NU: MERAKI+ (B) VED BOOT | product name |
 | SPROG | STOCK-SPROG | distinguished from UI-SPROG |
 | GRUPPE-TEMP · E1 · GRUPPE OVER 110° · E2 · GRUPPE-SENSOR · ORD 114 · BRYGHOVED-SETPOINT | GRUPPEHOVED · E1 · GRUPPEHOVED OVER 110° · E2 · GRUPPEHOVED-SENSOR · ORD 114 · GRUPPEHOVED-SETPOINT | the correct term (group head = gruppehoved); the unit °C shows that it is a temperature. The stat label on HOME is still the short *GRUPPE* — *GRUPPEHOVED* cannot fit in a 94 px column |
@@ -1343,10 +1343,10 @@ Product name and language. The UI is now called **Meraki+**, and every visible t
 | SLIDER-SKALA · VÆLGER UKENDT (hint) | TRIN = SKØN (hint) + the note *"… · SLIDER 0-100"* | the hint reached into the gauge ring (item 7) |
 | 24 T / 12 T | 24-TIMERS / 12-TIMERS | item 4 |
 | ØVERST TIL VENSTRE (1,5 S) | ØVERST TIL VENSTRE (1.5 S) | item 4 |
-| OURUI STARTET FRA · SPEJL 112/113/114 (DIAGNOSE) | STARTET FRA · SPEJL 112-114 | room in the column in both languages |
+| MERAKIPLUS STARTET FRA · SPEJL 112/113/114 (DIAGNOSE) | STARTET FRA · SPEJL 112-114 | room in the column in both languages |
 | SKIFT FEJLEDE · *(free error text)* | SKIFT FEJLEDE · INGEN STOCK-BINÆR / FORK-FEJL / STOCK-UI STOPPEDE | fixed, translated reasons; the full error text is still in `boot_ui.log` |
-| KUN STOCK-UI · OURUI ER DANSK (note) | KUN STOCK-UI · MERAKI+: SE UI-SPROG | no longer true |
-| splash: OURUI · MERAKITECH … · V6.2 | wordmark MERAKI+ · tagline · V6.3 | item 1 |
+| KUN STOCK-UI · MERAKIPLUS ER DANSK (note) | KUN STOCK-UI · MERAKI+: SE UI-SPROG | no longer true |
+| splash: MERAKIPLUS · MERAKITECH … · V6.2 | wordmark MERAKI+ · tagline · V6.3 | item 1 |
 
 All other Danish texts are verbatim as in v6.2.
 
@@ -1366,7 +1366,7 @@ All other Danish texts are verbatim as in v6.2.
 
 **8 · Local verification**
 * **Self-test: 152 → 193 checks, 0 errors**, run twice: UI language English (`selftest.txt`) and Danish (`selftest_da.txt`). New:
-  * *The table (9):* all 324 ids have EN + DA · the same printf conversions · the same numbers/units · no generation name (not even in the binary tag) · `ourui` only in paths/console · every character has a glyph · 196 classified strings × 2 languages within the pixel budget · endonyms · `TR()` per call with fallback.
+  * *The table (9):* all 324 ids have EN + DA · the same printf conversions · the same numbers/units · no generation name (not even in the binary tag) · `merakiplus` only in paths/console · every character has a glyph · 196 classified strings × 2 languages within the pixel budget · endonyms · `TR()` per call with fallback.
   * *The language file (12):* missing → English · `da`/`en` · tolerant reading · 13 invalid values → English · empty file · a path that is a directory · no read permission · `lang_save` writes exactly 2 bytes with no leftover tmp file · an invalid language is rejected · a missing directory · a read-only directory (the old file intact).
   * *The UI LANGUAGE row (13), through real touch events:* the first row on SYSTEM · opens with the active language · **+** switches live without writing · CANCEL undoes · SAVE writes `da` and confirms in Danish · **config.json md5, `config.language`, write counter, `RESTART_NEEDED` and backup directory unchanged** · **0 cmd6 frames, 0 bytes to the UART** · remembered after a "restart" · back to English · STOCK LANG. does not change the UI language · write error → the language applies for the rest of the session, a warning shown · the phase name, error text and HOME texts follow the language without a restart.
   * *Layout (all existing checks now run in both languages, + new ones):* the detail view for all 25 rows (label and range against **the ring's inner edge**, temperature rows in °C and °F, a list row with the label + widest value + unit) · the system views in all states · DIAGNOSTICS (label pairs and cell pairs must not touch, also with worst-case values; the ABOUT block) · HOME (stat label trios against the columns, chart texts, buttons, the title line against the progress ring) · splash.
@@ -1377,13 +1377,13 @@ All other Danish texts are verbatim as in v6.2.
 * `artifacts/config.json` is untouched (md5 `<config-md5-redacted>`); the config copies after the English and the Danish preview runs are byte-identical.
 
 **9 · Unchanged — and how it has been proven**
-* **53 functions are byte-identical to v6.2** (compared textually against `ourui_v6_2.c`), e.g. `crc16`, `build_write`, the whole write queue, `rx_feed`, `word_ok`, `frame_policy`, `setting_mcu_push`, `act_push`, `act_push_steam_stop`, `proto_keepawake`, `phase_raw`, the whole `cfg_*` persistence, `boot_flag_set`, `boot_refresh`, `restart_pending`, `ld_path_for_a`, `bin_is_ourui`, `inp_open`/`inp_poll`, `dev_release_impl`, `fb_open`/`fb_present`, `pset`/`hspan`, `hit_test`, `ui_touch`, `revert_request`. `TRIG_NEVER`, `TRIG_START`, the intent asserts and the timing constants are the same lines.
+* **53 functions are byte-identical to v6.2** (compared textually against `merakiplus_v6_2.c`), e.g. `crc16`, `build_write`, the whole write queue, `rx_feed`, `word_ok`, `frame_policy`, `setting_mcu_push`, `act_push`, `act_push_steam_stop`, `proto_keepawake`, `phase_raw`, the whole `cfg_*` persistence, `boot_flag_set`, `boot_refresh`, `restart_pending`, `ld_path_for_a`, `bin_is_merakiplus`, `inp_open`/`inp_poll`, `dev_release_impl`, `fb_open`/`fb_present`, `pset`/`hspan`, `hit_test`, `ui_touch`, `revert_request`. `TRIG_NEVER`, `TRIG_START`, the intent asserts and the timing constants are the same lines.
 * The six affected logic functions (`do_switch`, `sys_confirm`, `save_step`, `edit_step`, `settings_load`, `switch_launch`) have only changed in string lookups, a reason code for the translated toast and the two language hooks.
 * The self-test's frame vectors (the 6 observed frames byte for byte), the trigger word audit (words 26/27/30 always 0), the boot push equivalence and the config persistence are the same tests as in v6.2 and are green in both languages.
 * `run.sh`: md5 `3d799859549d2b8ba32245453022c20d` (unchanged). `boot/` and `sim/` were not touched.
 
 **10 · For v6.4 (SIM HAL — not done in this round)**
-* The SIM HAL against `sim/CONTRACT.md` has deliberately not been started. What v6.3 makes available for it: `OURUI_LANGFILE` (a language file outside `/new_customer`), `--lang en|da` on the preview binary (previews, self-test, `--textw`), and that every text can be looked up by id in `strings.tsv`.
+* The SIM HAL against `sim/CONTRACT.md` has deliberately not been started. What v6.3 makes available for it: `MERAKIPLUS_LANGFILE` (a language file outside `/new_customer`), `--lang en|da` on the preview binary (previews, self-test, `--textw`), and that every text can be looked up by id in `strings.tsv`.
 
 **Not verified (requires the device)** — see §11 O.
 
@@ -1402,7 +1402,7 @@ SIM build and E2E. The UI can now run without hardware against the test work str
 | 22 scenarios, real UI, **Danish**, with the UI profile | **22/22 scenarios · 553/553 checks** · settings_save_matrix **188/188** |
 | The replay scenarios (v2 / v3 / session) | green in both languages — and also in the raw run |
 | The same 22 scenarios **raw** (without the UI profile) | 17/22 scenarios · 527/553 checks · matrix 172/188 — the 26 checks that fail are exactly those in item 4 |
-| ourui's own touch scenarios (4, real FIFO touch) | English **4/4 · 87/87 checks**, Danish **4/4 · 87/87 checks** |
+| merakiplus's own touch scenarios (4, real FIFO touch) | English **4/4 · 87/87 checks**, Danish **4/4 · 87/87 checks** |
 | SWITCH TO ORIGINAL NOW without dry run (BOOT.md §9.2 in the sandbox) | **9/9** |
 | Device build: self-test | **199 checks, 0 errors** — English and Danish (v6.3: 193; the 6 new ones cover the SIM boot push) |
 | Device build: previews | 56 × 2 languages re-rendered; **circle check 56/56 + 56/56, 0 violations**; **100 of 112 byte-identical with v6.3**, the other 12 are the intended ones (item 2) |
@@ -1414,25 +1414,25 @@ Reports, PNG snapshots and contact sheets: `sim/reports/v6.4/` — start with `S
 **2 · The device build is v6.3 plus two texts — this is how it has been proven**
 * **Source text after the preprocessor** (`build_sim.sh`): the device builds of v6.3 and v6.4 have been compared token for token. 65,838 tokens in both; **10 differences**: 8 × `"V6.3"` → `"V6.4"` and the toast in English and Danish. Nothing else — no new branch, no new call, no new constant.
 * **How it is kept out:** everything SIM-specific is in `#ifdef SIM_RT` or in a handful of macros (`UART_DEV`, `INP_READ`, `SIM_TICK` …), which in the device build are empty or equal to the v6.3 expression.
-* **The binary:** `strings ourui_v6` contains no `OURUI_SIM`, `ourui-sim` or `boot_push`. `-Wall -Wextra` gives exactly the same warnings as v6.3 (25 × SET[] initializer, 1 × unused `fill_rect`).
-* **Previews:** v6.3 was built from `ourui_v6_3.c` and rendered in a tmp directory; all 112 images were compared byte for byte (`v63_compare.txt`). The 12 that differ: `00_splash`, `26_diag`, `49`/`50_diag_boot*` and `55_diag_about` (the version string; in 49/50 the bottom edge of the VERSION cell can be seen at the top of the scrolled field) and `25_save_fail_no_ack` (the toast) — each in both languages.
+* **The binary:** `strings merakiplus_v6` contains no `MERAKIPLUS_SIM`, `merakiplus-sim` or `boot_push`. `-Wall -Wextra` gives exactly the same warnings as v6.3 (25 × SET[] initializer, 1 × unused `fill_rect`).
+* **Previews:** v6.3 was built from `merakiplus_v6_3.c` and rendered in a tmp directory; all 112 images were compared byte for byte (`v63_compare.txt`). The 12 that differ: `00_splash`, `26_diag`, `49`/`50_diag_boot*` and `55_diag_about` (the version string; in 49/50 the bottom edge of the VERSION cell can be seen at the top of the scrolled field) and `25_save_fail_no_ack` (the toast) — each in both languages.
 * **The toast:** SAVE without an ACK now shows *SAVE FAILED · NO ACK · NOT SAVED* / *GEM FEJLET · INGEN ACK · INTET GEMT* (before: *NO ACK · NOT SAVED* / *INGEN ACK · INTET GEMT*). The text now says what went wrong before it says why; it takes up 304 px of the pill's 312 in Danish. The scenario `no_ack` asserts *GEM FEJLET*.
 * **Unchanged:** protocol, frame policy (words 26/27/30 = 0, spec ranges, explicit start intent), keep-awake word1 = 0, `EVIOCGRAB`, circle clip, BOOT UI/switch logic (BOOT.md §9.2), the activity-blocked switch, the exit reminder, the EN/DA tables (323 of 324 ids unchanged), `run.sh` (md5 `3d799859…`), `boot/`.
 
-**3 · The SIM HAL (only in `-DOURUI_SIM`)**
+**3 · The SIM HAL (only in `-DMERAKIPLUS_SIM`)**
 * **The same main loop.** The SIM build uses the device's `main()`: poll rotation, `wq_step`, keep-awake, `inp_poll`, render cadence 33/100 ms. Three hooks (`SIM_TICK`, `SIM_FRAME`, `SIM_EXIT`) have been inserted and are empty on the device.
 * **Framebuffer:** one 480×480 BGRA buffer in memory. `fb_present()` only copies the rects the compositor reports as changed — exactly like the device — so a bug in the dirty-rect logic would also be visible in the snapshots.
 * **Touch:** raw 16-byte evdev records from a FIFO, decoded by the device's own `inp_poll()`. Records are processed according to their timestamps, so a 700 ms hold written all at once also lasts 700 ms.
 * **UART:** `uart_open()`/`uart_flush()` are the device's; only the path has been switched to the pty.
-* **Paths:** everything goes through the sandbox root. `OURUI_SIM_ROOT` is required, and `/` is rejected.
+* **Paths:** everything goes through the sandbox root. `MERAKIPLUS_SIM_ROOT` is required, and `/` is rejected.
 * **State JSON and ctrl socket:** §13.3–13.4. The hooks call the same functions as a tap.
 * **Boot push:** only in the SIM (item 6).
 
 **4 · Where the reference client and the real UI differ (the UI profile)**
 
-The scenarios were written against `sim/ref_client.py`. Five of them have expectations that can only be met by the reference client: its synthetic layout, or that it has neither ourui's guards nor ourui's deliberate deviations from `parity_spec.json`. Bending the UI to them would mean sending out-of-spec values, starting a brew during an active error, unlocking PAUSE TIME or allowing a dark screen. The scenario files have not been touched. Instead the runner reads `sim_ui_profile.json` when the client is the SIM build, and replaces the affected expectations 1:1 with what ourui does — the number of checks is unchanged, each override must hit exactly one expectation, and the report lists them all.
+The scenarios were written against `sim/ref_client.py`. Five of them have expectations that can only be met by the reference client: its synthetic layout, or that it has neither merakiplus's guards nor merakiplus's deliberate deviations from `parity_spec.json`. Bending the UI to them would mean sending out-of-spec values, starting a brew during an active error, unlocking PAUSE TIME or allowing a dark screen. The scenario files have not been touched. Instead the runner reads `sim_ui_profile.json` when the client is the SIM build, and replaces the affected expectations 1:1 with what merakiplus does — the number of checks is unchanged, each override must hit exactly one expectation, and the report lists them all.
 
-| Scenario | The reference client | ourui (deliberate, documented) | Overrides |
+| Scenario | The reference client | merakiplus (deliberate, documented) | Overrides |
 |---|---|---|---|
 | `idle` | a page-colored band at the top; a phase-colored background | a gauge arc in the phase gradient; a dark background with white hero text (§2) | 2 color samples |
 | `grind` | GRIND button at (130,160) | GRIND at (150,372) (§3) | 1 touch coordinate |
@@ -1440,7 +1440,7 @@ The scenarios were written against `sim/ref_client.py`. Five of them have expect
 | `out_of_spec` | sends out-of-spec values; the sim logs them | the frame policy rejects the block; BLOCK ≥ 1 (§7a) | 1 |
 | `settings_save_matrix` | parity_spec word for word | PRE-INF. TIME = `sub113 len1` · GRIND MODE = `sub2 len1` · SAVE of an unchanged value writes nothing · PAUSE TIME locked · BRIGHTNESS 0 left out · `init`/`patch` not exposed (§4.1–4.5) | 16 |
 
-On top of that comes **one pure timing tolerance** (`replay_v3`): the window for the pre-infusion plateau ends 10–20 ms before the pressure jump at 8× playback and only passes when the client's state stream is coarse (the reference client: 10 Hz). ourui writes one line per changed frame; the window has been shortened from 15.0 to 14.9 s. All other time windows in the suite have at least 170 ms of margin (measured over three runs).
+On top of that comes **one pure timing tolerance** (`replay_v3`): the window for the pre-infusion plateau ends 10–20 ms before the pressure jump at 8× playback and only passes when the client's state stream is coarse (the reference client: 10 Hz). merakiplus writes one line per changed frame; the window has been shortened from 15.0 to 14.9 s. All other time windows in the suite have at least 170 ms of margin (measured over three runs).
 
 The five matrix rows have also been run through the real stepper + SAVE with touch (`sim_scenarios/ui_rows_real_frames.json`). `run_e2e.py --no-ui-profile` runs the scenarios raw.
 
@@ -1448,12 +1448,12 @@ The five matrix rows have also been run through the real stepper + SAVE with tou
 
 | Scenario | What was missing | Fix | Where |
 |---|---|---|---|
-| all (the universal check *boot push*) | ourui does not boot-push | boot push `sub1 len30` + `sub112 len3` through the frame policy | **SIM build only** |
+| all (the universal check *boot push*) | merakiplus does not boot-push | boot push `sub1 len30` + `sub112 len3` through the frame policy | **SIM build only** |
 | `no_ack` | the toast did not contain *GEM FEJLET* | a new toast text (item 2) | **device + SIM** |
 | `no_ack`, `settings_save_matrix` | a `save` hook that hit a keep-awake in flight was rejected with *WAITING FOR CONTROLLER* | the hook waits up to 600 ms for an empty write queue | SIM hook only |
-| `boot_flag_toggle`, `runtime_switch` | the runner's sandbox lacks what the BOOT UI guard reads → LOCKED | the SIM build adds to the sandbox (mounts, a slot B mock with the ourui tag, mock stock) | SIM build only |
+| `boot_flag_toggle`, `runtime_switch` | the runner's sandbox lacks what the BOOT UI guard reads → LOCKED | the SIM build adds to the sandbox (mounts, a slot B mock with the merakiplus tag, mock stock) | SIM build only |
 | `runtime_switch` | the dry run only showed a toast; the scenario requires the goodbye screen | the dry run shows the goodbye screen for 1 s | SIM build only |
-| `sleep_wake` | the frame policy rejects word1 = 1, and ourui wakes a sleeping controller within 3 s | `raw_write` allows word1 ∈ {0,1} and pauses keep-awake | SIM hook only |
+| `sleep_wake` | the frame policy rejects word1 = 1, and merakiplus wakes a sleeping controller within 3 s | `raw_write` allows word1 ∈ {0,1} and pauses keep-awake | SIM hook only |
 | `grind`, `gesture_switcher` | a gesture written all at once to the FIFO lasted 0 ms | a touch queue driven by the records' timestamps | SIM HAL only |
 | `brew`, `hotwater`, `steam_*` | the chip shows DONE for 8 s; the scenarios wait for READY | `phase` = the raw phase, `phase_ui` = the chip | state JSON only |
 | `language` | `lang` must be `config.language`, not the UI language | `lang` + a new field `ui_lang` | state JSON only |
@@ -1463,7 +1463,7 @@ The five matrix rows have also been run through the real stepper + SAVE with tou
 `crc_garbage`, `fault_e2`, `fault_e3`, `offline`, `replay_v2` and `replay_session` passed with the HAL alone.
 
 **6 · Findings and open points**
-* **Boot push on the device — requires a decision.** ourui has never boot-pushed; the contract assumed it. In run.sh mode it does not matter: the paused stock UI has done it. On a **slot B boot** (v6.2) the stock UI never starts. The MCU's register file is in RAM and is initialized to fixed start values (registermap §2: word 11 = 920, word 114 = 50, word 14 = 4, word 25 = 550 …), so after a cold start the controller has **a brew setpoint of 92.0 °C and a group head of 50 °C where the config says 87.0 and 70** — until ourui writes the words. That happens on SAVE, in the start blocks (brew/water send words 11, 14 and 17 along; steam word 25; grind word 4) and, for the brew weight and pre-infusion/group head, right before BREW. According to the static analysis the boiler therefore heats towards the wrong temperature until the first brew; this has **not been measured on the machine** (test plan P3). HOME would show it honestly (*BREW TEMP SET TO 92.0°*), but that is hardly desired. The code exists (`boot_push_step()`, only compiled in SIM/preview) and is tested in the SIM and the self-test: through the frame policy, deferred while an activity is running. Using it on the device requires two calls in `main()` (start + step) and `OURUI_BOOTPUSH` defined in the device build. This has **not** been done in v6.4, because it is new write behavior on the real MCU — 30 words in one block — that has not been tried on the machine, and because the device build was to stay unchanged in this round. Test plan P3 first measures whether the problem exists. *(Done in v6.5.)*
+* **Boot push on the device — requires a decision.** merakiplus has never boot-pushed; the contract assumed it. In run.sh mode it does not matter: the paused stock UI has done it. On a **slot B boot** (v6.2) the stock UI never starts. The MCU's register file is in RAM and is initialized to fixed start values (registermap §2: word 11 = 920, word 114 = 50, word 14 = 4, word 25 = 550 …), so after a cold start the controller has **a brew setpoint of 92.0 °C and a group head of 50 °C where the config says 87.0 and 70** — until merakiplus writes the words. That happens on SAVE, in the start blocks (brew/water send words 11, 14 and 17 along; steam word 25; grind word 4) and, for the brew weight and pre-infusion/group head, right before BREW. According to the static analysis the boiler therefore heats towards the wrong temperature until the first brew; this has **not been measured on the machine** (test plan P3). HOME would show it honestly (*BREW TEMP SET TO 92.0°*), but that is hardly desired. The code exists (`boot_push_step()`, only compiled in SIM/preview) and is tested in the SIM and the self-test: through the frame policy, deferred while an activity is running. Using it on the device requires two calls in `main()` (start + step) and `MERAKIPLUS_BOOTPUSH` defined in the device build. This has **not** been done in v6.4, because it is new write behavior on the real MCU — 30 words in one block — that has not been tried on the machine, and because the device build was to stay unchanged in this round. Test plan P3 first measures whether the problem exists. *(Done in v6.5.)*
 * **`rx_feed` can stall for about 3.5 s (code reading, not reproduced).** If the parser sees `AA 55` followed by a length field > 129 in a non-special frame, it breaks out without advancing and stays there until the 8 kB buffer overflows. The UI would show OFFLINE and then recover by itself. Requires a bit error in exactly the length byte; `crc_garbage` does not hit it. The fix is one line (`if(L>REGN){ i++; continue; }`), but it has been kept out of v6.4 because the device build was to stay unchanged. *(Fixed in v6.5.)*
 * **The host's images are not bit-identical with ARM code.** The same source compiled for ARMv7 and run emulated in a local container gives 56/56 previews that differ from the host's by on average 72 pixels (0.03 %) with ±1 in one color channel — and in one place a 3×8 px glyph fragment. The self-test is green on ARM in both languages (198 of 199 checks; the last one requires the vendor binary, which is not in the container). Invisible, but previews and SIM snapshots are therefore not pixel-exact predictions of the device.
 * **The UI profile should become superfluous.** Its 22 overrides belong in `gen_scenarios.py`/`ref_client.py` (as `hotwater_mode` already is). The proposal is in the contract addendum.
@@ -1483,8 +1483,8 @@ Measured as on the device — only `ui_frame()` — over all rendered frames in 
 
 **Host figures (Apple silicon), not the device's — and they cannot be scaled up.** In real time the process sleeps 2 ms between rounds, so every frame starts with cold caches; that is why the average here is about 10× the bench figure in §8 (0.03 ms, a warm loop), which is what §8's extrapolation is based on. The worst frame in `settings_save_matrix` is a SAVE frame: `cfg_set_int()` with backup, `fsync` and rename runs inside `ui_update()` — it does so on the device too, where the flash write will cost more. The caveat from §8 stands unchanged: the device's frame time must be read on the device (DIAGNOSTICS, `FRAME MS NOW/MAX`), especially right after a SAVE. The emulated ARM run (bench under qemu: 1.0 ms per brew frame, 4.2 ms for a full rebuild) is not a device figure either.
 
-**8 · Changes outside `ourui_v6.c`**
-* `sim/run_e2e.py` — additive: `OURUI_LANGFILE` + `--ui-lang`, the UI profile (`--ui-profile` / `--no-ui-profile`), `--run-name`, `--scen-dir`, language/check count/frame time in the report. Reference runs are unchanged.
+**8 · Changes outside `merakiplus.c`**
+* `sim/run_e2e.py` — additive: `MERAKIPLUS_LANGFILE` + `--ui-lang`, the UI profile (`--ui-profile` / `--no-ui-profile`), `--run-name`, `--scen-dir`, language/check count/frame time in the report. Reference runs are unchanged.
 * `sim/CONTRACT.md` — ADDENDUM v6.4 added at the bottom; the contract text is untouched. No other files in `sim/` have changed; the scenarios are unchanged.
 * `round_v6/build_previews.sh` — now compares all previews with v6.3 and fails on an unintended difference.
 * New: `build_sim.sh`, `sim_e2e.py`, `sim_ui_profile.json`, `sim_scenarios/`.
@@ -1496,7 +1496,7 @@ Measured as on the device — only `ui_frame()` — over all rendered frames in 
 
 ## CHANGES-v6.5
 
-Two fixes in the **device build**, both from the findings in CHANGES-v6.4 item 6: (1) ourui now boot-pushes the config to the controller itself — also on the device — and (2) the RX parser can no longer stall. In addition two new DIAGNOSTICS fields. Protocol, frame policy, keep-awake, the save path, activity recipes, boot/switch logic, texts and drawing code are unchanged; the SIM build's behavior is unchanged. The toast *SAVE FAILED · NO ACK · NOT SAVED* / *GEM FEJLET · INGEN ACK · INTET GEMT* from v6.4 stays as it is.
+Two fixes in the **device build**, both from the findings in CHANGES-v6.4 item 6: (1) merakiplus now boot-pushes the config to the controller itself — also on the device — and (2) the RX parser can no longer stall. In addition two new DIAGNOSTICS fields. Protocol, frame policy, keep-awake, the save path, activity recipes, boot/switch logic, texts and drawing code are unchanged; the SIM build's behavior is unchanged. The toast *SAVE FAILED · NO ACK · NOT SAVED* / *GEM FEJLET · INGEN ACK · INTET GEMT* from v6.4 stays as it is.
 
 **1 · Result**
 
@@ -1514,7 +1514,7 @@ Two fixes in the **device build**, both from the findings in CHANGES-v6.4 item 6
 | Targeted scenarios (`idle`, `no_ack`, `crc_garbage`, `out_of_spec`, `replay_v3`, `brew`) | **6/6** |
 | The whole suite, real UI, **English** | **23/23 scenarios · 589/589 checks** · settings_save_matrix 188/188 |
 | The whole suite, real UI, **Danish** | **23/23 scenarios · 589/589 checks** · settings_save_matrix 188/188 |
-| ourui's own touch scenarios · SWITCH NOW without dry run | English **4/4 · 87/87**, Danish **4/4 · 87/87** · **9/9** |
+| merakiplus's own touch scenarios · SWITCH NOW without dry run | English **4/4 · 87/87**, Danish **4/4 · 87/87** · **9/9** |
 
 Reports: `sim/reports/v6.5/` — start with `SUMMARY.md`.
 
@@ -1522,14 +1522,14 @@ The suite now has 23 scenarios (v6.4: 22; `replay_steam_live` is the test work s
 
 **2 · Boot push on the device**
 
-*What.* At startup — both in a slot B boot and in run.sh — ourui sends the two blocks the stock UI's `fuart_thread` sends when it starts (PARITY §1.3–1.4):
+*What.* At startup — both in a slot B boot and in run.sh — merakiplus sends the two blocks the stock UI's `fuart_thread` sends when it starts (PARITY §1.3–1.4):
 
 ```
 cmd6 sub1   len30   words 1..30      67 bytes
 cmd6 sub112 len3    words 112..114   13 bytes
 ```
 
-The code is v6.4's SIM boot push (`boot_push_step()`), now compiled in all build types; the `OURUI_BOOTPUSH` flag is gone, and the write queue's block limit is 30 words everywhere (the v6.4 device: 24).
+The code is v6.4's SIM boot push (`boot_push_step()`), now compiled in all build types; the `MERAKIPLUS_BOOTPUSH` flag is gone, and the write queue's block limit is 30 words everywhere (the v6.4 device: 24).
 
 *Why.* On a slot B boot the stock UI never starts. The controller's register file is in RAM and gets fixed start values on every startup (registermap §2), so without a boot push it has **a brew setpoint of 92.0 °C and a group head of 50 °C where the config says 87.0 and 70** — until the first SAVE or the first start block. That was the open point in v6.4.
 
@@ -1551,14 +1551,14 @@ With the current config the two frames on the line are `aa 55 06 01 1e 00 00 01 
 
 *Through the frame policy, like everything else.* The blocks are queued with `wq_push()` without an intent: the start words and words 26/27/30 cannot be anything but 0, every word must be within its spec range, and every block gets the write queue's ACK wait with **one** retransmit (150 ms + 300 ms). A config value out of spec gets the **whole** `sub1 len30` rejected and counted (BLOCK +1) — it is never sent; `sub112 len3` is still sent.
 
-*The activity guard.* `sub1 len30` writes the start words to 0. If an activity is already running when ourui starts — run.sh started in the middle of a brew, or ourui restarted during one — the block could interrupt it. Therefore:
+*The activity guard.* `sub1 len30` writes the start words to 0. If an activity is already running when merakiplus starts — run.sh started in the middle of a brew, or merakiplus restarted during one — the block could interrupt it. Therefore:
 
 * The decision is made **once**: the first time the link is up **and** word 33 (work_sta) has been read. Before that nothing is sent — not even if the link is only "up" because the controller has asked for the version.
 * If grind, brew, hot water or steam is running at that moment (`phase_active()`: work_sta bit 6 · bits 1+2 · bits 1+3 · bits 5+14 — the same patterns that block activity starts and SWITCH NOW), **the push is skipped**. It is not deferred and not repeated by a later SAVE. The controller then has the values the activity was started with; every SAVE and every start block still writes its own words.
 * If the machine is idle — `0101` (awake), `0001` (sleep/drain) or `0000` — the push is sent.
 * An activity that starts **after** the decision (between the two blocks) **defers** the missing block until the machine is idle.
 * The guard is deliberately tied to the four known activity patterns and not to "any bit beyond `0101`". An unknown bit during e.g. cold heating or water refill would otherwise get the push skipped precisely at the cold slot B start it is meant for — and the stock UI boot-pushes by itself without looking at work_sta.
-* The SIM build does **not** have the guard by default: it defers, as in v6.4 (the contract behavior is unchanged). `OURUI_SIM_BOOTPUSH_GUARD=1` gives the SIM build the device's guard, so it can be run against the simulated MCU (item 6).
+* The SIM build does **not** have the guard by default: it defers, as in v6.4 (the contract behavior is unchanged). `MERAKIPLUS_SIM_BOOTPUSH_GUARD=1` gives the SIM build the device's guard, so it can be run against the simulated MCU (item 6).
 
 *Outcome* — shown on DIAGNOSTICS (item 4):
 
@@ -1570,11 +1570,11 @@ With the current config the two frames on the line are `aa 55 06 01 1e 00 00 01 
 | NO CONFIG (amber) | a boot push key is missing from config.json; nothing is sent (no guessed values) | yes |
 | SKIPPED | the activity guard | no |
 | WAITING / SENDING | not finished yet (no link, queue busy, activity in progress) | — |
-| OFF | `OURUI_NOBOOTPUSH=1` or `OURUI_READONLY=1` | — |
+| OFF | `MERAKIPLUS_NOBOOTPUSH=1` or `MERAKIPLUS_READONLY=1` | — |
 
-*In run.sh mode* the paused stock UI has already sent the blocks; ourui sends the same values again. Two things are worth knowing: the low byte of word 113 gets `breakTime` again (the controller overwrites it itself at the next brew, §4a), and recipe words the stock UI may have set from an NFC card or a preset (13, 15, 18) go back to the boot values — exactly as a restart of the stock UI would.
+*In run.sh mode* the paused stock UI has already sent the blocks; merakiplus sends the same values again. Two things are worth knowing: the low byte of word 113 gets `breakTime` again (the controller overwrites it itself at the next brew, §4a), and recipe words the stock UI may have set from an NFC card or a preset (13, 15, 18) go back to the boot values — exactly as a restart of the stock UI would.
 
-*Disable:* `OURUI_NOBOOTPUSH=1` gives the v6.4 behavior. `OURUI_READONLY=1` sends no cmd6 at all, as before.
+*Disable:* `MERAKIPLUS_NOBOOTPUSH=1` gives the v6.4 behavior. `MERAKIPLUS_READONLY=1` sends no cmd6 at all, as before.
 
 **3 · RX resync watchdog**
 
@@ -1595,7 +1595,7 @@ Both have been reproduced: the new self-tests fail against v6.4's parser (11 of 
 | Measurement | Value | Source | Relation to 400 ms |
 |---|---|---|---|
 | The longest valid frame on the line (265 bytes, 57600 8N1) | 46 ms | PROTOCOL §2 | 8.7× below |
-| Poll cadence, stock (ourui polls every 50 ms) | ~100–130 ms | UARTLIVE / BREW / HOTWATER / SESSION §2 | pauses *between* frames — do not affect the watchdog |
+| Poll cadence, stock (merakiplus polls every 50 ms) | ~100–130 ms | UARTLIVE / BREW / HOTWATER / SESSION §2 | pauses *between* frames — do not affect the watchdog |
 | The longest poll gap | 456 ms (HOTWATER), 451 (UARTLIVE), 318 (BREW), 145 (SESSION) | same | ditto |
 | ACK latency, normal | 12–25 ms | HOTWATER, BREW §3.2 | — |
 | **The longest MCU silence** (the first ACK after a start write) | **249–279 ms** | BREW §3.2 | 400 ms = 1.4× |
@@ -1634,20 +1634,20 @@ The watchdog only measures a candidate that is waiting for the rest of itself. B
 * no retransmit before 150 ms, exactly one at 150 ms with the same bytes; no ACK → NO ACK after 450 ms, and the next block is sent anyway;
 * **the guard:** work_sta `0141` / `1107` / `1307` / `030B` / `4121` at startup → 0 bytes sent, not even 25 s after the activity has ended or after a SAVE; `0101` / `0001` / `0000` → the push is sent; an activity between the two blocks → block 2 is deferred 30 s and then sent;
 * config out of spec → `sub1 len30` rejected (BLOCK +1, 0 bytes), `sub112 len3` sent; after a SAVE that fixes the value, the push is repeated; a completed push is not repeated;
-* a missing config key → nothing is sent; read-only and `OURUI_NOBOOTPUSH` → nothing is sent; the DIAGNOSTICS texts for each outcome.
+* a missing config key → nothing is sent; read-only and `MERAKIPLUS_NOBOOTPUSH` → nothing is sent; the DIAGNOSTICS texts for each outcome.
 
 *RX resync (19):* a corrupt length byte (impossible; possible but too long, with and without subsequent traffic) · the v6.4 scenario over 3 s of poll traffic (all 60 replies, the largest gap 50 ms) · a truncated frame in five variants · a burst of noise · each of 9 "worst" prefixes in front of valid frames · 40 valid replies + 1 ACK interleaved with noise, CRC errors, impossible and too long lengths, truncated frames and `AA 55 03` (all 41 received once, in order) · pauses *between* frames of 100–1400 ms and *in the middle of* a frame of 20–398 ms (no resync) · 450 ms in the middle of a frame (that frame is given up, the next one is received) · the version handshake and a valid command 3 · an ACK behind a stuck candidate · the window's three limits.
 
 **6 · SIM build and E2E**
 
-* **The SIM behavior is unchanged:** the boot push is deferred during an activity (no guard), and `OURUI_SIM_NOBOOTPUSH=1` disables it. The repeat after a SAVE now lives in `save_step()` for all build types instead of in the SIM hook — the same condition.
-* **New in the state JSON:** `rx_resync`, and `boot_push.sub1_len30` / `.sub112_len3` can be `skipped`. **New environment variable:** `OURUI_SIM_BOOTPUSH_GUARD=1` (the device's guard). Addendum in [sim/CONTRACT.md](../../sim/CONTRACT.md).
+* **The SIM behavior is unchanged:** the boot push is deferred during an activity (no guard), and `MERAKIPLUS_SIM_NOBOOTPUSH=1` disables it. The repeat after a SAVE now lives in `save_step()` for all build types instead of in the SIM hook — the same condition.
+* **New in the state JSON:** `rx_resync`, and `boot_push.sub1_len30` / `.sub112_len3` can be `skipped`. **New environment variable:** `MERAKIPLUS_SIM_BOOTPUSH_GUARD=1` (the device's guard). Addendum in [sim/CONTRACT.md](../../sim/CONTRACT.md).
 * **Boot push against the simulated MCU** (`sim_e2e.py --only bootpush`, 23/23) — the same main loop and the same `boot_push_step()` as the device:
   * *"slot B boot":* the controller is set to its start values (word 11 = 920, word 114 = 50 …); the UI starts with the guard and brings words 1..30 + 112..114 to the config (870 / 70 …). The write order is `sub0 len1`, `sub1 len1`, `sub1 len30`, `sub112 len3` — and nothing else.
   * *Restart in the middle of a brew, with the guard:* UI no. 2 only sends PowerOn/keep-awake; the brew stops by itself at the target weight; the push is not sent afterwards either.
   * *The same without the guard (the contract mode):* the push is sent when the brew has ended.
-* **RX stall:** the test work stream's `sim/rx_stall_repro.py` is run against v6.5 and against a SIM binary built from `ourui_v6_4.c` (`rx_stall.txt`).
-* **The UI profile is out of use:** the test work stream's scenarios now assert ourui's guarded behavior directly, and the runner runs the SIM build with its own, empty default profile. `sim_ui_profile.json` from v6.4 is no longer read.
+* **RX stall:** the test work stream's `sim/rx_stall_repro.py` is run against v6.5 and against a SIM binary built from `merakiplus_v6_4.c` (`rx_stall.txt`).
+* **The UI profile is out of use:** the test work stream's scenarios now assert merakiplus's guarded behavior directly, and the runner runs the SIM build with its own, empty default profile. `sim_ui_profile.json` from v6.4 is no longer read.
 
 **7 · What has changed in the device build — the full list**
 
@@ -1655,33 +1655,33 @@ The watchdog only measures a candidate that is waiting for the rest of itself. B
 
 | | Fragments |
 |---|---|
-| **Changed (14)** | `rx_feed()` · `main()` (start + step of the boot push, the watchdog call, `OURUI_NOBOOTPUSH`) · `save_step()` (repeat the push after a SAVE) · `diag_top_text()`, `draw_diag()`, `scroll_max()`, `DG_LAB` (DIAGNOSTICS) · `WFrame`, `wq_push_t()`, `wq_tx()` (block limit 24 → 30 words) · the string table and its ids · `splash_status()`, `OURUI_MARK` (the version string) |
+| **Changed (14)** | `rx_feed()` · `main()` (start + step of the boot push, the watchdog call, `MERAKIPLUS_NOBOOTPUSH`) · `save_step()` (repeat the push after a SAVE) · `diag_top_text()`, `draw_diag()`, `scroll_max()`, `DG_LAB` (DIAGNOSTICS) · `WFrame`, `wq_push_t()`, `wq_tx()` (block limit 24 → 30 words) · the string table and its ids · `splash_status()`, `MERAKIPLUS_MARK` (the version string) |
 | **New (14)** | `boot_push_words()`, `boot_push_cfg_ok()`, `boot_push_start()`, `boot_push_step()`, `boot_push_resave()` (+ prototype), `bp_failed()`, `bp_text()` · the state `bp`, `bp_on` and the two enums · `rx_resync`, `rx_pend_ms` / `rx_last_ms` |
 | **Unchanged** | the other 1326 — including the frame policy, the write queue's ACK/retransmit logic, keep-awake, the save path, the activity recipes, phase detection, the boot/switch logic and all drawing code |
 
 **8 · Open points and caveats**
 
-* **The word layout has never been seen on the line.** The stock UI's boot push was found by static analysis (PARITY §1.3–1.4) and has not been caught in a capture. ourui sends what the analysis says; test plan K + Q2 compare it with the stock UI's own. *(Later confirmed on the device — see [power.md](../power.md) §3.)*
-* **A 30-word block is new on the real controller as seen from ourui** (the largest so far: 18 words). The stock UI sends it at every startup, and the controller's write handler is a `memcpy` with a band check (`sub + len < 33`), but the ACK latency for 67 bytes has not been measured. If it is above 450 ms, DIAGNOSTICS shows *NO ACK* — the values have then very likely been written anyway, and `MIRROR 112-114` + HOME show it.
-* **NO ACK gives no new attempt by itself** — only at the next SAVE or the next start of ourui. This follows the task's "ACK wait + one retransmit". A limited number of automatic repeats, or a reconciliation of the mirror against the config, is a possible next round; it has not been done because it is new write behavior that cannot be tried without the machine.
-* **If the controller restarts while ourui is running,** it is back on its start values, and ourui does not push again. The stock UI has the same gap. Not in this round. *(Done in v6.6: re-push.)*
-* **The guard only knows the four activities.** Drain, back-flush and self-test, started from the stock UI right before run.sh, are not `phase_active()`; the push would then write words 8/20/28/29 = 0. ourui's keep-awake (word 1 = 0) already interrupts a drain at startup, so the order "service routine in the stock UI → run.sh" was not safe before either.
+* **The word layout has never been seen on the line.** The stock UI's boot push was found by static analysis (PARITY §1.3–1.4) and has not been caught in a capture. merakiplus sends what the analysis says; test plan K + Q2 compare it with the stock UI's own. *(Later confirmed on the device — see [power.md](../power.md) §3.)*
+* **A 30-word block is new on the real controller as seen from merakiplus** (the largest so far: 18 words). The stock UI sends it at every startup, and the controller's write handler is a `memcpy` with a band check (`sub + len < 33`), but the ACK latency for 67 bytes has not been measured. If it is above 450 ms, DIAGNOSTICS shows *NO ACK* — the values have then very likely been written anyway, and `MIRROR 112-114` + HOME show it.
+* **NO ACK gives no new attempt by itself** — only at the next SAVE or the next start of merakiplus. This follows the task's "ACK wait + one retransmit". A limited number of automatic repeats, or a reconciliation of the mirror against the config, is a possible next round; it has not been done because it is new write behavior that cannot be tried without the machine.
+* **If the controller restarts while merakiplus is running,** it is back on its start values, and merakiplus does not push again. The stock UI has the same gap. Not in this round. *(Done in v6.6: re-push.)*
+* **The guard only knows the four activities.** Drain, back-flush and self-test, started from the stock UI right before run.sh, are not `phase_active()`; the push would then write words 8/20/28/29 = 0. merakiplus's keep-awake (word 1 = 0) already interrupts a drain at startup, so the order "service routine in the stock UI → run.sh" was not safe before either.
 * **Build scripts could hide an error.** Both `build_sim.sh` and `build_previews.sh` sent their checks through `tee`, and an error in an embedded Python check just aborted the block with exit 0. Both now fail loudly. (Discovered when the i18n appendix was out of sync and the script still reported 0.)
 * **The host's SIM binary has no stable md5** (Mach-O; every link gives a new one). The device binary and the ARM SIM binary are reproducible.
-* **Outside this round, but relevant for a permanent slot B boot: the clock is 32-bit.** `now_ms()` returns `long`, which is 32 bits on the device (measured in the local ARMv7 container: `sizeof(long)` = 4, `time_t` = 8). The millisecond clock therefore wraps around **24.86 days after startup**. Time differences (`now − x`) survive the wraparound, but the main loop's timers are compared absolutely (`now >= next_poll`, `next_render`, `next_slow`, `next_ext`, keep-awake): a timer that has been set to one of the last milliseconds before the wraparound, and which the loop's 2 ms steps skip over, only becomes true again 49.7 days later — the poll or rendering then stands still until ourui is restarted, and the watchdog only looks at the PID. Estimated risk: a few percent per timer per wraparound. The bug is older than v6.5 (inherited from v4) and has not been fixed here; v6.5's new code only uses differences. The fix is a 64-bit time base throughout the file — a proposal for the next round. *(Done in v6.6.)*
+* **Outside this round, but relevant for a permanent slot B boot: the clock is 32-bit.** `now_ms()` returns `long`, which is 32 bits on the device (measured in the local ARMv7 container: `sizeof(long)` = 4, `time_t` = 8). The millisecond clock therefore wraps around **24.86 days after startup**. Time differences (`now − x`) survive the wraparound, but the main loop's timers are compared absolutely (`now >= next_poll`, `next_render`, `next_slow`, `next_ext`, keep-awake): a timer that has been set to one of the last milliseconds before the wraparound, and which the loop's 2 ms steps skip over, only becomes true again 49.7 days later — the poll or rendering then stands still until merakiplus is restarted, and the watchdog only looks at the PID. Estimated risk: a few percent per timer per wraparound. The bug is older than v6.5 (inherited from v4) and has not been fixed here; v6.5's new code only uses differences. The fix is a 64-bit time base throughout the file — a proposal for the next round. *(Done in v6.6.)*
 
-**9 · Changes outside `ourui_v6.c`**
+**9 · Changes outside `merakiplus.c`**
 * `build_sim.sh` — now compares against v6.4 per fragment (item 7); fails loudly.
 * `round_v6/build_previews.sh` — compares all previews with v6.4 (`v64_compare.txt`); collects all checks at the end and fails if any of them does.
 * `sim_e2e.py` — `sim/reports/v6.5/`; new parts `bootpush`, `rxstall`, `targeted`.
 * [sim/CONTRACT.md](../../sim/CONTRACT.md) — ADDENDUM v6.5 added at the bottom. `sim/scenarios/`, `sim/mcu_sim.py`, `sim/run_e2e.py` and `boot/` were **not** touched.
-* `ourui_v6_4.c` / `ourui_v6_4.bin` — v6.4 kept unchanged. `run.sh` (md5 `3d799859…`) and `artifacts/config.json` (md5 `<config-md5-redacted>`) are unchanged.
+* `merakiplus_v6_4.c` / `merakiplus_v6_4.bin` — v6.4 kept unchanged. `run.sh` (md5 `3d799859…`) and `artifacts/config.json` (md5 `<config-md5-redacted>`) are unchanged.
 
 **Not verified (requires the device):** everything — test plan Q.
 
 ## CHANGES-v6.6
 
-Three things: (1) the phase semantics now follow what the live session in `STEAMLIVE.md` has proven — two steam paths and concurrent phases; (2) the clock is 64-bit — up to and including v6.5 it wrapped after 24.86 days on the device; (3) if the controller restarts while ourui is running, the boot push is sent again. Protocol, frame policy, write queue, keep-awake cadence, the save path, activity recipes, boot/switch logic and the config format are unchanged. The state contract's field `phase` is unchanged.
+Three things: (1) the phase semantics now follow what the live session in `STEAMLIVE.md` has proven — two steam paths and concurrent phases; (2) the clock is 64-bit — up to and including v6.5 it wrapped after 24.86 days on the device; (3) if the controller restarts while merakiplus is running, the boot push is sent again. Protocol, frame policy, write queue, keep-awake cadence, the save path, activity recipes, boot/switch logic and the config format are unchanged. The state contract's field `phase` is unchanged.
 
 **1 · Result**
 
@@ -1701,7 +1701,7 @@ Three things: (1) the phase semantics now follow what the live session in `STEAM
 | Clock wraparound in real time (`wrap.txt`) | **15/15** — 2^31 and 2^32 ms; 32-bit baseline: 227 keep-awake writes in 6 s, a DONE chip without an activity, no state lines after the wraparound |
 | MCU restart → re-push (`repush.txt`) | **14/14** — the controller back on the config 0.40 s after the restart; v6.5 baseline: stays at 920 / 50 |
 | Boot push (the v6.5 test) · RX stall repro · SWITCH NOW without dry run | **23/23** · v6.6 never OFFLINE, RESYNC = 1 (v6.4 baseline: 4.0 s without RX) · **9/9** |
-| ourui's own scenarios (4 touch + the new replay scenario) | English **5/5 · 110/110**, Danish **5/5 · 110/110** |
+| merakiplus's own scenarios (4 touch + the new replay scenario) | English **5/5 · 110/110**, Danish **5/5 · 110/110** |
 | Targeted scenarios (`idle`, `brew`, `grind`, `hotwater`, `steam_auto`, `steam_manual_stop`, `replay_steam_live`, `no_ack`, `out_of_spec`, `offline`, `sleep_wake`) | **11/11** |
 
 Reports: `sim/reports/v6.6/` — start with `SUMMARY.md`.
@@ -1719,7 +1719,7 @@ Reports: `sim/reports/v6.6/` — start with `SUMMARY.md`.
 | Stop | **the MCU itself**, when the milk (word 48) reaches the target (word 25): clears the bits and then word 24. No stop write | when the wand is released. **No auto-stop** — not even above the target (the probe reached 69.5 °C with a target of 65.0 °C) |
 | After the stop | the probe keeps rising about 3.9 °C over ~11 s (thermal inertia) | — |
 
-*What ourui shows now.*
+*What merakiplus shows now.*
 
 | State | Chip | Label / sub-line | Gauge | Button row |
 |---|---|---|---|---|
@@ -1778,19 +1778,19 @@ In addition: the RX counters are `uint32_t` (wrap around in a well-defined way),
 *Tested in three ways.*
 1. **Self-test (18 checks)** with a mock clock across 2^31 ms and 2^32 ms: the main loop with one 40 ms step that skips all three poll deadlines; the render timer; keep-awake (exactly 2 writes in 65 s, at B + 10 000 and B + 40 000 ms); the ACK budget (retransmit at exactly +150 ms, given up +300 ms later); the resync window (exactly 400 ms); hold-to-start (nothing at 649 ms, start at 650 ms); the stepper repeat (the same value as far from the limit); toast; page transition; frame time statistics; differences of 24.86 days; 2^45 ms; a `/proc` start time above 2^31 ticks; the counters' wraparound.
 2. **As a real 32-bit binary.** The self-test has been cross-compiled statically for ARMv7 and run in the local ARMv7 container (`getconf LONG_BIT` = 32): green in both languages. The same source with `typedef long ms_t` fails 10 of the wraparound checks on the same platform — and 0 on the host, where `long` is 64 bits. That is exactly why the bug could not be seen in any earlier local run.
-3. **The real main loop in real time** (`sim_e2e.py --only wrap`): the SIM build is started with the clock 6 s before 2^31 or 2^32 ms (`OURUI_SIM_UPTIME_MS`, only exists in the SIM build) and runs for 44 s against the simulated MCU — results in item 6.
+3. **The real main loop in real time** (`sim_e2e.py --only wrap`): the SIM build is started with the clock 6 s before 2^31 or 2^32 ms (`MERAKIPLUS_SIM_UPTIME_MS`, only exists in the SIM build) and runs for 44 s against the simulated MCU — results in item 6.
 
 **4 · Re-push after an MCU restart**
 
-*The gap.* The controller's register file is in RAM. If the MCU restarts while ourui is running, it is back on its start values (brew 92.0 °C, group 50 °C, pre-infusion reset), and v6.5 did not push again. The stock UI has the same gap.
+*The gap.* The controller's register file is in RAM. If the MCU restarts while merakiplus is running, it is back on its start values (brew 92.0 °C, group 50 °C, pre-infusion reset), and v6.5 did not push again. The stock UI has the same gap.
 
 *Two signs of a restart:*
 
-**(a) The version request arrives again.** The MCU sends `cmd 0x89` every 20 ms from its startup until it has got a reply — and only then (0 in 12 minutes of live traffic). ourui replies to each one as before. An `0x89` arriving more than 200 ms after the boot push left WAITING is an MCU startup *after* our push. The first handshake is before the push and does not count; a straggler from it is within the 200 ms and does not count either. When the round has been quiet for 300 ms, and any push in progress is finished, the boot push is started again.
+**(a) The version request arrives again.** The MCU sends `cmd 0x89` every 20 ms from its startup until it has got a reply — and only then (0 in 12 minutes of live traffic). merakiplus replies to each one as before. An `0x89` arriving more than 200 ms after the boot push left WAITING is an MCU startup *after* our push. The first handshake is before the push and does not count; a straggler from it is within the 200 ms and does not count either. When the round has been quiet for 300 ms, and any push in progress is finished, the boot push is started again.
 
 **(b) The start value signature: word 112 = 0 and word 113 = 0.** These are the MCU's start values, and they can never be config values within spec (word 112's low byte is the pre-inf. pressure 3..4; word 113's high byte is the pre-inf. time ≥ 5). The signature therefore says unambiguously that words 112..114 have not been written since the MCU's startup. It must be present in **3 fresh reads in a row** (polled every 1 s), while the machine is idle, the link is up, the write queue is empty, and the config is loaded and in spec. It catches a restart where the `0x89` round was lost — and a boot push that the guard skipped while the controller was actually on the start values (a slot B boot with the wand open).
 
-*The re-push is the boot push.* The same two blocks (`sub1 len30` + `sub112 len3`), the same word layout, the same gate (`wq_push()` without an intent → the frame policy), the same ACK wait with one retransmit — and **the same activity guard**, decided on a work_sta read *after* the restart. If an activity is running at that moment, it is skipped; if the signature is present afterwards, (b) takes it when the machine is idle. In the SIM build without `OURUI_SIM_BOOTPUSH_GUARD` it is deferred, like the boot push.
+*The re-push is the boot push.* The same two blocks (`sub1 len30` + `sub112 len3`), the same word layout, the same gate (`wq_push()` without an intent → the frame policy), the same ACK wait with one retransmit — and **the same activity guard**, decided on a work_sta read *after* the restart. If an activity is running at that moment, it is skipped; if the signature is present afterwards, (b) takes it when the machine is idle. In the SIM build without `MERAKIPLUS_SIM_BOOTPUSH_GUARD` it is deferred, like the boot push.
 
 *Limits* — so a controller that does not accept it does not cause a stream of writes:
 
@@ -1799,9 +1799,9 @@ In addition: the RX counters are `uint32_t` (wrap around in a well-defined way),
 | Interval between two re-pushes | at least 5 s |
 | Signature-triggered re-pushes | at most 3 per 10 min (sliding) |
 | Config out of spec / missing | no signature-triggered re-push (the block would be rejected again) |
-| `OURUI_NOBOOTPUSH=1`, `OURUI_READONLY=1` | no re-push |
+| `MERAKIPLUS_NOBOOTPUSH=1`, `MERAKIPLUS_READONLY=1` | no re-push |
 
-*DIAGNOSTICS.* After a re-push the boot push row is called **RE-PUSH 2 · 1-30** (accent color) and **112-114**, where the number is the number of re-pushes since ourui started; the cells show the outcome of the latest push (OK, NO ACK, REJECTED, SKIPPED …). Without a re-push the row is unchanged *BOOT PUSH 1-30* / *BOOT PUSH 112-114*. Preview: `61_diag_repush`. Nothing else on the screen: no toast, nothing on HOME.
+*DIAGNOSTICS.* After a re-push the boot push row is called **RE-PUSH 2 · 1-30** (accent color) and **112-114**, where the number is the number of re-pushes since merakiplus started; the cells show the outcome of the latest push (OK, NO ACK, REJECTED, SKIPPED …). Without a re-push the row is unchanged *BOOT PUSH 1-30* / *BOOT PUSH 112-114*. Preview: `61_diag_repush`. Nothing else on the screen: no toast, nothing on HOME.
 
 *Consequence for an open point in v6.5:* a boot push that ended in NO ACK, and where words 112..113 were actually not written, now gets up to 3 new attempts by itself through (b). If the blocks were written and only the ACK was missing, nothing happens — as before.
 
@@ -1826,7 +1826,7 @@ In addition: the RX counters are `uint32_t` (wrap around in a well-defined way),
 * budget: a controller that ACKs but does not keep the values: 3 re-pushes, then quiet; 10 min after the first one, one new one is given;
 * a restart in the middle of a push (block A ACKed, block B without an ACK, `0x89`): the push is completed, and both blocks are sent again;
 * without the guard (the SIM contract): deferred and sent when the machine is idle;
-* no re-push: config out of spec, read-only, `OURUI_NOBOOTPUSH` — `0x89` is still answered.
+* no re-push: config out of spec, read-only, `MERAKIPLUS_NOBOOTPUSH` — `0x89` is still answered.
 
 *The mutation probes* are run by `build_previews.sh` on every run and fail if a mutant gets through.
 
@@ -1834,13 +1834,13 @@ In addition: the RX counters are `uint32_t` (wrap around in a well-defined way),
 
 * **The SIM behavior is unchanged** for everything the test work stream's scenarios measure: `phase`, `work_sta`, `regs`, toasts, writes.
 * **New in the state JSON:** `phase_main`, `phases` (all active ones, the main activity first), `steam{on, kind, last_kind, concurrent, wand_sw, wand_seen, ord24, target, milk, stop_btn}`, `shown.badge`, `repush{count, ver, defaults, last, armed, ver_reqs, defaults_sig}`; `regs` also has words 44 and 46. `shown.chip` is *STEAM·AUTO* / *STEAM·WAND* during steam.
-* **New environment variable, SIM only:** `OURUI_SIM_UPTIME_MS=<n>` — the clock starts at n ms.
-* **New behavior, visible to the sim:** after `reboot` (and after `link closed` → `up`, which also resets the version handshake) ourui sends the boot push again. None of the 25 scenarios does either.
-* **A new scenario at ourui:** `sim_scenarios/ui_replay_steam_live_x4.json` — the LIVE recording played back at 4×. `sim_e2e.py --only phases` then goes through **every state line** against the new fields — also in the test work stream's `steam_wand_flush` and `steam_auto_overshoot`, when they exist in the suite. Addendum in [sim/CONTRACT.md](../../sim/CONTRACT.md).
-* **Phase semantics against the LIVE recording** (`--only phases`, 20/20): in the replay each of the 182 (EN) / 191 (DA) lines with latched steam has `steam.kind` = auto, the chip *STEAM·AUTO* / *DAMP·AUTO* and a STOP button; after the auto-stop the note *RISES ≈4° MORE* is shown, and the probe goes from 64.6° to 68.9°. Every line with work_sta `5327` has `kind` = wand, `phase` = STEAM (the contract), `phase_main` = EXT, chip + badge, the weight in the hero (21.6 → 27.9 g) and the milk in the 3rd stat field (51.4° → 66.7°); the probe reaches 69.5° without a STOP button and without DONE. No line is misclassified, and ourui sent 0 stop writes.
+* **New environment variable, SIM only:** `MERAKIPLUS_SIM_UPTIME_MS=<n>` — the clock starts at n ms.
+* **New behavior, visible to the sim:** after `reboot` (and after `link closed` → `up`, which also resets the version handshake) merakiplus sends the boot push again. None of the 25 scenarios does either.
+* **A new scenario at merakiplus:** `sim_scenarios/ui_replay_steam_live_x4.json` — the LIVE recording played back at 4×. `sim_e2e.py --only phases` then goes through **every state line** against the new fields — also in the test work stream's `steam_wand_flush` and `steam_auto_overshoot`, when they exist in the suite. Addendum in [sim/CONTRACT.md](../../sim/CONTRACT.md).
+* **Phase semantics against the LIVE recording** (`--only phases`, 20/20): in the replay each of the 182 (EN) / 191 (DA) lines with latched steam has `steam.kind` = auto, the chip *STEAM·AUTO* / *DAMP·AUTO* and a STOP button; after the auto-stop the note *RISES ≈4° MORE* is shown, and the probe goes from 64.6° to 68.9°. Every line with work_sta `5327` has `kind` = wand, `phase` = STEAM (the contract), `phase_main` = EXT, chip + badge, the weight in the hero (21.6 → 27.9 g) and the milk in the 3rd stat field (51.4° → 66.7°); the probe reaches 69.5° without a STOP button and without DONE. No line is misclassified, and merakiplus sent 0 stop writes.
 * **The same fields against the sim's own model** (the test work stream's two new scenarios, run in the suite): `steam_wand_flush` — 141 lines with `5327`, of which 48 with the probe above the target, all as above; after the release EXTRACTION continues without DONE. `steam_auto_overshoot` — 663 lines latched all the way, DONE with the note, the probe 64.9° at the stop and 68.8° afterwards.
 * **Clock wraparound** (`--only wrap`, 15/15): with the clock started 6 s before the limit and 44 s in real time: state lines all the way (the largest gap 171 ms), RX 25.6 replies/s before and after, exactly 2 keep-awake writes (0.06 s and 30.03 s), a hold-to-start that begins before and completes after the wraparound starts the brew, which stops by itself at its target weight; the toast from before the wraparound disappears on time. **Baseline** (the same source with `typedef int32_t ms_t`): the chip is on DONE from the start, 227 keep-awake writes in the first 6 s, RX 130/s (a poll stream), and no state lines after the wraparound.
-* **Re-push** (`--only repush`, 14/14): after the sim's `reboot` + start values ourui answers `0x89`, and 0.40 s after the restart words 11 / 114 / 112 are back at 870 / 70 / `0104`; the writes are exactly `sub1 len30` + `sub112 len3`; the sim does not report `boot_push_missing`. If the register file is reset without `0x89`, the signature triggers the re-push after 4.1 s. **Baseline** (a SIM binary built from `ourui_v6_5.c`): no writes, the controller stays at 920 / 50, and the sim reports `boot_push_missing`.
+* **Re-push** (`--only repush`, 14/14): after the sim's `reboot` + start values merakiplus answers `0x89`, and 0.40 s after the restart words 11 / 114 / 112 are back at 870 / 70 / `0104`; the writes are exactly `sub1 len30` + `sub112 len3`; the sim does not report `boot_push_missing`. If the register file is reset without `0x89`, the signature triggers the re-push after 4.1 s. **Baseline** (a SIM binary built from `merakiplus_v6_5.c`): no writes, the controller stays at 920 / 50, and the sim reports `boot_push_missing`.
 * **A/B step** (`--only ab`): scenarios that fail in the suite are run again against v6.6 and against the unchanged v6.5 binary on the same sim. In the rerun there was nothing to compare.
 
 **7 · What has changed in the device build — the full list**
@@ -1849,7 +1849,7 @@ In addition: the RX counters are `uint32_t` (wrap around in a well-defined way),
 
 | | Fragments |
 |---|---|
-| **Changed (28)** | *Clock:* `now_ms()`, `mono_s()`, `mono_fake`, `proc_stat()`, `restart_pending()`, `cfg_set_int()` (the stamp's format), `act` (field types), `rx_ok`, `rx_resync`, `main()` (the timers via `loop_*()`, the call to `repush_step()`) · *Phases:* `ui_update()`, `home_model()`, `HomeM`, `STAT_SET` + its enum, `draw_home()`, `draw_chart()`, `hit_test()` · *Re-push:* `rx_feed()` (counts `0x89` and reads of words 112..113), `bp`, `boot_push_start()`, `boot_push_step()` (the time the push left WAITING), `diag_top_text()`, `draw_diag()` · the string table and its ids · `splash_status()`, `OURUI_MARK` (the version string) |
+| **Changed (28)** | *Clock:* `now_ms()`, `mono_s()`, `mono_fake`, `proc_stat()`, `restart_pending()`, `cfg_set_int()` (the stamp's format), `act` (field types), `rx_ok`, `rx_resync`, `main()` (the timers via `loop_*()`, the call to `repush_step()`) · *Phases:* `ui_update()`, `home_model()`, `HomeM`, `STAT_SET` + its enum, `draw_home()`, `draw_chart()`, `hit_test()` · *Re-push:* `rx_feed()` (counts `0x89` and reads of words 112..113), `bp`, `boot_push_start()`, `boot_push_step()` (the time the push left WAITING), `diag_top_text()`, `draw_diag()` · the string table and its ids · `splash_status()`, `MERAKIPLUS_MARK` (the version string) |
 | **New (31)** | *Clock:* `ms_t`, `ts_ms()`, `lt`, `loop_poll()`, `loop_graph()`, `loop_render_due()`, `loop_rendered()` + a `_Static_assert` · *Phases:* `stm` + enum, `steam_bits()`, `wand_sw()`, `steam_track()`, `steam_stop_visible()`, `steam_target()` (+ prototype), `phase_main()`, `steam_label()` + a `_Static_assert` · *Re-push:* `rps` + enum, `bp_guard_cfg`, `ver_n`, `ver_ms`, `repush_count()` (+ prototype), `repush_cfg_sane()`, `mcu_defaults_sig()`, `repush_begin()`, `repush_step()`, `diag_label()` |
 | **Time type only (52)** | e.g. `wq_step()`, `wq_tx()`, `proto_keepawake()`, `link_up()`, `phase_raw()`, `act_guard()`, `act_request()`, `save_begin()`, `save_step()`, `ui_touch()`, `ui_frame()`, `do_switch()`, `switch_launch()` — the full list is in `sim_build_check.txt` |
 | **Unchanged (1274)** | including `frame_policy()`, `word_ok()`, `wq_push_t()`, `wq_push()`, `wq_on_ack()`, `wq_pop()`, `act_push()`, `act_push_steam_stop()`, `setting_mcu_push()`, `boot_push_words()`, `boot_push_resave()`, `build_write()`, `frame_query()`, `frame_version()`, `crc16()`, `boot_flag_set()`, `settings_load()` and all other drawing code |
@@ -1857,23 +1857,23 @@ In addition: the RX counters are `uint32_t` (wrap around in a well-defined way),
 **8 · Open points and caveats**
 
 * **None of it has been run on the device** — test plan R.
-* **The clock wraparound cannot be tested on the device in a reasonable time** (24.86 days). The proof is the three local tests in item 3, one of them on 32-bit ARM. `OURUI_SIM_UPTIME_MS` deliberately does not exist in the device binary.
+* **The clock wraparound cannot be tested on the device in a reasonable time** (24.86 days). The proof is the three local tests in item 3, one of them on 32-bit ARM. `MERAKIPLUS_SIM_UPTIME_MS` deliberately does not exist in the device binary.
 * **`0x89` is only known as a startup request.** If it also arrives in other situations (not seen in any capture), every round gives one re-push: the same values written again, with the guard. The counter on DIAGNOSTICS shows it — R7 asks for it to be read after a long session.
-* **An MCU restart cannot be provoked safely on the machine.** ourui never sends word 30 (reboot), and the MCU shares power with the display. (a) and (b) have therefore only been tested against the simulated MCU and in the self-test.
+* **An MCU restart cannot be provoked safely on the machine.** merakiplus never sends word 30 (reboot), and the MCU shares power with the display. (a) and (b) have therefore only been tested against the simulated MCU and in the self-test.
 * **The signature only looks at words 112..113.** A restart where (a) was lost **and** where block B was nevertheless written afterwards (e.g. by a brew start, which syncs words 112..114), but block A was not, is not detected: word 11 could be at 92.0 °C. The brew start itself sends word 11 in its block, so a brew gets the right temperature; the boiler would just hold 92.0 °C in between. A full reconciliation of the mirror against the config has not been done.
-* **A wand flush blocks starts from ourui.** While bits 5+14 are set, the start buttons answer *ACTIVITY IN PROGRESS*. In the live session the brew was started first and the wand opened afterwards; the reverse order has not been tried on the machine, and ourui does not allow it.
-* **Word 24 = 1 without the steam starting.** If the controller does not give bits 5+14 within 15 s, ourui shows *NO START · CHECK THE MACHINE* — but leaves word 24 as it is. Whether the MCU can then start the steam later is unknown. A STOP write on the timeout would close it; it has not been done, because it is new write behavior outside this round.
+* **A wand flush blocks starts from merakiplus.** While bits 5+14 are set, the start buttons answer *ACTIVITY IN PROGRESS*. In the live session the brew was started first and the wand opened afterwards; the reverse order has not been tried on the machine, and merakiplus does not allow it.
+* **Word 24 = 1 without the steam starting.** If the controller does not give bits 5+14 within 15 s, merakiplus shows *NO START · CHECK THE MACHINE* — but leaves word 24 as it is. Whether the MCU can then start the steam later is unknown. A STOP write on the timeout would close it; it has not been done, because it is new write behavior outside this round.
 * **The after-rise (≈4°) is one measured number** from one session (cold milk 12 → 65 °C). It is information in the sub-line, not a calculation.
 * **The host's SIM binary still has no stable md5** (Mach-O). The device binary and the ARM SIM binary are reproducible.
-* **New ground truth from the device, arriving during this round** (the boot work stream's `boot/ondevice/GROUND-TRUTH.md`, read — not touched): the stock UI's own boot push has now been captured on the line. `sub1 len30` is **byte-identical** to ourui's (67 bytes, `… 62 3e`) — the open point from CHANGES-v6.5 item 8 is thereby closed for that block. `sub112 len3` differs in **one byte**: the stock UI sends word 113 = `0600` (low byte 0), ourui sends `0605` (low byte = `breakTime` 5): `… 04 01 00 06 46 00 c7 ce` vs. ourui's `… 04 01 05 06 46 00 c7 02`. The controller overwrites the low byte itself at the next brew (§4a), and it has no known effect. **Not changed in v6.6:** the finding is outside the round's three items and arrived after the verification had been run; the fix is one line in `boot_push_words()` (`pack113(time, 0)`) plus the two test vectors, and it also applies to the re-push. Test plan Q2/Q3's expected frame is ourui's, not the stock UI's. The same capture shows that the stock UI does not send a separate PowerOn / keep-awake before the blocks; ourui does (unchanged since v6). *(Fixed in v6.7.)*
+* **New ground truth from the device, arriving during this round** (the boot work stream's `boot/ondevice/GROUND-TRUTH.md`, read — not touched): the stock UI's own boot push has now been captured on the line. `sub1 len30` is **byte-identical** to merakiplus's (67 bytes, `… 62 3e`) — the open point from CHANGES-v6.5 item 8 is thereby closed for that block. `sub112 len3` differs in **one byte**: the stock UI sends word 113 = `0600` (low byte 0), merakiplus sends `0605` (low byte = `breakTime` 5): `… 04 01 00 06 46 00 c7 ce` vs. merakiplus's `… 04 01 05 06 46 00 c7 02`. The controller overwrites the low byte itself at the next brew (§4a), and it has no known effect. **Not changed in v6.6:** the finding is outside the round's three items and arrived after the verification had been run; the fix is one line in `boot_push_words()` (`pack113(time, 0)`) plus the two test vectors, and it also applies to the re-push. Test plan Q2/Q3's expected frame is merakiplus's, not the stock UI's. The same capture shows that the stock UI does not send a separate PowerOn / keep-awake before the blocks; merakiplus does (unchanged since v6). *(Fixed in v6.7.)*
 
-**9 · Changes outside `ourui_v6.c`**
+**9 · Changes outside `merakiplus.c`**
 * `build_sim.sh` — compares against v6.5; time type differences separately; a check that the safety-critical fragments are token-identical; the self-test as a 32-bit ARM binary.
 * `round_v6/build_previews.sh` — compares all previews with v6.5 (`v65_compare.txt`); mutation probes (`mutation_check.txt`).
 * `sim_e2e.py` — `sim/reports/v6.6/`; new parts `phases`, `wrap`, `repush`; notes for each part whether the test work stream's files changed along the way.
 * `sim_scenarios/ui_replay_steam_live_x4.json` — new (additive).
 * [sim/CONTRACT.md](../../sim/CONTRACT.md) — ADDENDUM v6.6 added at the bottom. `sim/scenarios/`, `sim/mcu_sim.py`, `sim/run_e2e.py` and `boot/` were **not** touched.
-* `ourui_v6_5.c` / `ourui_v6_5.bin` — v6.5 kept unchanged. `run.sh` (md5 `3d799859…`) and `artifacts/config.json` (md5 `<config-md5-redacted>`) are unchanged.
+* `merakiplus_v6_5.c` / `merakiplus_v6_5.bin` — v6.5 kept unchanged. `run.sh` (md5 `3d799859…`) and `artifacts/config.json` (md5 `<config-md5-redacted>`) are unchanged.
 
 **Not verified (requires the device):** everything — test plan R.
 
@@ -1897,21 +1897,21 @@ In addition: the RX counters are `uint32_t` (wrap around in a well-defined way),
 
 **Network guard (Wi-Fi at startup + self-healing) and word 113 in the boot push.** On a slot B boot no Wi-Fi was started (INSTALL-REPORT §3.1). The stock UI brings Wi-Fi up itself via `libmi_wlan.so`; `demo.sh` does not. The mechanism has been proven by reverse engineering (`net_re/`, the comment "NET" in the source).
 
-1. **What ourui does — only when the stack is DOWN:**
+1. **What merakiplus does — only when the stack is DOWN:**
    * The init script `/config/wifi/ssw01bInit.sh` is only run if `wlan0` is missing.
    * `/appconfigs/wpa_supplicant.conf` is written from `config.json` in exactly the `save_config` format (md5-proven) and only if the contents differ.
    * Then `wpa_supplicant -i wlan0 -Dnl80211 -c …` is started and 1 s later `udhcpc -i wlan0 -s /etc/init.d/udhcpc.script -a -q -b -t 20 -T 1` — both with the stock UI's arguments. If `wlan0` still has an IP and a default route, they are kept (the same IP).
    * If the supplicant is alive but `wlan0` is down: `ifconfig wlan0 up`. No IP (8 s) or no default route despite carrier (3 s): `udhcpc` with backoff.
    * **A living wpa_supplicant is never touched** (0 `kill()` calls in the source). An init script that hangs is logged after 25 s and not killed.
    * Failing starts get a backoff of 5 → 10 → 20 → 40 → 60 s.
-   * `wifionoff = 0` or an invalid config (empty ssid, password < 8): the guard is OFF. `OURUI_NONET=1` disables it completely.
-2. **Visible:** DIAGNOSTICS → **NETWORK · WPA PID / IP / STATE** (e.g. `841 / <display-ip> / UP`, green). Log in `/tmp/ourui_net.log` (transitions only; the password is never written). `ourui --net-status` (read-only) and `--net-watch [s]`.
+   * `wifionoff = 0` or an invalid config (empty ssid, password < 8): the guard is OFF. `MERAKIPLUS_NONET=1` disables it completely.
+2. **Visible:** DIAGNOSTICS → **NETWORK · WPA PID / IP / STATE** (e.g. `841 / <display-ip> / UP`, green). Log in `/tmp/merakiplus_net.log` (transitions only; the password is never written). `merakiplus --net-status` (read-only) and `--net-watch [s]`.
 3. **Word 113 in the boot push** is now sent as the stock UI's recorded boot push, `0x0600`: the low byte (breakTime) is 0 (GROUND-TRUTH.md). The SAVE path still packs `time<<8 | breakTime` (e.g. `0605`). Self-test vector: sub112 len3 = `aa 55 06 70 03 04 01 00 06 46 00 c7 ce`. With breakTime 0 / 9 / 255 the boot push's word 113 is still `0600`. `0x0600` is within the frame policy and is not the MCU's start value signature.
 4. **Proof (local):**
    * The self-test section *v6.7 network guard*: 20/20 checks against a model of wlan0/wpa_supplicant/udhcpc. It covers a cold start, a healthy stack (0 interventions), a kill of the supplicant, the IP gone, wlan0 down, the AP gone for 2 min, no default route, an init script that hangs, backoff and the config guard.
    * E2E in real time against the SIM build's Wi-Fi model (`sim_e2e.py --only net`): 10/10.
    * The mutation probes `net0` and `dhcpall` are caught.
-5. **Proof on the device:** `net_heal_proof.py` is ready. It is read-only telnet plus one controlled kill of the stock UI's wpa_supplicant while demo_v9 is SIGSTOPped. There are no reboots and no writes to the flag, slots or config (`/tmp/ourui_t/` on tmpfs), and a fallback kicks in after 150 s. **Status 2026-11-17 23:01:** not run. The device was not on the network (see [CHANGES-v6.9](#changes-v69) item 6). No reboots and no writes to the flag, slots or config in this round.
+5. **Proof on the device:** `net_heal_proof.py` is ready. It is read-only telnet plus one controlled kill of the stock UI's wpa_supplicant while demo_v9 is SIGSTOPped. There are no reboots and no writes to the flag, slots or config (`/tmp/merakiplus_t/` on tmpfs), and a fallback kicks in after 150 s. **Status 2026-11-17 23:01:** not run. The device was not on the network (see [CHANGES-v6.9](#changes-v69) item 6). No reboots and no writes to the flag, slots or config in this round.
 
 ## CHANGES-v6.8
 
@@ -1943,7 +1943,7 @@ In addition: the RX counters are `uint32_t` (wrap around in a well-defined way),
    * Dead band < 0.25 g → 0 in the hero, chart and stat field.
    * Signed (int16) all the way.
 4. **DIAGNOSTICS → GRAPH:** smooth (default) / raw, only for the current session. The RAW chart is labelled **RAW**.
-5. **The predecessor's v6.9 intermediate state** (kept as `ourui_v6_9wip.c` / `.bin`) had the conditioning, but:
+5. **The predecessor's v6.9 intermediate state** (kept as `merakiplus_v6_9wip.c` / `.bin`) had the conditioning, but:
    * no v6.9 self-tests and 2 red v6.6 self-tests
    * p90 over the whole window had been dropped in favor of a "hold" scale
    * a snap to raw on a phase change: a brew that ended in a deadhead pulse gave a hump that took over 2 s to decay
@@ -1974,11 +1974,11 @@ In addition: the RX counters are `uint32_t` (wrap around in a well-defined way),
 
 | File | md5 |
 |---|---|
-| `ourui_v6.c` (v6.9) | `440be5124c0d986ec23e4c3b08f84149` |
-| `ourui_v6` (device binary) | **`2dce4eba0b4ce68dcd0369e955cf3b77`** |
-| `ourui_v6_sim_arm` · `ourui_v6_sim` | `cbebc8b128f413c1d40a83de2bd6343a` · `fbd8c89c236f508ec725505c519b7b91` (host; changes on every link) |
-| `ourui_v6_9wip.c` / `.bin` (the state at the start of the round) | `048a40ea7894dab5b57a58f6d9af8ead` / `bcb1b50c913700c64a6cfc39bb5a5776` |
-| `ourui_v6_8wip.c` / `.bin` (v6.8 = the previous device binary) | `5cdcc14b0503c67b939e27b6579655ff` / `75887fb154ffef20cc72696064e16c39` |
+| `merakiplus.c` (v6.9) | `440be5124c0d986ec23e4c3b08f84149` |
+| `merakiplus_v6` (device binary) | **`2dce4eba0b4ce68dcd0369e955cf3b77`** |
+| `merakiplus_v6_sim_arm` · `merakiplus_v6_sim` | `cbebc8b128f413c1d40a83de2bd6343a` · `fbd8c89c236f508ec725505c519b7b91` (host; changes on every link) |
+| `merakiplus_v6_9wip.c` / `.bin` (the state at the start of the round) | `048a40ea7894dab5b57a58f6d9af8ead` / `bcb1b50c913700c64a6cfc39bb5a5776` |
+| `merakiplus_v6_8wip.c` / `.bin` (v6.8 = the previous device binary) | `5cdcc14b0503c67b939e27b6579655ff` / `75887fb154ffef20cc72696064e16c39` |
 
    Report: `sim/reports/v6.9/SUMMARY.md`. New/changed tools:
    * `build_sim.sh`: reference v6.8 (the v6.8 version kept as `round_v6/build_sim_v68.sh`)
@@ -1990,7 +1990,7 @@ In addition: the RX counters are `uint32_t` (wrap around in a well-defined way),
 
    `sim/` was not touched, apart from an addendum in `sim/CONTRACT.md` and the reports under `sim/reports/v6.9/`.
 
-8. **Final round (2026-11-17, after the DEV-ITERATION-POLICY):** `ourui_v6.c` has **not changed** (md5 `440be512…` = the state at the start of the round). Both binaries have been rebuilt from the source and are byte-identical to the delivered ones: `ourui_v6` `2dce4eba…` and `ourui_v6_sim_arm` `cbebc8b1…`, with 0 warnings in all three builds (fresh zig cache). In the round, `build_previews.sh` (1 min 13 s), `sim/selftest.py`, the quick run and the calm part were run. That filled in the table in item 6 and [§15](#15-development-iteration-dev-iteration-policy). `ourui_v6_9wip.c` / `.bin` are the predecessor's state and have been kept unchanged. The source has not changed, so there is no new "pre-round" copy.
+8. **Final round (2026-11-17, after the DEV-ITERATION-POLICY):** `merakiplus.c` has **not changed** (md5 `440be512…` = the state at the start of the round). Both binaries have been rebuilt from the source and are byte-identical to the delivered ones: `merakiplus_v6` `2dce4eba…` and `merakiplus_v6_sim_arm` `cbebc8b1…`, with 0 warnings in all three builds (fresh zig cache). In the round, `build_previews.sh` (1 min 13 s), `sim/selftest.py`, the quick run and the calm part were run. That filled in the table in item 6 and [§15](#15-development-iteration-dev-iteration-policy). `merakiplus_v6_9wip.c` / `.bin` are the predecessor's state and have been kept unchanged. The source has not changed, so there is no new "pre-round" copy.
 
 
 ## CHANGES-v6.10
@@ -2022,11 +2022,11 @@ In addition: the RX counters are `uint32_t` (wrap around in a well-defined way),
 
 | File | md5 |
 |---|---|
-| `ourui_v6.c` (v6.10) | `23672df8557a1fbb4d54cdb6b220c244` |
-| `ourui_v6` (device binary, static ARMv7) | **`29bc801c1c777d9cb3484bfa960c66bc`** |
-| `ourui_v6_sim_arm` · `ourui_v6_sim` (host) | `14f58597ae605f642e37026bd97b66b3` · `0ce8d412f20d3a07b507b89566fb2605` |
-| `ourui_v6_9.c` / `ourui_v6_9.bin` (v6.9, rollback) | `440be5124c0d986ec23e4c3b08f84149` / `2dce4eba0b4ce68dcd0369e955cf3b77` |
-| `ourui_v6_9_sim` / `ourui_v6_9_sim_arm` (v6.9 SIM) | `fbd8c89c236f508ec725505c519b7b91` / `cbebc8b128f413c1d40a83de2bd6343a` |
+| `merakiplus.c` (v6.10) | `23672df8557a1fbb4d54cdb6b220c244` |
+| `merakiplus_v6` (device binary, static ARMv7) | **`29bc801c1c777d9cb3484bfa960c66bc`** |
+| `merakiplus_v6_sim_arm` · `merakiplus_v6_sim` (host) | `14f58597ae605f642e37026bd97b66b3` · `0ce8d412f20d3a07b507b89566fb2605` |
+| `merakiplus_v6_9.c` / `merakiplus_v6_9.bin` (v6.9, rollback) | `440be5124c0d986ec23e4c3b08f84149` / `2dce4eba0b4ce68dcd0369e955cf3b77` |
+| `merakiplus_v6_9_sim` / `merakiplus_v6_9_sim_arm` (v6.9 SIM) | `fbd8c89c236f508ec725505c519b7b91` / `cbebc8b128f413c1d40a83de2bd6343a` |
 
    Tools: `build_sim.sh` now compares with v6.9 (the v6.9 version kept as `round_v6/build_sim_v69.sh`); `round_v6/build_previews.sh` writes `v69_compare.txt` and has 4 new mutants. `boot/`, `sim/mcu_sim.py`, `sim/scenarios/` and `sim/run_e2e.py` were not touched. Report: `sim/reports/v6.10/SUMMARY.md`.
 
@@ -2081,11 +2081,11 @@ In addition: the RX counters are `uint32_t` (wrap around in a well-defined way),
 
 | File | md5 |
 |---|---|
-| `ourui_v6.c` (v6.11) | `e9eea8caebfa5d832884d96996dbd2c7` |
-| `ourui_v6` (device binary) | **`725386ccadade594275f20cc998885eb`** |
-| `ourui_v6_sim_arm` · `ourui_v6_sim` | `13b5ad2e374d5a79e097c008a581530e` · `3e12be0568223925c7c0ccd28f13c9d1` (host; changes on every link) |
-| `ourui_v6_10.c` / `.bin` (v6.10 kept) | `23672df8557a1fbb4d54cdb6b220c244` / `29bc801c1c777d9cb3484bfa960c66bc` |
-| `ourui_v6_10_sim_arm` · `ourui_v6_10_sim` | `14f58597ae605f642e37026bd97b66b3` · `0ce8d412f20d3a07b507b89566fb2605` |
+| `merakiplus.c` (v6.11) | `e9eea8caebfa5d832884d96996dbd2c7` |
+| `merakiplus_v6` (device binary) | **`725386ccadade594275f20cc998885eb`** |
+| `merakiplus_v6_sim_arm` · `merakiplus_v6_sim` | `13b5ad2e374d5a79e097c008a581530e` · `3e12be0568223925c7c0ccd28f13c9d1` (host; changes on every link) |
+| `merakiplus_v6_10.c` / `.bin` (v6.10 kept) | `23672df8557a1fbb4d54cdb6b220c244` / `29bc801c1c777d9cb3484bfa960c66bc` |
+| `merakiplus_v6_10_sim_arm` · `merakiplus_v6_10_sim` | `14f58597ae605f642e37026bd97b66b3` · `0ce8d412f20d3a07b507b89566fb2605` |
 
    Report: `sim/reports/v6.11/SUMMARY.md` with before/after sheets (`EN` · `DA`; v6.10 on the left, v6.11 on the right).
 
@@ -2146,21 +2146,21 @@ In addition: the RX counters are `uint32_t` (wrap around in a well-defined way),
 
 | File | md5 |
 |---|---|
-| `ourui_v6.c` (v6.13) | `eec5085ddc1861c212d396c70771e9dc` |
-| `ourui_v6` (static ARMv7; reproducible) | `163692b5b3e11d8294471c5a0eae578b` |
-| `ourui_v6_sim_arm` | `ed287001bc34d132a0da78026d1c806e` |
-| `ourui_v6_sim` (host; changes on every link) | `84f194c731b7230201c102538d236195` |
+| `merakiplus.c` (v6.13) | `eec5085ddc1861c212d396c70771e9dc` |
+| `merakiplus_v6` (static ARMv7; reproducible) | `163692b5b3e11d8294471c5a0eae578b` |
+| `merakiplus_v6_sim_arm` | `ed287001bc34d132a0da78026d1c806e` |
+| `merakiplus_v6_sim` (host; changes on every link) | `84f194c731b7230201c102538d236195` |
 
-   v6.12 is kept as `ourui_v6_12.c` (`e9eea8ca…`) / `ourui_v6_12.bin` (`725386cc…`, the deployed one) and `ourui_v6_12_sim` / `ourui_v6_12_sim_arm`. The old build scripts are kept as `round_v6/build_previews_v611.sh` and `round_v6/build_sim_v611.sh`.
+   v6.12 is kept as `merakiplus_v6_12.c` (`e9eea8ca…`) / `merakiplus_v6_12.bin` (`725386cc…`, the deployed one) and `merakiplus_v6_12_sim` / `merakiplus_v6_12_sim_arm`. The old build scripts are kept as `round_v6/build_previews_v611.sh` and `round_v6/build_sim_v611.sh`.
 8. **Not touched:** `boot/`, `sim/mcu_sim.py`, `sim/scenarios/`, `sim/run_e2e.py`, `config.json`, the flag and the slots. There were no reboots, and the device was not contacted beyond two connection attempts (ping and a TCP connect to :23), both of which failed.
 
 ## CHANGES-v6.14
 
-**The physical power button.** User bug: the button did nothing while Meraki+ was running. ourui only read the touch node (`event0`); the button is the k62091 node (`event1`). The stock UI's semantics have been reverse-engineered from demo_v9 and the MCU firmware and mirrored; table and addresses in [§19](#19-the-power-button-v614). The start recipes, the STOP path, the write queue, the phase logic and the boot push are token-identical to v6.13. *(On the tested hardware the button turned out to be a hardware power switch — see [power.md](../power.md).)*
+**The physical power button.** User bug: the button did nothing while Meraki+ was running. merakiplus only read the touch node (`event0`); the button is the k62091 node (`event1`). The stock UI's semantics have been reverse-engineered from demo_v9 and the MCU firmware and mirrored; table and addresses in [§19](#19-the-power-button-v614). The start recipes, the STOP path, the write queue, the phase logic and the boot push are token-identical to v6.13. *(On the tested hardware the button turned out to be a hardware power switch — see [power.md](../power.md).)*
 
-1. **The button node:** k62091 (`/dev/input/event1`) is opened read-only **without EVIOCGRAB** (the stock UI does not grab it either). Automatic selection by name → EV_KEY without EV_ABS → `event1`; `OURUI_KBD=<path>` overrides. The touch node is grabbed as before.
-2. **Power off (like the stock UI):** HOLD 1.5 s (stock: two second boundaries = 1–2 s) → the cmd8 time/alarm frame (alarm 0/0/0) → ≥ 80 ms → `aa 55 06 00 02 00 00 00 00 56 94` (word 0 = 0, word 1 = 0) → ACK → OFF. The backlight is turned off 1.5 s after the press (duty 99 + `pwm2/enable 0`). Keep-awake stands still while switched off. Blocked during brew/steam/grind with the same predicate as the stock UI (`isExtractionOrSteamSwitchOn`) — the stock UI never stops an activity; neither does ourui. Without a connection, with word 0 = 0 or in READ-ONLY nothing is sent. No ACK → back to ON with *POWER OFF: NO REPLY · TRY AGAIN*.
-3. **Power on:** the button in OFF → backlight + TURNING ON…; the MCU wakes from the same hold (reset). When the controller replies with word 0 = 1 → PowerOn `aa 55 06 00 01 01 00 c5 5f` + awake `aa 55 06 01 01 00 00 c5 33` (as at startup) → HOME. 10 s without a reply → OFF again. If the controller replies by itself with word 0 = 1, ourui also powers on. After the MCU reset the existing re-push (v6.6) puts the config back. Touch in OFF shows the page for 8 s and is swallowed.
+1. **The button node:** k62091 (`/dev/input/event1`) is opened read-only **without EVIOCGRAB** (the stock UI does not grab it either). Automatic selection by name → EV_KEY without EV_ABS → `event1`; `MERAKIPLUS_KBD=<path>` overrides. The touch node is grabbed as before.
+2. **Power off (like the stock UI):** HOLD 1.5 s (stock: two second boundaries = 1–2 s) → the cmd8 time/alarm frame (alarm 0/0/0) → ≥ 80 ms → `aa 55 06 00 02 00 00 00 00 56 94` (word 0 = 0, word 1 = 0) → ACK → OFF. The backlight is turned off 1.5 s after the press (duty 99 + `pwm2/enable 0`). Keep-awake stands still while switched off. Blocked during brew/steam/grind with the same predicate as the stock UI (`isExtractionOrSteamSwitchOn`) — the stock UI never stops an activity; neither does merakiplus. Without a connection, with word 0 = 0 or in READ-ONLY nothing is sent. No ACK → back to ON with *POWER OFF: NO REPLY · TRY AGAIN*.
+3. **Power on:** the button in OFF → backlight + TURNING ON…; the MCU wakes from the same hold (reset). When the controller replies with word 0 = 1 → PowerOn `aa 55 06 00 01 01 00 c5 5f` + awake `aa 55 06 01 01 00 00 c5 33` (as at startup) → HOME. 10 s without a reply → OFF again. If the controller replies by itself with word 0 = 1, merakiplus also powers on. After the MCU reset the existing re-push (v6.6) puts the config back. Touch in OFF shows the page for 8 s and is swallowed.
 4. **Frame policy:** `word_ok(0)` now allows 0 and 1, but word 0 = 0 requires the new intent `I_POWEROFF` (otherwise `WJ_TRIG`). `I_POWEROFF` allows nothing else (start words, words 26/27/30 and word 1 = 1 are still rejected; `_Static_assert`). `rx_feed` counts the 0x88 acknowledgement for cmd8 (no other change).
 5. **Verification (local dev iteration, §15):**
 
@@ -2173,24 +2173,24 @@ In addition: the RX counters are `uint32_t` (wrap around in a well-defined way),
 | Previews | 83 scenarios × 2 languages; **circle 0 violations** (166 images). Vs. v6.13: 156 compared, **134 byte-identical**, the rest only in the DIAGNOSTICS list and the scroll indicator. 5 new scenarios (78–82: TURNING OFF, OFF, TURNING ON, blocked during a brew, DIAGNOSTICS) |
 | Spec alignment | **ALL ALIGNED** |
 | `sim/selftest.py` | **150 / 0** |
-| `run_e2e.py --all --quick --parallel 4` (EN) | the v6.13 SIM binary (unchanged): **5/5, 97/97** · additionally against `ourui_v6_14_sim`: **5/5, 97/97** |
+| `run_e2e.py --all --quick --parallel 4` (EN) | the v6.13 SIM binary (unchanged): **5/5, 97/97** · additionally against `merakiplus_v6_14_sim`: **5/5, 97/97** |
 | `verify_power_v614.py --selftest` | **5/5** (a good log green; without cmd8 / without sleep / keep-awake in OFF / without re-push are caught) |
 | On-device | **not run** (v6.13 was being installed in slot B at the same time; no contact with the device). `verify_power_v614.py` is ready (§11 T) |
 
-6. **Files and md5 (SEPARATE — `ourui_v6` / `ourui_v6_sim*` are v6.13 and have NOT been touched):**
+6. **Files and md5 (SEPARATE — `merakiplus_v6` / `merakiplus_v6_sim*` are v6.13 and have NOT been touched):**
 
 | File | md5 |
 |---|---|
-| `ourui_v6.c` (the v6.14 source) | `94e7f577afb589d4e02c54b0942f78ab` |
-| `ourui_v6_14.bin` (static ARMv7; reproducible) | `1dd63f42e4b0d649ef851660fc123a10` |
-| `ourui_v6_14_sim_arm` | `d0559b45751a1fcddf75af57ac2df037` |
-| `ourui_v6_14_sim` (host; changes on every link) | `deac1b7aff018619bb86afb582e9cd7d` |
-| `ourui_v6_13.c` (the v6.13 source, a copy before the changes) | `eec5085ddc1861c212d396c70771e9dc` |
+| `merakiplus.c` (the v6.14 source) | `94e7f577afb589d4e02c54b0942f78ab` |
+| `merakiplus_v6_14.bin` (static ARMv7; reproducible) | `1dd63f42e4b0d649ef851660fc123a10` |
+| `merakiplus_v6_14_sim_arm` | `d0559b45751a1fcddf75af57ac2df037` |
+| `merakiplus_v6_14_sim` (host; changes on every link) | `deac1b7aff018619bb86afb582e9cd7d` |
+| `merakiplus_v6_13.c` (the v6.13 source, a copy before the changes) | `eec5085ddc1861c212d396c70771e9dc` |
 
-   Build scripts: `build_v614.sh` (builds ONLY the three `_14` files; log `round_v6/sim_build_check_v614.txt`) and `round_v6/build_previews_v614.sh` (+ `round_v6/v613_compare.py`). `build_sim.sh` and `round_v6/build_previews.sh` are the v6.13 versions and are unchanged — they write `ourui_v6` and must not be run before v6.14 has been promoted.
-7. **Promotion (the parent, once the v6.13 installation is done):** `cp ourui_v6 ourui_v6_13.bin; cp ourui_v6_sim ourui_v6_13_sim; cp ourui_v6_sim_arm ourui_v6_13_sim_arm` (keep v6.13) → `cp ourui_v6_14.bin ourui_v6; cp ourui_v6_14_sim ourui_v6_sim; cp ourui_v6_14_sim_arm ourui_v6_sim_arm` → `md5 -q ourui_v6` = `1dd63f42…`. Then on-device: `python3 verify_power_v614.py` (run.sh mode from `/tmp`, no install needed for the proof).
-8. **REVERT:** v6.14 only lives in `ourui_v6.c` and the three `_14` files. Back to v6.13: `cp ourui_v6_13.c ourui_v6.c` (md5 `eec5085d…`); the binaries `ourui_v6` (`163692b5…`) and `ourui_v6_sim*` are unchanged v6.13. If v6.14 has already been promoted/installed: `cp ourui_v6_13.bin ourui_v6` (from step 7) and reinstall via the normal boot install path. UI_v6.md before v6.14 does not exist as a copy — the sections §19, test plan T and this section are pure additions, and Appendix A is generated from the string table. No config, flag or slot changes to undo (none have been made). On the device an interrupted `verify_power_v614.py` leaves at most `/tmp/ourui_p/` (tmpfs) — run.sh SIGCONTs the stock UI, and ourui turns the backlight on at exit; a backlight left off after a crash: `echo 1 > /sys/class/pwm/pwmchip0/pwm2/enable`.
-9. **Not touched:** `boot/`, `sim/mcu_sim.py`, `sim/scenarios/`, `sim/run_e2e.py`, `ourui_v6`, `ourui_v6_sim`, `ourui_v6_sim_arm`, `config.json`, the flag and the slots. No contact with the device. The previews in `round_v6/` are generated from the v6.14 source.
+   Build scripts: `build_v614.sh` (builds ONLY the three `_14` files; log `round_v6/sim_build_check_v614.txt`) and `round_v6/build_previews_v614.sh` (+ `round_v6/v613_compare.py`). `build_sim.sh` and `round_v6/build_previews.sh` are the v6.13 versions and are unchanged — they write `merakiplus_v6` and must not be run before v6.14 has been promoted.
+7. **Promotion (the parent, once the v6.13 installation is done):** `cp merakiplus_v6 merakiplus_v6_13.bin; cp merakiplus_v6_sim merakiplus_v6_13_sim; cp merakiplus_v6_sim_arm merakiplus_v6_13_sim_arm` (keep v6.13) → `cp merakiplus_v6_14.bin merakiplus_v6; cp merakiplus_v6_14_sim merakiplus_v6_sim; cp merakiplus_v6_14_sim_arm merakiplus_v6_sim_arm` → `md5 -q merakiplus_v6` = `1dd63f42…`. Then on-device: `python3 verify_power_v614.py` (run.sh mode from `/tmp`, no install needed for the proof).
+8. **REVERT:** v6.14 only lives in `merakiplus.c` and the three `_14` files. Back to v6.13: `cp merakiplus_v6_13.c merakiplus.c` (md5 `eec5085d…`); the binaries `merakiplus_v6` (`163692b5…`) and `merakiplus_v6_sim*` are unchanged v6.13. If v6.14 has already been promoted/installed: `cp merakiplus_v6_13.bin merakiplus_v6` (from step 7) and reinstall via the normal boot install path. UI_v6.md before v6.14 does not exist as a copy — the sections §19, test plan T and this section are pure additions, and Appendix A is generated from the string table. No config, flag or slot changes to undo (none have been made). On the device an interrupted `verify_power_v614.py` leaves at most `/tmp/merakiplus_p/` (tmpfs) — run.sh SIGCONTs the stock UI, and merakiplus turns the backlight on at exit; a backlight left off after a crash: `echo 1 > /sys/class/pwm/pwmchip0/pwm2/enable`.
+9. **Not touched:** `boot/`, `sim/mcu_sim.py`, `sim/scenarios/`, `sim/run_e2e.py`, `merakiplus_v6`, `merakiplus_v6_sim`, `merakiplus_v6_sim_arm`, `config.json`, the flag and the slots. No contact with the device. The previews in `round_v6/` are generated from the v6.14 source.
 
 ## CHANGES-v6.15
 
@@ -2215,18 +2215,18 @@ In addition: the RX counters are `uint32_t` (wrap around in a well-defined way),
 | New scenario `graph_reset` | **21/21** EN, DA and reference client (REF profile replaces the 6 `chart` checks 1:1) |
 | On-device | **not run** (install deferred) |
 
-6. **Files:** `src/ourui_v6.c`, `sim/scenarios/graph_reset.json`, `sim/run_e2e.py` (expect kind `chart`, additive), `sim/sim_ui_profile-ref.json` (6 overrides), `bin/` (`ourui`, `ourui_sim_arm`, host SIM builds; md5 in `bin/MD5SUMS`).
+6. **Files:** `src/merakiplus.c`, `sim/scenarios/graph_reset.json`, `sim/run_e2e.py` (expect kind `chart`, additive), `sim/sim_ui_profile-ref.json` (6 overrides), `bin/` (`merakiplus`, `merakiplus_sim_arm`, host SIM builds; md5 in `bin/MD5SUMS`).
 
 ## CHANGES-v6.16
 
-**Time & scheduling.** Three user reports: (1) the 24-hour flag was inverted relative to the stock UI, (2) ourui showed no clock, (3) there was no planned pre-heat / scheduled wake. The stock semantics (addresses, frame layout, MCU behaviour) are in [time-scheduling.md](../time-scheduling.md). Power semantics of v6.14 are unchanged (the button's kernel cut, cmd8 → 80 ms → cmd6 sub0 len2 `[0,0]`); the stop, gesture and graph-reset paths are untouched.
+**Time & scheduling.** Three user reports: (1) the 24-hour flag was inverted relative to the stock UI, (2) merakiplus showed no clock, (3) there was no planned pre-heat / scheduled wake. The stock semantics (addresses, frame layout, MCU behaviour) are in [time-scheduling.md](../time-scheduling.md). Power semantics of v6.14 are unchanged (the button's kernel cut, cmd8 → 80 ms → cmd6 sub0 len2 `[0,0]`); the stop, gesture and graph-reset paths are untouched.
 
 1. **TIME FORMAT fixed:** stock `update_time` 0xD5944 XORs `model[0x59]` (= `timemode != 0`) with 1 before the test (0xD5970) — `timemode = 1` is **24 h**, `0` is 12 h with A.M./P.M.; the stock switch "24-Hour Format" is ON for 1. v6.1 missed the `eor`; `OPT_TIME` is now `{12-HOUR, 24-HOUR}`, so SAVE writes what stock expects (config path unchanged).
-2. **Clock:** HOME's top line (`W_CLOCK`, replaces the wordmark while the clock is valid) and DIAGNOSE → TIME · SCHEDULE. Local time = SoC UTC + stock zone table 0x1A5890 (136 entries, copied) + 1 h when `sumtime` and the region's DST window (EU / US / Levant / AU / NZ rules; stock's window is date-only and only exists after its HTTP sync). Format byte-identical to `update_time`. A clock before 2025 = not set: wordmark, NOT SET, no alarm. ourui never sets the clock. TIME ZONE (locked) shows the stock label and the place names.
-3. **Planned pre-heat:** SYSTEM rows PRE-HEAT, PRE-HEAT AT (5-min steps), REPEAT (once / every day / Mon–Fri / Sat–Sun) in ourui's own file `/new_customer/ourui/schedule`. **Power-off** sends the next occurrence as the cmd8 alarm exactly like stock `performSleepActions` 0x148324 → `powerOffSend(day, hour, minute)`; no schedule → 0/0/0 (v6.14). **Pre-arm** (documented addition): while ON the same frame is sent when the alarm differs from what the current MCU session holds (start, MCU restart / wake, schedule change, daily roll-over); disarm = 0/0/0 once; never while turning off / off; no schedule = no new traffic. A one-shot switches itself off a minute after its time. HOME's swipe hint shows `⏰ PRE-HEAT · THU 06:30` while planned.
-4. **Auto off (optional, default off):** 15 / 20 / 30 / 60 min without touch, button or an active phase → the same power-off as the button (with the alarm); a 30-s warning toast (a touch dismisses it). Stock: a fixed 30 min (`SleepRefresh` 0x149268); `sleepMode`/`sleepModeSetting` are never read by stock and are not written by ourui.
+2. **Clock:** HOME's top line (`W_CLOCK`, replaces the wordmark while the clock is valid) and DIAGNOSE → TIME · SCHEDULE. Local time = SoC UTC + stock zone table 0x1A5890 (136 entries, copied) + 1 h when `sumtime` and the region's DST window (EU / US / Levant / AU / NZ rules; stock's window is date-only and only exists after its HTTP sync). Format byte-identical to `update_time`. A clock before 2025 = not set: wordmark, NOT SET, no alarm. merakiplus never sets the clock. TIME ZONE (locked) shows the stock label and the place names.
+3. **Planned pre-heat:** SYSTEM rows PRE-HEAT, PRE-HEAT AT (5-min steps), REPEAT (once / every day / Mon–Fri / Sat–Sun) in merakiplus's own file `/new_customer/merakiplus/schedule`. **Power-off** sends the next occurrence as the cmd8 alarm exactly like stock `performSleepActions` 0x148324 → `powerOffSend(day, hour, minute)`; no schedule → 0/0/0 (v6.14). **Pre-arm** (documented addition): while ON the same frame is sent when the alarm differs from what the current MCU session holds (start, MCU restart / wake, schedule change, daily roll-over); disarm = 0/0/0 once; never while turning off / off; no schedule = no new traffic. A one-shot switches itself off a minute after its time. HOME's swipe hint shows `⏰ PRE-HEAT · THU 06:30` while planned.
+4. **Auto off (optional, default off):** 15 / 20 / 30 / 60 min without touch, button or an active phase → the same power-off as the button (with the alarm); a 30-s warning toast (a touch dismisses it). Stock: a fixed 30 min (`SleepRefresh` 0x149268); `sleepMode`/`sleepModeSetting` are never read by stock and are not written by merakiplus.
 5. **cmd8 time = stock local time** (v6.14 sent the SoC's UTC).
-6. **SIM:** state JSON `clock` + `sched`; env `OURUI_SIM_CLOCK`, `OURUI_SCHEDFILE`; ctrl `clock`; `save` accepts `preheat`, `preheat_at`, `preheat_repeat`, `auto_off`. `run_e2e.py` (additive): scenario keys `ui_env` / `ui_only`, expect kind `state`, `time_sync_seen` with `alarm` / `max_count` / `count: 0`. `mcu_sim.py`: a CPU reset clears the cmd8 alarm (MCU RAM).
+6. **SIM:** state JSON `clock` + `sched`; env `MERAKIPLUS_SIM_CLOCK`, `MERAKIPLUS_SCHEDFILE`; ctrl `clock`; `save` accepts `preheat`, `preheat_at`, `preheat_repeat`, `auto_off`. `run_e2e.py` (additive): scenario keys `ui_env` / `ui_only`, expect kind `state`, `time_sync_seen` with `alarm` / `max_count` / `count: 0`. `mcu_sim.py`: a CPU reset clears the cmd8 alarm (MCU RAM).
 7. **Verification (local dev iteration, §15):**
 
 | What | Result |
@@ -2243,11 +2243,11 @@ In addition: the RX counters are `uint32_t` (wrap around in a well-defined way),
 | Regression (targeted) | `power_off_wake` 38/38, `power_during_activity` 29/29, `graph_reset` 21/21, `settings_save_matrix` 188/188, `language` 16/16 |
 | On-device | **not run** (install deferred) |
 
-8. **Files:** `src/ourui_v6.c`, `docs/time-scheduling.md` (new), `sim/scenarios/{time_display,timemode_stock_parity,schedule_prewarm}.json`, `sim/run_e2e.py`, `sim/mcu_sim.py`, `sim/CONTRACT.md`, `bin/` (`ourui`, `ourui_sim_arm`, host SIM builds; md5 in `bin/MD5SUMS`), `tools/merakiplus.py` (VERSION 6.16 + md5).
+8. **Files:** `src/merakiplus.c`, `docs/time-scheduling.md` (new), `sim/scenarios/{time_display,timemode_stock_parity,schedule_prewarm}.json`, `sim/run_e2e.py`, `sim/mcu_sim.py`, `sim/CONTRACT.md`, `bin/` (`merakiplus`, `merakiplus_sim_arm`, host SIM builds; md5 in `bin/MD5SUMS`), `tools/merakiplus.py` (VERSION 6.16 + md5).
 
 ## Appendix A — string table (id / EN / DA)
 
-<!-- I18N-APPENDIX:BEGIN (generated by i18n_appendix.py — edit STR_TABLE in ourui_v6.c, not here) -->
+<!-- I18N-APPENDIX:BEGIN (generated by i18n_appendix.py — edit STR_TABLE in merakiplus.c, not here) -->
 
 **449 string ids × 2 languages** (50 are the same in EN and DA: units, proper names, technical words and commands). Class = the field the string is shown in; the self-test measures every classified string in both languages against the field's pixel budget (`-` = measured in its context by the layout tests). `%s`/`%d` are placeholders for numbers and names; text in `code font` inside a string is shown in lower case (paths, commands). Source: `round_v6/strings.tsv` (`--dump-strings`). The EN and DA columns are the UI's actual strings and are deliberately kept in both languages.
 
@@ -2553,7 +2553,7 @@ In addition: the RX counters are `uint32_t` (wrap around in a well-defined way),
 | `TX_D_MCU_CFG` | foot-1 | `CONTROLLER NOW + CONFIG` | `CONTROLLER STRAKS + CONFIG` |
 | `TX_D_CFGONLY` | foot-1 | `CONFIG.JSON ONLY` | `KUN CONFIG.JSON` |
 | `TX_D_STOCK_RESTART` | foot-2 | `STOCK UI: AFTER RESTART` | `STOCK-UI: EFTER GENSTART` |
-| `TX_D_LANG_L1` | foot-1 | MERAKI+ ONLY · `ourui/lang` | KUN MERAKI+ · `ourui/lang` |
+| `TX_D_LANG_L1` | foot-1 | MERAKI+ ONLY · `merakiplus/lang` | KUN MERAKI+ · `merakiplus/lang` |
 | `TX_D_LANG_L2` | foot-2 | `STOCK UI LANGUAGE UNCHANGED` | `STOCK-UI-SPROG UÆNDRET` |
 | `TX_D_SAVING` | status | `SAVING…` | `GEMMER…` |
 | `TX_D_OOR` | status | `OUT OF SPEC · PICK A NEW VALUE` | `UDEN FOR SPEC · VÆLG NY VÆRDI` |
@@ -2696,7 +2696,7 @@ In addition: the RX counters are `uint32_t` (wrap around in a well-defined way),
 | `TX_DG_PNOTE2` | - | `> %d BAR = PULSE · RAW: GRAPH PILL` | `> %d BAR = PULS · RÅ: GRAF-PILLEN` |
 | `TX_DG_ABOUT` | full-line | `ABOUT` | `OM` |
 | `TX_DG_RAWCAP` | full-line | `RAW COUNTERS · SERVICE` | `RÅ TÆLLERE · SERVICE` |
-| `TX_DG_L_LANG` | full-line | UI LANGUAGE · `ourui/lang` | UI-SPROG · `ourui/lang` |
+| `TX_DG_L_LANG` | full-line | UI LANGUAGE · `merakiplus/lang` | UI-SPROG · `merakiplus/lang` |
 | `TX_DG_LANG_DEFAULT` | - | `%s · DEFAULT (NO FILE)` | `%s · STANDARD (INGEN FIL)` |
 | `TX_DG_LANG_FILE` | - | `%s · FROM FILE` | `%s · FRA FIL` |
 | `TX_DG_LANG_UNKNOWN` | - | `%s · UNKNOWN FILE VALUE` | `%s · UKENDT VÆRDI I FIL` |
@@ -2747,7 +2747,7 @@ In addition: the RX counters are `uint32_t` (wrap around in a well-defined way),
 
 | id | class | EN | DA |
 |---|---|---|---|
-| `TX_D_OWN_L1` | foot-1 | MERAKI+ ONLY · `ourui/schedule` | KUN MERAKI+ · `ourui/schedule` |
+| `TX_D_OWN_L1` | foot-1 | MERAKI+ · `merakiplus/schedule` | MERAKI+ · `merakiplus/schedule` |
 | `TX_D_OWN_L2` | foot-2 | `STOCK SCHEDULES UNCHANGED` | `STOCK-PLANER UÆNDREDE` |
 
 **Guards and toasts**
@@ -2795,9 +2795,9 @@ In addition: the RX counters are `uint32_t` (wrap around in a well-defined way),
 
 | id | class | EN | DA |
 |---|---|---|---|
-| `TX_O_SWITCHED` | console | `== ourui: runtime switch B->A (user button): stock UI pid %d started from /customer/demo_v9; ourui exits\n` | `== ourui: runtime-skift B->A (bruger-knap): stock-UI pid %d startet fra /customer/demo_v9; ourui afslutter\n` |
-| `TX_O_RESTART` | console | `== ourui: STOCK UI NEEDS A RESTART OF demo_v9 FOR NEW VALUES:   kill $(pidof demo_v9)\n==        (config.json changed by ourui; the watchdog restarts it, the boot push syncs the controller)\n` | `== ourui: STOCK-UI KRAEVER GENSTART AF demo_v9 FOR NYE VAERDIER:   kill $(pidof demo_v9)\n==        (config.json aendret af ourui; watchdog genstarter, boot-push synker controlleren)\n` |
-| `TX_O_CFGCHANGED` | console | `== ourui: config.json changed %d time(s) - no paused stock UI is waiting; the next stock start reads it itself\n` | `== ourui: config.json aendret %d gang(e) - intet pauset stock-UI venter; naeste stock-start laeser den selv\n` |
-| `TX_O_BLOCKED` | console | `== ourui: %ld cmd6 frame(s) rejected by the frame policy (see UI_v6.md)\n` | `== ourui: %ld cmd6-frame(s) afvist af frame-politikken (se UI_v6.md)\n` |
+| `TX_O_SWITCHED` | console | `== merakiplus: runtime switch B->A (user button): stock UI pid %d started from /customer/demo_v9; merakiplus exits\n` | `== merakiplus: runtime-skift B->A (bruger-knap): stock-UI pid %d startet fra /customer/demo_v9; merakiplus afslutter\n` |
+| `TX_O_RESTART` | console | `== merakiplus: STOCK UI NEEDS A RESTART OF demo_v9 FOR NEW VALUES:   kill $(pidof demo_v9)\n==        (config.json changed by merakiplus; the watchdog restarts it, the boot push syncs the controller)\n` | `== merakiplus: STOCK-UI KRAEVER GENSTART AF demo_v9 FOR NYE VAERDIER:   kill $(pidof demo_v9)\n==        (config.json aendret af merakiplus; watchdog genstarter, boot-push synker controlleren)\n` |
+| `TX_O_CFGCHANGED` | console | `== merakiplus: config.json changed %d time(s) - no paused stock UI is waiting; the next stock start reads it itself\n` | `== merakiplus: config.json aendret %d gang(e) - intet pauset stock-UI venter; naeste stock-start laeser den selv\n` |
+| `TX_O_BLOCKED` | console | `== merakiplus: %ld cmd6 frame(s) rejected by the frame policy (see UI_v6.md)\n` | `== merakiplus: %ld cmd6-frame(s) afvist af frame-politikken (se UI_v6.md)\n` |
 
 <!-- I18N-APPENDIX:END -->

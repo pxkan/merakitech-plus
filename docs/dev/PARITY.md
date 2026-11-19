@@ -1,4 +1,4 @@
-# PARITY — complete feature parity specification for ourui (MerakiTech Gen 1, 480×480)
+# PARITY — complete feature parity specification for merakiplus (MerakiTech Gen 1, 480×480)
 
 > **Note (public edition):** This document consists of development notes from reverse engineering a MerakiTech Gen 1 owned by the author. The manufacturer's firmware, binaries and scripts referred to (e.g. `demo_v9`, `MEM03_V514_260923.bin`, `demo.sh`, `test.sh`) are **not** included in the repository. Addresses and short excerpts are included solely for interoperability. IP addresses and other personal data have been removed. See [README → Disclaimer](../../README.md#️-disclaimer--read-this-before-you-do-anything).
 
@@ -10,7 +10,7 @@
 
 ## 0. TL;DR — the most important parity facts
 
-1. **Two parallel truths:** the original UI keeps (a) a **config.json** (persistent, cJSON) and (b) a **register mirror** in RAM (`machine_struct+0xFE8`, 129 words) that is synced to the MCU via `cmd 6`. A parameter often has to be written **in both places**: `setXxx()` → config.json **and** mirror word → `usart_send`. ourui must do the same for full parity.
+1. **Two parallel truths:** the original UI keeps (a) a **config.json** (persistent, cJSON) and (b) a **register mirror** in RAM (`machine_struct+0xFE8`, 129 words) that is synced to the MCU via `cmd 6`. A parameter often has to be written **in both places**: `setXxx()` → config.json **and** mirror word → `usart_send`. merakiplus must do the same for full parity.
 2. **`setNumber` writes config.json IMMEDIATELY** (not only on exit): `setNumber`/`setString` → `cJSON_ReplaceItemInObject` → `configFileClose` → `fseek(0)/ftruncate/fwrite/fflush/fsync` ([0xd0fa4](#), [0xd0c40](#)). Every `setXxx` accessor calls `setNumber`. So every UI change is persisted immediately.
 3. **CORRECTION to WRITETEST:** there **IS** a parameter push to the MCU at boot/restart. At startup `fuart_thread` sends `cmd6 sub1 len30` (words 1..30, [0x14685c](#)) and shortly after `cmd6 sub112 len3` (words 112..114, [0x146b0c](#)) from the mirror (which `model_data_init` has filled from the config). WRITETEST's "no config push at boot" is wrong — it only looked at `app_init`/`PowerOn`. **A kill + watchdog restart therefore syncs new config values to the MCU automatically.**
 4. **Hot water has NO temperature setting.** The displayed "hot water temperature" is **the e-boiler's measured temperature** (word 40, sensor, read-only) — `hotWaterTemperUpdate` [0x112c9c](#) reads word 40. There is no hot water temperature setpoint in either the config or the write blocks. (Answers the task's "find the hot water TEMP": it is **fixed = boiler temperature**.)
@@ -22,7 +22,7 @@
    - **word114** = `headTemper` (whole °C, the MCU multiplies by 10).
 8. **Word 14 is multiplexed** between `steamGears` (steam gear) and the pre-infusion pressure role in the recipe block. The MCU's recipe function `0x1E10` reads the **low byte of word112** (pressure) and only handles pressure **3 or 4**.
 9. **Word 13 (pre-inf time parameter) is hard-coded to 60 at boot** but **is overwritten by the MCU's recipe function `0x1E10`** during brew setup (if `preInfusionSwitch` is on). `preInfusionTime` (word113 hi) is copied by the MCU to word113 lo and is part of the timing `word13 + word113_lo`.
-10. **The MCU has NO range checks on cmd6** (a plain `memcpy` + ACK, registermap §3). **The original UI's limits are the only guard.** ourui must enforce the same min/max/step — otherwise extreme values can reach the MCU unfiltered.
+10. **The MCU has NO range checks on cmd6** (a plain `memcpy` + ACK, registermap §3). **The original UI's limits are the only guard.** merakiplus must enforce the same min/max/step — otherwise extreme values can reach the MCU unfiltered.
 
 ---
 
@@ -78,11 +78,11 @@ After reading the fields, `model_data_init` packs [0xcf284..0xcf43c]:
 3. In the poll loop, the first time the flag `0x1a63d2` ≠ 0: **`usart_send(6, 112, 3)`** [0x146b0c] → writes **words 112..114** (pre-infusion + head temperature), resets the flag.
 4. Then the normal poll rotation (cmd3 sub0/56 len56, sub33 len7 ×2).
 
-**Parity consequence:** when ourui changes config.json and restarts demo_v9 (kill + watchdog), the new value will be **pushed to the MCU at boot** via the above. But if ourui *itself* holds ttyS1 and writes directly, it must send the same blocks. Order: **config first, then the MCU write** (or let the boot push handle it on restart).
+**Parity consequence:** when merakiplus changes config.json and restarts demo_v9 (kill + watchdog), the new value will be **pushed to the MCU at boot** via the above. But if merakiplus *itself* holds ttyS1 and writes directly, it must send the same blocks. Order: **config first, then the MCU write** (or let the boot push handle it on restart).
 
 ### 1.5 Mirror vs. MCU-owned words
 * **Writable (display→MCU):** words **0..31** (`sub+len<33`) and words **112..114** (`sub+len∈{113,114,115}`). Everything else is rejected by the MCU ("06 error").
-* **MCU-owned status (words 32..111):** the display must **not** write these (sensors/flags/work_sta). ourui must only read them.
+* **MCU-owned status (words 32..111):** the display must **not** write these (sensors/flags/work_sta). merakiplus must only read them.
 * **Trigger words** (consumed + reset by the MCU): words 3/9 (start/tare), 6 (grind tare), 26/27 (calibration), 30 (reboot). **They must be 0 in normal write blocks** — otherwise an unintended action is triggered.
 
 ---
@@ -147,7 +147,7 @@ Confidence: **H**=high (unambiguous code + live), **M**=medium (code, not live-v
 
 **Language list (11 languages, index 0..10):** English, Deutsch, French, Italian, Español, Polish, العربية, 简体中文, 繁体中文, 한국어, 日本語 (strings @ 0x166d84..0x166df4). `language=0` = English.
 
-### 2.3 TIER 3 — system / time / Wi-Fi (document, but leave out of ourui v1)
+### 2.3 TIER 3 — system / time / Wi-Fi (document, but leave out of merakiplus v1)
 
 | # | Parameter | UI label | Page / handler | config field (cur.) | Unit | word | write | persist | Conf. |
 |---|---|---|---|---|---|---|---|---|---|
@@ -161,10 +161,10 @@ Confidence: **H**=high (unambiguous code + live), **M**=medium (code, not live-v
 | 32 | **presetStore / NFC** | "Preset"/NFC profile | page_preset* + app_nfc_thread | `presetStore`={}, `presetAppliedIndex` | JSON | **4..25** | (4,21/22,0) | config+mcu | H |
 | 33 | **init / patch / version** | (setup/OTA) | page_first_config, lage_patch | `init`=1, `patch`=1, `*version` | — | — | none | config | H |
 
-**⚠️ Wi-Fi policy (task requirement):** ourui must **NOT touch** `wifionoff`/`ssid`/`password` or the Wi-Fi functions. Documented here only. Likewise, OTA (`page_software_update`, `page_mcu_soft_update`) and the factory test should be avoided in v1.
+**⚠️ Wi-Fi policy (task requirement):** merakiplus must **NOT touch** `wifionoff`/`ssid`/`password` or the Wi-Fi functions. Documented here only. Likewise, OTA (`page_software_update`, `page_mcu_soft_update`) and the factory test should be avoided in v1.
 
 #### 2.3.1 Service controls (write-only, no config — leave out of the normal UI)
-These exist in the original UI as service/factory pages and are included in the write atlas (§3.8) and `parity_spec.json` (tier 3, `persist:"mcu"`). **They are dangerous or service-only and should not be exposed in ourui v1:**
+These exist in the original UI as service/factory pages and are included in the write atlas (§3.8) and `parity_spec.json` (tier 3, `persist:"mcu"`). **They are dangerous or service-only and should not be exposed in merakiplus v1:**
 | Control | Page | word(s) | write | Hazard |
 |---|---|---|---|---|
 | Back-flush clean (~30 s) | page_clear / clear_run | 20 | (20,1) | cleaning cycle |
@@ -179,7 +179,7 @@ These exist in the original UI as service/factory pages and are included in the 
 
 ## 3. WRITE BLOCK ATLAS (word for word)
 
-Frame format: `AA 55 06 SUB LEN <LEN words, 16-bit LE> CRC16lo CRChi` (CRC-16/MODBUS over bytes[0..4+2·LEN]). `usart_send(cmd,sub,len)` [0x146d5c] copies `len` words from the mirror `machine+0xFE8+2·sub`. **Payload = the mirror words at the time of writing** — ourui must make sure the mirror contains the desired values (incl. 0 in the trigger words) before sending.
+Frame format: `AA 55 06 SUB LEN <LEN words, 16-bit LE> CRC16lo CRChi` (CRC-16/MODBUS over bytes[0..4+2·LEN]). `usart_send(cmd,sub,len)` [0x146d5c] copies `len` words from the mirror `machine+0xFE8+2·sub`. **Payload = the mirror words at the time of writing** — merakiplus must make sure the mirror contains the desired values (incl. 0 in the trigger words) before sending.
 
 ### 3.1 sub3 len4 — GRIND START (words 3..6) · live-verified [BREW W1]
 Call: home onClick [0x109278]. Before that: word3=1 [0x109250], word38=0 (clear the grind weight) [0x109268]. Followed by `sub6 len1` word6=1 (tare) [0x10928c].
@@ -363,7 +363,7 @@ After that, `brew-ctl` [0x1fd4] uses **`word13 + word113_lo`** as the pre-infusi
 
 ---
 
-## 5. PARITY SCOPE — recommendation for ourui v6
+## 5. PARITY SCOPE — recommendation for merakiplus v6
 
 ### TIER 1 (must expose — core brewing, full parity)
 Grind weight, brew weight, hot water weight, brew temp, group head temp, steam/milk target, steam gear, pre-infusion (pressure/time/switch), breakTime, grind mode, hot water mode.
@@ -371,41 +371,41 @@ Grind weight, brew weight, hot water weight, brew temp, group head temp, steam/m
 
 ### TIER 2 (should expose — comfort, display-local, low risk)
 Backlight, volume, temperature unit (°C/°F), theme, language, hotWaterShortcut, sumtime, clearTip.
-**Rationale:** pure config writes (no MCU write), low risk. °C/°F must also affect how the tier 1 temperatures are **displayed** (but word11/25 are always 0.1 °C). Language requires the 11 language strings (or let ourui be Danish-only and document the deviation). *(ourui later got its own EN/DA UI language, v6.3.)*
+**Rationale:** pure config writes (no MCU write), low risk. °C/°F must also affect how the tier 1 temperatures are **displayed** (but word11/25 are always 0.1 °C). Language requires the 11 language strings (or let merakiplus be Danish-only and document the deviation). *(merakiplus later got its own EN/DA UI language, v6.3.)*
 
 ### TIER 3 (document, but LEAVE OUT of v1)
 * **timeZone/timemode/Automatically/date-time:** requires cmd8 time sync + DST logic (`time_sync_thread`, `calc_*_dst`) — complex, not core. Can be added later.
-* **sleepMode/sleepModeSetting:** the original UI has **no working editor** (hard-coded timing). ourui can either (a) leave it out, or (b) implement a *better* editor that actually writes word1 — but that is an **extension**, not parity. Recommendation: leave it out of v1, document it.
+* **sleepMode/sleepModeSetting:** the original UI has **no working editor** (hard-coded timing). merakiplus can either (a) leave it out, or (b) implement a *better* editor that actually writes word1 — but that is an **extension**, not parity. Recommendation: leave it out of v1, document it.
 * **brewMode:** vestigial (0 callers). Leave out.
 * **wifi/ssid/password:** **MUST NOT be touched** (task requirement). Leave out.
 * **OTA/factory test/calibration (word26/27)/reboot (word30)/drain (word28/29)/self-test (word8):** dangerous or service-only. Leave out of the normal UI; calibration/reboot could be a hidden service menu. **In particular: word30=1 reboots the MCU, word26/27≠0 triggers calibration — these must ALWAYS be 0 in normal write blocks.**
 * **presetStore/NFC:** nice to have. Preset apply (sub4 len22) is straightforward; NFC requires the MF522 driver + card format. Recommendation: preset in v2, leave NFC out.
 
-### Persistence safeguards (procedure for ourui)
+### Persistence safeguards (procedure for merakiplus)
 Cf. `WRITETEST §7` + §1 here:
 1. **Backup + md5 before every write:** copy `/customer/config.json` → backup, log the md5 (baseline `<config-md5-redacted>`).
 2. **Generate byte-exact cJSON** (`"key":\tvalue`, tab indentation) — only the desired fields change.
 3. **Atomic write:** temp file + `mv` (NEVER in place — demo_v9's persistent write fd would otherwise overwrite/corrupt it).
-4. **Order:** **config first, then the MCU write.** If ourui writes directly to the MCU (holds ttyS1), send the mirror block with correctly packed word112/113 and 0 in the trigger words. If ourui only changes the config and restarts demo_v9, the **boot push** (§1.4) handles the MCU sync automatically.
+4. **Order:** **config first, then the MCU write.** If merakiplus writes directly to the MCU (holds ttyS1), send the mirror block with correctly packed word112/113 and 0 in the trigger words. If merakiplus only changes the config and restarts demo_v9, the **boot push** (§1.4) handles the MCU sync automatically.
 5. **Reboot-free reload:** `kill $(pidof demo_v9)` → the watchdog `test.sh` restarts it within **< 4 s** and reads the new values + boot-pushes them. Effective downtime ~3–5 s. (No full reboot needed.)
 6. **Verify:** md5 after the write + the relevant sysfs/UI signal (e.g. PWM duty for the backlight: `duty = 100 − 7·config_v`).
 7. **md5 log:** log every config change (before/after md5, field, value, timestamp) cf. WRITETEST.
-8. **MCU write first or config first?** For an *immediate* MCU effect without a restart: **MCU write first** (so the action happens), then the config (so it is persisted). For persistence *only*: config + kill. ourui should do **both** (MCU write + config) for full parity with the original UI's onClick handlers (which do both).
+8. **MCU write first or config first?** For an *immediate* MCU effect without a restart: **MCU write first** (so the action happens), then the config (so it is persisted). For persistence *only*: config + kill. merakiplus should do **both** (MCU write + config) for full parity with the original UI's onClick handlers (which do both).
 
 ---
 
 ## 6. SAFETY NOTES & QUIRKS
 
-1. **No MCU range checks:** cmd6 = a plain `memcpy` + ACK (registermap §3). All 16-bit values are accepted. **ourui's min/max/step are the only guard.** Enforce the limits in §2 before writing.
+1. **No MCU range checks:** cmd6 = a plain `memcpy` + ACK (registermap §3). All 16-bit values are accepted. **merakiplus's min/max/step are the only guard.** Enforce the limits in §2 before writing.
 2. **Trigger words must be 0:** words 3/6/9 (start/tare), 26/27 (calibration), 30 (reboot) in every block that is not explicitly meant to trigger them. In particular **sub24 len8 (steam)** and **sub18 len14** include words 26/27/30 — set them to 0.
 3. **word30=1 → MCU reboot** (AIRCR reset). Only in page_reset. Never in normal blocks.
 4. **word26/27 ≠ 0 → calibration** (grind_k/extract_k are written to the MCU flash). Only in page_test_scale.
-5. **Extreme temperatures:** the MCU's error detector sets E1/E2/E3 (head>110 °C→E1, e-boiler>120 °C→E3, s-boiler>160 °C→E3). But cmd6 still accepts the value. ourui should cap to the UI limits (85–96 °C brew, 45–70 °C milk, 30–80 °C head).
+5. **Extreme temperatures:** the MCU's error detector sets E1/E2/E3 (head>110 °C→E1, e-boiler>120 °C→E3, s-boiler>160 °C→E3). But cmd6 still accepts the value. merakiplus should cap to the UI limits (85–96 °C brew, 45–70 °C milk, 30–80 °C head).
 6. **Pre-infusion picker anomaly:** the rows of page_time_zone (pressure/time/break/head temp) push `nav+0x6c` on click — which `app_pages_init` registers as **the Wi-Fi page** [0xf1c40]. This is either a firmware quirk or a shared picker page. **The value formulas are nevertheless proven** from the CLICKED path (§2.1.1). The picker's number of options (max values) has therefore not been fully mapped — verify when the device is online. Implement the formula + sensible limits.
 7. **breakTime is overwritten by the MCU** with preInfusionTime (§4) — a separate breakTime has no effect in a standard brew.
 8. **brewMode vestigial**, **sleepMode/sleepModeSetting without an editor** (§0.5/0.6) — do not implement an editor as "parity" (it does not exist in the original).
 9. **Hot water temp is read-only** (the e-boiler sensor word40). No setpoint write exists.
-10. **Steam requires the physical wand switch** (PE.2, word44 bit0) — a write alone does not start steam without the wand (SESSION §5.2). ourui cannot replace the wand with a write alone. *(Later disproven live: display steam starts without the wand switch — see [ui-guide.md §4a](../ui-guide.md) item 10.)*
+10. **Steam requires the physical wand switch** (PE.2, word44 bit0) — a write alone does not start steam without the wand (SESSION §5.2). merakiplus cannot replace the wand with a write alone. *(Later disproven live: display steam starts without the wand switch — see [ui-guide.md §4a](../ui-guide.md) item 10.)*
 
 ---
 
@@ -427,8 +427,8 @@ Cf. `WRITETEST §7` + §1 here:
 
 **Reproduction (in the author's working environment):**
 ```bash
-.venv/bin/python artifacts/ourui/parity_analysis.py     # builds the accessors/calls/funcs JSON
-.venv/bin/python artifacts/ourui/sdump.py <start_hex> <end_hex>   # annotated disassembly
+.venv/bin/python workspace/parity_analysis.py     # builds the accessors/calls/funcs JSON
+.venv/bin/python workspace/sdump.py <start_hex> <end_hex>   # annotated disassembly
 ```
 
 ---

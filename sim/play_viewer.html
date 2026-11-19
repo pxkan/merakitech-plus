@@ -312,7 +312,7 @@ function render(){
   const s = SNAP.state||{}, ui = SNAP.ui||{}, sim = SNAP.sim||{}, ping = sim.ping||{};
   const sess = SNAP.session||{};
   const isRef = sess.client === "reference";
-  pill("p-client", isRef ? "REFERENCE client" : "ourui SIM-build", isRef?"warn":"ok");
+  pill("p-client", isRef ? "REFERENCE client" : "merakiplus SIM-build", isRef?"warn":"ok");
   pill("p-ui", "UI: "+ui.status, ui.status==="running"?"ok":"bad");
   pill("p-sim", "MCU: "+(sim.status||"?")+(ping.link?" · link "+ping.link:""),
        sim.status==="running"?"ok":"bad");
@@ -333,7 +333,7 @@ function render(){
            "bad", {label:"Reset sandbox", fn:doReset});
   } else if (isRef){
     banner("REFERENCE CLIENT: protocol/state play with simple fb emulation (placeholder graphics). "+
-           "Full visual play requires Fable's v6.4 binary <code>artifacts/ourui/ourui_v6_sim</code> — "+
+           "Full visual play requires Fable's v6.4 binary <code>workspace/merakiplus_v6_sim</code> — "+
            "it is auto-detected once it lands.", "ref");
   } else if (!serverGone){ b.style.display="none"; }
   // state table
@@ -490,7 +490,7 @@ $("fbwrap").addEventListener("mousemove", e=>{
 });
 $("fbwrap").addEventListener("mouseleave", ()=>{ mouse=null; $("coord").textContent="x=– y=–"; });
 // ---- 1:1 touch: pointer events are forwarded LIVE (down/move/up) to the evdev FIFO.
-// ourui's own inp_poll/ui_touch decides tap/hold/swipe/scroll = exactly like the device.
+// merakiplus's own inp_poll/ui_touch decides tap/hold/swipe/scroll = exactly like the device.
 // No client-side classification hacks. Touch is detected; desktop without touch
 // gets a hint about Chrome device mode, but mouse drag works too (pointer events).
 const IS_TOUCH = (matchMedia && matchMedia('(pointer:coarse)').matches) || navigator.maxTouchPoints > 0;

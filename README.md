@@ -195,6 +195,12 @@ The installer is **idempotent**: run it again to update to a new version, or to 
 after a reboot (without `--persist` the machine starts the original UI at boot). A log is saved in
 `logs/`. Status without changing anything: `python3 tools/merakiplus.py status --ip ADDR`.
 
+**Installed with a release from before 2026-11-19 (v6.16 or earlier)?** Those releases used an older
+install directory under `/new_customer/`. Running `./install.sh` (or `./revert.sh`) again migrates it
+automatically: backups, state, gesture switcher, language file, pre-heat schedule and settings backups
+are moved to `/new_customer/merakiplus/`, the `demo.sh` guard line is updated (or removed by revert), and
+the older Meraki+ build is still recognised as Meraki+. Nothing is lost; `--dry-run` shows the steps.
+
 <details>
 <summary><b>Installing without git (curl) — not recommended</b></summary>
 
@@ -275,7 +281,7 @@ times as you like.
 
 **Settings:** changes you saved in Meraki+ are stored in `config.json` in the stock format and remain
 in effect in the original UI — that is intended. Meraki+ takes a backup before every change in
-`/new_customer/ourui/cfgbak/` (only deleted with `--purge`).
+`/new_customer/merakiplus/cfgbak/` (only deleted with `--purge`).
 
 **Cannot reach the display over the network?** Unplug the machine for 10 s and plug it back in.
 Without `--persist` the machine starts the original UI. With `--persist`: see the manual procedure in
@@ -350,7 +356,7 @@ Please share the result in an issue.
 ```
  /customer/          slot A — original UI (demo_v9), NEVER touched by Meraki+
  /new_customer/      slot B — Meraki+ is installed here as demo_v9
-   ourui/boot/       backups (demo_v9.vendor, demo.sh.bak), state, gesture switcher
+   merakiplus/boot/  backups (demo_v9.vendor, demo.sh.bak), state, gesture switcher
  /customer/new       boot flag: if present, slot B starts at boot (only with --persist)
  /customer/test.sh   the manufacturer's watchdog: restarts "demo_v9" if it disappears
 ```

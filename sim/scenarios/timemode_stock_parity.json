@@ -4,7 +4,7 @@
   "duration_s": 30,
   "ui_only": true,
   "ui_env": {
-    "OURUI_SIM_CLOCK": "2026-11-18T08:05:10Z"
+    "MERAKIPLUS_SIM_CLOCK": "2026-11-18T08:05:10Z"
   },
   "events": [
     {

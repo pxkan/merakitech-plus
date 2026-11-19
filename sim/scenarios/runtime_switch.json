@@ -1,6 +1,6 @@
 {
   "name": "runtime_switch",
-  "description": "SWITCH TO ORIGINAL NOW (OURUI_SWITCH_DRY=1): bye view → back, flag unchanged, process keeps running",
+  "description": "SWITCH TO ORIGINAL NOW (MERAKIPLUS_SWITCH_DRY=1): bye view → back, flag unchanged, process keeps running",
   "duration_s": 10,
   "events": [
     {

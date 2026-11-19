@@ -19,17 +19,17 @@ ARMSO="-target arm-linux-musleabihf -mcpu=cortex_a7 -shared -fPIC -nostdlib -fno
 WERR="-Wall -Wextra -Werror"
 say(){ printf '== %s\n' "$*"; }
 
-say "host: ourui_sim (SIM build, used by sim/run_e2e.py)"
-zig cc -DOURUI_SIM -O2 -o build/ourui_sim src/ourui_v6.c -lm
+say "host: merakiplus_sim (SIM build, used by sim/run_e2e.py)"
+zig cc -DMERAKIPLUS_SIM -O2 -o build/merakiplus_sim src/merakiplus.c -lm
 say "host: switcher_selftest + switcher_host + grab_shim_selftest"
 zig cc -DSWITCHER_SELFTEST -O2 $WERR -o build/switcher_selftest boot/switcher.c
 zig cc -O2 $WERR -o build/switcher_host boot/switcher.c
 zig cc -DGRAB_SHIM_SELFTEST -DSHIM_HOST -O2 $WERR -o build/grab_shim_selftest boot/grab_shim.c
 
 if [ "$MODE" != host ]; then
-  say "device (ARMv7 static): ourui, ourui_sim_arm"
-  zig cc $ARM -o build/ourui src/ourui_v6.c
-  zig cc $ARM -DOURUI_SIM -o build/ourui_sim_arm src/ourui_v6.c
+  say "device (ARMv7 static): merakiplus, merakiplus_sim_arm"
+  zig cc $ARM -o build/merakiplus src/merakiplus.c
+  zig cc $ARM -DMERAKIPLUS_SIM -o build/merakiplus_sim_arm src/merakiplus.c
   say "device (ARMv7 static): switcher, tinj_hold, keyinj, tinj, fbpage, evprobe"
   zig cc $ARM $WERR -o build/switcher boot/switcher.c
   zig cc $ARM $WERR -o build/tinj_hold boot/tinj_hold.c

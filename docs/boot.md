@@ -11,8 +11,8 @@
 mock dry run). The device is offline; device runs happen later via `boot_install.py` when the user is
 at the machine. No contact with the device took place during preparation.
 
-**Ownership:** this directory (`artifacts/ourui/boot/`) belongs to the boot work stream. The UI work
-stream owns `ourui_v6.c`, `UI_v6.md`, `REVERT.md`, `round_v6/` — those files were NOT touched. The
+**Ownership:** this directory (`workspace/boot/`) belongs to the boot work stream. The UI work
+stream owns `merakiplus.c`, `UI_v6.md`, `REVERT.md`, `round_v6/` — those files were NOT touched. The
 UI changes required from the UI work stream are specified in **§9 (UI requirements)** below.
 
 ---
@@ -50,12 +50,12 @@ matches `demo_v9`** — no heartbeat, no exe path, no slot. Consequences (all us
 ### 1.3 The two switching directions
 | Direction | Who | How | Reboot? |
 |---|---|---|---|
-| A→B (stock→ourui) | **the switcher daemon** (this deliverable) | secret gesture (§2) → SIGSTOP-first switch (§3.2) | no |
-| B→A (ourui→stock) | **ourui itself** (UI work stream, §9) | "Switch to original NOW" button: launch A, exit | no |
+| A→B (stock→merakiplus) | **the switcher daemon** (this deliverable) | secret gesture (§2) → SIGSTOP-first switch (§3.2) | no |
+| B→A (merakiplus→stock) | **merakiplus itself** (UI work stream, §9) | "Switch to original NOW" button: launch A, exit | no |
 | Boot choice A/B | the user / `boot_install.py persist` | `touch`/`rm /customer/new` | yes (next boot) |
 
-In B mode ourui grabs `/dev/input/event0` exclusively (`EVIOCGRAB`, cf. FINDINGS §5.10) → the
-switcher gets no events and idles. When ourui exits (the B→A button), the grab is released
+In B mode merakiplus grabs `/dev/input/event0` exclusively (`EVIOCGRAB`, cf. FINDINGS §5.10) → the
+switcher gets no events and idles. When merakiplus exits (the B→A button), the grab is released
 automatically (process death, also on `kill -9`), and the switcher observes again → the gesture can
 switch back to B. **Both directions work without a reboot, and the switcher never has to handle B→A
 itself.**
@@ -111,7 +111,7 @@ Details:
 ### 3.1 Behavior
 * Static ARM binary (`zig cc -target arm-linux-musleabihf -mcpu=cortex_a7 -static`, 0 warnings with
   `-Wall -Wextra -Werror`). No dependencies, no libc requirement beyond musl.
-* Started from demo.sh's guard line (§4) — in **both** boots. In B mode it idles (ourui's grab starves
+* Started from demo.sh's guard line (§4) — in **both** boots. In B mode it idles (merakiplus's grab starves
   it of events, by design).
 * Input discovery (v6.12, grab bypass a): ALL touch nodes are opened read-only at the same time
   (event0..9 with `ABS_MT_POSITION_X`, names "TECHWIN"/"tw31xx" preferred) — a duplicate node that the
@@ -125,7 +125,7 @@ Details:
   to UART/fb/config/input. No reboot. No grab.
 * Single instance: `flock` on `/tmp/switcher.lock` (an extra instance exits immediately).
 * Log: `/tmp/switcher.log` (UTC timestamps, rotation at 64 KB). B's stdout/stderr on a runtime switch
-  → `/tmp/ourui_boot.log`.
+  → `/tmp/merakiplus_boot.log`.
 * Signals: SIGTERM/SIGINT → clean exit (used by revert/emergency).
 * Gesture timing follows the **event timestamps** (kernel `input_event.time`), not the wall clock —
   robust against scheduling delays and makes file-mode testing possible.
@@ -175,7 +175,7 @@ install). Run one step at a time; every step has gates and logs everything to `b
 Error → automatic emergency (§5.3).
 
 ```sh
-cd artifacts/ourui/boot
+cd workspace/boot
 
 # 0. (optional, already done locally) dry run against a mock root:
 python3 boot_install.py mock-setup --mock-root mock_root
@@ -187,18 +187,18 @@ python3 boot_install.py persist    --mock-root mock_root --default-boot A
 
 # 1. DEVICE — backup (md5 + copies, flag recorded, config baseline gate):
 python3 boot_install.py backup
-#    → /new_customer/ourui/boot/demo.sh.bak      (md5-verified copy of demo.sh)
-#    → /new_customer/ourui/boot/demo_v9.vendor   (md5-verified copy of B's vendor binary)
+#    → /new_customer/merakiplus/boot/demo.sh.bak      (md5-verified copy of demo.sh)
+#    → /new_customer/merakiplus/boot/demo_v9.vendor   (md5-verified copy of B's vendor binary)
 #    → state.json with the flag state + config md5; local snapshots in boot/backups/
 
 # 2. DEVICE — install (upload + ONE line in demo.sh):
 python3 boot_install.py install
-#    → switcher, tinj_hold, fbpage → /new_customer/ourui/boot/
-#    → artifacts/ourui/ourui_v6 (md5 READ AT RUN TIME → picks up the UI's v6.1)
+#    → switcher, tinj_hold, fbpage → /new_customer/merakiplus/boot/
+#    → workspace/merakiplus_v6 (md5 READ AT RUN TIME → picks up the UI's v6.1)
 #      pushed as /new_customer/demo_v9 (md5 round trip via push_nc)
 #    → demo.sh: the guard line is inserted BEFORE the slot branch, AFTER mounts/insmod (v6.12:
 #      the shim export is combined into the SAME line — exactly ONE line kept):
-#        [ -x /new_customer/ourui/boot/switcher ] && { [ -f /new_customer/ourui/boot/grab_shim.so ] && export LD_PRELOAD=/new_customer/ourui/boot/grab_shim.so${LD_PRELOAD:+:$LD_PRELOAD}; /new_customer/ourui/boot/switcher & }
+#        [ -x /new_customer/merakiplus/boot/switcher ] && { [ -f /new_customer/merakiplus/boot/grab_shim.so ] && export LD_PRELOAD=/new_customer/merakiplus/boot/grab_shim.so${LD_PRELOAD:+:$LD_PRELOAD}; /new_customer/merakiplus/boot/switcher & }
 #      (atomic: cp→/customer/.demo_sh.tmp, md5 gate, mv, chmod 755, sync;
 #       a legacy guard line from v6.11 is upgraded automatically to the new one)
 #    → the revert line is logged (REVERT_LINE in install.log + state.json)
@@ -207,11 +207,11 @@ python3 boot_install.py install
 # 3. DEVICE — boot test (3 reboots + gesture; the machine is left in A, flag gone):
 python3 boot_install.py boot-test
 #    a) touch flag + reboot → verify B: exe link=/new_customer/demo_v9,
-#       pidof switcher, fb capture (test-logs/boot_B_ourui.png)
+#       pidof switcher, fb capture (test-logs/boot_B_merakiplus.png)
 #    b) rm flag + reboot → verify A: exe link=/customer/demo_v9 + fb capture
 #    c) gesture via tinj_hold (3×1.6 s at (75,75)) → verify the runtime switch to B
 #       WITHOUT a reboot: exe link + fb + /tmp/switcher.log saved
-#    d) switch back to A (SIGSTOP-first kill+launch; ourui's button can also be used)
+#    d) switch back to A (SIGSTOP-first kill+launch; merakiplus's button can also be used)
 
 # 4. DEVICE — the user's persistence choice (applies at the NEXT boot, no reboot now):
 python3 boot_install.py persist --default-boot B   # our UI as the default
@@ -224,7 +224,7 @@ drift is understood).
 
 **Manual verification after install (telnet):**
 ```sh
-md5sum /customer/demo.sh /new_customer/demo_v9 /new_customer/ourui/boot/switcher
+md5sum /customer/demo.sh /new_customer/demo_v9 /new_customer/merakiplus/boot/switcher
 grep -n switcher /customer/demo.sh          # exactly ONE line, before the "starting from B" branch
 pidof switcher                               # running (started at boot)
 cat /tmp/switcher.log
@@ -245,13 +245,13 @@ Does, in order and with md5 gates: restores `demo.sh` from `.bak` (atomic tmp+mv
 kills the switcher → `rm /customer/new` + reboot → verifies that stock A is untouched (exe link, no
 switcher, demo.sh md5) → restores B's `demo_v9` from `demo_v9.vendor` (md5 == original) → cleans our
 own files out of `/tmp` → verifies that the config md5 is unchanged. The backups are left in
-`/new_customer/ourui/boot/` (harmless; they can be removed with `rm -rf` afterwards if desired — but
+`/new_customer/merakiplus/boot/` (harmless; they can be removed with `rm -rf` afterwards if desired — but
 then a full revert is no longer possible without a new backup).
 
 ### 5.2 Manual revert (telnet, if the script cannot run)
 ```sh
 # 1. demo.sh back (atomic, md5 gate):
-cp /new_customer/ourui/boot/demo.sh.bak /customer/.demo_sh.tmp
+cp /new_customer/merakiplus/boot/demo.sh.bak /customer/.demo_sh.tmp
 md5sum /customer/.demo_sh.tmp        # must match the original (see §6)
 mv /customer/.demo_sh.tmp /customer/demo.sh && sync
 # 2. remove the switcher + the flag:
@@ -260,12 +260,12 @@ rm -f /customer/new && sync
 # 3. reboot → stock A:
 reboot
 # 4. (optional) B's vendor binary back:
-cp /new_customer/ourui/boot/demo_v9.vendor /new_customer/.demo_v9.tmp
+cp /new_customer/merakiplus/boot/demo_v9.vendor /new_customer/.demo_v9.tmp
 md5sum /new_customer/.demo_v9.tmp    # must match the vendor md5 (§6)
 mv /new_customer/.demo_v9.tmp /new_customer/demo_v9 && sync
 ```
 **Only disable the gesture (keep the install):** remove the guard line manually (the same tmp+mv
-pattern with an edited copy) or `rm /new_customer/ourui/boot/switcher` — the `[ -x … ]` gate then
+pattern with an edited copy) or `rm /new_customer/merakiplus/boot/switcher` — the `[ -x … ]` gate then
 makes the line harmless.
 
 ### 5.3 Emergency (automatic on any error in a device step)
@@ -287,17 +287,17 @@ device column during installation.
 | `/customer/demo.sh` (original) | `45b8f5d3f79b5eb5c5b405963426d9d4` | ______ | `53cfde05…` (with guard) | `45b8f5d3…` ✓ |
 | `/customer/demo.sh` (installed, +1 line) | `53cfde0510e4c2b8ad531516c64bf669` | — | ______ | — |
 | `/customer/demo_v9` (vendor A) | `d44c2414b2ac6f0c9370ed6c9f549903` | ______ | unchanged | unchanged |
-| `/new_customer/demo_v9` (vendor B) | `d44c2414b2ac6f0c9370ed6c9f549903` | ______ | ourui md5 ↓ | `d44c2414…` ✓ |
-| ourui binary `artifacts/ourui/ourui_v6` (v6.2 at the time of writing; the installer reads the md5 at run time) | `0bb93da0ed0824c424f1e16530f07022` * | — | ______ | — |
-| `/new_customer/ourui/boot/switcher` | `6222d8c2236d1b27092ed345134ac9bb` | — | ______ | — |
-| `/new_customer/ourui/boot/tinj_hold` | `32d04919f700194df7e553776c38d385` | — | ______ | — |
-| `/new_customer/ourui/boot/fbpage` | `a1eefe6934067c280c2b44c4582c899a` | — | ______ | — |
+| `/new_customer/demo_v9` (vendor B) | `d44c2414b2ac6f0c9370ed6c9f549903` | ______ | merakiplus md5 ↓ | `d44c2414…` ✓ |
+| merakiplus binary `workspace/merakiplus_v6` (v6.2 at the time of writing; the installer reads the md5 at run time) | `0bb93da0ed0824c424f1e16530f07022` * | — | ______ | — |
+| `/new_customer/merakiplus/boot/switcher` | `6222d8c2236d1b27092ed345134ac9bb` | — | ______ | — |
+| `/new_customer/merakiplus/boot/tinj_hold` | `32d04919f700194df7e553776c38d385` | — | ______ | — |
+| `/new_customer/merakiplus/boot/fbpage` | `a1eefe6934067c280c2b44c4582c899a` | — | ______ | — |
 | `/customer/config.json` (baseline) | `<config-md5-redacted>` | ______ | unchanged | unchanged ✓ |
 
-\* The ourui md5 is read **at run time** by `boot_install.py install` — the UI's v6.1 rebuild is picked
+\* The merakiplus md5 is read **at run time** by `boot_install.py install` — the UI's v6.1 rebuild is picked
 up automatically (proven during preparation: the md5 changed from `90bcf094…` to `4d927802…` between
 builds, and the script used the new one). State + snapshots: `boot/backups/state_snapshot.json`,
-`boot/backups/md5_history.json`, device: `/new_customer/ourui/boot/state.json`.
+`boot/backups/md5_history.json`, device: `/new_customer/merakiplus/boot/state.json`.
 
 ---
 
@@ -308,8 +308,8 @@ The vendor OTA (`/customer/temp.tar.gz`, an unsigned channel from `oss.sanbontft
 
 | Flag at OTA time | The OTA does | Consequence for us |
 |---|---|---|
-| `/customer/new` exists (B active) | unpacks into **/customer (A)**, **removes the flag** | next boot = stock A (new version). Our `demo.sh` guard line is **overwritten** by the OTA's demo.sh → the switcher no longer starts; the gesture is dead until a re-install. ourui in B untouched but inactive. |
-| no flag (A active) | unpacks into **/new_customer (B)**, **sets the flag** | next boot = **B = the vendor's new demo_v9 — our ourui is overwritten!** (the `demo_v9.vendor` backup and `ourui/boot/` survive, as the tar only touches its own paths). The machine boots vendor B without our knowledge. |
+| `/customer/new` exists (B active) | unpacks into **/customer (A)**, **removes the flag** | next boot = stock A (new version). Our `demo.sh` guard line is **overwritten** by the OTA's demo.sh → the switcher no longer starts; the gesture is dead until a re-install. merakiplus in B untouched but inactive. |
+| no flag (A active) | unpacks into **/new_customer (B)**, **sets the flag** | next boot = **B = the vendor's new demo_v9 — our merakiplus is overwritten!** (the `demo_v9.vendor` backup and `merakiplus/boot/` survive, as the tar only touches its own paths). The machine boots vendor B without our knowledge. |
 | mount failed | only unpacks into A | like row 1 without a flag change. |
 
 In addition, the OTA strips `softversion` from `config.json` → the config md5 changes → our baseline
@@ -317,9 +317,9 @@ gate will (correctly) refuse install/revert-test until the config is understood/
 
 **Recommendation for persistence:** block `oss.sanbontft.com` (and optionally `pro.ip-api.com`) on the
 LAN firewall for as long as our UI should be persistent. Without blocking: accept that a vendor OTA can
-(a) remove the switcher line and (b) replace ourui in B + force a B boot. Detection:
+(a) remove the switcher line and (b) replace merakiplus in B + force a B boot. Detection:
 `md5sum /customer/demo.sh /new_customer/demo_v9` against the §6 table + `ls /customer/new`. Recovery:
-run `backup` (new baseline) + `install` again — the backups in `ourui/boot/` survive an OTA, but **the
+run `backup` (new baseline) + `install` again — the backups in `merakiplus/boot/` survive an OTA, but **the
 vendor OTA's new A demo.sh then becomes the new "original"** (the backup takes the current one as the
 truth; document the version change in the md5 table).
 
@@ -338,9 +338,9 @@ truth; document the version change in the md5 table).
    (≈ 3.5 % of the square area, mostly outside the round active area) within 6 s. In normal use (taps
    on the four activity buttons, swipes) the probability is **vanishingly small**; realistic
    unintended sources are cleaning the screen with long presses in the corner or a child holding a
-   finger in the corner repeatedly. The consequence is mild: the UI switches to ourui (no actuator
-   start; ourui never starts grind/brew without an explicit button + 650 ms hold), and the user can
-   switch back with ourui's "Switch to original NOW" button (§9) or the kill+launch pattern (§5.2).
+   finger in the corner repeatedly. The consequence is mild: the UI switches to merakiplus (no actuator
+   start; merakiplus never starts grind/brew without an explicit button + 650 ms hold), and the user can
+   switch back with merakiplus's "Switch to original NOW" button (§9) or the kill+launch pattern (§5.2).
    The gesture only works A→B. **Disable:** remove the guard line via revert (§5.1/§5.2) or
    `rm …/boot/switcher` (the gate makes the line harmless).
 4. **Watchdog slot mismatch after a runtime switch** (§1.2): crash after a switch → the watchdog
@@ -348,10 +348,10 @@ truth; document the version change in the md5 table).
    The next reboot normalizes it.
 5. **SIGSTOP in the middle of a UART write** (A is stopped before B starts): a partial frame to the MCU
    — the MCU resyncs on the header (FINDINGS §5.7, low risk, accepted in phase 2).
-6. **ourui's own writes** (v6 SAVE → config.json + MCU registers) are unchanged and documented in
+6. **merakiplus's own writes** (v6 SAVE → config.json + MCU registers) are unchanged and documented in
    REVERT.md; the boot deliverable adds no new config writes. Note REVERT.md's OTA caveat on a demo_v9
    restart.
-7. **B boot with our UI = no stock sleep control:** ourui v6 has keep-awake (word1=0 every 30 s) and
+7. **B boot with our UI = no stock sleep control:** merakiplus v6 has keep-awake (word1=0 every 30 s) and
    controls sleep itself; on a B boot the stock UI's sleep logic is not active. Expected behavior, but
    noted.
 8. **Root telnet open to the LAN** (FINDINGS §6.6) — unchanged by this deliverable; hardening is still
@@ -359,10 +359,10 @@ truth; document the version change in the md5 table).
 
 ---
 
-## 9. UI requirements for the UI work stream (ourui v6.1+, SYSTEM page)
+## 9. UI requirements for the UI work stream (merakiplus v6.1+, SYSTEM page)
 
-The boot deliverable is ready; the following two controls had to be added to ourui (owner of
-`ourui_v6.c`/`UI_v6.md`). Specification — implemented and tested by the UI work stream, not by the
+The boot deliverable is ready; the following two controls had to be added to merakiplus (owner of
+`merakiplus.c`/`UI_v6.md`). Specification — implemented and tested by the UI work stream, not by the
 boot work stream:
 
 ### 9.1 Boot UI toggle (persistence choice)
@@ -385,25 +385,25 @@ The order is critical because of the watchdog race (§1.2) and fb/UART ownership
    `/tmp/a_relaunch.log`), `execl("/customer/demo_v9", "./demo_v9", NULL)`. (argv0 MUST contain
    `demo_v9` so the watchdog grep matches.)
 3. **Wait ~300–500 ms** in the parent (A initializes fb/UART), **then exit** (`_exit(0)`). During the
-   overlap ourui must NOT read the UART or render the fb (fds closed in step 1). The watchdog now sees
+   overlap merakiplus must NOT read the UART or render the fb (fds closed in step 1). The watchdog now sees
    A's PID → no restart.
 4. **Do NOT touch the flag** (`/customer/new`) — a runtime switch ≠ a boot choice. **Do not kill
-   demo_v9** — launch + our own exit is enough (the existing guarantee "ourui never kills demo_v9" is
+   demo_v9** — launch + our own exit is enough (the existing guarantee "merakiplus never kills demo_v9" is
    kept).
 5. The exit automatically releases `EVIOCGRAB` on event0 → the switcher observes again and the
    gesture (A→B) is available immediately.
-6. Log the switch (ourui's own log) with time + reason ("user button").
+6. Log the switch (merakiplus's own log) with time + reason ("user button").
 * Known consequence (documented in UI_v6.md): if we booted B, the watchdog is `test.sh new_customer`
   → if A crashes later, B is restarted. The next reboot follows the flag. Acceptable; no action
   required.
 
 ### 9.3 General requirements (unchanged guarantees)
-* ourui must never write to `/customer/demo.sh`, `/customer/demo_v9`, `test.sh`, pinit or libs.
+* merakiplus must never write to `/customer/demo.sh`, `/customer/demo_v9`, `test.sh`, pinit or libs.
 * Config writes only via the established v6 pattern (REVERT.md: tmp+rename, cfgbak, md5 log) — the
   boot deliverable only reads the config md5 as a gate.
-* On a B boot (ourui as `/new_customer/demo_v9`) ourui must run without the `run.sh` wrapper (it is
+* On a B boot (merakiplus as `/new_customer/demo_v9`) merakiplus must run without the `run.sh` wrapper (it is
   phase 2 only; run.sh SIGCONTs a stock process that does not exist on a B boot). Run the binary
-  directly; exit codes are logged to `/tmp/ourui_boot.log` if started by the switcher.
+  directly; exit codes are logged to `/tmp/merakiplus_boot.log` if started by the switcher.
 
 ---
 
@@ -419,10 +419,10 @@ The order is critical because of the watchdog race (§1.2) and fb/UART ownership
 | Mock boot test (B boot/A boot/gesture runtime/back, simulated boot + REAL gesture code) | ✓ | `install.log`, `test-logs/mock_*` |
 | Mock revert test: demo.sh + vendor B + config byte-identical to the originals; /tmp clean | ✓ | independent `diff`/`md5` against the artifacts (run 2026-11-17) |
 | Mock emergency (restore demo.sh, kill switcher, A secured, flag gone) | ✓ | `install.log` |
-| ourui md5 read at run time (v6.1 pickup) | ✓ | the md5 changed during preparation; the install used the new one |
+| merakiplus md5 read at run time (v6.1 pickup) | ✓ | the md5 changed during preparation; the install used the new one |
 
 **The rest requires the device (online, user at the machine):** the device steps in §4 (real reboot,
-fb captures, the gesture on physical touch, the watchdog race in practice, ourui v6.1 as the B
+fb captures, the gesture on physical touch, the watchdog race in practice, merakiplus v6.1 as the B
 binary). The §9 buttons had to be implemented before the B→A button could be tested; the boot test's
 switch back, however, uses kill+launch and is independent of the UI work stream.
 
@@ -433,7 +433,7 @@ switch back, however, uses kill+launch and is independent of the UI work stream.
 | File | Purpose |
 |---|---|
 | `switcher.c` | daemon source (gesture + mode check + SIGSTOP-first switch) |
-| `switcher` | static ARM binary (installed as `/new_customer/ourui/boot/switcher`) |
+| `switcher` | static ARM binary (installed as `/new_customer/merakiplus/boot/switcher`) |
 | `switcher_selftest`, `switcher_host` | host builds for local tests |
 | `tinj_hold.c`, `tinj_hold` | touch injector with long press + `gesture` (boot test) |
 | `boot_install.py` | step script (device + mock backends, gates, emergency) |

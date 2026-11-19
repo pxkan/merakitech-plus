@@ -1,4 +1,4 @@
-# PLAY.md — interactive play mode for the SIM environment (Meraki+ / ourui)
+# PLAY.md — interactive play mode for the SIM environment (Meraki+ / merakiplus)
 
 **Date:** 2026-11-17 · **Owner:** the test work stream · **Files:** `sim/play.py` + `sim/play_viewer.html`
 **Policy:** local development only — **no contact with the physical device**. Python standard library
@@ -24,7 +24,7 @@ python3 sim/play.py
 python3 sim/play.py --port 9000 --lang en          # another port + English UI language
 python3 sim/play.py --scenario steam_auto          # the scenario's config/sim as the starting point
 python3 sim/play.py --ack observed_v3              # ACK profile at start
-python3 sim/play.py --ui-bin /path/to/ourui_sim    # explicit UI binary
+python3 sim/play.py --ui-bin /path/to/merakiplus_sim    # explicit UI binary
 python3 sim/play.py --no-browser                   # do not open a browser
 python3 sim/play.py --keep                         # keep the sandbox on exit (troubleshooting)
 python3 sim/play.py --smoke --no-browser           # headless smoke test (see §7)
@@ -49,11 +49,11 @@ with `--keep`). Snapshot exports are always kept in `sim/reports/play-exports/`.
 
 | Mode | When | What do you see? |
 |---|---|---|
-| **ourui SIM build** (full visual play) | `build/ourui_sim` exists (`./build.sh host`), or `--ui-bin`/`OURUI_SIM_BIN` points to a binary | The real Meraki+ UI rendered to the fb file; clicks hit the real buttons |
+| **merakiplus SIM build** (full visual play) | `build/merakiplus_sim` exists (`./build.sh host`), or `--ui-bin`/`MERAKIPLUS_SIM_BIN` points to a binary | The real Meraki+ UI rendered to the fb file; clicks hit the real buttons |
 | **Reference client** (protocol/state play) | when no SIM build is found, or with `--force-reference` | A simple fb emulation (phase ring + four buttons + toast region) = **placeholder graphics**, but full protocol, state and interaction. The viewer shows a blue banner about this. |
 
 Auto-detection happens at startup. **Status 2026-11-17:** the v6.4 binary landed at 16:04
-(`build/ourui_sim`) and is now auto-detected — full visual play is active and verified (§7). The
+(`build/merakiplus_sim`) and is now auto-detected — full visual play is active and verified (§7). The
 reference mode is still available with `--force-reference`.
 
 ---
@@ -64,7 +64,7 @@ reference mode is still available with `--force-reference`.
 
 * **Live fb** is updated at ~6 Hz (PNG from `fb.bin`, cached per frame).
 * **Click** = tap (touch down/up immediately).
-* **Hold ≥ 650 ms** on an activity button = *hold-to-start* (exactly as in ourui: you must hold the
+* **Hold ≥ 650 ms** on an activity button = *hold-to-start* (exactly as in merakiplus: you must hold the
   button for at least 650 ms). A yellow/green ring shows the hold time.
 * **Right-click** (or the "gesture test" button) = gesture test: the trigger gesture is injected as
   an evdev stream, and the **real `switcher_host`** is run in file mode against the same stream. The
@@ -157,7 +157,7 @@ in the current view), `/api/scenarios`, `/exports/<file>` (snapshot files).
 * **Exit (Ctrl-C/SIGTERM)** → ctrl `exit` to the UI + sim, process wait/terminate, sockets, FIFO, pty
   and sandbox are cleaned up. `--keep` keeps the sandbox for troubleshooting.
 * **Writes** only happen in the sandbox (`sim/reports/play-*/`), the designated exports
-  (`sim/reports/play-exports/`) and a short `/tmp/ourui_e2e_<pid>_*` directory for the ctrl sockets
+  (`sim/reports/play-exports/`) and a short `/tmp/merakiplus_e2e_<pid>_*` directory for the ctrl sockets
   (AF_UNIX paths must be ≤ 104 bytes on macOS; the directory is cleaned up on exit).
 * **Speed > 1×**: only the MCU's sim time is scaled; the UI client still runs on the wall clock. The
   keep-awake threshold is scaled accordingly in the sim, so there are no false `keepalive_gap` logs.
@@ -171,7 +171,7 @@ in the current view), `/api/scenarios`, `/exports/<file>` (snapshot files).
 |---|---|
 | `mcu_sim.py` | ctrl `speed {factor}`, `pause {value}`, `require_wand {value}`; `ping` now also returns speed/paused/profile/require_wand. Live speed/pause in the main loop (1×/unpaused = byte-identical behavior). The keep-awake threshold scales with the speed (1× unchanged). `do_reboot` resets the boot push detection + first RX, so the boot push/version handshake are expected again after a reboot. |
 | `ref_client.py` | 0x89 received *after* a completed handshake = MCU restart → re-handshake + re-boot-push (as on a new connect, PARITY §1.4). Does not affect the scenarios (no reboot in the scenarios). |
-| `run_e2e.py` | `start_ui()` sets `OURUI_LANGFILE=<sandbox>/new_customer/ourui/lang` (the v6.3+ language file; a missing file = fallback EN, unchanged behavior for older builds). |
+| `run_e2e.py` | `start_ui()` sets `MERAKIPLUS_LANGFILE=<sandbox>/new_customer/merakiplus/lang` (the v6.3+ language file; a missing file = fallback EN, unchanged behavior for older builds). |
 | `play.py`, `play_viewer.html`, `PLAY.md` | The play mode deliverable itself (new files). |
 
 `selftest.py` and all scenarios were rerun after the changes — see §7.
@@ -181,16 +181,16 @@ in the current view), `/api/scenarios`, `/exports/<file>` (snapshot files).
 ## 6. Limitations
 
 * **Full visual play requires the SIM build.** Without it, the fb is the reference client's simple
-  emulation (phase ring + buttons + toast region) — not ourui's real graphics. All protocols, state
+  emulation (phase ring + buttons + toast region) — not merakiplus's real graphics. All protocols, state
   fields, touch mechanics and controls are, however, the same.
-* **The reference client's button layout** is not ourui's real layout. Against the SIM build, play
+* **The reference client's button layout** is not merakiplus's real layout. Against the SIM build, play
   uses the real touch targets from ctrl `layout`; against the reference client its own layout. Direct
   click/hold on the fb always works (it is just touch coordinates).
-* **Language:** ourui's UI language (v6.3+) lives in its own file (`"en"`/`"da"`, `OURUI_LANGFILE`),
+* **Language:** merakiplus's UI language (v6.3+) lives in its own file (`"en"`/`"da"`, `MERAKIPLUS_LANGFILE`),
   not in config.json. Play writes the file; against the SIM build the UI is restarted automatically
   (the file is loaded at boot). **Danish is not among the stock UI's 11 languages** (config index
   0..10 = EN/DE/FR/IT/ES/PL/AR/简中/繁中/KO/JA) — the stock language row is config-only and does not
-  affect ourui's labels. The reference client has no i18n (only the config index in the state).
+  affect merakiplus's labels. The reference client has no i18n (only the config index in the state).
 * **Steam has two paths (v6.6, STEAMLIVE §5-6).** Display steam (the UI button / word24=1) runs
   **without** the wand switch and auto-stops at the milk setpoint. The wand switch (PE.2, "Wand
   on/off") starts a **flush** (word24=0, no auto-stop) — also on top of a brew (work_sta 0x5327) —
@@ -239,7 +239,7 @@ injects touch via the API and asserts state changes in the JSONL:
 ```sh
 python3 sim/play.py --smoke --no-browser
 # → [smoke] 30/30 PASS · client=sim-build   (2026-11-17 16:08)
-#   binary: build/ourui_sim · md5 354976e839a26663310493446c7a3f97
+#   binary: build/merakiplus_sim · md5 354976e839a26663310493446c7a3f97
 ```
 
 The visually relevant checks against the real UI:
@@ -261,7 +261,7 @@ git).
 Also run the whole E2E suite against the binary for full contract coverage:
 
 ```sh
-python3 sim/run_e2e.py --all --ui-bin build/ourui_sim
+python3 sim/run_e2e.py --all --ui-bin build/merakiplus_sim
 ```
 
 ### Backward compatibility (run after the changes)
@@ -283,7 +283,7 @@ development.
 | Symptom | Cause / solution |
 |---|---|
 | `kan ikke binde port 8765` (cannot bind port) | The port is in use — use `--port <other>`. |
-| The viewer shows the "REFERENCE CLIENT" banner | No SIM build was found. Run `./build.sh host` (→ `build/ourui_sim`) or use `--ui-bin`. |
+| The viewer shows the "REFERENCE CLIENT" banner | No SIM build was found. Run `./build.sh host` (→ `build/merakiplus_sim`) or use `--ui-bin`. |
 | UI crash banner | Click "Restart UI"; a stderr excerpt is shown in the banner. The full stderr is in the play process's output. |
 | Touch does nothing | Hold ≥ 650 ms on an activity button (a tap only gives a hold hint toast). Against the SIM build: use the real button layout. |
 | Steam does not start | "require wand for steam" is enabled and the wand is off — turn the wand on or the requirement off. |

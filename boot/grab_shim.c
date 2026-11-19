@@ -7,8 +7,8 @@
  * stock THINKS it grabs, but it does not → the switcher (read-only) sees events.
  *
  * SCOPE: only ioctl(EVIOCGRAB) in processes whose /proc/self/exe == /customer/demo_v9
- * (stock, incl. watchdog restart and runtime B→A launch). ourui (/new_customer/
- * demo_v9) and all other processes get ALL ioctls passed through unchanged — ourui's
+ * (stock, incl. watchdog restart and runtime B→A launch). merakiplus (/new_customer/
+ * demo_v9) and all other processes get ALL ioctls passed through unchanged — merakiplus's
  * own EVIOCGRAB in B mode is thus preserved (no phantom presses in the SIGSTOP'ed stock).
  * Risk: stock only loses exclusivity; evdev still delivers to stock as
  * before (a grab only takes events away from OTHER readers). No writes, no other behavior.
@@ -132,7 +132,7 @@ int main(void)
     CHECK(shim_noop(SHIM_EVIOCGRAB, "/customer/demo_v9") == 1,
           "EVIOCGRAB + stock exe → no-op");
     CHECK(shim_noop(SHIM_EVIOCGRAB, "/new_customer/demo_v9") == 0,
-          "EVIOCGRAB + ourui exe → passthrough (ourui's grab preserved)");
+          "EVIOCGRAB + merakiplus exe → passthrough (merakiplus's grab preserved)");
     CHECK(shim_noop(SHIM_EVIOCGRAB, "/bin/busybox") == 0,
           "EVIOCGRAB + other exe → passthrough");
     CHECK(shim_noop(SHIM_EVIOCGRAB, NULL) == 0, "EVIOCGRAB + unknown exe → passthrough");

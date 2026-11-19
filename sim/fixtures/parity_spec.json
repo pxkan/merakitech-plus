@@ -1,6 +1,6 @@
 {
   "meta": {
-    "title": "ourui feature-parity spec — MerakiTech Gen 1 (demo_v9 original UI)",
+    "title": "merakiplus feature-parity spec — MerakiTech Gen 1 (demo_v9 original UI)",
     "date": "2026-11-17",
     "method": "static-only (binaries+docs), device offline",
     "source_binary": "artifacts/demo_v9 (MD5 d44c2414…)",
@@ -803,7 +803,7 @@
       "persist": "config-excluded",
       "confidence": "H",
       "handler_addr": "0x13a538",
-      "notes": "ourui maa IKKE roere wifi/ssid/password (opgave-krav)."
+      "notes": "merakiplus maa IKKE roere wifi/ssid/password (opgave-krav)."
     },
     {
       "id": "wifi_ssid",
@@ -828,7 +828,7 @@
       "persist": "config-excluded",
       "confidence": "H",
       "handler_addr": "0xef0ac",
-      "notes": "ourui maa IKKE roere."
+      "notes": "merakiplus maa IKKE roere."
     },
     {
       "id": "wifi_password",
@@ -853,7 +853,7 @@
       "persist": "config-excluded",
       "confidence": "H",
       "handler_addr": "0xef0ac",
-      "notes": "ourui maa IKKE roere."
+      "notes": "merakiplus maa IKKE roere."
     },
     {
       "id": "preset_store",

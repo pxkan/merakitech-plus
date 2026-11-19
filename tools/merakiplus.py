@@ -47,31 +47,115 @@ RAW_BASE = "https://raw.githubusercontent.com/" + REPO + "/{ref}/bin/{name}"
 
 # md5 of the shipped device binaries in bin/ (kept in sync with bin/MD5SUMS by CI).
 BIN_MD5 = {
-    "ourui": "2d10173cffb99807d7144619099b49b7",
-    "switcher": "de0d4920e4e80be32e3a70798886a3c0",
+    "merakiplus": "737db9b97dcea27764c682381b70dff2",
+    "switcher": "a5e0128bdd77ff5697df2100e889604a",
     "grab_shim.so": "c42076c807c54d477a5868977404186d",
 }
-OURUI_MARK = "@(#)ourui "                 # embedded in every Meraki+ binary (src/ourui_v6.c OURUI_MARK)
+MERAKIPLUS_MARK = "@(#)merakiplus "        # embedded in every Meraki+ binary (src/merakiplus.c MERAKIPLUS_MARK)
 
 # ---- device layout (vendor A/B scheme, see docs/boot.md) ----
 A_DIR, B_DIR = "/customer", "/new_customer"
 A_EXE, B_EXE = "/customer/demo_v9", "/new_customer/demo_v9"
 DEMO_SH, TEST_SH, FLAG = "/customer/demo.sh", "/customer/test.sh", "/customer/new"
-OURDIR = "/new_customer/ourui"
+OURDIR = "/new_customer/merakiplus"
 BOOTDIR = OURDIR + "/boot"
-STAGE = OURDIR + "/ourui"                              # staged copy (same fs as slot B)
+STAGE = OURDIR + "/merakiplus"                          # staged copy (same fs as slot B)
 BAK_B = BOOTDIR + "/demo_v9.vendor"                     # slot B's original binary
 BAK_B_ABSENT = BOOTDIR + "/demo_v9.vendor.absent"       # marker: slot B had no binary
 BAK_SH = BOOTDIR + "/demo.sh.bak"                       # original /customer/demo.sh
 STATE = BOOTDIR + "/merakiplus.state"
 SWITCHER, SHIM = BOOTDIR + "/switcher", BOOTDIR + "/grab_shim.so"
-GUARD_LINE = ("[ -x /new_customer/ourui/boot/switcher ] && { [ -f /new_customer/ourui/boot/grab_shim.so ] "
-              "&& export LD_PRELOAD=/new_customer/ourui/boot/grab_shim.so${LD_PRELOAD:+:$LD_PRELOAD}; "
-              "/new_customer/ourui/boot/switcher & }")
-GUARD_KEY = "/new_customer/ourui/boot/switcher"         # any line containing this is ours
+GUARD_LINE = ("[ -x /new_customer/merakiplus/boot/switcher ] && { [ -f /new_customer/merakiplus/boot/grab_shim.so ] "
+              "&& export LD_PRELOAD=/new_customer/merakiplus/boot/grab_shim.so${LD_PRELOAD:+:$LD_PRELOAD}; "
+              "/new_customer/merakiplus/boot/switcher & }")
+GUARD_KEY = "/new_customer/merakiplus/boot/switcher"    # any line containing this is ours
+ENV_PREFIX = "MERAKIPLUS_"                              # prefix of the UI's environment variables
 ANCHOR = 'if [ "$MOUNT_SUCCESS" -eq 1 ] && [ -f /customer/new ]; then'
 INSMOD_MARKER = "# kernel_mod_list"
 B_LDP, A_LDP = "/new_customer/libs:/config/wifi", "/customer/libs:/config/wifi"
+
+# ============================================================ legacy migration only
+# BEGIN legacy-compat (legacy migration only)
+# Installs made before the rename (releases up to v6.16) used a different identifier for the
+# install directory, the staged binary, the UI's environment variables and the binary marker.
+# This block is the ONLY place in the repository where that identifier may appear
+# (tests/hygiene.py enforces it). Nothing else may use these literals.
+LEGACY_ID = "ourui"
+LEGACY_DIR = B_DIR + "/" + LEGACY_ID                    # former OURDIR
+LEGACY_GUARD_KEY = LEGACY_DIR + "/boot/switcher"        # former GUARD_KEY (demo.sh guard line)
+LEGACY_ENV_PREFIX = LEGACY_ID.upper() + "_"             # former ENV_PREFIX (only used in a dev run.sh)
+LEGACY_MARKS = ("@(#)" + LEGACY_ID + " ",               # v6.2 .. v6.16 what(1) marker
+                "== " + LEGACY_ID + ": config.json aendret")   # v6.1 (no marker; its exit text)
+
+
+def legacy_path(path):
+    """The pre-rename location of a path under OURDIR."""
+    return LEGACY_DIR + path[len(OURDIR):] if path.startswith(OURDIR) else path
+
+
+def legacy_rewrite(data):
+    """Rewrite a pre-rename helper script (a dev run.sh) to the current identifiers."""
+    return (data.replace(LEGACY_ENV_PREFIX.encode(), ENV_PREFIX.encode())
+                .replace(LEGACY_ID.encode(), pathlib.PurePosixPath(OURDIR).name.encode()))
+
+
+def legacy_inspect(dev):
+    """{'dir': legacy install directory exists, 'guard': legacy guard lines in demo.sh}."""
+    _, g = dev.sh(f"grep -c -F '{LEGACY_GUARD_KEY}' {dev.d(DEMO_SH)} 2>/dev/null; true", check=False)
+    last = g.strip().splitlines()[-1] if g.strip() else ""
+    return {"dir": dev.exists(LEGACY_DIR), "guard": int(last) if last.isdigit() else 0}
+
+
+def legacy_migrate(dev, o, st, rewrite_guard):
+    """Move a pre-rename install to OURDIR (backups, state, switcher, language, schedule, settings
+    backups, a dev run.sh) and, with rewrite_guard, turn its demo.sh guard line into GUARD_LINE.
+    Idempotent. Returns True when something was (or, in --dry-run, would be) changed."""
+    lg = st["legacy"]
+    if not lg["dir"] and not (lg["guard"] and rewrite_guard):
+        return False
+    o.step(f"Migrating an install from before the rename ({LEGACY_DIR} -> {OURDIR})")
+    if lg["dir"]:
+        old, new = dev.d(LEGACY_DIR), dev.d(OURDIR)
+        if not dev.exists(OURDIR):
+            dev.w(f"mv {old} {new} && sync")
+            o.ok(f"{LEGACY_DIR} moved to {OURDIR} (same filesystem, atomic)")
+        else:
+            # both exist (interrupted migration): move what the new directory lacks, never overwrite;
+            # anything left over is kept aside in OURDIR/legacy-leftover (removed only by --purge)
+            dev.w(f"cd {old} && for f in $(find . -type f -o -type l); do [ -e {new}/$f ] || "
+                  f"{{ mkdir -p {new}/$(dirname $f) && mv $f {new}/$f; }}; done; cd /; "
+                  f"if [ -n \"$(find {old} -type f -o -type l)\" ]; then rm -rf {new}/legacy-leftover; "
+                  f"mv {old} {new}/legacy-leftover; else rm -rf {old}; fi; sync")
+            o.ok(f"{LEGACY_DIR} merged into {OURDIR} (existing files kept)")
+        src = OURDIR if not dev.dry else LEGACY_DIR
+        old_stage = src + "/" + LEGACY_ID
+        if dev.exists(old_stage):
+            dev.w(f"rm -f {dev.d(old_stage)}; sync")
+            o.ok("old staged copy removed (install stages the new binary as " + STAGE + ")")
+        run_sh = src + "/run.sh"
+        if dev.exists(run_sh):
+            cur = dev.read(run_sh)
+            new_b = legacy_rewrite(cur)
+            if new_b != cur:
+                dev.push(new_b, OURDIR + "/run.sh", mode="755")
+                o.ok("run.sh rewritten to the new directory, binary name and environment variables")
+    if lg["guard"] and rewrite_guard:
+        lines = dev.read(DEMO_SH).decode("utf-8", "surrogateescape").splitlines(keepends=True)
+        out, placed = [], any(GUARD_KEY in l for l in lines)
+        for l in lines:
+            if LEGACY_GUARD_KEY in l:
+                if not placed:
+                    out.append(GUARD_LINE + "\n")
+                    placed = True
+                continue
+            out.append(l)
+        new_sh = "".join(out).encode("utf-8", "surrogateescape")
+        dev.push(new_sh, DEMO_SH, mode="755")
+        if not dev.dry and dev.read(DEMO_SH) != new_sh:
+            raise Abort("demo.sh read-back differs from what was written — run ./revert.sh now")
+        o.ok("demo.sh: the old guard line now points at " + BOOTDIR)
+    return True
+# END legacy-compat
 
 IAC, DONT, DO, WONT, WILL, SB, SE = 255, 254, 253, 252, 251, 250, 240
 
@@ -253,7 +337,8 @@ class Device:
         return m.group(1) if (rc == 0 and m) else None
 
     def is_ours(self, path):
-        return self.sh(f"grep -q '{OURUI_MARK}' {self.d(path)} 2>/dev/null && echo Y || echo N",
+        pats = " ".join(f"-e '{m}'" for m in (MERAKIPLUS_MARK,) + LEGACY_MARKS)
+        return self.sh(f"grep -q -F {pats} {self.d(path)} 2>/dev/null && echo Y || echo N",
                        check=False)[1].strip().endswith("Y")
 
     def read(self, path):
@@ -428,15 +513,23 @@ def inspect(dev):
     st["b_md5"] = dev.md5(B_EXE) if st["b_exists"] else None
     st["b_ours"] = dev.is_ours(B_EXE) if st["b_exists"] else False
     st["a_md5"] = dev.md5(A_EXE)
-    st["bak_b"] = dev.exists(BAK_B)
-    st["bak_b_absent"] = dev.exists(BAK_B_ABSENT)
-    st["bak_sh"] = dev.exists(BAK_SH)
-    _, g = dev.sh(f"grep -c '{GUARD_KEY}' {dev.d(DEMO_SH)} 2>/dev/null; true", check=False)
-    st["guard_lines"] = int(g.strip().splitlines()[-1]) if g.strip() and g.strip().splitlines()[-1].isdigit() else 0
+    st["legacy"] = legacy_inspect(dev)
+
+    def where(path):      # current location, or the pre-rename one while a migration is pending
+        if dev.exists(path):
+            return path
+        return legacy_path(path) if st["legacy"]["dir"] and dev.exists(legacy_path(path)) else None
+    st["bak_b"] = bool(where(BAK_B))
+    st["bak_b_absent"] = bool(where(BAK_B_ABSENT))
+    st["bak_sh"] = bool(where(BAK_SH))
+    _, g = dev.sh(f"grep -c -F '{GUARD_KEY}' {dev.d(DEMO_SH)} 2>/dev/null; true", check=False)
+    st["guard_lines"] = (int(g.strip().splitlines()[-1]) if g.strip() and g.strip().splitlines()[-1].isdigit() else 0) \
+        + st["legacy"]["guard"]
     st["switcher_pids"] = dev.pids_named("switcher")
     st["state"] = {}
-    if dev.exists(STATE):
-        _, s = dev.sh(f"cat {dev.d(STATE)}", check=False)
+    sp = where(STATE)
+    if sp:
+        _, s = dev.sh(f"cat {dev.d(sp)}", check=False)
         st["state"] = dict(l.split("=", 1) for l in s.splitlines() if "=" in l)
     _, df = dev.sh(f"df -k {dev.d(B_DIR)} 2>/dev/null | tail -n 1", check=False)
     try:
@@ -462,6 +555,8 @@ def print_status(o, st):
     o.say(f"  demo.sh guard line : {st['guard_lines']}   switcher running: {bool(st['switcher_pids'])}")
     o.say(f"  backups            : slot-B {'yes' if st['bak_b'] else ('was-empty' if st['bak_b_absent'] else 'no')}"
           f", demo.sh {'yes' if st['bak_sh'] else 'no'}")
+    if st["legacy"]["dir"] or st["legacy"]["guard"]:
+        o.say("  older install      : found in the pre-rename layout — migrated by install / revert")
 
 
 def require_device(st):
@@ -534,10 +629,10 @@ def activate_meraki(dev, o, st, want_md5):
         pid, _ = find_new(dev, B_EXE, [old], 15)
         if pid is None:
             o.warn("watchdog did not restart slot B within 15 s — starting it directly")
-            pid = stop_first_switch(dev, o, B_DIR, B_EXE, B_LDP, "ourui_boot.log")
+            pid = stop_first_switch(dev, o, B_DIR, B_EXE, B_LDP, "merakiplus_boot.log")
     else:
         o.say("  stop-first runtime switch: pause stock UI, start Meraki+, verify, then stop stock")
-        pid = stop_first_switch(dev, o, B_DIR, B_EXE, B_LDP, "ourui_boot.log")
+        pid = stop_first_switch(dev, o, B_DIR, B_EXE, B_LDP, "merakiplus_boot.log")
     return pid
 
 
@@ -554,7 +649,7 @@ def verify_running(dev, o, pid, want_md5):
         raise Abort(f"Meraki+ (pid {pid}) exited within 5 s. The vendor watchdog will restart a UI; "
                     "run ./revert.sh to go back to stock and please open an issue.")
     o.ok("still running after 5 s (no crash loop)")
-    _, lg = dev.sh(f"grep 'net-vagt startet' {dev.d('/tmp/ourui_net.log')} 2>/dev/null | tail -n 1", check=False)
+    _, lg = dev.sh(f"grep 'net-vagt startet' {dev.d('/tmp/merakiplus_net.log')} 2>/dev/null | tail -n 1", check=False)
     if ("V" + VERSION) in lg:
         o.ok(f"Meraki+ log confirms version V{VERSION}")
 
@@ -571,9 +666,9 @@ def cmd_install(dev, o, args):
         o.warn("no UI process running right now (the watchdog usually restarts one within a second)")
 
     o.step("2/7 Getting and verifying the Meraki+ binaries")
-    ourui = get_binary("ourui", args, o)
-    check_arm_elf(ourui, "ourui")
-    want = BIN_MD5["ourui"]
+    merakiplus = get_binary("merakiplus", args, o)
+    check_arm_elf(merakiplus, "merakiplus")
+    want = BIN_MD5["merakiplus"]
     extra = {}
     if args.gesture:
         extra["switcher"] = get_binary("switcher", args, o)
@@ -587,6 +682,8 @@ def cmd_install(dev, o, args):
     if not dev.dry and not confirm("  Machine is idle and you accept the risks described in the README?", args.yes):
         raise Abort("Cancelled by user. Nothing was changed.")
 
+    if legacy_migrate(dev, o, st, rewrite_guard=True) and not dev.dry:
+        st = inspect(dev)
     o.step("3/7 Backups (only taken once; never overwritten)")
     dev.w(f"mkdir -p {dev.d(BOOTDIR)}")
     if st["bak_b"] or st["bak_b_absent"]:
@@ -618,7 +715,7 @@ def cmd_install(dev, o, args):
     if dev.md5(STAGE) == want:
         o.ok(f"staged copy {STAGE} already up to date")
     else:
-        dev.push(ourui, STAGE)
+        dev.push(merakiplus, STAGE)
         o.ok(f"uploaded and verified {STAGE}")
     if st["b_md5"] == want:
         o.ok(f"{B_EXE} already is Meraki+ {VERSION}")
@@ -673,11 +770,11 @@ def cmd_install(dev, o, args):
 def install_guard(dev, o):
     content = dev.read(DEMO_SH).decode("utf-8", "surrogateescape")
     lines = content.splitlines(keepends=True)
-    ours = [l for l in lines if GUARD_KEY in l]
+    ours = [l for l in lines if GUARD_KEY in l or LEGACY_GUARD_KEY in l]
     if len(ours) == 1 and ours[0].rstrip("\n") == GUARD_LINE:
         o.ok("demo.sh guard line already present")
         return
-    base = [l for l in lines if GUARD_KEY not in l]
+    base = [l for l in lines if GUARD_KEY not in l and LEGACY_GUARD_KEY not in l]
     anchors = [i for i, l in enumerate(base) if l.rstrip("\n") == ANCHOR]
     insm = [i for i, l in enumerate(base) if l.strip() == INSMOD_MARKER]
     if not anchors or not insm or anchors[-1] < insm[-1] or \
@@ -710,6 +807,11 @@ def cmd_revert(dev, o, args):
         return
     if not dev.dry and not confirm("  Revert this display to the stock UI now?", args.yes):
         raise Abort("Cancelled by user. Nothing was changed.")
+    if legacy_migrate(dev, o, st, rewrite_guard=False) and not dev.dry:
+        st = dict(inspect(dev), a_md5=st["a_md5"])
+
+    def at(path):         # --dry-run: a pending migration has not moved the file yet
+        return legacy_path(path) if dev.dry and st["legacy"]["dir"] and not dev.exists(path) else path
 
     o.step("2/6 Switching the running UI back to stock (no reboot)")
     running_ours = [p for p, e in st["procs"] if e == B_EXE and st["b_ours"]]
@@ -725,8 +827,9 @@ def cmd_revert(dev, o, args):
     o.step("3/6 Restoring /customer/demo.sh")
     if st["guard_lines"]:
         cur = dev.read(DEMO_SH)
-        stripped = b"".join(l for l in cur.splitlines(keepends=True) if GUARD_KEY.encode() not in l)
-        bak_md5 = dev.md5(BAK_SH) if st["bak_sh"] else None
+        stripped = b"".join(l for l in cur.splitlines(keepends=True)
+                            if GUARD_KEY.encode() not in l and LEGACY_GUARD_KEY.encode() not in l)
+        bak_md5 = dev.md5(at(BAK_SH)) if st["bak_sh"] else None
         if bak_md5 and bak_md5 == md5b(stripped):
             dev.atomic_copy(BAK_SH, DEMO_SH, bak_md5)
             o.ok(f"demo.sh restored from backup (md5 {bak_md5})")
@@ -747,7 +850,7 @@ def cmd_revert(dev, o, args):
     o.step("5/6 Restoring slot B and the boot flag")
     restored_vendor = False
     if st["bak_b"]:
-        bmd5 = dev.md5(BAK_B)
+        bmd5 = dev.md5(at(BAK_B))
         if st["b_md5"] == bmd5:
             o.ok("slot B already holds the vendor binary")
         else:
@@ -768,7 +871,7 @@ def cmd_revert(dev, o, args):
     else:
         o.ok("boot flag not set: next boot starts the stock UI (slot A)")
     if args.purge:
-        dev.w(f"rm -rf {dev.d(OURDIR)} && sync")
+        dev.w(f"rm -rf {dev.d(OURDIR)} {dev.d(LEGACY_DIR)} && sync")
         o.ok(f"{OURDIR} removed (backups, language file and settings backups included)")
     else:
         dev.w(f"rm -f {dev.d(STAGE)} {dev.d(STATE)}; sync")
@@ -870,7 +973,7 @@ def main(argv=None):
     p.add_argument("--bin-dir", help="use binaries from this directory (md5-checked)")
     p = sub.add_parser("revert", help="restore the stock UI and remove Meraki+")
     common(p)
-    p.add_argument("--purge", action="store_true", help="also delete /new_customer/ourui (backups, language, settings backups)")
+    p.add_argument("--purge", action="store_true", help="also delete /new_customer/merakiplus (backups, language, settings backups)")
     p = sub.add_parser("status", help="read-only overview")
     common(p)
     p = sub.add_parser("scan", help="find displays on the local network")

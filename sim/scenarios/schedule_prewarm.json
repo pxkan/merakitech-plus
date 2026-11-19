@@ -1,10 +1,10 @@
 {
   "name": "schedule_prewarm",
-  "description": "v6.16 planned pre-heat: PRE-HEAT every day at 06:30 (local, zone #48) saved at 06:29 → pre-armed while on (cmd8 alarm [18,6,30]); HOLD → power-off carries the same alarm (stock performSleepActions) + cmd6 sub0 len2 [0,0] → deep sleep → the MCU RTC reaches 06:30 → alarm wake (CPU reset, factory defaults) → re-push restores the config → ourui ON again and RE-ARMS the next occurrence (tomorrow, [19,6,30]); then PRE-HEAT OFF disarms with 0/0/0",
+  "description": "v6.16 planned pre-heat: PRE-HEAT every day at 06:30 (local, zone #48) saved at 06:29 → pre-armed while on (cmd8 alarm [18,6,30]); HOLD → power-off carries the same alarm (stock performSleepActions) + cmd6 sub0 len2 [0,0] → deep sleep → the MCU RTC reaches 06:30 → alarm wake (CPU reset, factory defaults) → re-push restores the config → merakiplus ON again and RE-ARMS the next occurrence (tomorrow, [19,6,30]); then PRE-HEAT OFF disarms with 0/0/0",
   "duration_s": 80,
   "ui_only": true,
   "ui_env": {
-    "OURUI_SIM_CLOCK": "2026-11-18T05:29:12Z"
+    "MERAKIPLUS_SIM_CLOCK": "2026-11-18T05:29:12Z"
   },
   "events": [
     {

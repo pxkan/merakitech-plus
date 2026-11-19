@@ -188,7 +188,7 @@ WS_PULSE_MASK = 0x2C00    # bits 10,11,13 = stochastic idle pulses (masked in re
 WS_ACTIVITY_MASK = 0x537F & ~WS_PULSE_MASK  # everything except idle pulses
 
 def phase_of(regs, link_up=True) -> str:
-    """Same phase logic as ourui_v6.c phase_raw() (the UI's expectation)."""
+    """Same phase logic as merakiplus.c phase_raw() (the UI's expectation)."""
     if not link_up:
         return "OFFLINE"
     ws = regs[33]
@@ -297,8 +297,8 @@ def evdev_event(sec: int, usec: int, typ: int, code: int, val: int) -> bytes:
     return EV_FMT.pack(sec, usec, typ, code, val)
 
 # The device's ACTUAL ABS_MT range (FINDINGS 'Gesture debug': 0..480, not 4095).
-# switcher/tinj/ourui auto-detect it via EVIOCGABS with 480 as the fallback constant.
-# The SIM's virtual touch surface KEEPS its declared 0..4095 (ourui_v6.c SIM HAL);
+# switcher/tinj/merakiplus auto-detect it via EVIOCGABS with 480 as the fallback constant.
+# The SIM's virtual touch surface KEEPS its declared 0..4095 (merakiplus.c SIM HAL);
 # streams feeding switcher_host in file mode must pass rmax=4095 (or 480) so that
 # screen<->raw matches the receiver's range (switcher's file-mode default = 480).
 DEVICE_RAW_MAX = 480

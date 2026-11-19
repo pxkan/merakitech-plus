@@ -13,7 +13,7 @@ STEPS (in order):
   mock-setup   build a local mock root from artifacts/ (only with --mock-root)
   backup       md5+copy: demo.sh → boot/demo.sh.bak, B's demo_v9 → demo_v9.vendor,
                flag state recorded, config-md5 baseline gate
-  install      upload switcher + ourui (artifacts/ourui/ourui_v6, md5 read AT
+  install      upload switcher + merakiplus (workspace/merakiplus_v6, md5 read AT
                RUN TIME so v6.1 is always fresh) as /new_customer/demo_v9 + helpers;
                ADD ONE guard line in /customer/demo.sh before the slot branch (atomic)
   boot-test    flag+reboot → B verified (exe link+fb); rm flag+reboot → A;
@@ -65,7 +65,7 @@ import zlib
 DEV = pathlib.Path(__file__).resolve().parent            # boot/dev
 ROOT = DEV.parent.parent                                 # repo root
 HERE = ROOT / "build"                                    # switcher, tinj_hold, grab_shim.so
-OURUI = ROOT / "build"                                   # ourui, fbpage
+MERAKIPLUS = ROOT / "build"                                   # merakiplus, fbpage
 ART = pathlib.Path(os.environ.get("VENDOR_DIR", str(ROOT / "vendor-local")))
 TELNET = DEV / "telnet_run.py"
 PUSH = DEV / "push_nc.py"
@@ -74,27 +74,27 @@ BACKUPS = ROOT / "logs" / "backups"
 TESTLOGS = ROOT / "logs" / "test-logs"
 
 BASELINE_CONFIG_MD5 = "<config-md5-redacted>"   # WRITETEST.md §1
-BOOTDIR = "/new_customer/ourui/boot"
+BOOTDIR = "/new_customer/merakiplus/boot"
 STATE_PATH = BOOTDIR + "/state.json"
 DEMO_SH = "/customer/demo.sh"
 FLAG = "/customer/new"
 # v6.12 (GESTUS-FIX): the guard line exports LD_PRELOAD=grab_shim.so BEFORE ./demo_v9
 # (bypass c: stock's EVIOCGRAB is made a no-op → the read-only switcher sees events). The shim
-# scopes itself to /customer/demo_v9 (exe check) — ourui's grab in B mode is preserved.
+# scopes itself to /customer/demo_v9 (exe check) — merakiplus's grab in B mode is preserved.
 # Still EXACTLY ONE line; the -f test makes a missing .so harmless. LD_PRELOAD is inherited by
 # the test.sh watchdog → a watchdog-restarted stock also gets the shim.
-GUARD_LINE = ("[ -x /new_customer/ourui/boot/switcher ] && { [ -f /new_customer/ourui/boot/grab_shim.so ] "
-              "&& export LD_PRELOAD=/new_customer/ourui/boot/grab_shim.so${LD_PRELOAD:+:$LD_PRELOAD}; "
-              "/new_customer/ourui/boot/switcher & }")
-LEGACY_GUARD_LINE = "[ -x /new_customer/ourui/boot/switcher ] && /new_customer/ourui/boot/switcher &"
+GUARD_LINE = ("[ -x /new_customer/merakiplus/boot/switcher ] && { [ -f /new_customer/merakiplus/boot/grab_shim.so ] "
+              "&& export LD_PRELOAD=/new_customer/merakiplus/boot/grab_shim.so${LD_PRELOAD:+:$LD_PRELOAD}; "
+              "/new_customer/merakiplus/boot/switcher & }")
+LEGACY_GUARD_LINE = "[ -x /new_customer/merakiplus/boot/switcher ] && /new_customer/merakiplus/boot/switcher &"
 ANCHOR = 'if [ "$MOUNT_SUCCESS" -eq 1 ] && [ -f /customer/new ]; then'
 INSMOD_MARKER = "# kernel_mod_list"
-REVERT_LINE = ("REVERT (BOOT.md §5): cp /new_customer/ourui/boot/demo.sh.bak "
+REVERT_LINE = ("REVERT (BOOT.md §5): cp /new_customer/merakiplus/boot/demo.sh.bak "
                "/customer/.demo_sh.tmp && md5sum /customer/.demo_sh.tmp "
                "&& mv /customer/.demo_sh.tmp /customer/demo.sh && sync")
 A_EXE, B_EXE = "/customer/demo_v9", "/new_customer/demo_v9"
 TMP_CLEANUP = ["/tmp/tinj_hold", "/tmp/fbpage", "/tmp/switcher.log",
-               "/tmp/ourui_boot.log", "/tmp/switcher.lock", "/tmp/.push_nc_tmp",
+               "/tmp/merakiplus_boot.log", "/tmp/switcher.lock", "/tmp/.push_nc_tmp",
                "/tmp/nc.err", "/tmp/fb_boot.bin", "/tmp/a_relaunch.log"]
 
 
@@ -282,8 +282,8 @@ class DeviceBackend:
 
     def capture(self, name):
         """fb capture (the round_capture pattern) → test-logs/<name>.bin/.png."""
-        if self.md5("/tmp/fbpage") != md5b((OURUI / "fbpage").read_bytes()):
-            self.push(OURUI / "fbpage", "/tmp/fbpage")
+        if self.md5("/tmp/fbpage") != md5b((MERAKIPLUS / "fbpage").read_bytes()):
+            self.push(MERAKIPLUS / "fbpage", "/tmp/fbpage")
         out = self.telnet("dd if=/dev/fb0 of=/tmp/fb_boot.bin bs=1920 count=960 2>/dev/null; "
                           "/tmp/fbpage; gzip -c /tmp/fb_boot.bin | base64; rm -f /tmp/fb_boot.bin",
                           timeout=90)
@@ -603,23 +603,23 @@ def step_install(be, args):
     gate(st and all(e == A_EXE for _, e in st),
          f"install requires A mode (stock running, the B binary is not in use): {st}")
     # md5 is read AT RUN TIME — catches Fable's v6.1 if the file changed in the meantime
-    ourui_src = OURUI / "ourui"
-    gate(ourui_src.is_file(), f"ourui source exists: {ourui_src}")
-    elf_arm_static(ourui_src)
+    merakiplus_src = MERAKIPLUS / "merakiplus"
+    gate(merakiplus_src.is_file(), f"merakiplus source exists: {merakiplus_src}")
+    elf_arm_static(merakiplus_src)
     elf_arm_static(HERE / "switcher")
     elf_arm_static(HERE / "tinj_hold")
-    ourui_md5 = md5b(ourui_src.read_bytes())
-    log(f"[install] ourui source: {ourui_src} md5={ourui_md5} "
-        f"mtime={datetime.datetime.fromtimestamp(ourui_src.stat().st_mtime).isoformat()} "
+    merakiplus_md5 = md5b(merakiplus_src.read_bytes())
+    log(f"[install] merakiplus source: {merakiplus_src} md5={merakiplus_md5} "
+        f"mtime={datetime.datetime.fromtimestamp(merakiplus_src.stat().st_mtime).isoformat()} "
         "(md5 read at run time → v6.1 is caught automatically)")
     be.mkdir_p(BOOTDIR)
-    be.mkdir_p("/new_customer/ourui")
+    be.mkdir_p("/new_customer/merakiplus")
     be.push(HERE / "switcher", BOOTDIR + "/switcher")
     be.push(HERE / "tinj_hold", BOOTDIR + "/tinj_hold")
     be.push(HERE / "grab_shim.so", BOOTDIR + "/grab_shim.so")
-    be.push(OURUI / "fbpage", BOOTDIR + "/fbpage")
-    be.push(ourui_src, "/new_customer/demo_v9")
-    gate(be.md5("/new_customer/demo_v9") == ourui_md5, "ourui installed as B's demo_v9 (md5)")
+    be.push(MERAKIPLUS / "fbpage", BOOTDIR + "/fbpage")
+    be.push(merakiplus_src, "/new_customer/demo_v9")
+    gate(be.md5("/new_customer/demo_v9") == merakiplus_md5, "merakiplus installed as B's demo_v9 (md5)")
     # --- demo.sh: ADD ONE LINE before the slot branch, after mounts/insmod ---
     content = be.read(DEMO_SH).decode()
     if GUARD_LINE in content:
@@ -629,7 +629,7 @@ def step_install(be, args):
         # v6.11 installation → upgrade the guard line (shim export), still ONE line
         gate(content.count(LEGACY_GUARD_LINE) == 1, "exactly ONE legacy guard line")
         new_content = content.replace(LEGACY_GUARD_LINE, GUARD_LINE)
-        gate(sum(1 for l in new_content.splitlines() if "/ourui/boot/switcher" in l) == 1,
+        gate(sum(1 for l in new_content.splitlines() if "/merakiplus/boot/switcher" in l) == 1,
              "exactly ONE guard line after upgrade")
         gate(new_content.index(GUARD_LINE) < new_content.rindex(ANCHOR),
              "guard line is before the boot branch")
@@ -655,17 +655,17 @@ def step_install(be, args):
     readback = be.read(DEMO_SH).decode()
     gate(GUARD_LINE in readback and readback == new_content, "demo.sh readback == expected content")
     log(f"[install] {REVERT_LINE}")
-    state["install"] = {"ts": now(), "ourui_md5": ourui_md5, "ourui_src": str(ourui_src),
+    state["install"] = {"ts": now(), "merakiplus_md5": merakiplus_md5, "merakiplus_src": str(merakiplus_src),
                         "switcher_md5": md5b((HERE / "switcher").read_bytes()),
                         "tinj_hold_md5": md5b((HERE / "tinj_hold").read_bytes()),
                         "grab_shim_md5": md5b((HERE / "grab_shim.so").read_bytes()),
-                        "fbpage_md5": md5b((OURUI / "fbpage").read_bytes()),
+                        "fbpage_md5": md5b((MERAKIPLUS / "fbpage").read_bytes()),
                         "demo_sh_orig_md5": state["backup"]["demo_sh_md5"],
                         "demo_sh_installed_md5": expected, "guard_line": GUARD_LINE,
                         "revert_line": REVERT_LINE}
     save_state(be, state)
     (BACKUPS / "demo.sh.installed").write_text(new_content)
-    log(f"[install] DONE: demo.sh={expected} ourui(B)={ourui_md5}")
+    log(f"[install] DONE: demo.sh={expected} merakiplus(B)={merakiplus_md5}")
 
 
 def step_boot_test(be, args):
@@ -676,14 +676,14 @@ def step_boot_test(be, args):
     gate(GUARD_LINE in be.read(DEMO_SH).decode(), "guard line present")
     results = {}
 
-    # 1. B boot: flag + reboot → ourui
+    # 1. B boot: flag + reboot → merakiplus
     be.touch(FLAG)
     be.sync()
     be.reboot()
     st = be.wait_up()
-    gate(st and all(e == B_EXE for _, e in st), f"B boots ourui (exe link): {st}")
+    gate(st and all(e == B_EXE for _, e in st), f"B boots merakiplus (exe link): {st}")
     gate(be.switcher_pids(), "switcher started by the guard line (pidof switcher)")
-    be.capture("boot_B_ourui")
+    be.capture("boot_B_merakiplus")
     results["b_boot"] = "OK"
 
     # 2. A boot: rm flag + reboot → stock
@@ -706,10 +706,10 @@ def step_boot_test(be, args):
         TESTLOGS.mkdir(exist_ok=True)
         (TESTLOGS / f"{be.name}_switcher.log").write_text(sl)
         log("[boot-test] switcher.log saved in test-logs/")
-    be.capture("runtime_B_ourui")
+    be.capture("runtime_B_merakiplus")
     results["gesture_runtime_switch"] = "OK"
 
-    # 4. switch back to A (kill+launch A, SIGSTOP first; ourui's button can also be used)
+    # 4. switch back to A (kill+launch A, SIGSTOP first; merakiplus's button can also be used)
     be.launch_a_stopfirst()
     st = be.demo_state()
     gate(len(st) >= 1 and all(e == A_EXE for _, e in st),
@@ -771,7 +771,7 @@ def step_persist(be, args):
     log(f"[persist] default-boot = {choice} (applies to the NEXT boot; no reboot now)")
     if choice == "B" and state.get("revert_test"):
         log("[persist] WARNING: revert-test has run → B's demo_v9 is now the VENDOR binary, "
-            "not ourui. Run install again before choosing B as default.")
+            "not merakiplus. Run install again before choosing B as default.")
 
 
 def step_emergency(be, args):

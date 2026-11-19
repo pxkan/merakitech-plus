@@ -3,7 +3,7 @@
 #
 #   ./revert.sh --ip ADDR             stop Meraki+, start the stock UI, restore demo.sh + slot B + boot flag
 #   ./revert.sh --ip ADDR --dry-run   show what would happen
-#   ./revert.sh --ip ADDR --purge     also delete /new_customer/ourui (backups, language, settings backups)
+#   ./revert.sh --ip ADDR --purge     also delete /new_customer/merakiplus (backups, language, settings backups)
 #
 # Slot A (the stock UI) is never modified by Meraki+, so the stock UI is always there to go back to.
 set -euo pipefail

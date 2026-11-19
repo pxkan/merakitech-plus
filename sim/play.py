@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""play.py — INTERACTIVE play mode for the E2E sim environment (Meraki+ / ourui).
+"""play.py — INTERACTIVE play mode for the E2E sim environment (Meraki+ / merakiplus).
 
 Starts sandbox + mcu_sim + UI client in one call (reuses run_e2e.py's
 launch mechanics) and serves a local web viewer where you can click around
@@ -9,7 +9,7 @@ the UI with a simulated MCU and data:
                       [--scenario idle|brew|steam_auto|...]
                       [--ack normal|observed_v3|no_ack|lossy]
 
-* The UI binary is auto-detected (build/ourui_sim, OURUI_SIM_BIN,
+* The UI binary is auto-detected (build/merakiplus_sim, MERAKIPLUS_SIM_BIN,
   --ui-bin). Until Fable's v6.4 SIM build lands, it runs against the reference
   client (sim/ref_client.py): protocol/state play with a simple fb emulation
   (placeholder graphics + state panel). Full visual play requires the v6.4 binary.
@@ -62,7 +62,7 @@ REPORTS = HERE / "reports"
 EXPORTS = REPORTS / "play-exports"
 VIEWER_HTML = HERE / "play_viewer.html"
 
-HOLD_START_MS = 650             # ourui: hold-for-start on activity buttons
+HOLD_START_MS = 650             # merakiplus: hold-for-start on activity buttons
 ACTIVITY_MS = 750               # play's simulated hold (a bit over 650)
 FAULT_CYCLE = [None, {"e1": 32}, {"e2": 16}, {"e3": 16}]
 FAULT_NAMES = ["no fault", "E1 (word34=32)", "E2 (word35=16)", "E3 (word36=16)"]
@@ -122,7 +122,7 @@ class Play:
         self.gen = 0                    # session-generation (reset/restart)
         self.sr = None                  # ScenarioRun (reused launch mechanics)
         self.ui_bin = None if args.force_reference else find_ui_bin(args.ui_bin)
-        self.ui_lang = args.lang        # "en"/"da" (ourui's own lang file)
+        self.ui_lang = args.lang        # "en"/"da" (merakiplus's own lang file)
         self.fault_idx = 0
         self.link_closed = False
         self.ui_intentional = False     # true while we stop the UI ourselves
@@ -169,8 +169,8 @@ class Play:
             self.sr = ScenarioRun(self._build_scen(), run_dir, ui_bin=self.ui_bin)
             sr = self.sr
             sr.make_sandbox()
-            # UI language file (v6.3+): "en"/"da" — ourui's own labels, not config
-            lang_path = sr.sandbox / "new_customer" / "ourui" / "lang"
+            # UI language file (v6.3+): "en"/"da" — merakiplus's own labels, not config
+            lang_path = sr.sandbox / "new_customer" / "merakiplus" / "lang"
             lang_path.parent.mkdir(parents=True, exist_ok=True)
             lang_path.write_text(self.ui_lang)
             sr.start_sim()
@@ -190,12 +190,12 @@ class Play:
             self._last_slow = 0.0
             self._drain(sr.ui_proc, self.ui_stderr)
             self._drain(sr.sim_proc, self.sim_stderr)
-        kind = "ourui SIM-build" if self.ui_bin else "REFERENCE client (placeholder fb)"
+        kind = "merakiplus SIM-build" if self.ui_bin else "REFERENCE client (placeholder fb)"
         print(f"[play] UI client: {kind}"
               + (f" ({self.ui_bin})" if self.ui_bin else ""), flush=True)
         print(f"[play] sandbox: {self.sr.sandbox}", flush=True)
         if not self.ui_bin:
-            print("[play] NOTE: Fable's v6.4 SIM build (build/ourui_sim) "
+            print("[play] NOTE: Fable's v6.4 SIM build (build/merakiplus_sim) "
                   "does not exist yet — running against ref_client with simple fb emulation. "
                   "Full visual play requires the v6.4 binary (auto-detected).", flush=True)
 
@@ -342,7 +342,7 @@ class Play:
                 "hold": ms >= HOLD_START_MS}
 
     # ---- 1:1 live touch forwarding (pointer/touch events → evdev FIFO) ----
-    # The viewer sends down/move/up exactly as the finger moves; ourui's
+    # The viewer sends down/move/up exactly as the finger moves; merakiplus's
     # inp_poll/ui_touch decides tap/hold/swipe/scroll itself = same behavior as the device.
     def _touch_io(self, data):
         with self.tio:
@@ -364,7 +364,7 @@ class Play:
 
     def inject_swipe(self, x0, y0, x1, y1, ms=260):
         """Drag/swipe: down at (x0,y0) → interpolated MOVE records → up at (x1,y1).
-        ourui switches page on horizontal >= 60 px (the state contract's 'swipe')."""
+        merakiplus switches page on horizontal >= 60 px (the state contract's 'swipe')."""
         x0 = max(0, min(W - 1, int(x0))); y0 = max(0, min(H - 1, int(y0)))
         x1 = max(0, min(W - 1, int(x1))); y1 = max(0, min(H - 1, int(y1)))
         ms = max(60, min(2000, int(ms)))
@@ -492,7 +492,7 @@ class Play:
             sr = self.sr
         if sr is None:
             return {"ok": False, "error": "no session"}
-        lp = sr.sandbox / "new_customer" / "ourui" / "lang"
+        lp = sr.sandbox / "new_customer" / "merakiplus" / "lang"
         try:
             lp.parent.mkdir(parents=True, exist_ok=True)
             tmp = lp.with_suffix(".tmp")
@@ -502,14 +502,14 @@ class Play:
             return {"ok": False, "error": str(e)}
         restarted = False
         if self.ui_bin:
-            # ourui loads the lang file at boot → restart the UI for a live switch
+            # merakiplus loads the lang file at boot → restart the UI for a live switch
             r = self.restart_ui()
             restarted = bool(r.get("ok"))
         else:
             # the reference client has no i18n; the config language is reloaded
             self._ui_call({"cmd": "config_reload"})
         return {"ok": True, "lang": lang, "ui_restarted": restarted,
-                "note": "DA is not one of stock's 11 languages — ourui's labels are "
+                "note": "DA is not one of stock's 11 languages — merakiplus's labels are "
                         "fixed Danish/English via the lang file (v6.3+)"}
 
     def link(self, state):
@@ -645,7 +645,7 @@ class Play:
                 self._last_cfg_md5 = cfg_md5
             lang_file = None
             try:
-                lang_file = (sr.sandbox / "new_customer" / "ourui" / "lang").read_text().strip()
+                lang_file = (sr.sandbox / "new_customer" / "merakiplus" / "lang").read_text().strip()
             except OSError:
                 pass
             # real touch targets from the SIM build (ctrl layout) — cached between ticks
@@ -1030,7 +1030,7 @@ def run_smoke(play, base):
     chk("config md5 logged in protocol log", ok)
     # 7. language file, boot flag, pause, gesture, snapshot, touch tap, reset
     r = post("/api/lang", {"value": "da"})
-    lp = play.sr.sandbox / "new_customer" / "ourui" / "lang"
+    lp = play.sr.sandbox / "new_customer" / "merakiplus" / "lang"
     chk("language switch: lang file = 'da'", r.get("ok") and lp.read_text().strip() == "da")
     flag0 = (json.loads(get("/api/state")[1]).get("state") or {}).get("boot_flag")
     post("/api/boot_flag", {})
@@ -1065,8 +1065,8 @@ def run_smoke(play, base):
 
 # ---------------------------------------------------------------- main
 def main():
-    ap = argparse.ArgumentParser(description="Interactive play mode for the ourui SIM environment")
-    ap.add_argument("--ui-bin", help="ourui SIM build (auto-detected otherwise)")
+    ap = argparse.ArgumentParser(description="Interactive play mode for the merakiplus SIM environment")
+    ap.add_argument("--ui-bin", help="merakiplus SIM build (auto-detected otherwise)")
     ap.add_argument("--force-reference", action="store_true",
                     help="run against ref_client even if a SIM binary exists")
     ap.add_argument("--port", type=int, default=8765)
@@ -1075,7 +1075,7 @@ def main():
     ap.add_argument("--host", default="127.0.0.1",
                     help="bind address; use 0.0.0.0 to reach the viewer from other machines on the LAN")
     ap.add_argument("--lang", choices=["en", "da"], default="da",
-                    help="UI language (ourui's lang file; default da)")
+                    help="UI language (merakiplus's lang file; default da)")
     ap.add_argument("--scenario", help="scenario name: uses its config/sim part "
                     "(not the timeline) as the starting point")
     ap.add_argument("--ack", default="normal",

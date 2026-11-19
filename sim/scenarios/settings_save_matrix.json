@@ -1,6 +1,6 @@
 {
   "name": "settings_save_matrix",
-  "description": "Settings SAVE matrix: min/max/step/original per parity_spec parameter (ourui's guarded SAVE path: writes + config persist; config-only without writes; locked/omitted fields rejected; unchanged value = 'unchanged')",
+  "description": "Settings SAVE matrix: min/max/step/original per parity_spec parameter (merakiplus's guarded SAVE path: writes + config persist; config-only without writes; locked/omitted fields rejected; unchanged value = 'unchanged')",
   "duration_s": 67.3,
   "events": [
     {
