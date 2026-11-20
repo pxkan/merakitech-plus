@@ -35,6 +35,10 @@ jobs:
         run: ./build.sh host
       - name: Cross-build device binaries (ARMv7, 0 errors)
         run: ./build.sh
+      - name: Cross-build Linux SIM (x86_64 musl, static, stripped)
+        run: zig cc -target x86_64-linux-musl -DMERAKIPLUS_SIM -O2 -static -s src/merakiplus.c -lm -o build/merakiplus_sim-linux-x86_64
+      - name: bin/ drift check (committed binaries == fresh builds)
+        run: python3 tests/check_bins.py
       - name: UI self-test (preview build, 440+ checks)
         run: |
           zig cc -DMERAKIPLUS_PREVIEW -O2 -o build/merakiplus_preview src/merakiplus.c -lm

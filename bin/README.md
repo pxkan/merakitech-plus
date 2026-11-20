@@ -71,7 +71,19 @@ self-test and the simulator E2E suite.
 | `merakiplus_sim-macos-arm64` (V6.17) | `ddbb0ef2a6443c45a1bddfec5b1cbb16` | `zig cc -DMERAKIPLUS_SIM -O2 -s src/merakiplus.c -lm` (Mach-O builds are not bit-reproducible) |
 
 The ARM builds above are reproducible: running `./build.sh` on the same sources with zig 0.17.1 gives
-the same md5, independent of the build directory.
+the same md5, independent of the build directory. The Linux SIM build (`-target x86_64-linux-musl
+-static -s`) is reproducible the same way. CI enforces this on every push and PR
+(`tests/check_bins.py`): the committed `bin/` must be byte-identical to fresh builds of these six
+reproducible targets, so a source change without a `bin/` rebuild fails CI. `grab_shim.so` (trimmed
+verified build, see below) and `merakiplus_sim-macos-arm64` (Mach-O is not bit-reproducible) are
+excluded from that check; `tests/hygiene.py` still md5-gates every file in `bin/`.
+
+GitHub releases are maintained automatically by `.github/workflows/release.yml`: a `v*` tag push, a
+manual dispatch, or a push to `main` that bumps `VERSION` past the latest release builds, runs the
+full quick test gate and publishes the committed `bin/` assets (device binary, ARM SIM, Linux SIM,
+macOS SIM, `MD5SUMS`) with the CHANGELOG section as notes. Re-runs update the existing release
+instead of creating a duplicate. The macOS SIM asset is the committed build from the table above —
+CI does not rebuild it (no macOS runner needed), it ships exactly what `bin/MD5SUMS` lists.
 
 `grab_shim.so` (`c42076c807c54d477a5868977404186d`) is still the exact build that was verified on a real
 machine: its source change was comments/self-test text only and compiles to the same `.so` as before.
