@@ -41,7 +41,7 @@ if [ "$MODE" != host ]; then
   say "device (ARMv7 static): switcher, tinj_hold, keyinj, tinj, fbpage, evprobe"
   zig cc $ARM $WERR -o build/switcher boot/switcher.c
   say "device (ARMv7, glibc 2.28 like the display, dynamic): merakiplus_snd (dlopens the display's libmi_sys.so + libmi_ao.so)"
-  zig cc -target arm-linux-gnueabihf.2.28 -mcpu=cortex_a7 -O2 -s -fno-PIE -no-pie $WERR -o build/merakiplus_snd src/merakiplus_snd.c -ldl
+  zig cc -target arm-linux-gnueabihf.2.28 -mcpu=cortex_a7 -O2 -s -fno-PIE -no-pie $WERR -o build/merakiplus_snd src/merakiplus_snd.c -lpthread -ldl
   zig cc $ARM $WERR -o build/tinj_hold boot/tinj_hold.c
   zig cc $ARM -o build/keyinj src/keyinj.c
   zig cc $ARM -o build/tinj src/tinj.c

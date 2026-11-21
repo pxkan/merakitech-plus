@@ -9,6 +9,8 @@
     ./build.sh) and no audio/video file of any other origin is tracked (no vendor .mp3/.mp4 — docs/audio.md)
   * the pre-rename identifier (tools/merakiplus.py LEGACY_ID) appears nowhere — not in file names,
     text or binaries — except inside the "legacy-compat" block of tools/merakiplus.py
+  * bin/merakiplus_snd NEEDs libpthread.so.0 and its source dlopen()s libpthread.so.0 RTLD_GLOBAL before libmi_common.so
+    (v6.18.1: the display's libmi_common.so uses sem_post & co. without NEEDing libpthread — docs/audio.md §3)
 """
 import hashlib
 import json
@@ -144,6 +146,31 @@ for p in files:
     n = data.lower().count(OLD)
     if n:
         fail(f"{rel}: {n} occurrence(s) of the pre-rename identifier outside the legacy-compat block")
+
+# 6. sound helper: libpthread must be in the global scope before libmi_common.so is loaded (v6.18.1, docs/audio.md §3)
+def elf32_needed(d):
+    import struct
+    shoff, = struct.unpack_from("<I", d, 32)
+    es, en = struct.unpack_from("<HH", d, 46)
+    secs = [struct.unpack_from("<10I", d, shoff + i * es) for i in range(en)]
+    dyn = next(s for s in secs if s[1] == 6)                       # SHT_DYNAMIC
+    strt = secs[dyn[6]]
+    out = []
+    for i in range(dyn[5] // 8):
+        tag, val = struct.unpack_from("<II", d, dyn[4] + i * 8)
+        if tag == 0:
+            break
+        if tag == 1:                                                   # DT_NEEDED
+            o = strt[4] + val
+            out.append(d[o:d.index(b"\0", o)].decode())
+    return out
+need = elf32_needed((ROOT / "bin/merakiplus_snd").read_bytes())
+if "libpthread.so.0" not in need:
+    fail(f"bin/merakiplus_snd: DT_NEEDED {need} lacks libpthread.so.0 (libmi_common.so needs sem_post & co.)")
+src = (ROOT / "src/merakiplus_snd.c").read_text(encoding="utf-8")
+ip, ic = src.find('dlopen("libpthread.so.0", RTLD_NOW | RTLD_GLOBAL)'), src.find('dlopen("libmi_common.so"')
+if ip < 0 or ic < 0 or ip > ic or src.count("pthread_global();") < 2:
+    fail("src/merakiplus_snd.c: libpthread.so.0 must be dlopen()ed RTLD_GLOBAL before libmi_common.so (mi_load + mp3_play)")
 
 print("HYGIENE: " + ("OK" if not fails else f"{len(fails)} problem(s)"))
 sys.exit(1 if fails else 0)

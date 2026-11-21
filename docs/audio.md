@@ -1,4 +1,4 @@
-# Audio — how the stock UI makes sound, and Meraki+'s start jingle + per-boiler ready tones (v6.18)
+# Audio — how the stock UI makes sound, and Meraki+'s start jingle + per-boiler ready tones (v6.18, fix v6.18.1)
 
 The stock UI plays a jingle at power-on and **one** "pre-heat complete" sound once **both** boilers are hot.
 Meraki+ v6.18 does the same job with **its own** short sounds, but with a **different tone per boiler**, so you can
@@ -9,9 +9,9 @@ Everything below the "Reversed" heading comes from the stock UI binary (`demo_v9
 nodes). **No vendor audio, library or code is in this repository.** Meraki+ ships only its own synthesized WAV files
 and a small helper that loads the display's own libraries at run time.
 
-> **Status:** implemented and tested in the simulator, the self-tests and a 32-bit ARM container (the helper resolves
-> every MI symbol against the display's real `libmi_sys.so` / `libmi_ao.so`). **Not yet heard on a machine** — see
-> [On-device check (pending)](#on-device-check-pending).
+> **Status (v6.18.1):** the speaker path works on a real machine (tone heard, 2026-11-21). The v6.18 helper could not
+> load the display's `libmi_common.so` there (`undefined symbol: sem_post`), so **every sound of v6.18 is silent on a
+> machine**; v6.18.1 fixes the helper — see [§3 Hardware check and the v6.18.1 fix](#3-hardware-check-and-the-v6181-fix).
 
 ---
 
@@ -149,17 +149,22 @@ after the logo).
 
 Meraki+ is a static musl binary; the MI libraries are glibc shared objects. So one sound = one short-lived helper
 process: `/new_customer/merakiplus/merakiplus_snd <file> <volume>` (source `src/merakiplus_snd.c`, 8 KB, linked
-against glibc 2.28 armhf like the display, `-ldl` only). merakiplus starts it with `LD_LIBRARY_PATH=/lib:/customer/libs`,
+against glibc 2.28 armhf like the display, `-lpthread -ldl`; DT_NEEDED `libc.so.6 libpthread.so.0 libdl.so.2`). merakiplus starts it with `LD_LIBRARY_PATH=/lib:/customer/libs`,
 plays one sound at a time (queue of 4) and never sends a signal (the helper ends itself after 8 s via `alarm()`; while one
 is still running after 10 s, sounds are skipped as *no player*), and logs every event to
 `/tmp/merakiplus_snd.log` (`<ms> <event> <outcome> vol=… mode=… ready=…`; the helper's own errors go there too).
 
-* **WAV (ours):** `dlopen("libmi_common.so")` (RTLD_GLOBAL, for `CamOs*`), `libmi_sys.so`, `libmi_ao.so`;
+* **WAV (ours):** `dlopen("libpthread.so.0")` (RTLD_GLOBAL, for libmi_common's `sem_*`/`pthread_*` — v6.18.1, §3),
+  `dlopen("libmi_common.so")` (RTLD_GLOBAL, for `CamOs*`), `libmi_sys.so`, `libmi_ao.so`;
   `MI_SYS_Init()`; then **exactly libhvplayer's sequence and parameters** (1.6): 48 kHz (our 16 kHz files are upsampled
   ×3, linear), 16 bit, mono, FrmNum 6, PtNumPerFrm 2048; `SetPubAttr → Enable → EnableChn → SetVolume(dB) → SetMute →
   SendFrame…` in 4096-byte frames with the `0xA005200D` retry; drain; `DisableChn → Disable`.
-* **MP3 (STOCK SOUNDS):** `libhvplayer.so`'s `mm_player_*` with stock's options and polling (1.2).
-* `merakiplus_snd --check` loads the libraries and resolves all symbols without playing anything.
+* **MP3 (STOCK SOUNDS):** `libpthread.so.0` RTLD_GLOBAL first (as above), then `libhvplayer.so`'s `mm_player_*` with
+  stock's options and polling (1.2).
+* `merakiplus_snd --check` loads the libraries and resolves all symbols without playing anything; exit 0 and
+  `merakiplus_snd: MI_SYS + MI_AO ok (sem_post global)` when everything is there (v6.18 printed no `(sem_post …)`).
+* The outcome `played` in `/tmp/merakiplus_snd.log` means *handed to the helper*: merakiplus does not read the helper's
+  exit code. A helper failure shows up as the helper's own `merakiplus_snd: …` line right after it (§3.1).
 * Exit codes: 0 ok, 2 usage, 3 not a 16-bit PCM WAV, 4 library/symbol missing, 5 an MI_AO call failed, 6 mp3 player failed.
 
 ### 2.4 Our sounds
@@ -190,17 +195,75 @@ They are original work of this project (MIT).
 
 ---
 
-## On-device check (pending)
+## 3. Hardware check and the v6.18.1 fix
 
-The speaker path has **not** been heard on a machine yet. What to check after `./install.sh` (in this order):
+### 3.1 What the machine showed (2026-11-21, v6.18 installed)
 
-1. `telnet <display-ip>` → `/new_customer/merakiplus/merakiplus_snd --check` → `MI_SYS + MI_AO ok`.
+* `merakiplus_snd --check` → `merakiplus_snd: dlopen: /lib/libmi_common.so: undefined symbol: sem_post`,
+  `MI_SYS + MI_AO MISSING`, **exit 4**. So the jingle, both ready tones and the SAVE preview were all **silent**, although
+  `/tmp/merakiplus_snd.log` listed them as `played` (= handed to the helper, §2.3) — each followed by that dlopen line.
+* The same helper with `LD_PRELOAD=/lib/libpthread.so.0`: `--check` ok (exit 0), and playing `audio/*.wav` directly
+  exits 0 and **the tone is heard from the speaker**. `libmi_ao.so` prints four lines
+  `_MI_AO_Open{Vqe,Src,G711,G726}Lib: Can not load lib….so!` — optional VQE / resampler / codec libraries the display
+  does not have and plain 48 kHz PCM does not need; they are harmless.
+* **Speaker and amplifier work with what `demo.sh` already sets at boot** — no extra enable GPIO is needed.
+* During the check Meraki+ was the only UI process (slot B, no paused stock UI), so MI_AO was free. Whether MI_AO also
+  plays while a **SIGSTOPped stock UI** still holds the MI layer (runtime switch A→B, [boot.md](boot.md) §3.2) was not
+  tested and stays open.
+
+### 3.2 Root cause
+
+The display's `/lib/libmi_common.so` lists only `libc.so.6` as DT_NEEDED, but uses `sem_init`, `sem_post`, `sem_wait`,
+`sem_timedwait`, `sem_trywait`, `sem_getvalue`, `sem_destroy`, `pthread_create`, `pthread_join`, `pthread_once`,
+`pthread_key_create`, `pthread_{get,set}specific`, `pthread_rwlock_*`, `pthread_spin_*`, `pthread_mutex_trylock`,
+`pthread_condattr_setclock`, `pthread_attr_setstacksize`, `pthread_{set,get}name_np` — which glibc 2.28 defines **only
+in `libpthread.so.0`** (`libc.so.6` forwards just a few mutex/cond/attr calls). The stock `demo_v9` links libpthread,
+so in the stock UI they are in the global scope already. The v6.18 helper was linked `-ldl` only, so
+`dlopen("libmi_common.so", RTLD_NOW)` failed on the first of them.
+
+The v6.18 container test did not catch it because it had no copy of the real `libmi_common.so`: it used a stand-in that
+only exported the `CamOs*` functions, so the real library's own dependencies were never exercised. The v6.18.1 test uses
+byte-exact copies of the display's `/lib` (§3.4).
+
+### 3.3 Fix (`src/merakiplus_snd.c`, v6.18.1)
+
+* `pthread_global()`: `dlopen("libpthread.so.0", RTLD_NOW | RTLD_GLOBAL)` **before** `libmi_common.so`, in the WAV
+  path (`mi_load`) and the MP3 path (`mp3_play`; `libhvplayer.so` NEEDs libmi_common too). Works whatever the link flags.
+* Belt and braces: linked `-lpthread` **with one reference to `sem_post`**, so `libpthread.so.0` really is a DT_NEEDED
+  (a linker drops a library none of whose symbols is used — plain `-lpthread` alone left the helper unchanged) and
+  ld.so maps it at start into the global scope, like `demo_v9`.
+* `--check` also prints whether `sem_post` is in the global scope: `MI_SYS + MI_AO ok (sem_post global)`.
+* Unchanged: the MI_AO call sequence and parameters (48 kHz, 16 bit, 6 × 2048, retry on `0xA005200D`), the volume →
+  dB curve, `alarm(8)` (the helper still ends itself; merakiplus sends no signal), the exit codes, `--check` exit 0 when
+  everything resolves. merakiplus itself only changed its version string.
+* `tests/hygiene.py` fails if `bin/merakiplus_snd` lacks the `libpthread.so.0` DT_NEEDED or the source stops loading
+  libpthread RTLD_GLOBAL before `libmi_common.so`.
+
+### 3.4 Resolve test against the display's own libraries
+
+32-bit ARM container (`arm32v7/debian:bullseye-slim`, `--network none`, non-root), with read-only copies of the
+display's `ld-2.28.so`, `libc`, `libdl`, `libpthread`, `librt`, `libgcc_s`, `libmi_common.so`, `libmi_sys.so`,
+`libmi_ao.so` (md5 checked against the display, kept outside the repository) and the display's own loader:
+`ld-linux-armhf.so.3 --library-path <copies> ./merakiplus_snd --check` — no LD_PRELOAD, no container libraries used.
+
+| helper | DT_NEEDED | `--check` |
+|---|---|---|
+| v6.18 `161edd2c…` | libc, libdl | `undefined symbol: sem_post`, exit **4** (as on the machine) |
+| v6.18 + `LD_PRELOAD=libpthread.so.0` | libc, libdl | ok, exit 0 (as on the machine) |
+| **v6.18.1** `a7659c17…` | libc, **libpthread**, libdl | `MI_SYS + MI_AO ok (sem_post global)`, exit **0** |
+| test variant: dlopen only (no sem_post reference) | libc, libdl | ok (sem_post global), exit 0 |
+| test variant: link only (no dlopen of libpthread) | libc, libpthread, libdl | ok (sem_post global), exit 0 |
+
+Either half of the fix suffices alone. `--check` resolves `MI_SYS_Init` and the eight `MI_AO_*` functions with
+`RTLD_NOW`, i.e. every relocation of the three MI libraries is bound. (Playing in the container ends at once in a
+`libmi_ao.so` assertion — there is no `/dev/mi_ao` — so the speaker itself can only be checked on a machine.)
+
+### 3.5 Check after installing v6.18.1
+
+1. `telnet <display-ip>` → `/new_customer/merakiplus/merakiplus_snd --check` → `MI_SYS + MI_AO ok (sem_post global)`,
+   exit 0 — **without** LD_PRELOAD.
 2. `/new_customer/merakiplus/merakiplus_snd /new_customer/merakiplus/audio/ready_steam.wav 40` → three pips
    from the speaker, exit 0. If it exits 5, see `/tmp/merakiplus_snd.log` (an MI_AO return code).
 3. Power the machine off and on with the button: the jingle, then the two ready tones as the boilers heat
-   (`cat /tmp/merakiplus_snd.log`; DIAGNOSTICS › SOUND shows the last one).
+   (`cat /tmp/merakiplus_snd.log`: no `merakiplus_snd: dlopen` lines; DIAGNOSTICS › SOUND shows the last one).
 4. Change VOLUME in SYSTEM › DISPLAY · SOUND: SAVE plays the test tone at the new level.
-
-Open questions only hardware can answer: whether a speaker amplifier needs an enable GPIO that `demo.sh` already sets
-(`gpio0`/`gpio17` are driven high at boot), and whether MI_AO accepts a second process' `MI_SYS_Init` while a paused
-stock UI still holds the MI layer (Meraki+ normally runs with the stock UI stopped).

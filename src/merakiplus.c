@@ -2,6 +2,9 @@
  * 480x480 screen, v6.16: feature parity (settings + activity control), its own visual
  * design system, boot-slot integration, product name + two languages — and from v6.4 a SIM build.
  *
+ * v6.18.1 = v6.18 + a fix in the sound helper only (src/merakiplus_snd.c puts libpthread.so.0 into the global scope before
+ *  libmi_common.so; docs/audio.md §3). In this file only MERAKIPLUS_VERSION changed.
+ *
  * v6.18 = v6.17 + SOUND (UI_v6.md "CHANGES-v6.18", docs/audio.md). The stock UI plays a jingle at power-on (the audio track of
  *  video/power.mp4, page_logo 0x1001B8) and ONE "pre-heat complete" sound when BOTH boilers are hot (uartRxProcess 0x145BA0: words 62 AND 63
  *  > 99, once per power-on). Meraki+ plays its OWN short tones (audio/<name>.wav, made by tools/gen_audio.py): a start jingle once per
@@ -298,7 +301,7 @@ static int  sim_net_on=1;
 #define KBD_NAME "k62091"
 #define BL_SYSFS "/sys/class/pwm/pwmchip0/pwm2/duty_cycle"
 #define BL_EN_SYSFS "/sys/class/pwm/pwmchip0/pwm2/enable"   /* v6.14: stock uikit_os_back_light_off/on 0xC2278 = blpwm_set_enable(2,0/1) */
-#define MERAKIPLUS_VERSION "V6.18"
+#define MERAKIPLUS_VERSION "V6.18.1"
 
 /* ---- v6.10: pressure estimate (UI_v6.md §16) ----
  * Word 51 (SPI2 ADC channel 0xA, REGISTERMAP: pressure OR pump-drive candidate) -> bar with ONE linear anchor:

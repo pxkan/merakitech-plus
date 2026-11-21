@@ -1,7 +1,7 @@
 # Meraki+ — UI guide
 
 This guide is extracted from the full UI specification ([dev/UI_v6.md](dev/UI_v6.md)) and describes the
-pages, touch zones and settings in **Meraki+ v6.18**. For a short user guide, see
+pages, touch zones and settings in **Meraki+ v6.18.1**. For a short user guide, see
 [README → Usage](../README.md#usage). Addresses in square brackets (e.g. `[0x12bcfc]`) refer to the
 place in the original UI program where the limit was read (see [dev/PARITY.md](dev/PARITY.md)).
 
@@ -32,7 +32,7 @@ whole header is the target), or swipe right. There are no page dots, no edge zon
 | **BREW** | tap the cup icon | live line *BOILER 92.4° · GROUP 70°* · BREW WEIGHT, BREW TEMP, PRE-INFUSION, PRE-INF. TIME, PRE-INF. PRESSURE, GROUP HEAD (4 in view, the list scrolls) · HOLD TO START |
 | **WATER** | tap the drop icon | live line *WATER 99.9°* (word 40 — the "water sensor") · HOT WATER, WATER MODE · HOLD TO START |
 | **STEAM** | tap the steam icon | live line *BOILER 130° · MILK 22.6°* · MILK TEMP, STEAM LEVEL · HOLD TO START |
-| **SYSTEM** | the gear | *MERAKI+ V6.18* · four section headers with a summary (**DISPLAY · SOUND** *ENGLISH* · **CLOCK** *16:35* · **SCHEDULE** *06:30 / OFF* · **STOCK UI**) + the **DIAGNOSTICS** row (*OK* / the error code / *DOWN*). Closed: 5 rows, no scrolling. A tap on a header opens it (and closes the other) |
+| **SYSTEM** | the gear | *MERAKI+ V6.18.1* · four section headers with a summary (**DISPLAY · SOUND** *ENGLISH* · **CLOCK** *16:35* · **SCHEDULE** *06:30 / OFF* · **STOCK UI**) + the **DIAGNOSTICS** row (*OK* / the error code / *DOWN*). Closed: 5 rows, no scrolling. A tap on a header opens it (and closes the other) |
 | **DIAGNOSTICS** | SYSTEM's last row, or a tap on HOME's error / offline hint | STATUS, BOOT · SLOT · SWITCHER, NET, GRAPH (smooth / raw), PRESSURE · ESTIMATE, RAW COUNTERS, POWER BUTTON, TIME · SCHEDULE, SOUND (v6.18), ABOUT — scrolls vertically. Its chevron returns to where it was opened from |
 
 A feature page's live line turns **amber and names the reason** when a start is not possible (*NO

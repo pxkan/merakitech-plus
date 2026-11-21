@@ -2,7 +2,7 @@
 
 | File | What | Built from |
 |---|---|---|
-| `merakiplus` | **Meraki+ v6.18** device binary (static ARMv7, musl). Installed as `/new_customer/demo_v9`. | `src/merakiplus.c` |
+| `merakiplus` | **Meraki+ v6.18.1** device binary (static ARMv7, musl). Installed as `/new_customer/demo_v9`. | `src/merakiplus.c` |
 | `merakiplus_snd` | sound helper (ARMv7, dynamic against the display's glibc 2.28; `dlopen`s the display's own `libmi_*.so` at run time). Installed as `/new_customer/merakiplus/merakiplus_snd`, next to `audio/` | `src/merakiplus_snd.c` |
 | `switcher` | gesture switcher daemon (center-hold 5 s → stock to Meraki+), only with `--gesture` | `boot/switcher.c` |
 | `grab_shim.so` | tiny LD_PRELOAD shim so the switcher can see touches while the stock UI runs (only with `--gesture`) | `boot/grab_shim.c` |
@@ -15,6 +15,12 @@
 **No vendor firmware, libraries or scripts are included here or anywhere in this repository.**
 
 ## Provenance of the ARM binaries
+
+**v6.18.1 (2026-11-21, sound-helper fix):** `merakiplus_snd` rebuilt from the fixed source (`./build.sh`: `… -lpthread
+-ldl`): it now NEEDs `libc.so.6` + `libpthread.so.0` + `libdl.so.2` and `dlopen`s `libpthread.so.0` RTLD_GLOBAL before
+the display's `libmi_common.so`, which uses `sem_post` & co. without NEEDing libpthread (the v6.18 helper failed on a
+machine with exit 4 — docs/audio.md §3). Checked against byte-exact copies of the display's glibc 2.28 + MI libraries
+in an ARMv7 container. `merakiplus`, `merakiplus_sim_arm` and the host SIM builds changed only in their version string.
 
 **v6.18 (2026-11-21, start jingle + per-boiler ready tones):** `merakiplus`, `merakiplus_sim_arm` and the two host
 SIM builds were rebuilt from the v6.18 source; **`merakiplus_snd` is new** (`./build.sh`: `zig cc -target
@@ -76,14 +82,14 @@ self-test and the simulator E2E suite.
 
 | File | md5 (this repo) | Built with |
 |---|---|---|
-| `merakiplus` (V6.18) | `3f02369bbaaee542979cb7f45595c23b` | `./build.sh` → `build/merakiplus` |
-| `merakiplus_sim_arm` (V6.18) | `d2266f86d503dbc04fb3ebaa4df8ee10` | `./build.sh` → `build/merakiplus_sim_arm` |
-| `merakiplus_snd` (V6.18) | `161edd2c477f4aa6238060ba0b09162b` | `./build.sh` → `build/merakiplus_snd` |
+| `merakiplus` (V6.18.1) | `cc8c5fb9ef4f4ff37c493032ba76e14b` | `./build.sh` → `build/merakiplus` |
+| `merakiplus_sim_arm` (V6.18.1) | `ad29bce0ec4aa45ce967840d2defce8c` | `./build.sh` → `build/merakiplus_sim_arm` |
+| `merakiplus_snd` (V6.18.1) | `a7659c176b8ef78385b0b612a69e81ca` | `./build.sh` → `build/merakiplus_snd` |
 | `switcher` | `f2b95b16b33a9e1bc868a2f5b2414e6b` | `./build.sh` → `build/switcher` |
 | `tinj_hold` | `e9806fb92e9b8a7e506a34639173c648` | `./build.sh` → `build/tinj_hold` |
 | `keyinj` | `a0cbd4bc2a670abe0e250ec34a193843` | `./build.sh` → `build/keyinj` |
-| `merakiplus_sim-linux-x86_64` (V6.18) | `e4e7915f84c56a0ef6be84ca8a054f32` | `zig cc -target x86_64-linux-musl -DMERAKIPLUS_SIM -O2 -static -s src/merakiplus.c -lm` |
-| `merakiplus_sim-macos-arm64` (V6.18) | `13dde8b2c02c675e57b8bca9aa0a026c` | `zig cc -DMERAKIPLUS_SIM -O2 -s src/merakiplus.c -lm` (Mach-O builds are not bit-reproducible) |
+| `merakiplus_sim-linux-x86_64` (V6.18.1) | `8d9ed264a9c8cbbeacb9122f2050eba9` | `zig cc -target x86_64-linux-musl -DMERAKIPLUS_SIM -O2 -static -s src/merakiplus.c -lm` |
+| `merakiplus_sim-macos-arm64` (V6.18.1) | `991d73d22b182a869f6e40a4c6549be2` | `zig cc -DMERAKIPLUS_SIM -O2 -s src/merakiplus.c -lm` (Mach-O builds are not bit-reproducible) |
 
 The ARM builds above are reproducible: running `./build.sh` on the same sources with the **official**
 zig 0.17.1 release (the ziglang.org tarball CI installs) gives the same md5 on macOS and Linux,

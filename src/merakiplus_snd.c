@@ -15,7 +15,8 @@
  *
  * THE PATH IS THE STOCK ONE (reversed from the stock UI demo_v9 and its player libhvplayer.so; docs/audio.md):
  *  - WAV (our own PCM, audio/<name>.wav): what libhvplayer does after decoding (mm_audio_init 0x46B0 / mm_audio_play 0x45A8):
- *      dlopen libmi_common.so (RTLD_GLOBAL: libmi_ao.so's CamOs* symbols), libmi_sys.so, libmi_ao.so
+ *      dlopen libpthread.so.0 (RTLD_GLOBAL: libmi_common.so's sem_* / pthread_* symbols; v6.18.1),
+ *      libmi_common.so (RTLD_GLOBAL: libmi_ao.so's CamOs* symbols), libmi_sys.so, libmi_ao.so
  *      MI_SYS_Init()                                  (the stock UI calls it once at start; libhvplayer itself does not)
  *      MI_AO_SetPubAttr(0, {48000 Hz, 16 bit, mode 0, mono 0 / stereo 1, FrmNum 6, PtNumPerFrm 2048, CodecChn 0, Chn 1|2})
  *      MI_AO_Enable(0); MI_AO_EnableChn(0, 0); MI_AO_SetVolume(0, dB); MI_AO_SetMute(0, vol == 0)
@@ -32,9 +33,12 @@
  *  - VOLUME: merakiplus passes the config "volume" already capped at 70 (stock deal_play 0x1372C4). The dB value is
  *    libhvplayer's mm_player_set_volumn 0x563C: vol <= 0 -> mute (-60 dB), else min(vol * 90 / 100 - 60, 15).
  *
- * Build (device): zig cc -target arm-linux-gnueabihf.2.28 -mcpu=cortex_a7 -O2 -s -fno-PIE -no-pie -o merakiplus_snd src/merakiplus_snd.c -ldl
+ * Build (device): zig cc -target arm-linux-gnueabihf.2.28 -mcpu=cortex_a7 -O2 -s -fno-PIE -no-pie -o merakiplus_snd src/merakiplus_snd.c -lpthread -ldl
  * Build (test):   zig cc -DSND_SELFTEST -O2 -o merakiplus_snd_selftest src/merakiplus_snd.c && ./merakiplus_snd_selftest
  */
+#ifndef SND_SELFTEST
+#define _GNU_SOURCE 1                    /* RTLD_DEFAULT (--check) */
+#endif
 #include <stdio.h>
 #include <stdlib.h>
 #include <stdint.h>
@@ -43,6 +47,7 @@
 #include <time.h>
 #ifndef SND_SELFTEST
 #include <dlfcn.h>
+#include <semaphore.h>
 #endif
 
 #define AO_DEV 0
@@ -154,8 +159,23 @@ out:
 static void *sym(void *h, const char *n, int *ok) { void *p = h ? dlsym(h, n) : NULL; if (!p) { fprintf(stderr, "merakiplus_snd: missing %s\n", n); *ok = 0; } return p; }
 /* The display's libmi_ao.so lists only libc.so.6 as DT_NEEDED but leaves its OS layer (CamOsMemAlloc, CamOsRwsem*,
  * CamOsGetTimeOfDay, CamOsPrintf, ...) undefined: in the stock UI those come from libmi_common.so, which demo_v9 links
- * (libhvplayer.so NEEDs it too). So libmi_common.so is loaded first, RTLD_GLOBAL, then libmi_sys.so and libmi_ao.so. */
+ * (libhvplayer.so NEEDs it too). So libmi_common.so is loaded first, RTLD_GLOBAL, then libmi_sys.so and libmi_ao.so.
+ *
+ * v6.18.1 (found on the real display): libmi_common.so in turn lists only libc.so.6 as DT_NEEDED but uses sem_post,
+ * sem_wait, sem_init, ..., pthread_create, pthread_rwlock_*, pthread_spin_*, ... which glibc 2.28 has ONLY in
+ * libpthread.so.0. demo_v9 links libpthread, so in the stock UI they are already in the global scope; a helper linked
+ * with -ldl alone got "dlopen: libmi_common.so: undefined symbol: sem_post" (exit 4, no sound). So libpthread.so.0 is
+ * put into the global scope FIRST, explicitly (works whatever the link flags are), and the helper is also linked
+ * -lpthread (belt and braces: then it is already loaded at start and the dlopen only returns it). */
+/* -lpthread becomes a DT_NEEDED only if one of its symbols is referenced (the linker drops an unused library), so this one
+ * reference makes ld.so map libpthread.so.0 at start, into the global scope, exactly like demo_v9. */
+static int (*volatile need_pthread)(sem_t *) = sem_post;
+static void pthread_global(void) {
+    if (!dlopen("libpthread.so.0", RTLD_NOW | RTLD_GLOBAL))
+        fprintf(stderr, "merakiplus_snd: dlopen: %s (continuing)\n", dlerror());
+}
 static int mi_load(void) {
+    pthread_global();
     void *hc = dlopen("libmi_common.so", RTLD_NOW | RTLD_GLOBAL);
     if (!hc) { fprintf(stderr, "merakiplus_snd: dlopen: %s\n", dlerror()); return 0; }
     void *hs = dlopen("libmi_sys.so", RTLD_NOW | RTLD_GLOBAL), *ha = hs ? dlopen("libmi_ao.so", RTLD_NOW | RTLD_GLOBAL) : NULL;
@@ -174,6 +194,7 @@ static int mi_load(void) {
 }
 /* the stock UI's mp3 path through libhvplayer (mm_player), exactly its call sequence */
 static int mp3_play(const char *file, int vol) {
+    pthread_global();                                             /* libmi_common.so (NEEDed by libhvplayer.so): see mi_load */
     void *hs = dlopen("libmi_sys.so", RTLD_NOW | RTLD_GLOBAL), *hp = dlopen("libhvplayer.so", RTLD_NOW | RTLD_GLOBAL);
     if (!hs || !hp) { fprintf(stderr, "merakiplus_snd: dlopen: %s\n", dlerror()); return 4; }
     int ok = 1;
@@ -199,7 +220,12 @@ static uint8_t *slurp(const char *p, size_t *n) {
 }
 int main(int argc, char **argv) {
     alarm(8);                                                     /* a hang in a vendor library must not outlive the sound */
-    if (argc == 2 && !strcmp(argv[1], "--check")) { int ok = mi_load(); printf("merakiplus_snd: MI_SYS + MI_AO %s\n", ok ? "ok" : "MISSING"); return ok ? 0 : 4; }
+    if (argc == 2 && !strcmp(argv[1], "--check")) {
+        (void)need_pthread;                                       /* a volatile read: keeps the libpthread reference */
+        int ok = mi_load();
+        printf("merakiplus_snd: MI_SYS + MI_AO %s (sem_post %s)\n", ok ? "ok" : "MISSING", dlsym(RTLD_DEFAULT, "sem_post") ? "global" : "MISSING");
+        return ok ? 0 : 4;
+    }
     if (argc != 3) { fprintf(stderr, "usage: merakiplus_snd <file.wav|file.mp3> <volume 0..100> | --check\n"); return 2; }
     int vol = atoi(argv[2]); if (vol < 0) vol = 0; if (vol > 100) vol = 100;
     if (vol == 0) return 0;                                       /* mute: nothing to do (merakiplus does not call it at 0 either) */

@@ -3,6 +3,31 @@
 All notable changes to Meraki+. Details (with evidence, frames and test figures) are in
 [docs/dev/UI_v6.md](docs/dev/UI_v6.md) under *CHANGES-v6.x*. All dates are 2026.
 
+## [6.18.1] — 2026-11-21
+Fix: **every Meraki+ sound was silent on a real machine** (start jingle, both ready tones, the SAVE test tone). Sound
+helper only — no UART frame, guard, limit, timing or sound rule changed.
+### Fixed
+- **`bin/merakiplus_snd` could not load the display's MI libraries**: `merakiplus_snd --check` on the machine printed
+  `dlopen: /lib/libmi_common.so: undefined symbol: sem_post` and exited 4. The display's `libmi_common.so` uses
+  `sem_*` / `pthread_*` functions that glibc 2.28 has only in `libpthread.so.0`, without listing it as a dependency;
+  the stock UI links libpthread, the v6.18 helper did not (`-ldl` only). The helper now puts `libpthread.so.0` into the
+  global scope with `dlopen(RTLD_NOW | RTLD_GLOBAL)` before `libmi_common.so` (WAV and MP3 paths), and is also linked
+  against it (DT_NEEDED). `--check` reports `MI_SYS + MI_AO ok (sem_post global)`.
+  Details and the hardware findings: [docs/audio.md §3](docs/audio.md#3-hardware-check-and-the-v6181-fix).
+### Hardware findings (2026-11-21)
+- With the v6.18 helper started with `LD_PRELOAD=/lib/libpthread.so.0` the tones **play from the speaker**: the MI_AO path
+  works and the speaker amplifier needs **no extra enable pin** beyond what `demo.sh` sets at boot. Checked with Meraki+
+  as the only UI process; playback while a paused stock UI holds the MI layer is still untested.
+### Notes
+- `tests/hygiene.py` now fails if the helper lacks the `libpthread.so.0` dependency or stops loading it first.
+- The v6.18 ARM-container check had used a stand-in `libmi_common.so`; it now runs the helper with byte-exact copies of
+  the display's own glibc 2.28 and MI libraries (and its own loader), no LD_PRELOAD: v6.18 helper → exit 4 (`sem_post`),
+  v6.18.1 helper → exit 0.
+- `bin/`: `merakiplus_snd` `a7659c17…` (was `161edd2c…`); `merakiplus` `cc8c5fb9…`, `merakiplus_sim_arm` `ad29bce0…` and
+  the host SIM builds changed only in the version string (V6.18.1). `switcher`, `tinj_hold`, `keyinj`, `grab_shim.so` and
+  `audio/` are unchanged. All built with the official zig 0.17.1.
+- Update: run the installer again (`./install.sh`); it replaces the helper (md5-gated) and the UI.
+
 ## [6.18] — 2026-11-21
 Audio feedback: a start jingle and **one ready tone per boiler**. The stock audio path was reversed first:
 [docs/audio.md](docs/audio.md). **Display and audio only** — no UART frame, guard, limit or timing changed.
@@ -46,7 +71,7 @@ Audio feedback: a start jingle and **one ready tone per boiler**. The stock audi
   section, simulator self-test 192/0, full E2E 43/43 scenarios (1126/1126 checks) in EN and in DA, installer tests.
 - **Not yet heard on a machine** (install deferred). The helper resolves every MI symbol against the display's real
   `libmi_sys.so` / `libmi_ao.so` in a 32-bit ARM container; the speaker path itself is pending a hardware check
-  ([docs/audio.md](docs/audio.md#on-device-check-pending)).
+  ([docs/audio.md](docs/audio.md#3-hardware-check-and-the-v6181-fix)).
 
 ## [6.17] — 2026-11-20
 A UX audit of v6.16 and the redesign it led to: [docs/ux-audit-v617.md](docs/ux-audit-v617.md).
