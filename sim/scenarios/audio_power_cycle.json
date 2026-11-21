@@ -1,6 +1,6 @@
 {
   "name": "audio_power_cycle",
-  "description": "v6.18: cold display boot with HOT boilers -> jingle + both ready tones right away (stock: preheatCompele right after the logo); HOLD the power button -> OFF: silent; button on the machine -> MCU wake/reboot -> ON again = a power-on: the jingle + both tones again (stock's latch resets at every power-on); the sound file chooses READY TONE = STEAM BOILER only",
+  "description": "v6.18/v6.19: cold display boot with HOT boilers -> ONLY the start jingle (v6.19: a boiler already at stage 100 at a power-on counts as announced; v6.18 played jingle + both tones back-to-back); HOLD the power button -> OFF: silent; button on the machine -> MCU wake/reboot -> ON again = a power-on: the jingle again, still no ready tone (both hot); the sound file chooses READY TONE = STEAM BOILER only",
   "duration_s": 46,
   "ui_only": true,
   "sandbox_files": {
@@ -79,24 +79,36 @@
     },
     {
       "kind": "state",
-      "path": "audio.played_boiler_ready_steam",
+      "path": "audio.played_start_jingle",
       "t": 4,
       "window": 2,
       "equals": 1
+    },
+    {
+      "kind": "state",
+      "path": "audio.armed",
+      "t": 5,
+      "window": 1.5,
+      "equals": [
+        0,
+        0
+      ]
     },
     {
       "kind": "state",
       "path": "audio.n_boiler_ready_extract",
-      "t": 4,
-      "window": 2,
-      "equals": 1
+      "t0": 1,
+      "t1": 45,
+      "equals": 0,
+      "mode": "all"
     },
     {
       "kind": "state",
-      "path": "audio.played_boiler_ready_extract",
-      "t": 4,
-      "window": 2,
-      "equals": 0
+      "path": "audio.n_boiler_ready_steam",
+      "t0": 1,
+      "t1": 45,
+      "equals": 0,
+      "mode": "all"
     },
     {
       "kind": "power",
@@ -135,24 +147,17 @@
     },
     {
       "kind": "state",
-      "path": "audio.played_boiler_ready_steam",
+      "path": "audio.played_start_jingle",
       "t": 42,
       "window": 3,
       "equals": 2
     },
     {
       "kind": "state",
-      "path": "audio.played_boiler_ready_extract",
-      "t": 42,
-      "window": 3,
-      "equals": 0
-    },
-    {
-      "kind": "state",
       "path": "audio.log",
       "t": 43,
       "window": 2,
-      "contains": "start_jingle:played,boiler_ready_extract:off,boiler_ready_steam:played"
+      "equals": "start_jingle:played,start_jingle:played"
     }
   ]
 }

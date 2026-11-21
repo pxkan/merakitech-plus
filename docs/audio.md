@@ -1,8 +1,10 @@
-# Audio — how the stock UI makes sound, and Meraki+'s start jingle + per-boiler ready tones (v6.18, fix v6.18.1)
+# Audio — how the stock UI makes sound, and Meraki+'s start jingle + per-boiler ready tones (v6.18, fix v6.18.1, v6.19)
 
 The stock UI plays a jingle at power-on and **one** "pre-heat complete" sound once **both** boilers are hot.
 Meraki+ v6.18 does the same job with **its own** short sounds, but with a **different tone per boiler**, so you can
-hear which one is ready: the brew (extract) boiler for espresso, the steam boiler for milk.
+hear which one is ready: the brew (extract) boiler for espresso, the steam boiler for milk. Since **v6.19** a power-on with
+boilers that are already hot plays **only the jingle** ([§2.6](#26-power-on-with-hot-boilers-v619)), and the sounds are
+struck-instrument timbres (marimba, glockenspiel, a soft bell) instead of sine beeps ([§2.4](#24-our-sounds)).
 
 Everything below the "Reversed" heading comes from the stock UI binary (`demo_v9`, symbols kept), its player library
 `libhvplayer.so`, the controller firmware (MEM03) and a read-only look at the display (file listings, md5s, device
@@ -108,30 +110,30 @@ the stock process those come from **`libmi_common.so`**.
 
 ---
 
-## 2. Meraki+ v6.18
+## 2. Meraki+ v6.18 / v6.19
 
 ### 2.1 What you hear
 
 | Event | When | Sound (`audio/`) |
 |---|---|---|
-| **start jingle** | once per **power-on**: OFF/sleep → on, and the first "on" after a cold boot of the display (SoC uptime < 120 s) | `start.wav` — rising bell arpeggio C5-E5-G5-C6, 1.1 s |
-| **brew boiler ready** | word 62 first reaches stage 100 | `ready_extract.wav` — two warm low notes A4 → E5, 0.55 s |
-| **steam boiler ready** | word 63 first reaches stage 100 | `ready_steam.wav` — three quick bright pips E6 F#6 B6, 0.5 s |
+| **start jingle** | once per **power-on**: OFF/sleep → on, and the first "on" after a cold boot of the display (SoC uptime < 120 s) | `start.wav` — warm rising marimba + bell arpeggio G4-C5-E5-G5, capped by a C6 bell, ringing into a chord, 1.4 s |
+| **brew boiler ready** | word 62 goes from below 100 to stage 100 **during the session** | `ready_extract.wav` — low wooden marimba double note G4 → D5, 0.8 s |
+| **steam boiler ready** | word 63 goes from below 100 to stage 100 **during the session** | `ready_steam.wav` — bright glockenspiel triple pip E6 G#6 B6, 0.75 s |
 | *(test)* | after SAVE of SOUND, READY TONE or VOLUME | the brew boiler tone at the new volume |
 
-With hot boilers at power-on you hear the jingle, then both ready tones (stock: jingle, then *preheatCompele* right
-after the logo).
+With hot boilers at power-on you hear **only the jingle** (v6.19, §2.6). v6.18 played the jingle and then both ready
+tones back-to-back, like stock plays *preheatCompele* right after its logo — users found that redundant.
 
 ### 2.2 Rules (`src/merakiplus.c`, `snd_tick`)
 
 * **Ready signal = the controller's own heat stage** (words 62/63 ≥ 100, the same signal the stock UI uses, but
   per boiler). Fallback if a word was never received: word 40 ≥ word 11 (extract) / word 47 ≥ steam target − 10 °C.
-* **Once per power-on**, then **re-armed only after real cooling**: stage ≤ 30, or 15.0 °C below the ready point.
-  A shot (the extract boiler dips a few °C) or a steam session (steam boiler dips below its threshold) never
-  re-triggers a tone. Power-off / sleep re-arms both.
-* **Start of Meraki+ on a machine that is already on** (switch from the stock UI, watchdog restart): no jingle, and a
-  boiler that is already hot counts as announced (decided over the first 1.5 s of link, so stale first samples
-  do not count). A boiler that is still heating plays its tone when it gets there.
+* **A tone means "this boiler just got hot"**: it needs a cold → hot transition during the session. At **every "on"**
+  — a power-on (with the jingle) or a start of Meraki+ on a machine that is already on (switch from the stock UI,
+  watchdog restart; no jingle) — a boiler that is **already** at stage 100 counts as announced: its latch starts as
+  *fired* (v6.19, §2.6). A boiler that is still heating plays its tone when it gets there.
+* **Re-armed only after real cooling**: stage ≤ 30, or 15.0 °C below the ready point. A shot (the extract boiler dips a
+  few °C) or a steam session (steam boiler dips below its threshold) never re-triggers a tone.
 * **Silent while OFF / sleeping / TURNING ON…** — nothing is queued for later. **OFFLINE** (no UART link) holds
   everything: a link glitch is not a power cycle (no second jingle).
 * **During an activity** (grind, brew, water, steam, or a start pending): a ready tone that comes due is **dropped**
@@ -169,17 +171,40 @@ is still running after 10 s, sounds are skipped as *no player*), and logs every 
 
 ### 2.4 Our sounds
 
-`tools/gen_audio.py` synthesizes all three with the Python standard library (a few sine harmonics with an exponential
-decay per note; no samples). 16 kHz, mono, 16-bit PCM WAV, together ~68 KB. `./build.sh` (and so CI) runs
+`tools/gen_audio.py` synthesizes all three with the Python standard library — no samples, no vendor audio. Since v6.19
+they are **struck-instrument timbres** (v6.18: a few sine harmonics per note, which sounded like plain beeps):
+
+* **Modal synthesis**, like a struck bar: each note is a sum of exponentially decaying partials at the instrument's own
+  frequency ratios — **marimba** 1 : 3.9 : 9.2 (a tuned wooden bar; the overtones die 4–10× faster than the
+  fundamental, which gives the soft "tok" then a round tone), **glockenspiel** 1 : 2.76 : 5.40 (a metal bar: inharmonic,
+  bright, long-ringing). A raised-cosine mallet attack of 1.5–4 ms and a raised-cosine damping at the end of every note
+  (no clicks).
+* A two-operator **FM bell** layer (carrier : modulator 1 : 1 with a decaying index — bright at the strike, mellow after;
+  1 : 3 on the top C6) adds warmth to the jingle and the brew tone.
+* A small **room**: a Schroeder reverb (4 damped feedback combs 30–44 ms, 2 all-passes), 16–20 % wet, for a short soft tail.
+* Every file is DC-blocked, peak-normalized to −4 dBFS and faded out; partials above 6 kHz are dropped (the files are
+  16 kHz and the helper upsamples them linearly to 48 kHz).
+
+| Sound | Instrument | Notes | Length |
+|---|---|---|---|
+| `start.wav` | marimba + FM bell, C6 glockenspiel + bell on top | G4 C5 E5 G5 (110 ms apart, each ringing on, like a pedalled chord), then C6 | 1.42 s |
+| `ready_extract.wav` | low marimba (+ a quiet octave partial), a touch of FM bell on the second note | G4 → D5 (up a fifth), the second louder and longer | 0.80 s |
+| `ready_steam.wav` | glockenspiel | E6 G#6 B6 (E major, 90 ms apart), the last one ringing out | 0.75 s |
+
+The two ready tones differ in instrument (wood vs metal), register (≈ 400–600 Hz vs 1.3–2 kHz) and rhythm (two notes vs
+three), so they are easy to tell apart. One sound theme only (a theme selector would have needed a new setting row and
+3× the assets). 16 kHz, mono, 16-bit PCM WAV, together ~95 KB. `./build.sh` (and so CI) runs
 `tools/gen_audio.py --check`: the committed files must equal the generator's output (±1 LSB). `tests/hygiene.py`
 md5-gates them against `AUDIO_MD5` in `tools/merakiplus.py` and fails on any other audio/video file in the repository.
 They are original work of this project (MIT).
 
 | File | md5 |
 |---|---|
-| `audio/start.wav` | `90efa9a33cc07d433adb0818e74b2c37` |
-| `audio/ready_extract.wav` | `d001a4f478723ad32f6f2f709aa9aa6f` |
-| `audio/ready_steam.wav` | `55d5039558b361e3747841fd47928b5d` |
+| `audio/start.wav` | `a03cb807d1cdb629b0614fdb740ec71d` |
+| `audio/ready_extract.wav` | `4e7e24f18a80ee2f237e2f5ed220afbe` |
+| `audio/ready_steam.wav` | `483d57ef122dc9929b004441fe01bc44` |
+
+v6.18 files (sine beeps, replaced): `90efa9a3…`, `d001a4f4…`, `55d50395…`.
 
 ### 2.5 Where to see it
 
@@ -191,7 +216,42 @@ They are original work of this project (MIT).
   (`sim/play.py`) shows the log and has *Cold boilers / Cool brew boiler / Hot* buttons.
 * **Simulator:** `mcu_sim.py` models words 62/63 as the MCU's stages once a `boilers` event switches the model on
   (`{"type":"boilers","e":…,"s":…,"e_rate":…,"s_rate":…}`); scenarios `audio_boiler_ready`, `audio_muted`,
-  `audio_power_cycle`, `audio_sound_off` (see `sim/CONTRACT.md` ADDENDUM v6.18).
+  `audio_power_cycle`, `audio_sound_off` (see `sim/CONTRACT.md` ADDENDUM v6.18), and since v6.19
+  `audio_boot_hot_no_ready` and `audio_cold_to_hot_ready` (ADDENDUM v6.19).
+
+### 2.6 Power-on with hot boilers (v6.19)
+
+User report on v6.18: switching on a machine whose boilers are still hot played the jingle and both ready tones
+back-to-back — three sounds for one event. v6.19 initializes the per-boiler ready latch from the boiler's state at the
+power-on instead of arming it:
+
+* **Latch init:** at every transition to "on" (`snd_tick`, `snd.st` → 2) the engine plays the jingle (if it is a
+  power-on) and opens a **settle window of 1.5 s** (`SND_SETTLE_MS`). During the window, on every tick,
+  `armed[b] = !ready(b)` — so the **last** sample of the window decides: a boiler at stage 100 ends the window with its
+  latch **already fired** (no tone), a boiler below 100 ends it **armed**. Words 62/63 are polled every 200 ms, so the
+  window sees ~7 fresh samples. The last sample, not any sample, decides because the UI's copies of words 62/63 can be
+  stale right after a power-on or a wake (the controller does not answer while off and writes stage 0 while asleep);
+  e.g. a stale 100 from before the power-off followed by the real 60 leaves the boiler armed.
+* **After the window**, the v6.18 rules apply unchanged: a tone on a real cold → hot transition (stage < 100 → 100),
+  once; re-armed only after real cooling (stage ≤ 30 or 15.0 °C below the ready point); dropped during an activity.
+* **Sleep → wake** is a power-on too (jingle). While asleep the controller writes stage 0 (heating off), so without the
+  window a wake would look like a heat-up; with it, a boiler that is still hot at the wake stays quiet. After a long
+  sleep that let a boiler really cool down, its tone plays when it is hot again.
+* This was already the rule for a start of Meraki+ on a running machine (v6.18); v6.19 uses the same window for every
+  "on", the only difference being the jingle.
+
+| At the power-on / wake | v6.18 | v6.19 |
+|---|---|---|
+| both boilers hot | jingle + brew tone + steam tone | **jingle only** |
+| brew hot, steam still heating | jingle + brew tone, later steam tone | jingle, later **steam tone only** |
+| both cold | jingle, later each tone | unchanged |
+| hot, then a boiler cools (stage ≤ 30) and heats up again | its tone again | unchanged |
+| wake after a short sleep (stages 0 while asleep, still hot) | jingle + both tones | **jingle only** |
+
+Checked by the self-test section *v6.19 boot-already-hot* (8 checks; 4 mutants against it in the dev workspace's preview pipeline) and
+the scenarios `audio_boot_hot_no_ready` (cold boot hot → jingle only; sleep → wake hot → jingle only; real cool-down →
+the tone once) and `audio_cold_to_hot_ready` (boot hot → jingle only; both boilers go cold during the session → each
+tone once); `audio_power_cycle` now expects the jingle only at both power-ons.
 
 ---
 
@@ -266,4 +326,9 @@ Either half of the fix suffices alone. `--check` resolves `MI_SYS_Init` and the 
    from the speaker, exit 0. If it exits 5, see `/tmp/merakiplus_snd.log` (an MI_AO return code).
 3. Power the machine off and on with the button: the jingle, then the two ready tones as the boilers heat
    (`cat /tmp/merakiplus_snd.log`: no `merakiplus_snd: dlopen` lines; DIAGNOSTICS › SOUND shows the last one).
+   **v6.19:** if the boilers are still hot at the power-on, only the jingle plays (`/tmp/merakiplus_snd.log` has one
+   `start_jingle played` line and no `boiler_ready_*` line); a ready tone needs a real heat-up from cold.
 4. Change VOLUME in SYSTEM › DISPLAY · SOUND: SAVE plays the test tone at the new level.
+5. **v6.19 listening check:** play the three files at a normal volume (`merakiplus_snd …/audio/<name>.wav 40`) and judge
+   on the real speaker: is the jingle warm (not harsh), are the two ready tones clearly different, is nothing distorted
+   or too quiet? The small speaker may lose the lowest notes (G4 = 392 Hz); the marimba's second mode (3.9 ×, ≈ 1.5–2.3 kHz) still carries them.

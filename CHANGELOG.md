@@ -3,6 +3,34 @@
 All notable changes to Meraki+. Details (with evidence, frames and test figures) are in
 [docs/dev/UI_v6.md](docs/dev/UI_v6.md) under *CHANGES-v6.x*. All dates are 2026.
 
+## [6.19] — 2026-11-21
+Two sound changes from user feedback. Display and audio only — no UART frame, guard, limit, timing, setting or helper
+changed (`bin/merakiplus_snd` is byte-identical to v6.18.1).
+### Changed
+- **No ready tones at a power-on with hot boilers.** Switching on (or waking) a machine whose boilers are still hot
+  played the jingle and both ready tones back-to-back. Now each boiler's ready latch is initialized from its state at
+  the power-on: a boiler already at heat stage 100 counts as announced, so **only the jingle plays**. A ready tone now
+  always means a real cold → hot transition during the session. The decision uses the last sample of a 1.5 s window
+  after the power-on (words 62/63 are polled every 200 ms), so stale values right after a power-on or a wake do not
+  count. Re-arming after real cooling, the per-boiler READY TONE setting, mute, OFF/sleep silence and skip-during-activity
+  are unchanged. Details: [docs/audio.md §2.6](docs/audio.md#26-power-on-with-hot-boilers-v619).
+- **Nicer sounds.** `tools/gen_audio.py` now synthesizes struck-instrument timbres instead of sine beeps: modal
+  marimba (1 : 3.9 : 9.2) and glockenspiel (1 : 2.76 : 5.40) partials with mallet attack and damped release, a soft FM
+  bell layer and a small Schroeder room. Start jingle = warm marimba + bell arpeggio G4-C5-E5-G5 → C6 (1.4 s); brew
+  boiler = low marimba double note G4 → D5 (0.8 s); steam boiler = glockenspiel triple pip E6 G#6 B6 (0.75 s). Still
+  our own, stdlib-only, 16 kHz mono; ~95 KB together (was ~68 KB). One sound theme (no theme selector).
+### Notes
+- Self-test: new section *v6.19 boot-already-hot* (8 checks: boot hot → jingle only; cold → hot during the session →
+  tone; mixed; stale samples; 3 × sleep → wake hot → no ready tone; long sleep → tones again); the v6.18 sleep/wake and
+  OFF → on checks now expect the jingle only. 545 checks EN + DA (also as a 32-bit ARM binary).
+- Simulator: new scenarios `audio_boot_hot_no_ready` and `audio_cold_to_hot_ready`; `audio_power_cycle` now expects
+  the jingle only (all three fail against the v6.18.1 build, as they should).
+- `audio/` md5: `start.wav` `a03cb807d1cdb629b0614fdb740ec71d`, `ready_extract.wav` `4e7e24f18a80ee2f237e2f5ed220afbe`, `ready_steam.wav` `483d57ef122dc9929b004441fe01bc44` (`AUDIO_MD5`).
+- `bin/`: `merakiplus` `e654f668…`, `merakiplus_sim_arm` `8624e302…` and the host SIM builds rebuilt (official zig 0.17.1);
+  `merakiplus_snd`, `switcher`, `tinj_hold`, `keyinj`, `grab_shim.so` unchanged.
+- **Not yet verified on a machine**: the new sounds need a listen on the real speaker and a power-on with hot boilers
+  (docs/audio.md §3.5, steps 3 and 5). Update: run the installer again (`./install.sh`).
+
 ## [6.18.1] — 2026-11-21
 Fix: **every Meraki+ sound was silent on a real machine** (start jingle, both ready tones, the SAVE test tone). Sound
 helper only — no UART frame, guard, limit, timing or sound rule changed.

@@ -502,3 +502,11 @@ The contract and ADDENDUM v6.4/v6.5/v6.6 (UI work stream) are unchanged. Full do
 * **play.py:** `POST /api/boilers` (same keys as the event); the viewer has an *Audio (v6.18)* card with the log and *Cold boilers / Cool brew boiler / Hot* buttons.
 * **Scenarios** (all `ui_only`): `audio_boiler_ready` (44 s, 27 checks: cold boot + cold boilers → jingle once, extract tone at ~11 s, the steam boiler's own tone at ~21 s, cool-down → re-armed → extract tone again, no UART write), `audio_muted` (24 s, config volume 0 → events logged `muted`, nothing played), `audio_power_cycle` (46 s: hot boilers at a cold boot → jingle + tones; button OFF → silent; wake → jingle + tones again; READY TONE = steam only), `audio_sound_off` (40 s: ctrl SAVE `sound` = 0 → events logged `off`; SOUND on + READY TONE brew → only the extract tone). Green EN + DA.
 * `--quick` is unchanged.
+
+## ADDENDUM v6.19 — sound: no ready tone at a power-on with hot boilers (scenarios only)
+
+**Date:** 2026-11-21 · **Applies to:** `sim/scenarios/audio_boot_hot_no_ready.json`, `sim/scenarios/audio_cold_to_hot_ready.json` (new), `sim/scenarios/audio_power_cycle.json` (expectations). The contract above, `mcu_sim.py`, `run_e2e.py`, `play.py` and the state JSON are **unchanged**. Background: [docs/audio.md §2.6](../docs/audio.md#26-power-on-with-hot-boilers-v619).
+
+* **Rule under test:** at every "on" (cold boot of the display, OFF → on, sleep → wake) a boiler already at heat stage 100 counts as announced — only the start jingle plays; a ready tone needs a cold → hot transition during the session.
+* **Scenarios** (all `ui_only`): `audio_boot_hot_no_ready` (42 s, 26 checks: cold boot with both boilers hot → jingle only, latches `[0,0]`; sleep → wake while hot → second jingle, still no ready event; the extract boiler cools to 65 °C → `armed [1,0]` → heats up → its tone once; no UART write), `audio_cold_to_hot_ready` (38 s, 22 checks: boot hot → jingle only; both boilers go cold at 6 s → armed → extract tone, then the steam tone, each once). `audio_power_cycle` now expects the jingle only at both power-ons and no ready event (25 checks). Green EN + DA; the three fail against the v6.18.1 SIM build.
+

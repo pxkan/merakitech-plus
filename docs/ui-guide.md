@@ -350,9 +350,11 @@ ready (§11, test plan T). The later on-device run and its hardware findings are
 The full description — the reversed stock audio path with addresses, the rules and the helper — is in
 [audio.md](audio.md). In short:
 
-* **What plays:** a **start jingle** once per power-on, then **one tone per boiler** as its controller heat stage
-  (word 62 brew/extract, word 63 steam) first reaches 100 — two warm low notes for the brew boiler, three bright pips
-  for the steam boiler. A boiler is re-armed only after real cooling (stage ≤ 30 or 15 °C below its ready point).
+* **What plays:** a **start jingle** once per power-on (a marimba + bell arpeggio), then **one tone per boiler** as its
+  controller heat stage (word 62 brew/extract, word 63 steam) goes from below 100 to 100 — a low marimba double note
+  for the brew boiler, a glockenspiel triple pip for the steam boiler. A boiler that is **already** at stage 100 at the
+  power-on / wake plays nothing (v6.19: only the jingle). A boiler is re-armed only after real cooling (stage ≤ 30 or
+  15 °C below its ready point).
   Silent while OFF / asleep; a tone that comes due during an activity is skipped (logged *suppressed*).
 * **Where to set it:** *SYSTEM › DISPLAY · SOUND* — SOUND (OFF / ON / STOCK SOUNDS), READY TONE (OFF / BREW BOILER /
   STEAM BOILER / BOTH BOILERS), VOLUME (config `volume`, 0 = mute, capped at 70). SAVE of any of them plays a short

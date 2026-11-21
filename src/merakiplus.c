@@ -2,6 +2,11 @@
  * 480x480 screen, v6.16: feature parity (settings + activity control), its own visual
  * design system, boot-slot integration, product name + two languages — and from v6.4 a SIM build.
  *
+ * v6.19 = v6.18.1 + (1) NO READY TONE AT A POWER-ON WITH HOT BOILERS (user: jingle + both ready tones back-to-back is redundant): at every
+ *  power-on (cold boot of the display, OFF -> on, sleep -> wake) a boiler whose heat stage is already 100 over the first 1.5 s counts as
+ *  announced — only the jingle plays; a tone needs a real cold -> hot transition during the session (re-arm after cooling unchanged).
+ *  (2) nicer sounds: tools/gen_audio.py now synthesizes struck-instrument timbres (marimba / glockenspiel partials + a soft FM bell + a
+ *  small room) instead of sine beeps; the three audio/<name>.wav files regenerated. Control logic, frames, the helper and the settings are unchanged.
  * v6.18.1 = v6.18 + a fix in the sound helper only (src/merakiplus_snd.c puts libpthread.so.0 into the global scope before
  *  libmi_common.so; docs/audio.md §3). In this file only MERAKIPLUS_VERSION changed.
  *
@@ -301,7 +306,7 @@ static int  sim_net_on=1;
 #define KBD_NAME "k62091"
 #define BL_SYSFS "/sys/class/pwm/pwmchip0/pwm2/duty_cycle"
 #define BL_EN_SYSFS "/sys/class/pwm/pwmchip0/pwm2/enable"   /* v6.14: stock uikit_os_back_light_off/on 0xC2278 = blpwm_set_enable(2,0/1) */
-#define MERAKIPLUS_VERSION "V6.18.1"
+#define MERAKIPLUS_VERSION "V6.19"
 
 /* ---- v6.10: pressure estimate (UI_v6.md §16) ----
  * Word 51 (SPI2 ADC channel 0xA, REGISTERMAP: pressure OR pump-drive candidate) -> bar with ONE linear anchor:
@@ -4300,11 +4305,13 @@ static void sched_step(ms_t now){
  *                  (target by steam gear word 14: 1 = 120.0, 2 = 125.0, 3 = 130.0, else 135.0 °C); 100 while work_sta bit 5.
  * MERAKI+: the same signal, but PER BOILER — a ready tone when the EXTRACT boiler's stage first reaches 100 and a different one when
  * the STEAM boiler's does (fallback if a word was never received: word 40 >= word 11 / word 47 >= steam target - 10 °C).
- *  - ONCE per power-on (like stock's latch); RE-ARM only after that boiler has really cooled: stage <= 30, or 15.0 °C below its
- *    ready point (so the dips of a brew or a steam session never re-trigger it); power-off / sleep re-arms both.
+ *  - ONCE per heat-up; RE-ARM only after that boiler has really cooled: stage <= 30, or 15.0 °C below its ready point (so the
+ *    dips of a brew or a steam session never re-trigger it).
  *  - START JINGLE once per power-on: OFF/sleep -> on, and the first "on" after a cold boot of the display (SoC uptime < 120 s).
- *    A Meraki+ start on a machine that was already on (switch from the stock UI, watchdog restart) plays nothing and counts a
- *    boiler that is already hot as announced.
+ *  - v6.19: at EVERY "on" (power-on with the jingle, and a Meraki+ start on a machine that was already on — switch from the stock
+ *    UI, watchdog restart — without it) a boiler that is already hot (stage 100, decided over the first SND_SETTLE_MS so stale
+ *    first samples do not count) counts as announced: a ready tone only for a real cold -> hot transition during the session
+ *    (stock plays preheatCompele right after its logo even when both are hot; the user found jingle + 2 tones redundant).
  *  - SILENT while off / sleeping / TURNING ON… (nothing is queued), and a ready tone that comes due while an activity runs is
  *    dropped like stock drops it during its animations (logged "suppressed"). OFFLINE (no link) holds everything (no decision).
  *  - SOUND off (own file) / READY TONE per boiler / config volume 0 = mute: the event is logged, nothing is played.
@@ -4445,10 +4452,10 @@ static void snd_tick(ms_t now){
     if(snd.st!=2){                                                    /* -> on */
         int power_on=snd.seen_off||snd.cold_boot;
         snd.st=2; snd.t_on=now; snd.cold_boot=0;
-        if(power_on){ snd.armed[0]=snd.armed[1]=1; snd.settle=0; snd_emit(SE_JINGLE,now); }
-        else snd.settle=1;                                            /* already hot when Meraki+ started: announced (by the stock UI) */
+        if(power_on) snd_emit(SE_JINGLE,now);
+        snd.settle=1;          /* v6.19: power-on too — a boiler already hot now is announced (only the jingle plays); before: both armed */
     }
-    if(snd.settle){                                                   /* the first samples after a (re)start may still be stale */
+    if(snd.settle){            /* "already hot?" = the LAST sample of the window: the first ones after a (re)start / wake may be stale */
         for(int b=0;b<2;b++){ snd.ready[b]=snd_ready(b); snd.armed[b]=!snd.ready[b]; }
         if(now-snd.t_on>=SND_SETTLE_MS) snd.settle=0;
         return;
@@ -8158,14 +8165,18 @@ static void st_v618(const char*dir){
       reg[1]=1; reg[33]=0x0001; sim_run(800); int sl=snd.st==1&&snd.armed[0]&&snd.armed[1];
       reg[62]=30; reg[63]=30; sim_run(500); reg[62]=100; reg[63]=100; sim_run(500);
       int quiet=snd.n[SE_JINGLE]+snd.n[SE_READY_E]+snd.n[SE_READY_S]==n0&&snd.qn==0;
-      reg[1]=0; reg[33]=0x0101; sim_run(800);
-      st_check("SLEEP: nothing plays (heat stages change while asleep: no event); WAKE = power-on: the jingle again + both boilers' tones (both hot) — in that order",
-               sl&&quiet&&st_sn(SE_JINGLE)==2&&st_sp(SE_READY_E)==3&&st_sp(SE_READY_S)==3&&snd.log[2].ev==SE_JINGLE&&snd.log[1].ev==SE_READY_E&&snd.log[0].ev==SE_READY_S); }
+      reg[1]=0; reg[33]=0x0101; sim_run(SND_SETTLE_MS+800);
+      st_check("SLEEP: nothing plays (heat stages change while asleep: no event); WAKE = power-on: the jingle again — and (v6.19) NO ready tone, both boilers are already hot",
+               sl&&quiet&&st_sn(SE_JINGLE)==2&&st_sn(SE_READY_E)==2&&st_sn(SE_READY_S)==2&&snd.log[0].ev==SE_JINGLE&&!snd.armed[0]&&!snd.armed[1]); }
     { pw.state=PW_OFF; view=V_OFF; sim_link=0; reg[0]=0; last_rx_ms=sim_now-5000; sim_run(600);   /* OFF: the MCU sleeps and does not reply */
-      int n0=snd.n[SE_JINGLE]; reg[62]=30; sim_run(300); reg[62]=100; sim_run(300);
-      int quiet=snd.n[SE_JINGLE]==n0&&snd.n[SE_READY_E]==3&&snd.st==1;
-      sim_link=1; reg[0]=1; sim_run(2500);                                      /* the controller answers with word 0 = 1 -> merakiplus powers on (pw_step) */
-      st_check("the UI's OFF (power button): silent while OFF; ON again -> the jingle (3rd power-on) and the re-armed tones",quiet&&st_sn(SE_JINGLE)==3&&st_sp(SE_READY_E)==4); }
+      int n0=snd.n[SE_JINGLE], ne0=snd.n[SE_READY_E]; reg[62]=30; sim_run(300); reg[62]=100; sim_run(300);
+      int quiet=snd.n[SE_JINGLE]==n0&&snd.n[SE_READY_E]==ne0&&snd.st==1;
+      int n1=st_sn(SE_READY_E)+st_sn(SE_READY_S);
+      sim_link=1; reg[0]=1; reg[62]=60; sim_run(2500);                         /* the controller answers with word 0 = 1 -> merakiplus powers on (pw_step); extract still heating */
+      int j3=st_sn(SE_JINGLE)==3&&st_sn(SE_READY_E)+st_sn(SE_READY_S)==n1&&snd.armed[0]&&!snd.armed[1];
+      reg[62]=100; sim_run(300);
+      st_check("the UI's OFF (power button): silent while OFF; ON again -> the jingle (3rd power-on) only; the extract boiler (stage 60 at the power-on) heats up -> its tone, the hot steam boiler stays quiet",
+               quiet&&j3&&st_sp(SE_READY_E)==3&&st_sn(SE_READY_S)==2); }
     /* ---- (6) a Meraki+ start on a machine that is already on (switch from the stock UI): no jingle, hot boilers count as announced ---- */
     sim_reset(); sim_run(1500);
     st_check("Meraki+ started on a running machine (uptime 1 day): no jingle, both boilers already hot -> no ready tone",st_sn(SE_JINGLE)==0&&st_sn(SE_READY_E)==0&&st_sn(SE_READY_S)==0&&!snd.armed[0]&&!snd.armed[1]);
@@ -8175,7 +8186,7 @@ static void st_v618(const char*dir){
     st_check("... stale first samples (words 62/63 = 0 for 0.5 s, then 100) inside the 1.5 s settle window do not count as \"heated up\": no tone",
              st_sn(SE_READY_E)==0&&st_sn(SE_READY_S)==0&&!snd.settle&&!snd.armed[0]&&!snd.armed[1]);
     /* ---- (7) fallback thresholds when words 62/63 were never received ---- */
-    sim_reset(); snd_uptime_ovr=10; reg_seen[62]=reg_seen[63]=0; reg[11]=900; reg[40]=880; reg[14]=1; reg[47]=1050; sim_run(800);
+    sim_reset(); snd_uptime_ovr=10; reg_seen[62]=reg_seen[63]=0; reg[11]=900; reg[40]=880; reg[14]=1; reg[47]=1050; sim_run(SND_SETTLE_MS+800);
     int f0=st_sn(SE_READY_E)==0&&st_sn(SE_READY_S)==0;
     reg[40]=900; sim_run(300); int f1=st_sp(SE_READY_E)==1;
     reg[47]=1099; sim_run(300); int f2=st_sn(SE_READY_S)==0; reg[47]=1100; sim_run(300); int f3=st_sp(SE_READY_S)==1;
@@ -8183,14 +8194,14 @@ static void st_v618(const char*dir){
     st_check("fallback without words 62/63: extract = word 40 >= word 11 (88.0 < 90.0 -> no, 90.0 -> tone); steam = word 47 >= gear target - 10 °C (gear 1: 110.0 °C)",
              f0&&f1&&f2&&f3&&snd_steam_thr()==1250&&st_sp(SE_READY_E)==2);
     /* ---- (8) mute, off, per boiler, volume cap, stock files ---- */
-    sim_reset(); snd_uptime_ovr=10; SET[S_VOL].val=0; reg[62]=reg[63]=30; sim_run(800); reg[62]=reg[63]=100; sim_run(400);
+    sim_reset(); snd_uptime_ovr=10; SET[S_VOL].val=0; reg[62]=reg[63]=30; sim_run(SND_SETTLE_MS+800); reg[62]=reg[63]=100; sim_run(400);
     st_check("config volume 0 = mute (stock: 0 -> MI_AO mute): jingle + both tones are logged \"muted\", nothing is played",
              st_sn(SE_JINGLE)==1&&st_sp(SE_JINGLE)==0&&snd.n_out[SO_MUTED]==3&&st_sp(SE_READY_E)==0&&st_sp(SE_READY_S)==0);
-    sim_reset(); snd_uptime_ovr=10; SET[S_SOUND].val=0; reg[62]=reg[63]=30; sim_run(800); reg[62]=reg[63]=100; sim_run(400);
+    sim_reset(); snd_uptime_ovr=10; SET[S_SOUND].val=0; reg[62]=reg[63]=30; sim_run(SND_SETTLE_MS+800); reg[62]=reg[63]=100; sim_run(400);
     st_check("SOUND OFF: no jingle, no tone (logged \"off\")",snd.n_out[SO_OFF]==3&&snd.n_out[SO_PLAYED]==0);
-    sim_reset(); snd_uptime_ovr=10; SET[S_SNDRDY].val=1; reg[62]=reg[63]=30; sim_run(800); reg[62]=reg[63]=100; sim_run(400);
+    sim_reset(); snd_uptime_ovr=10; SET[S_SNDRDY].val=1; reg[62]=reg[63]=30; sim_run(SND_SETTLE_MS+800); reg[62]=reg[63]=100; sim_run(400);
     int pb=st_sp(SE_JINGLE)==1&&st_sp(SE_READY_E)==1&&st_sn(SE_READY_S)==1&&st_sp(SE_READY_S)==0;
-    sim_reset(); snd_uptime_ovr=10; SET[S_SNDRDY].val=2; reg[62]=reg[63]=30; sim_run(800); reg[62]=reg[63]=100; sim_run(400);
+    sim_reset(); snd_uptime_ovr=10; SET[S_SNDRDY].val=2; reg[62]=reg[63]=30; sim_run(SND_SETTLE_MS+800); reg[62]=reg[63]=100; sim_run(400);
     st_check("READY TONE per boiler: BREW BOILER -> only the extract tone; STEAM BOILER -> only the steam tone; the jingle is independent",pb&&st_sp(SE_READY_E)==0&&st_sp(SE_READY_S)==1&&st_sp(SE_JINGLE)==1);
     sim_reset(); SET[S_VOL].val=100; int c1=snd_vol()==SND_VOL_CAP; SET[S_VOL].val=40; int c2=snd_vol()==40; SET[S_VOL].loaded=0; int c3=snd_vol()==SET[S_VOL].def;
     st_check("volume = config \"volume\" capped at 70 like stock deal_play (100 -> 70, 40 -> 40; no config -> the default 40)",c1&&c2&&c3);
@@ -8199,7 +8210,7 @@ static void st_v618(const char*dir){
       put_bytes(rp(SND_STOCK[SE_JINGLE]),"ID3",3); int s2=!strcmp(snd_file(SE_JINGLE),SND_STOCK[SE_JINGLE]); unlink(rp(SND_STOCK[SE_JINGLE]));
       st_check("STOCK SOUNDS: the stock UI's own /customer/audio/*.mp3 when present (never shipped), else Meraki+'s tones",s1&&s2&&!strcmp(SND_STOCK[SE_READY_E],"/customer/audio/preheatCompele.mp3")); }
     /* ---- (9) activity: a tone that comes due while something runs is dropped (stock: no sound during its animations) ---- */
-    sim_reset(); snd_uptime_ovr=10; reg[63]=60; sim_run(800); reg[33]=0x1307; reg[63]=100; sim_run(400); int sup=snd.n_out[SO_SUPPRESSED]==1&&st_sp(SE_READY_S)==0;
+    sim_reset(); snd_uptime_ovr=10; reg[63]=60; sim_run(SND_SETTLE_MS+800); reg[33]=0x1307; reg[63]=100; sim_run(400); int sup=snd.n_out[SO_SUPPRESSED]==1&&st_sp(SE_READY_S)==0;
     reg[33]=0x0101; sim_run(800);
     st_check("brew running when the steam boiler gets hot: the tone is dropped (logged \"suppressed\"), and NOT played late after the shot",sup&&st_sp(SE_READY_S)==0&&!snd.armed[1]);
     /* ---- (10) preview tone on SAVE ---- */
@@ -8211,13 +8222,55 @@ static void st_v618(const char*dir){
     st_check("event / outcome names (state JSON \"audio\", /tmp/merakiplus_snd.log) = start_jingle, boiler_ready_extract, boiler_ready_steam, preview / played, off, muted, suppressed",
              !strcmp(SE_KEY[SE_JINGLE],"start_jingle")&&!strcmp(SE_KEY[SE_READY_E],"boiler_ready_extract")&&!strcmp(SE_KEY[SE_READY_S],"boiler_ready_steam")&&!strcmp(SE_KEY[SE_PREVIEW],"preview")
              &&!strcmp(SO_KEY[SO_PLAYED],"played")&&!strcmp(SO_KEY[SO_MUTED],"muted")&&!strcmp(SO_KEY[SO_SUPPRESSED],"suppressed")&&!strcmp(SO_KEY[SO_OFF],"off"));
-    { unlink(snd_path); sim_reset(); snd_uptime_ovr=20; reg[63]=60; sim_run(1200); reg[63]=100; sim_run(400); char m1[40],l1[64],m2[40],l2[64],e1[48],e2[64];
+    { unlink(snd_path); sim_reset(); snd_uptime_ovr=20; reg[63]=60; sim_run(SND_SETTLE_MS+800); reg[63]=100; sim_run(400); char m1[40],l1[64],m2[40],l2[64],e1[48],e2[64];
       uint32_t c1=snd_diag_text(m1,sizeof m1,l1,sizeof l1); SET[S_VOL].val=0; uint32_t c2=snd_diag_text(m2,sizeof m2,l2,sizeof l2); SET[S_VOL].val=31;
       snprintf(e1,sizeof e1,TR(TX_DV_SND_ON),31); snprintf(e2,sizeof e2,"%s · %s",TR(TX_DV_SE_STEAM),TR(TX_DV_SO_PLAYED));
       printf("       DIAGNOSTICS SOUND: '%s' | '%s' | muted '%s' (DG_SND %d, ABOUT %d)\n",m1,l1,m2,DG_SND,DG_ABOUT);
       st_check("DIAGNOSTICS › SOUND: mode · volume (\"ON · 31\"; amber \"VOLUME 0\" when muted) and the last event + outcome (\"STEAM · PLAYED\"); the block sits between TIME and ABOUT",
                !strcmp(m1,e1)&&c1==C_TXT&&!strcmp(m2,TR(TX_DV_SND_MUTE))&&c2==C_WARN&&!strcmp(l1,e2)&&DG_SND>DG_TIME+28+2*DG_P+30&&DG_SND+28+DG_P<DG_ABOUT); }
     unlink(snd_path); snprintf(snd_path,sizeof snd_path,"%s",keep_sp); sim_reset(); settings_load();
+}
+/* ============ v6.19: no ready tone at a power-on with hot boilers (user: jingle + 2 tones back-to-back is redundant) ============ */
+static void st_v619(void){
+    printf("== selftest: v6.19 boot-already-hot (a boiler at stage 100 at power-on counts as announced; only the jingle plays) ==\n");
+    int tx0, sq0;
+    /* boot-already-hot: a cold boot of the display, both boilers at stage 100 */
+    sim_reset(); snd_uptime_ovr=25; reg[62]=reg[63]=100; tx0=txq_len; sq0=(int)wq.seq; sim_run(SND_SETTLE_MS+1500);
+    st_check("boot already hot (uptime 25 s, words 62 = 63 = 100): ONLY the start jingle plays — no ready tone (not even logged); both latches already fired",
+             st_sn(SE_JINGLE)==1&&st_sp(SE_JINGLE)==1&&st_sn(SE_READY_E)==0&&st_sn(SE_READY_S)==0&&!snd.armed[0]&&!snd.armed[1]&&snd.log_n==1&&!snd.settle);
+    /* the dips of normal use do not re-arm; real cooling does, and a cold -> hot transition DURING the session plays the tone */
+    reg[62]=60; reg[40]=(uint16_t)(reg[11]-40); sim_run(600); reg[62]=100; reg[40]=reg[11]; sim_run(400); int dip=st_sn(SE_READY_E)==0;
+    reg[62]=30; sim_run(400); int re=snd.armed[0]&&!snd.armed[1]; reg[62]=60; sim_run(400); reg[62]=100; sim_run(400);
+    st_check("... a shot's dip (stage 60) re-arms nothing; real cooling (stage 30) re-arms the extract boiler; cold -> hot during the session -> its tone (once), the steam boiler stays quiet",
+             dip&&re&&st_sp(SE_READY_E)==1&&st_sn(SE_READY_S)==0&&st_slast(SE_READY_E,SO_PLAYED));
+    reg[63]=0; sim_run(400); reg[63]=100; sim_run(400);
+    st_check("... the same for the steam boiler (stage 0 -> 100): its own tone; the jingle never repeats; no UART frame from the sound engine",
+             st_sp(SE_READY_S)==1&&st_sn(SE_JINGLE)==1&&txq_len==tx0&&(int)wq.seq==sq0);
+    /* cold boot with cold boilers: the tones still come as each boiler heats */
+    sim_reset(); snd_uptime_ovr=25; reg[62]=30; reg[63]=0; sim_run(SND_SETTLE_MS+500); int arm=snd.armed[0]&&snd.armed[1]&&st_sn(SE_JINGLE)==1;
+    reg[62]=100; sim_run(400); int e=st_sp(SE_READY_E)==1&&st_sn(SE_READY_S)==0; reg[63]=100; sim_run(400);
+    st_check("cold boot with cold boilers (stage 30 / 0): jingle, both armed; each boiler's tone when it reaches stage 100 (cold -> hot)",arm&&e&&st_sp(SE_READY_S)==1);
+    /* mixed: extract hot, steam still heating at the power-on */
+    sim_reset(); snd_uptime_ovr=25; reg[62]=100; reg[63]=60; sim_run(SND_SETTLE_MS+500); int mx=!snd.armed[0]&&snd.armed[1];
+    reg[63]=100; sim_run(400);
+    st_check("power-on with the extract boiler hot and the steam boiler at stage 60: jingle + only the STEAM tone (when it gets hot)",
+             mx&&st_sn(SE_JINGLE)==1&&st_sn(SE_READY_E)==0&&st_sp(SE_READY_S)==1);
+    /* stale samples at the power-on: the decision is the LAST sample of the window */
+    sim_reset(); snd_uptime_ovr=25; reg[62]=reg[63]=100; sim_run(400); reg[62]=60; sim_run(SND_SETTLE_MS+300); int st1=snd.armed[0]&&!snd.armed[1];
+    reg[62]=100; sim_run(400);
+    st_check("stale \"hot\" samples from before the power-on (100 for 0.4 s, then the real stage 60) do not latch: armed, tone when really hot",st1&&st_sp(SE_READY_E)==1&&st_sn(SE_READY_S)==0);
+    /* sleep -> wake, already hot: no ready spam; heating off while asleep (stages 0) and stale 0s right after the wake do not count */
+    sim_reset(); snd_uptime_ovr=25; reg[62]=reg[63]=100; sim_run(SND_SETTLE_MS+500);
+    for(int k=0;k<3;k++){
+        reg[1]=1; reg[33]=0x0001; reg[62]=reg[63]=0; sim_run(1500);                    /* asleep: heating off -> the MCU writes stage 0 */
+        reg[1]=0; reg[33]=0x0101; sim_run(400); reg[62]=reg[63]=100; sim_run(SND_SETTLE_MS+400);   /* awake: 0.4 s of stale 0s, then hot */
+    }
+    st_check("3 x sleep -> wake with hot boilers (stages 0 while asleep, 0.4 s stale after the wake): 4 jingles (boot + 3 wakes), NO ready tone at all",
+             st_sn(SE_JINGLE)==4&&st_sn(SE_READY_E)==0&&st_sn(SE_READY_S)==0&&!snd.armed[0]&&!snd.armed[1]);
+    reg[1]=1; reg[33]=0x0001; reg[62]=reg[63]=0; sim_run(1500); reg[1]=0; reg[33]=0x0101; reg[62]=30; reg[63]=60; sim_run(SND_SETTLE_MS+500);
+    int cold=snd.armed[0]&&snd.armed[1]; reg[62]=reg[63]=100; sim_run(400);
+    st_check("... a long sleep that let both boilers cool (stage 30 / 60 at the wake): armed, and both tones play as they heat back up",cold&&st_sp(SE_READY_E)==1&&st_sp(SE_READY_S)==1&&st_sn(SE_JINGLE)==5);
+    sim_reset();
 }
 static void st_v617(void){
     printf("== selftest: v6.17 IA consolidation (HOME = live root; one page per feature w. its settings + HOLD TO START; SYSTEM in sections; DIAGNOSTICS behind SYSTEM; one way back) ==\n");
@@ -9414,6 +9467,7 @@ static int selftest(const char*cfgsrc){
     st_v611();
     st_v617();
     st_v618(dir);                      /* v6.18 */
+    st_v619();                         /* v6.19 */
     /* ============================ v6.15 ============================ */
     st_graph();
     printf("== selftest [%s]: %s (%d checks, %d failed) — work dir %s ==\n",LANG_CODE[base_lang],st_fail?"FAILED":"ALL OK",st_n,st_fail,dir);
@@ -9655,7 +9709,7 @@ int main(int argc,char**argv){
     sim_reset(); PV_SEC(SEC_DISPLAY); sim_run(300); detail_open(S_SNDRDY,sim_now); sim_run(900); dump(out,"102_detail_ready_tone");
     sim_reset(); PV_SEC(SEC_DISPLAY); sim_run(300); detail_open(S_VOL,sim_now); sim_run(900); dump(out,"103_detail_volume");
     sim_reset(); PV_SEC(SEC_DISPLAY); sim_run(300); detail_open(S_SNDRDY,sim_now); edit_val=1; save_begin(sim_now); sim_run(500); dump(out,"104_sound_saved_toast");
-    unlink(snd_path); sim_reset(); snd_uptime_ovr=20; reg[63]=60; sim_run(1200); reg[63]=100; sim_run(400); page=PG_DIAG; scroll[PG_DIAG]=DG_SND-LIST_VY0-12; static_dirty=1; force_all=1; sim_run(600); dump(out,"105_diag_sound");
+    unlink(snd_path); sim_reset(); snd_uptime_ovr=20; reg[63]=60; sim_run(SND_SETTLE_MS+800); reg[63]=100; sim_run(400); page=PG_DIAG; scroll[PG_DIAG]=DG_SND-LIST_VY0-12; static_dirty=1; force_all=1; sim_run(600); dump(out,"105_diag_sound");
     return 0;
 }
 #endif

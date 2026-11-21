@@ -41,23 +41,23 @@ import time
 import urllib.request
 from concurrent.futures import ThreadPoolExecutor
 
-VERSION = "6.18.1"
+VERSION = "6.19"
 REPO = "thomasgrastein/merakitech-plus"
 RAW_BASE = "https://raw.githubusercontent.com/" + REPO + "/{ref}/bin/{name}"
 RAW_AUDIO = "https://raw.githubusercontent.com/" + REPO + "/{ref}/audio/{name}"
 
 # md5 of the shipped device binaries in bin/ (kept in sync with bin/MD5SUMS by CI).
 BIN_MD5 = {
-    "merakiplus": "cc8c5fb9ef4f4ff37c493032ba76e14b",
+    "merakiplus": "e654f668636322204e18d9ac1b386795",
     "switcher": "f2b95b16b33a9e1bc868a2f5b2414e6b",
     "grab_shim.so": "c42076c807c54d477a5868977404186d",
     "merakiplus_snd": "a7659c176b8ef78385b0b612a69e81ca",
 }
-# v6.18: Meraki+'s own sounds (tools/gen_audio.py; docs/audio.md) — installed next to the sound helper
+# v6.18: Meraki+'s own sounds (tools/gen_audio.py; docs/audio.md; v6.19: marimba / glockenspiel timbres) — installed next to the sound helper
 AUDIO_MD5 = {
-    "start.wav": "90efa9a33cc07d433adb0818e74b2c37",
-    "ready_extract.wav": "d001a4f478723ad32f6f2f709aa9aa6f",
-    "ready_steam.wav": "55d5039558b361e3747841fd47928b5d",
+    "start.wav": "a03cb807d1cdb629b0614fdb740ec71d",
+    "ready_extract.wav": "4e7e24f18a80ee2f237e2f5ed220afbe",
+    "ready_steam.wav": "483d57ef122dc9929b004441fe01bc44",
 }
 MERAKIPLUS_MARK = "@(#)merakiplus "        # embedded in every Meraki+ binary (src/merakiplus.c MERAKIPLUS_MARK)
 
