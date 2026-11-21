@@ -147,8 +147,8 @@ Defaults from init `0x9966` (non-zero only): word 0=1, 2=1, 4=180, 5=60, 11=920,
 | 59 | **gears_min** (grinder calibration) | setup/internal | config load/save (config[4]); debug "min=%d"; grind gear interpolation | high |
 | 60 | **gears_5** (grinder calibration) | setup/internal | config (config[6]); debug "5=%d" | high |
 | 61 | **mains frequency** (50/60 Hz) | sensor | SPI2 ADC `0xA8AC`→`0xA880` range check 48..52/58..62 → snap to 50/60; debug "hz=%d" | high |
-| 62 | **e boiler heating power** (PWM/power) | actuator | boiler_heat `0x35EE/0x365E` `strh [r7,#0x7c]`; debug "extract_heat:...power=%d" | med |
-| 63 | **s boiler heating power** (PWM/power) | actuator | boiler_heat `0x358E` `strh [fp,#0x7e]`; debug "steam_heat:...power=%d" | med |
+| 62 | **e boiler heat STAGE** 0/30/60/100 (v6.18 correction: not a power) | sensor/state | boiler_heat `0x35EE…0x3672` `strh [r7,#0x7c]`: e boiler < 40.0 °C → 0, < 60.0 → 30, < word 11 → 60, else 100; 100 while work_sta bit 12. The stock UI's "pre-heat complete" needs 62 **and** 63 > 99 ([audio.md](audio.md)) | high |
+| 63 | **s boiler heat STAGE** 0/30/60/100 (v6.18 correction: not a power) | sensor/state | boiler_heat `0x358E/0x37E4…0x3820` `strh [sb,#0x7e]`: s boiler < 50.0 °C → 0, < 80.0 → 30, < steam target − 10.0 °C → 60, else 100 (target by gear word 14: 120/125/130/135 °C); 100 while bit 5 | high |
 | 64 | **gears_25** (grinder calibration) | setup/internal | config (config[8]); debug "25=%d" | high |
 | 65 | **gears_max** (grinder calibration) | setup/internal | config (config[0xA]); debug "max=%d" | high |
 | 66 | **brew counter/timer** | sensor/internal | brew ctl `0x1F9E/0x2086` `strh [r6,#0x84]` (RW many times) | med |

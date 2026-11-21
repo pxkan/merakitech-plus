@@ -1,11 +1,11 @@
 # Meraki+ — UI guide
 
 This guide is extracted from the full UI specification ([dev/UI_v6.md](dev/UI_v6.md)) and describes the
-pages, touch zones and settings in **Meraki+ v6.17**. For a short user guide, see
+pages, touch zones and settings in **Meraki+ v6.18**. For a short user guide, see
 [README → Usage](../README.md#usage). Addresses in square brackets (e.g. `[0x12bcfc]`) refer to the
 place in the original UI program where the limit was read (see [dev/PARITY.md](dev/PARITY.md)).
 
-The UI is available in **English and Danish** (*gear → SYSTEM → DISPLAY → UI LANGUAGE*). This guide uses the English
+The UI is available in **English and Danish** (*gear → SYSTEM → DISPLAY · SOUND → UI LANGUAGE*). This guide uses the English
 labels; where a Danish label is useful for cross-reference with the developer notes, it is given in
 parentheses.
 
@@ -17,7 +17,7 @@ swiping) with one root and sheets — the reasoning is in [ux-audit-v617.md](ux-
 ```
 HOME ─ icon, tap ─► GRIND / BREW / WATER / STEAM   (live line · that feature's settings · HOLD TO START)
      ─ icon, hold ► starts the activity (650 ms)
-     ─ gear ──────► SYSTEM ─ DISPLAY · CLOCK · SCHEDULE · STOCK UI (sections, one open at a time)
+     ─ gear ──────► SYSTEM ─ DISPLAY · SOUND · CLOCK · SCHEDULE · STOCK UI (sections, one open at a time)
      │                     └ DIAGNOSTICS ─► DIAGNOSTICS
      └ error / offline hint, tap ─► DIAGNOSTICS
 ```
@@ -32,8 +32,8 @@ whole header is the target), or swipe right. There are no page dots, no edge zon
 | **BREW** | tap the cup icon | live line *BOILER 92.4° · GROUP 70°* · BREW WEIGHT, BREW TEMP, PRE-INFUSION, PRE-INF. TIME, PRE-INF. PRESSURE, GROUP HEAD (4 in view, the list scrolls) · HOLD TO START |
 | **WATER** | tap the drop icon | live line *WATER 99.9°* (word 40 — the "water sensor") · HOT WATER, WATER MODE · HOLD TO START |
 | **STEAM** | tap the steam icon | live line *BOILER 130° · MILK 22.6°* · MILK TEMP, STEAM LEVEL · HOLD TO START |
-| **SYSTEM** | the gear | *MERAKI+ V6.17* · four section headers with a summary (**DISPLAY** *ENGLISH* · **CLOCK** *16:35* · **SCHEDULE** *06:30 / OFF* · **STOCK UI**) + the **DIAGNOSTICS** row (*OK* / the error code / *DOWN*). Closed: 5 rows, no scrolling. A tap on a header opens it (and closes the other) |
-| **DIAGNOSTICS** | SYSTEM's last row, or a tap on HOME's error / offline hint | STATUS, BOOT · SLOT · SWITCHER, NET, GRAPH (smooth / raw), PRESSURE · ESTIMATE, RAW COUNTERS, POWER BUTTON, TIME · SCHEDULE, ABOUT — scrolls vertically. Its chevron returns to where it was opened from |
+| **SYSTEM** | the gear | *MERAKI+ V6.18* · four section headers with a summary (**DISPLAY · SOUND** *ENGLISH* · **CLOCK** *16:35* · **SCHEDULE** *06:30 / OFF* · **STOCK UI**) + the **DIAGNOSTICS** row (*OK* / the error code / *DOWN*). Closed: 5 rows, no scrolling. A tap on a header opens it (and closes the other) |
+| **DIAGNOSTICS** | SYSTEM's last row, or a tap on HOME's error / offline hint | STATUS, BOOT · SLOT · SWITCHER, NET, GRAPH (smooth / raw), PRESSURE · ESTIMATE, RAW COUNTERS, POWER BUTTON, TIME · SCHEDULE, SOUND (v6.18), ABOUT — scrolls vertically. Its chevron returns to where it was opened from |
 
 A feature page's live line turns **amber and names the reason** when a start is not possible (*NO
 CONNECTION*, *ERROR ACTIVE · START BLOCKED*, *GRIND = TIME · USE STOCK UI*, *CONFIG OUT OF SPEC · FIX
@@ -100,10 +100,11 @@ estimate · **LOCKED** = shown without an editor · **SENSOR** = read-only measu
 The tables below keep the grouping of the spec (tier 1 espresso, tier 1 steam/water, config-only). **Where
 a row is shown since v6.17:** GRIND DOSE, GRIND MODE → **GRIND** · BREW WEIGHT, BREW TEMP, PRE-INFUSION,
 PRE-INF. TIME, PRE-INF. PRESSURE, GROUP HEAD → **BREW** · HOT WATER, WATER MODE → **WATER** (the WATER SENSOR
-is that page's live line, not a row) · MILK TEMP, STEAM LEVEL → **STEAM** · UI LANGUAGE, BRIGHTNESS, TEMP UNIT →
-**SYSTEM › DISPLAY** · TIME FORMAT, DAYLIGHT SAVING, TIME ZONE → **SYSTEM › CLOCK** · PRE-HEAT, PRE-HEAT AT,
-REPEAT, AUTO OFF → **SYSTEM › SCHEDULE** · BOOT UI, SWITCH TO ORIGINAL NOW, VOLUME, STOCK LANG., WATER SHORTCUT,
-CLEANING REMINDER, AUTO TIME, PAUSE TIME → **SYSTEM › STOCK UI** (what only the stock UI reads).
+is that page's live line, not a row) · MILK TEMP, STEAM LEVEL → **STEAM** · UI LANGUAGE, BRIGHTNESS, TEMP UNIT,
+SOUND, READY TONE, VOLUME → **SYSTEM › DISPLAY · SOUND** (v6.18: + the two sound rows; VOLUME moved here from STOCK
+UI because it now sets Meraki+'s sounds too) · TIME FORMAT, DAYLIGHT SAVING, TIME ZONE → **SYSTEM › CLOCK** ·
+PRE-HEAT, PRE-HEAT AT, REPEAT, AUTO OFF → **SYSTEM › SCHEDULE** · BOOT UI, SWITCH TO ORIGINAL NOW, STOCK LANG.,
+WATER SHORTCUT, CLEANING REMINDER, AUTO TIME, PAUSE TIME → **SYSTEM › STOCK UI** (what only the stock UI reads).
 
 ### 4.1 Espresso (spec tier 1) — the GRIND and BREW pages
 | Label | config field | Word | Write on SAVE | Min..max / step | Shown as | Status |
@@ -132,7 +133,9 @@ CLEANING REMINDER, AUTO TIME, PAUSE TIME → **SYSTEM › STOCK UI** (what only 
 |---|---|---|---|---|---|
 | **UI LANGUAGE** (v6.3) | *(none — its own file `/new_customer/merakiplus/lang`)* | 0..1 | ENGLISH / DANSK (endonyms) | — | merakiplus's own setting; **not** a spec parameter and not in `--dump-table` (CHANGES-v6.3 item 2) |
 | BRIGHTNESS | `backlight` | 1..10 | live preview (PWM `duty = 100 − 7·v`) | 2 | **PROVEN** 0..10; **0 deliberately left out** (duty 100 = a dark screen the user cannot find their way back from) |
-| VOLUME | `volume` | 0..100 | 0–100 | 2 | **PROVEN** for the slider; UI hint about the discrete selector (§4.4) |
+| VOLUME | `volume` | 0..100 | 0–100 | 2 | **PROVEN** for the slider; UI hint about the discrete selector (§4.4). v6.18: also Meraki+'s sound volume, capped at 70 like stock (0 = mute) — [audio.md](audio.md) |
+| **SOUND** (v6.18) | *(none — its own file `/new_customer/merakiplus/sound`, `sound=`)* | 0..2 | OFF / ON / STOCK SOUNDS | — | merakiplus's own setting: the start jingle + ready tones; STOCK SOUNDS = the display's own `/customer/audio/*.mp3` if present |
+| **READY TONE** (v6.18) | *(none — the same file, `ready=`)* | 0..3 | OFF / BREW BOILER / STEAM BOILER / BOTH BOILERS | — | merakiplus's own setting: which boiler announces itself (its own tone each) |
 | TEMP UNIT | `Temperature` | 0..1 | 0 °F / 1 °C — also controls merakiplus's display | 2 | **PROVEN** |
 | STOCK LANG. (before v6.3: LANGUAGE) | `language` | 0..10 | 11 languages, Danish not among them (the names are shown in the UI language) | 2 | **PROVEN** — unlocked in v6.1; only controls the stock UI |
 | WATER SHORTCUT | `hotWaterShortcut` | 0..1 | OFF / ON | 2 | **PROVEN** |
@@ -149,7 +152,7 @@ CLEANING REMINDER, AUTO TIME, PAUSE TIME → **SYSTEM › STOCK UI** (what only 
 |---|---|---|---|
 | PRE-INF. TIME | the picker's number of options has not been mapped (PARITY §6.6); max 15 = the stock UI's own default | **`MAX = ESTIMATE`** in amber next to the range + `≈` in front of the value in the list | 5–15 s is harmless; the field is one byte |
 | GROUP HEAD | the same picker anomaly; the spec's max of 80 is itself a cautious estimate | **`MAX = ESTIMATE`** + `≈` | E1 only triggers at > 110 °C; 80 is far below |
-| VOLUME | the stock UI has two controls: a 0–100 slider (what merakiplus edits) and a discrete High/Medium/Low/Mute selector whose mapping has not been mapped | **`STEPS = ESTIMATE`** + `≈` (the note says *"STOCK UI SOUND"*) | config only, no MCU write |
+| VOLUME | the stock UI has two controls: a 0–100 slider (what merakiplus edits) and a discrete High/Medium/Low/Mute selector whose mapping has not been mapped | **`STEPS = ESTIMATE`** + `≈` (the note says *"MERAKI+ + STOCK UI SOUNDS"*) | config only, no MCU write |
 | PAUSE TIME | max unknown — and the value has no effect | locked, amber note *"NO EFFECT · PRE-INF. TIME IS USED"* | §4.5 |
 | TIME ZONE | the size and meaning of the index table | locked, *"SET IT IN THE STOCK UI"* | an invalid index could break the stock UI's time/DST logic |
 
@@ -341,3 +344,21 @@ Locally all green (figures in [CHANGES-v6.14](dev/UI_v6.md#changes-v614) item 5)
 run** in this round (the installation of v6.13 in slot B was in progress). `verify_power_v614.py` is
 ready (§11, test plan T). The later on-device run and its hardware findings are documented in
 [power.md](power.md).
+
+## 20. Sound (v6.18)
+
+The full description — the reversed stock audio path with addresses, the rules and the helper — is in
+[audio.md](audio.md). In short:
+
+* **What plays:** a **start jingle** once per power-on, then **one tone per boiler** as its controller heat stage
+  (word 62 brew/extract, word 63 steam) first reaches 100 — two warm low notes for the brew boiler, three bright pips
+  for the steam boiler. A boiler is re-armed only after real cooling (stage ≤ 30 or 15 °C below its ready point).
+  Silent while OFF / asleep; a tone that comes due during an activity is skipped (logged *suppressed*).
+* **Where to set it:** *SYSTEM › DISPLAY · SOUND* — SOUND (OFF / ON / STOCK SOUNDS), READY TONE (OFF / BREW BOILER /
+  STEAM BOILER / BOTH BOILERS), VOLUME (config `volume`, 0 = mute, capped at 70). SAVE of any of them plays a short
+  test tone (when the machine is on).
+* **Where to see it:** *DIAGNOSTICS › SOUND* — `SOUND · VOLUME` (*ON · 31*, *OFF*, amber *VOLUME 0* / *NO PLAYER*) and
+  `LAST SOUND` (*JINGLE · PLAYED*, *STEAM · PLAYED*, *BREW · SKIPPED*, *BREW · MUTED*, …). On the device every event is
+  also a line in `/tmp/merakiplus_snd.log`.
+* Previews: `100_system_display_sound`, `101_detail_sound`, `102_detail_ready_tone`, `103_detail_volume`,
+  `104_sound_saved_toast`, `105_diag_sound` (EN + DA).

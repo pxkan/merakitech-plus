@@ -907,11 +907,47 @@ def t13_power():
     sim._close_pty()
 
 
+# ---------------------------------------------------------------- T14: heat stages (v6.18)
+def t14_heat_stage():
+    print("== T14: boiler heat stages words 62/63 + the boilers event (v6.18, MCU boiler_heat 0x3502) ==")
+    sim = fresh_sim()
+    sim.advance(0.5)
+    check("default (no heat model): awake -> words 62 = 63 = 100 (pre-v6.18 behaviour)",
+          sim.regs[62] == 100 and sim.regs[63] == 100 and sim.heat is None)
+    r = list(sim.regs)
+    r[11], r[14], r[33] = 870, 3, 0x0101
+    cases = [((399, 499), (0, 0)), ((400, 500), (30, 30)), ((599, 799), (30, 30)), ((600, 800), (60, 60)),
+             ((869, 1199), (60, 60)), ((870, 1200), (100, 100))]
+    ok = True
+    for (e, s_), want in cases:
+        r[40], r[47] = e, s_
+        ok &= McuSim.heat_stage(r) == want
+    r[40], r[47], r[33] = 500, 600, 0x1107 | 0x20
+    ok &= McuSim.heat_stage(r) == (100, 100)          # bit 12 / bit 5 force 100
+    for g, thr in ((1, 1100), (2, 1150), (3, 1200), (4, 1250)):
+        r[14], r[33], r[47] = g, 0x0101, thr - 1
+        ok &= McuSim.heat_stage(r)[1] == 60
+        r[47] = thr
+        ok &= McuSim.heat_stage(r)[1] == 100
+    check("heat_stage = MCU: 40/60 degC, set temp (extract); 50/80 degC, gear target - 10 degC (steam); bits 12/5 force 100", ok)
+    sim.inject({"type": "boilers", "e": 550, "s": 700, "e_rate": 30, "s_rate": 24})
+    check("boilers event: cold boilers -> stages 30 / 30, model on",
+          sim.regs[62] == 30 and sim.regs[63] == 30 and sim.heat is not None)
+    sim.advance(sim.t + 12.0)
+    e_ready = sim.regs[62] == 100 and sim.regs[63] == 60
+    sim.advance(sim.t + 12.0)
+    check("heats up: the extract boiler reaches stage 100 first (~11 s), the steam boiler later (~21 s)",
+          e_ready and sim.regs[63] == 100)
+    sim.inject({"type": "boilers", "model": False})
+    sim.advance(sim.t + 0.5)
+    check("model off again -> 62 = 63 = 100", sim.heat is None and sim.regs[62] == 100)
+
+
 def main():
     t0 = time.monotonic()
     for fn in (t1_crc, t2_chunking, t3_write_policy, t4_packing, t5_boot,
                t6_autostop, t7_keepalive, t8_faults, t9_ack, t10_link, t11_replay,
-               t12_manual_stop, t13_power):
+               t12_manual_stop, t13_power, t14_heat_stage):
         fn()
     dt = time.monotonic() - t0
     print(f"\nSELFTEST: {N_PASS} PASS / {N_FAIL} FAIL ({dt:.1f}s)")

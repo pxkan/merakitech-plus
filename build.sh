@@ -25,6 +25,8 @@ say "host: switcher_selftest + switcher_host + grab_shim_selftest"
 zig cc -DSWITCHER_SELFTEST -O2 $WERR -o build/switcher_selftest boot/switcher.c
 zig cc -O2 $WERR -o build/switcher_host boot/switcher.c
 zig cc -DGRAB_SHIM_SELFTEST -DSHIM_HOST -O2 $WERR -o build/grab_shim_selftest boot/grab_shim.c
+say "host: merakiplus_snd_selftest (sound helper against a mock MI_AO) + audio/ check"
+zig cc -DSND_SELFTEST -O2 $WERR -o build/merakiplus_snd_selftest src/merakiplus_snd.c
 
 if [ "$MODE" != host ]; then
   say "device (ARMv7 static): merakiplus, merakiplus_sim_arm"
@@ -32,6 +34,8 @@ if [ "$MODE" != host ]; then
   zig cc $ARM -DMERAKIPLUS_SIM -o build/merakiplus_sim_arm src/merakiplus.c
   say "device (ARMv7 static): switcher, tinj_hold, keyinj, tinj, fbpage, evprobe"
   zig cc $ARM $WERR -o build/switcher boot/switcher.c
+  say "device (ARMv7, glibc 2.28 like the display, dynamic): merakiplus_snd (dlopens the display's libmi_sys.so + libmi_ao.so)"
+  zig cc -target arm-linux-gnueabihf.2.28 -mcpu=cortex_a7 -O2 -s -fno-PIE -no-pie $WERR -o build/merakiplus_snd src/merakiplus_snd.c -ldl
   zig cc $ARM $WERR -o build/tinj_hold boot/tinj_hold.c
   zig cc $ARM -o build/keyinj src/keyinj.c
   zig cc $ARM -o build/tinj src/tinj.c
@@ -63,10 +67,13 @@ print("   grab_shim.so: no DT_NEEDED, no undefined symbols")
 PY
 fi
 
-say "self-tests (switcher gesture/mode logic, grab shim)"
-for t in switcher_selftest grab_shim_selftest; do
-  ./build/$t > build/$t.log 2>&1 || { cat build/$t.log; echo "build.sh: $t FAILED" >&2; exit 1; }
+say "self-tests (switcher gesture/mode logic, grab shim, sound helper)"
+for t in switcher_selftest grab_shim_selftest merakiplus_snd_selftest; do
+  a=; [ "$t" = merakiplus_snd_selftest ] && a=audio
+  ./build/$t $a > build/$t.log 2>&1 || { cat build/$t.log; echo "build.sh: $t FAILED" >&2; exit 1; }
   printf '   %s: %s\n' "$t" "$(tail -n 1 build/$t.log)"
 done
+python3 tools/gen_audio.py --check > build/audio_check.log 2>&1 || { cat build/audio_check.log; echo "build.sh: audio/ differs from tools/gen_audio.py" >&2; exit 1; }
+printf '   audio: %s\n' "$(tail -n 1 build/audio_check.log)"
 
 say "done -> build/"

@@ -41,15 +41,23 @@ import time
 import urllib.request
 from concurrent.futures import ThreadPoolExecutor
 
-VERSION = "6.17"
+VERSION = "6.18"
 REPO = "thomasgrastein/merakitech-plus"
 RAW_BASE = "https://raw.githubusercontent.com/" + REPO + "/{ref}/bin/{name}"
+RAW_AUDIO = "https://raw.githubusercontent.com/" + REPO + "/{ref}/audio/{name}"
 
 # md5 of the shipped device binaries in bin/ (kept in sync with bin/MD5SUMS by CI).
 BIN_MD5 = {
-    "merakiplus": "532e4bd5aa06e625e3b2c80ace5921f4",
+    "merakiplus": "fa2c1f4dd2b85660cb6e6b9fa71ee1af",
     "switcher": "a5e0128bdd77ff5697df2100e889604a",
     "grab_shim.so": "c42076c807c54d477a5868977404186d",
+    "merakiplus_snd": "0ffff0ba1bca3617fcb38b4496ea50a5",
+}
+# v6.18: Meraki+'s own sounds (tools/gen_audio.py; docs/audio.md) — installed next to the sound helper
+AUDIO_MD5 = {
+    "start.wav": "90efa9a33cc07d433adb0818e74b2c37",
+    "ready_extract.wav": "d001a4f478723ad32f6f2f709aa9aa6f",
+    "ready_steam.wav": "55d5039558b361e3747841fd47928b5d",
 }
 MERAKIPLUS_MARK = "@(#)merakiplus "        # embedded in every Meraki+ binary (src/merakiplus.c MERAKIPLUS_MARK)
 
@@ -64,6 +72,8 @@ BAK_B = BOOTDIR + "/demo_v9.vendor"                     # slot B's original bina
 BAK_B_ABSENT = BOOTDIR + "/demo_v9.vendor.absent"       # marker: slot B had no binary
 BAK_SH = BOOTDIR + "/demo.sh.bak"                       # original /customer/demo.sh
 STATE = BOOTDIR + "/merakiplus.state"
+SND_HELPER = OURDIR + "/merakiplus_snd"                 # v6.18: plays a sound via the display's own libmi_ao.so
+AUDIO_DIR = OURDIR + "/audio"                           # v6.18: start.wav, ready_extract.wav, ready_steam.wav
 SWITCHER, SHIM = BOOTDIR + "/switcher", BOOTDIR + "/grab_shim.so"
 GUARD_LINE = ("[ -x /new_customer/merakiplus/boot/switcher ] && { [ -f /new_customer/merakiplus/boot/grab_shim.so ] "
               "&& export LD_PRELOAD=/new_customer/merakiplus/boot/grab_shim.so${LD_PRELOAD:+:$LD_PRELOAD}; "
@@ -461,13 +471,14 @@ def repo_root():
     return pathlib.Path(__file__).resolve().parent.parent
 
 
-def get_binary(name, args, out):
-    """Local bin/<name> (git clone) or download from GitHub raw; md5-verified either way."""
-    want = BIN_MD5[name]
+def get_binary(name, args, out, sub="bin"):
+    """Local bin/<name> (git clone) or download from GitHub raw; md5-verified either way.
+    sub="audio": the same for audio/<name> (v6.18), gated by AUDIO_MD5."""
+    want = (AUDIO_MD5 if sub == "audio" else BIN_MD5)[name]
     cands = []
-    if getattr(args, "bin_dir", None):
+    if getattr(args, "bin_dir", None) and sub == "bin":
         cands.append(pathlib.Path(args.bin_dir) / name)
-    cands.append(repo_root() / "bin" / name)
+    cands.append(repo_root() / sub / name)
     for p in cands:
         if p.is_file():
             data = p.read_bytes()
@@ -476,7 +487,7 @@ def get_binary(name, args, out):
                             f"re-download the repo (or pass --bin-dir to a verified copy).")
             out.ok(f"{name}: local {p} (md5 {want})")
             return data
-    url = RAW_BASE.format(ref=args.ref, name=name)
+    url = (RAW_AUDIO if sub == "audio" else RAW_BASE).format(ref=args.ref, name=name)
     out.say(f"  downloading {url}")
     try:
         with urllib.request.urlopen(url, timeout=60) as r:
@@ -669,6 +680,9 @@ def cmd_install(dev, o, args):
     merakiplus = get_binary("merakiplus", args, o)
     check_arm_elf(merakiplus, "merakiplus")
     want = BIN_MD5["merakiplus"]
+    snd = get_binary("merakiplus_snd", args, o)                  # v6.18: sound helper + our own sounds
+    check_arm_elf(snd, "merakiplus_snd")
+    sounds = {n: get_binary(n, args, o, sub="audio") for n in AUDIO_MD5}
     extra = {}
     if args.gesture:
         extra["switcher"] = get_binary("switcher", args, o)
@@ -717,6 +731,7 @@ def cmd_install(dev, o, args):
     else:
         dev.push(merakiplus, STAGE)
         o.ok(f"uploaded and verified {STAGE}")
+    install_sound(dev, o, snd, sounds)
     if st["b_md5"] == want:
         o.ok(f"{B_EXE} already is Meraki+ {VERSION}")
     else:
@@ -765,6 +780,23 @@ def cmd_install(dev, o, args):
     o.say(f"Done. Meraki+ {VERSION} is {'installed (dry-run: nothing was changed)' if dev.dry else 'running'}.")
     o.say("  Check on the screen: the gear on HOME -> SYSTEM shows 'MERAKI+ V" + VERSION + "' under its title.")
     o.say(f"  Undo everything:     ./revert.sh --ip {args.ip}")
+
+
+def install_sound(dev, o, snd, sounds):
+    """v6.18: the sound helper + the three WAVs (before the UI is activated, so it finds them). md5-gated, idempotent."""
+    if dev.md5(SND_HELPER) == BIN_MD5["merakiplus_snd"]:
+        o.ok(f"{SND_HELPER} up to date")
+    else:
+        dev.push(snd, SND_HELPER, mode="755")
+        o.ok(f"{SND_HELPER} uploaded and verified (sound player; uses the display's own libmi_ao.so)")
+    dev.w(f"mkdir -p {dev.d(AUDIO_DIR)}")
+    for name, data in sounds.items():
+        dest = AUDIO_DIR + "/" + name
+        if dev.md5(dest) == AUDIO_MD5[name]:
+            o.ok(f"{dest} up to date")
+        else:
+            dev.push(data, dest, mode="644")
+            o.ok(f"{dest} uploaded and verified")
 
 
 def install_guard(dev, o):
@@ -874,8 +906,8 @@ def cmd_revert(dev, o, args):
         dev.w(f"rm -rf {dev.d(OURDIR)} {dev.d(LEGACY_DIR)} && sync")
         o.ok(f"{OURDIR} removed (backups, language file and settings backups included)")
     else:
-        dev.w(f"rm -f {dev.d(STAGE)} {dev.d(STATE)}; sync")
-        o.say(f"  backups kept in {BOOTDIR} (remove with --purge)")
+        dev.w(f"rm -f {dev.d(STAGE)} {dev.d(STATE)} {dev.d(SND_HELPER)}; rm -rf {dev.d(AUDIO_DIR)}; sync")
+        o.say(f"  backups kept in {BOOTDIR} (remove with --purge); the sound player and sounds were removed")
 
     o.step("6/6 Verifying")
     if dev.dry:

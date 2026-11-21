@@ -2,6 +2,15 @@
  * 480x480 screen, v6.16: feature parity (settings + activity control), its own visual
  * design system, boot-slot integration, product name + two languages — and from v6.4 a SIM build.
  *
+ * v6.18 = v6.17 + SOUND (UI_v6.md "CHANGES-v6.18", docs/audio.md). The stock UI plays a jingle at power-on (the audio track of
+ *  video/power.mp4, page_logo 0x1001B8) and ONE "pre-heat complete" sound when BOTH boilers are hot (uartRxProcess 0x145BA0: words 62 AND 63
+ *  > 99, once per power-on). Meraki+ plays its OWN short tones (audio/<name>.wav, made by tools/gen_audio.py): a start jingle once per
+ *  power-on and a DIFFERENT ready tone per boiler — extract (word 62, the MCU's heat stage, reaches 100) and steam (word 63) — so you
+ *  can hear which boiler is ready. Once per power-on, re-armed only after real cooling (stage <= 30 or 15 °C below the ready point);
+ *  silent while off/asleep; dropped while an activity runs (like stock). SYSTEM › DISPLAY · SOUND: SOUND (off / on / stock sounds),
+ *  READY TONE (off / brew / steam / both boilers) — own file /new_customer/merakiplus/sound — and VOLUME (config "volume", moved here
+ *  from STOCK UI, capped at 70 like stock). Playback via the helper merakiplus_snd (glibc; the display's own libmi_ao.so, exactly the
+ *  MI_AO calls of stock's player libhvplayer.so). DIAGNOSTICS › SOUND shows mode · volume and the last event. No UART frame changed.
  * v6.16 = v6.15 + TIME & SCHEDULING (UI_v6.md "CHANGES-v6.16", docs/time-scheduling.md). User bugs: (1) TIME FORMAT was inverted —
  *  stock update_time 0xD5944 XORs model[0x59] with 1 before the test (missed in v6.1): timemode 1 = 24 h, 0 = 12 h A.M./P.M.; (2) no clock —
  *  HOME's top line now shows the local time (SoC UTC + stock zone table 0x1A5890 + DST when sumtime is on), DIAGNOSE a TIME · SCHEDULE
@@ -289,7 +298,7 @@ static int  sim_net_on=1;
 #define KBD_NAME "k62091"
 #define BL_SYSFS "/sys/class/pwm/pwmchip0/pwm2/duty_cycle"
 #define BL_EN_SYSFS "/sys/class/pwm/pwmchip0/pwm2/enable"   /* v6.14: stock uikit_os_back_light_off/on 0xC2278 = blpwm_set_enable(2,0/1) */
-#define MERAKIPLUS_VERSION "V6.17"
+#define MERAKIPLUS_VERSION "V6.18"
 
 /* ---- v6.10: pressure estimate (UI_v6.md §16) ----
  * Word 51 (SPI2 ADC channel 0xA, REGISTERMAP: pressure OR pump-drive candidate) -> bar with ONE linear anchor:
@@ -1253,7 +1262,7 @@ enum { K0=0, KT, KSUB, KLAB, KCHIP, KBTN, KBTNS, KTITLE, KPSUB, KSPL, KDL, KDV, 
  X(TX_SPL_CFG_MISSING, K0, "CONFIG MISSING", "CONFIG MANGLER") \
  X(TX_PG_SYSTEM, KTITLE, "SYSTEM", "SYSTEM") \
  X(TX_PG_DIAG, KTITLE, "DIAGNOSTICS", "DIAGNOSE") \
- X(TX_SEC_DISPLAY, K0, "DISPLAY", "SKÆRM") \
+ X(TX_SEC_DISPLAY, K0, "DISPLAY · SOUND", "SKÆRM · LYD") \
  X(TX_SEC_CLOCK, K0, "CLOCK", "UR") \
  X(TX_SEC_SCHED, K0, "SCHEDULE", "TIDSPLAN") \
  X(TX_SEC_STOCK, K0, "STOCK UI", "STOCK-UI") \
@@ -1294,7 +1303,7 @@ enum { K0=0, KT, KSUB, KLAB, KCHIP, KBTN, KBTNS, KTITLE, KPSUB, KSPL, KDL, KDV, 
  X(TX_SL_BL, K0, "BRIGHTNESS", "LYSSTYRKE") \
  X(TX_SN_BL, KNOTE, "LIVE PREVIEW", "LIVE PREVIEW") \
  X(TX_SL_VOL, K0, "VOLUME", "LYDSTYRKE") \
- X(TX_SN_VOL, KNOTE, "STOCK UI SOUND", "STOCK-UI LYD") \
+ X(TX_SN_VOL, KNOTE, "MERAKI+ + STOCK UI SOUNDS", "MERAKI+ + STOCK-UI LYDE") \
  X(TX_SH_VOL, K0, "STEPS = ESTIMATE", "TRIN = SKØN") \
  X(TX_SL_TUNIT, K0, "TEMP UNIT", "TEMP-ENHED") \
  X(TX_SN_TUNIT, KNOTE, "ALSO APPLIES IN " PRODUCT, "GÆLDER OGSÅ I " PRODUCT) \
@@ -1649,6 +1658,32 @@ enum { K0=0, KT, KSUB, KLAB, KCHIP, KBTN, KBTNS, KTITLE, KPSUB, KSPL, KDL, KDV, 
  X(TX_E_MIN60, K0, "60 MIN", "60 MIN") \
  X(TX_T_OWN_SAVED, KT, "SCHEDULE SAVED", "TIDSPLAN GEMT") \
  X(TX_T_OWN_NOFILE, KT, "ACTIVE · FILE NOT SAVED", "AKTIV · FIL IKKE GEMT") \
+ X(TX_SL_SOUND, K0, "SOUND", "LYD") \
+ X(TX_SL_SNDRDY, K0, "READY TONE", "KLAR-TONE") \
+ X(TX_SN_SOUND, KNOTE, "START JINGLE + BOILER READY TONES", "START-JINGLE + KLAR-TONER") \
+ X(TX_SN_SNDRDY, KNOTE, "ITS OWN TONE PER BOILER · WHEN HOT", "SIN EGEN TONE PR. KEDEL · NÅR VARM") \
+ X(TX_E_SND_STOCK, K0, "STOCK SOUNDS", "STOCK-LYDE") \
+ X(TX_E_RDY_BREW, K0, "BREW BOILER", "BRYGKEDEL") \
+ X(TX_E_RDY_STEAM, K0, "STEAM BOILER", "DAMPKEDEL") \
+ X(TX_E_RDY_BOTH, K0, "BOTH BOILERS", "BEGGE KEDLER") \
+ X(TX_T_SND_SAVED, KT, "SOUND SAVED", "LYD GEMT") \
+ X(TX_DG_SNDCAP, KDF, "SOUND", "LYD") \
+ X(TX_DL_SND, KDL, "SOUND · VOLUME", "LYD · LYDSTYRKE") \
+ X(TX_DL_SND_LAST, KDL, "LAST SOUND", "SIDSTE LYD") \
+ X(TX_DV_SND_ON, KDV, "ON · %d", "TIL · %d") \
+ X(TX_DV_SND_STOCK, KDV, "STOCK · %d", "STOCK · %d") \
+ X(TX_DV_SND_OFF, KDV, "OFF", "FRA") \
+ X(TX_DV_SND_MUTE, KDV, "VOLUME 0", "LYDSTYRKE 0") \
+ X(TX_DV_SND_NOHELPER, KDV, "NO PLAYER", "INGEN AFSPILLER") \
+ X(TX_DV_SE_JINGLE, KDV, "JINGLE", "JINGLE") \
+ X(TX_DV_SE_BREW, KDV, "BREW", "BRYG") \
+ X(TX_DV_SE_STEAM, KDV, "STEAM", "DAMP") \
+ X(TX_DV_SE_PREVIEW, KDV, "TEST", "TEST") \
+ X(TX_DV_SO_PLAYED, KDV, "PLAYED", "SPILLET") \
+ X(TX_DV_SO_MUTED, KDV, "MUTED", "LYDLØS") \
+ X(TX_DV_SO_SKIP, KDV, "SKIPPED", "UDELADT") \
+ X(TX_DV_SO_FAIL, KDV, "FAILED", "FEJL") \
+ X(TX_DV_SO_DROP, KDV, "BUSY", "OPTAGET") \
  X(TX_T_AUTOOFF_SOON, KT, "AUTO OFF IN 30 S · TOUCH TO STAY ON", "AUTO-SLUK OM 30 S · RØR SKÆRMEN") \
  X(TX_T_ONCE_USED, KT, "ONE-TIME PRE-HEAT USED · NOW OFF", "FORVARMNING BRUGT · NU FRA") \
  X(TX_T_NOCLOCK, KT, "CLOCK NOT SET · NO PRE-HEAT ALARM", "UR IKKE SAT · INGEN FORVARM-ALARM") \
@@ -2013,6 +2048,7 @@ enum { M_NONE=0, M_W4, M_W23, M_W11, M_W112, M_W113, M_W114, M_W25, M_W14, M_W17
 #define SF_LOCAL  64
 #define SF_OWN    128 /* v6.16: own file (schedule) */
 #define SF_HHMM   256 /* v6.16: minutes after midnight, shown as hh:mm (12/24 h per timemode) */
+#define SF_SND    512 /* v6.18: own file (sound) */
 typedef struct {
     const char *key; short label, unit;
     int tier, ptier, min, max, step, dec, kind;
@@ -2033,12 +2069,14 @@ static const short OPT_REPEAT[]={TX_E_ONCE,TX_E_DAILY,TX_E_WORKDAYS,TX_E_WEEKEND
 static const short OPT_AUTOOFF[]={TX_E_OFF,TX_E_MIN15,TX_E_MIN20,TX_E_MIN30,TX_E_MIN60};   /* v6.16: stock "%dmin" table 0x1A02D0 = 15/20/30/60 */
 static const short OPT_TUNIT[]={TX_U_F,TX_U_C};                         /* 0=°F, 1=°C           [PARITY #17] */
 static const short OPT_LANG[]={TX_LG_EN,TX_LG_DE,TX_LG_FR,TX_LG_IT,TX_LG_ES,TX_LG_PL,TX_LG_AR,TX_LG_ZHS,TX_LG_ZHT,TX_LG_KO,TX_LG_JA};   /* stock: index 0..10 [strings @0x166d84] */
-static const short OPT_UILANG[]={TX_UL_EN,TX_UL_DA};                    /* v6.3: = LANG_EN, LANG_DA */
+static const short OPT_UILANG[]={TX_UL_EN,TX_UL_DA};
+static const short OPT_SOUND[]={TX_E_OFF,TX_E_ON,TX_E_SND_STOCK};                  /* v6.18: 0 off, 1 Meraki+ tones, 2 the stock UI's own mp3 files (if present) */
+static const short OPT_SNDRDY[]={TX_E_OFF,TX_E_RDY_BREW,TX_E_RDY_STEAM,TX_E_RDY_BOTH};   /* v6.18: bit 0 = brew (extract) boiler, bit 1 = steam boiler */                    /* v6.3: = LANG_EN, LANG_DA */
 _Static_assert(TX_UL_DA==TX_UL_EN+LANG_DA,"TX_UL_* must follow LANG_*");
 enum { S_GRINDW=0, S_GRINDMODE, S_BREWW, S_BREWT, S_PISW, S_PITIME, S_PIPRESS, S_BREAK, S_HEADT,
        S_STEAMT, S_STEAMG, S_HOTW, S_HOTMODE, S_HOTT,
        S_UILANG, S_BL, S_VOL, S_TUNIT, S_LANG, S_HOTSC, S_DST, S_CLEARTIP, S_TIMEMODE, S_AUTOTIME, S_TZ,
-       S_PREHEAT, S_PHAT, S_PHREP, S_AUTOOFF, NSET };   /* v6.16: + the time rows (merakiplus's own file) */
+       S_PREHEAT, S_PHAT, S_PHREP, S_AUTOOFF, S_SOUND, S_SNDRDY, NSET };   /* v6.16: + the time rows (merakiplus's own file); v6.18: + sound (own file) */
 static Setting SET[NSET]={
  /*              key                   label            unit    page,spec-tier  min   max step dec kind   opts        mcu    flags                    def hard  note, hint */
  /* v6.17: page = the list page the row belongs to (0 GRIND, 1 BREW, 2 WATER, 3 STEAM, 4 SYSTEM); the row ORDER on a page and the
@@ -2077,6 +2115,10 @@ static Setting SET[NSET]={
  [S_PHAT]     ={0,                    TX_SL_PHAT,      TX_NONE,  4,0,    0,1435,  5, 0,K_NUM, 0,         M_NONE,SF_OWN|SF_HHMM,         390,1435,TX_SN_PHAT,0},
  [S_PHREP]    ={0,                    TX_SL_PHREP,     TX_NONE,  4,0,    0,   3,  1, 0,K_ENUM,OPT_REPEAT,M_NONE,SF_OWN,                   1,   3,TX_SN_PHREP,0},
  [S_AUTOOFF]  ={0,                    TX_SL_AUTOOFF,   TX_NONE,  4,0,    0,   4,  1, 0,K_ENUM,OPT_AUTOOFF,M_NONE,SF_OWN,                  0,   4,TX_SN_AUTOOFF,0},
+ /* ---- v6.18: sound — merakiplus's OWN file (/new_customer/merakiplus/sound), not config.json, no MCU word. The volume is the stock
+  *      config "volume" (S_VOL, shared with the stock UI, which caps it at 70 like merakiplus) ---- */
+ [S_SOUND]    ={0,                    TX_SL_SOUND,     TX_NONE,  4,0,    0,   2,  1, 0,K_ENUM,OPT_SOUND, M_NONE,SF_SND,                   1,   2,TX_SN_SOUND,0},
+ [S_SNDRDY]   ={0,                    TX_SL_SNDRDY,    TX_NONE,  4,0,    0,   3,  1, 0,K_ENUM,OPT_SNDRDY,M_NONE,SF_SND,                   3,   3,TX_SN_SNDRDY,0},
 };
 static const short TIER_NAME[5]={TX_A_GRIND,TX_A_BREW,TX_A_WATER,TX_A_STEAM,TX_PG_SYSTEM};   /* v6.17: the list pages' titles (page = SET[].tier) */
 static int sv(int i){ return SET[i].val; }
@@ -2341,6 +2383,31 @@ static int sched_save(void){
     if(cn!=n||memcmp(chk,d,n)||rename(tmp,sched_path)!=0){ unlink(tmp); sch.src=SCS_SESSION; return 0; }
     fsync_dir(sched_path); sch.src=SCS_FILE; return 1;
 }
+/* ---- v6.18: the sound file — merakiplus's OWN setting (docs/audio.md) ----
+ * Text, one "key=value" per line: sound=off|on|stock, ready=off|brew|steam|both. Missing file / unknown value -> the default
+ * (sound=on, ready=both). Written atomically like the schedule (tmp + fsync + re-read/compare + rename + fsync of the directory). */
+static char snd_path[256]="/new_customer/merakiplus/sound";
+static const char*const SND_MODE_KEY[3]={"off","on","stock"};
+static const char*const SND_RDY_KEY[4]={"off","brew","steam","both"};
+static struct { int mode,ready,src; } sndc={1,3,SCS_DEFAULT};
+static void snd_cfg_load(void){
+    sndc.mode=1; sndc.ready=3; sndc.src=SCS_DEFAULT;
+    char b[256]; int fd=open(snd_path,O_RDONLY); if(fd<0) return;
+    int n=(int)read(fd,b,sizeof b-1); close(fd); if(n<=0) return; b[n]=0; sndc.src=SCS_FILE;
+    for(char*l=strtok(b,"\r\n");l;l=strtok(NULL,"\r\n")){
+        char*e=strchr(l,'='); if(!e) continue; *e++=0;
+        if(!strcmp(l,"sound")){ for(int k=0;k<3;k++) if(!strcmp(e,SND_MODE_KEY[k])) sndc.mode=k; }
+        else if(!strcmp(l,"ready")){ for(int k=0;k<4;k++) if(!strcmp(e,SND_RDY_KEY[k])) sndc.ready=k; }
+    }
+}
+static int snd_cfg_save(void){
+    char d[96],chk[96],tmp[280]; int n=snprintf(d,sizeof d,"sound=%s\nready=%s\n",SND_MODE_KEY[sndc.mode],SND_RDY_KEY[sndc.ready]);
+    snprintf(tmp,sizeof tmp,"%s.tmp",snd_path);
+    if(!write_all(tmp,d,n,0)){ unlink(tmp); sndc.src=SCS_SESSION; return 0; }
+    int fd=open(tmp,O_RDONLY); int cn=fd>=0?(int)read(fd,chk,sizeof chk):-1; if(fd>=0) close(fd);
+    if(cn!=n||memcmp(chk,d,n)||rename(tmp,snd_path)!=0){ unlink(tmp); sndc.src=SCS_SESSION; return 0; }
+    fsync_dir(snd_path); sndc.src=SCS_FILE; return 1;
+}
 /* stock performSleepActions 0x148324 for ONE entry (hm = minutes after midnight, mask = REP_MASK): the next occurrence strictly after
  * `now` (minute resolution). Returns the days ahead (0..7); *ad = the day of month (wrapped like stock w. the month's length). */
 static int sched_next(const struct tm*now,int hm,int mask,int*ad){
@@ -2375,13 +2442,14 @@ static int64_t sched_once_target(int64_t u){
  * a value outside spec is shown as it is, marked, and blocks activity start
  * until the user has chosen a valid value. */
 static void settings_load(void){
-    cfg_read(); sched_load();
+    cfg_read(); sched_load(); snd_cfg_load();
     for(int i=0;i<NSET;i++){
         Setting*s=&SET[i]; int v;
         s->lo=s->min; s->hi=s->max;
         if(s->flags&SF_SENSOR){ s->val=0; s->loaded=0; continue; }
         if(s->flags&SF_LOCAL){ s->val=ui_lang; s->loaded=1; continue; }      /* v6.3: the UI language comes from the lang file, not config.json */
         if(s->flags&SF_OWN){ s->val=sched_val(i); s->loaded=1; continue; }   /* v6.16: the schedule file (sched_load) */
+        if(s->flags&SF_SND){ s->val=i==S_SOUND?sndc.mode:sndc.ready; s->loaded=1; continue; }   /* v6.18: the sound file (snd_cfg_load) */
         if(cfg_get_int(s->key,&v)){ s->val=v; s->loaded=1; }
         else { s->val=s->def; s->loaded=0; }
         if(s->flags&SF_LOCK){ s->lo=s->hi=s->val; continue; }
@@ -3593,10 +3661,10 @@ static const signed char FEAT_ROWS[4][8]={
  {S_HOTW,S_HOTMODE,-1},
  {S_STEAMT,S_STEAMG,-1} };
 static const signed char SEC_ROWS[NSEC][10]={
- [SEC_DISPLAY]={S_UILANG,S_BL,S_TUNIT,-1},
+ [SEC_DISPLAY]={S_UILANG,S_BL,S_TUNIT,S_SOUND,S_SNDRDY,S_VOL,-1},          /* v6.18: + sound; VOLUME moved here (it now sets Meraki+'s sounds too) */
  [SEC_CLOCK]  ={S_TIMEMODE,S_DST,S_TZ,-1},
  [SEC_SCHED]  ={S_PREHEAT,S_PHAT,S_PHREP,S_AUTOOFF,-1},
- [SEC_STOCK]  ={RX(X_BOOTUI),RX(X_SWITCH),S_VOL,S_LANG,S_HOTSC,S_CLEARTIP,S_AUTOTIME,S_BREAK,-1} };   /* what only matters to / leads to the stock UI */
+ [SEC_STOCK]  ={RX(X_BOOTUI),RX(X_SWITCH),S_LANG,S_HOTSC,S_CLEARTIP,S_AUTOTIME,S_BREAK,-1} };   /* what only matters to / leads to the stock UI */
 static const short SEC_NAME[NSEC]={TX_SEC_DISPLAY,TX_SEC_CLOCK,TX_SEC_SCHED,TX_SEC_STOCK};
 static int sec_open=-1;                           /* SYSTEM: the open section (-1 = all closed: five rows, no scrolling) */
 static int pg_feat(int pg){ return pg>=PG_GRIND&&pg<=PG_STEAM; }
@@ -3644,7 +3712,8 @@ static int page_parent(int pg){ return pg==PG_DIAG?diag_from:PG_HOME; }
 #define DG_RAW (DG_PRESS+28+2*DG_P+20)      /* v6.11: the RAW COUNTERS heading (where ABOUT was in v6.10); 4 rows below it. v6.17: the two note lines under the pressure estimate are gone (-32) */
 #define DG_PWR (DG_RAW+28+4*DG_P+10)        /* v6.14: POWER BUTTON (state, word 0, press, last button, node) — where ABOUT was in v6.13 */
 #define DG_TIME (DG_PWR+28+3*DG_P+10)       /* v6.16: TIME · SCHEDULE (clock, zone/DST, auto off, last alarm sent, next pre-heat) — where ABOUT was in v6.15 */
-#define DG_ABOUT (DG_TIME+28+3*DG_P+10)      /* v6.14: + POWER BUTTON. v6.11: + RAW COUNTERS. v6.3: heading of the ABOUT block (UI language, wordmark, tagline); v6.7: + the NET line; v6.9: + the GRAPH row; v6.10: + PRESSURE · ESTIMATE */
+#define DG_SND (DG_TIME+28+3*DG_P+10)        /* v6.18: SOUND (mode + volume, last event + outcome) — where ABOUT was in v6.17 */
+#define DG_ABOUT (DG_SND+28+DG_P+10)         /* v6.18: + SOUND. v6.14: + POWER BUTTON. v6.11: + RAW COUNTERS. v6.3: heading of the ABOUT block (UI language, wordmark, tagline); v6.7: + the NET line; v6.9: + the GRAPH row; v6.10: + PRESSURE · ESTIMATE */
 #define DG_BOTTOM (DG_ABOUT+76+24+11+22)
 static float scroll_max(int pg){
     if(pg==PG_DIAG) return DG_BOTTOM-(LIST_VY1-14);
@@ -3708,6 +3777,7 @@ static void act_request(int kind,ms_t now){
 /* ---- save flow: MCU write (ACK) -> config.json (atomic) ; all-or-nothing ---- */
 static void detail_close(ms_t now);
 static void boot_push_resave(void);
+static void snd_preview(ms_t now);                                   /* v6.18 (the sound engine is after sched_step) */
 static void save_begin(ms_t now){
     if(sav.active||sel<0) return;
     Setting*s=&SET[sel];
@@ -3728,6 +3798,12 @@ static void save_begin(ms_t now){
         if(sch.on&&!clk_valid(clk_utc())) toast_show(TR(TX_T_NOCLOCK),C_WARN,now);
         else toast_show(TR(ok?TX_T_OWN_SAVED:TX_T_OWN_NOFILE),ok?C_OK:C_WARN,now);
         detail_close(now); return;
+    }
+    if(s->flags&SF_SND){     /* v6.18: sound on/off + ready tones — merakiplus's own file; no MCU write, no config.json */
+        s->val=edit_val; if(sel==S_SOUND) sndc.mode=edit_val; else sndc.ready=edit_val;
+        int ok=snd_cfg_save();
+        toast_show(TR(ok?TX_T_SND_SAVED:TX_T_OWN_NOFILE),ok?C_OK:C_WARN,now);
+        detail_close(now); snd_preview(now); return;
     }
     if(!cfg_ok||!s->loaded){ toast_show(TR(TX_T_CFG_UNAVAIL),C_ERR,now); return; }
     sav.idx=sel; sav.val=edit_val; sav.rollback=0;
@@ -3755,6 +3831,7 @@ static void save_step(ms_t now){
             boot_push_resave();
             toast_show(TR(s->mcu!=M_NONE?TX_T_SAVED_MCU:TX_T_SAVED_CFG),C_OK,now);
             if(view==V_DETAIL) detail_close(now);
+            if(sav.idx==S_VOL) snd_preview(now);                       /* v6.18: hear the new volume */
         } else {
             /* config failed: roll the MCU back to the old value so both sides are unchanged */
             if(s->mcu!=M_NONE){ sav.seq=wq.seq; if(setting_mcu_push(sav.idx,s->val)>0) sav.stage=3; else sav.active=0; }
@@ -4201,6 +4278,201 @@ static void sched_step(ms_t now){
     ms_t left=(ms_t)mins*60000-(now-idle_t0);
     if(left<=AO_WARN_MS&&!ao_warned){ ao_warned=1; toast_show(TR(TX_T_AUTOOFF_SOON),C_WARN,now); toast.dur=AO_WARN_MS; ui_kick=1; }
     if(left<=0){ ao_n++; idle_kick(now); pw_off_begin(now); }
+}
+/* ================= v6.18: SOUND — start jingle + one ready tone PER BOILER (docs/audio.md, UI_v6.md "CHANGES-v6.18") =================
+ * STOCK (demo_v9, reversed): one sound thread (playpthread_init 0x137478 -> deal_play 0x13725C) waits on a semaphore that
+ * set_volumn_type 0x1374B8 posts with a slot 0..10 (0x1A588C); the slot picks a file under /customer/audio/ (slide, keyboard,
+ * LackWater, toasterror, fault, power, preheatCompele, nfc, brewcOrMilk x2, milkTempHight) and plays it with
+ * mmplayer_play_audio_once 0x136CE8 -> mm_player_set_opts / mm_player_open / mm_player_set_volumn (libhvplayer.so, ffmpeg) ->
+ * MI_AO (libmi_ao.so). Volume = config "volume" capped at 70 (deal_play 0x1372C4); libhvplayer maps it to
+ * dB = min(vol*90/100 - 60, 15), vol 0 = mute (mm_player_set_volumn 0x563C). Nothing plays while the power-on logo runs
+ * (model+0x15B0) or while a brew/steam animation video runs (model+0x15AD) — such a request is DROPPED.
+ *  - START JINGLE: the audio track of video/power.mp4, played by the logo page (page_logo onEnter 0x1001B8) at every power-on.
+ *  - "PRE-HEAT COMPLETE" (slot 6, preheatCompele.mp3): uartRxProcess 0x145BA0 — ONCE per power-on (latch model+0x15AA, cleared only by
+ *    the logo page) when BOTH mirror words 62 AND 63 are > 99. The UI mirrors the MCU's registers at model+0xFE8+2*word, so
+ *    model+0x1064/0x1066 = words 62/63 (also HOME's two arcs, home_date_update 0x10DFF0/0x10E0DC).
+ * MCU (MEM03 boiler_heat 0x3502) writes words 62/63 as a heat STAGE 0/30/60/100, not a power:
+ *    extract (62): e_boiler < 40.0 °C -> 0, < 60.0 -> 30, < brew set temp (word 11) -> 60, else 100 (+ an MCU-internal state test);
+ *                  100 while work_sta bit 12. steam (63): s_boiler < 50.0 -> 0, < 80.0 -> 30, < steam target - 10.0 °C -> 60, else 100
+ *                  (target by steam gear word 14: 1 = 120.0, 2 = 125.0, 3 = 130.0, else 135.0 °C); 100 while work_sta bit 5.
+ * MERAKI+: the same signal, but PER BOILER — a ready tone when the EXTRACT boiler's stage first reaches 100 and a different one when
+ * the STEAM boiler's does (fallback if a word was never received: word 40 >= word 11 / word 47 >= steam target - 10 °C).
+ *  - ONCE per power-on (like stock's latch); RE-ARM only after that boiler has really cooled: stage <= 30, or 15.0 °C below its
+ *    ready point (so the dips of a brew or a steam session never re-trigger it); power-off / sleep re-arms both.
+ *  - START JINGLE once per power-on: OFF/sleep -> on, and the first "on" after a cold boot of the display (SoC uptime < 120 s).
+ *    A Meraki+ start on a machine that was already on (switch from the stock UI, watchdog restart) plays nothing and counts a
+ *    boiler that is already hot as announced.
+ *  - SILENT while off / sleeping / TURNING ON… (nothing is queued), and a ready tone that comes due while an activity runs is
+ *    dropped like stock drops it during its animations (logged "suppressed"). OFFLINE (no link) holds everything (no decision).
+ *  - SOUND off (own file) / READY TONE per boiler / config volume 0 = mute: the event is logged, nothing is played.
+ * Playback (device): the helper bin merakiplus_snd (glibc, dlopens the display's own libmi_sys.so + libmi_ao.so) is started per
+ * sound with the file and the volume — WAV = our own PCM, sent to MI_AO exactly like libhvplayer's mm_audio_init/mm_audio_play
+ * (48 kHz, 16 bit, 6 x 2048 frames, SetVolume in dB), MP3 (stock sounds) via libhvplayer's mm_player like stock. One sound at a
+ * time, the rest queued (max SND_QMAX); the helper ends itself after 8 s (alarm) — merakiplus sends no signal; if one still runs
+ * after SND_TIMEOUT_MS, sounds are skipped ("noplayer") until it has exited. No UART frame, display + audio only. */
+#define SND_BOOT_WINDOW_S 120     /* SoC uptime at Meraki+'s start below this = a cold boot of the display (mains on) */
+#define SND_REARM_DROP    150     /* 15.0 °C below the ready point re-arms a boiler's tone */
+#define SND_VOL_CAP        70     /* stock deal_play: volume > 70 -> 70 */
+#define SND_QMAX            4
+#define SND_TIMEOUT_MS  10000     /* the helper ends itself after 8 s (alarm); merakiplus never sends it a signal */
+#define SND_LOGN            8
+#define SND_SETTLE_MS    1500     /* a start on a running machine: "already hot" is decided over the first 1.5 s of link */
+enum { SE_JINGLE=0, SE_READY_E, SE_READY_S, SE_PREVIEW, NSE };
+static const char*const SE_KEY[NSE]={"start_jingle","boiler_ready_extract","boiler_ready_steam","preview"};
+enum { SO_PLAYED=0, SO_OFF, SO_MUTED, SO_SUPPRESSED, SO_NOPLAYER, SO_DROPPED, NSO };
+static const char*const SO_KEY[NSO]={"played","off","muted","suppressed","noplayer","dropped"};
+#define SND_DIR   "/new_customer/merakiplus"
+#define SND_HELPER SND_DIR "/merakiplus_snd"
+static const char*const SND_OURS[NSE]={SND_DIR "/audio/start.wav",SND_DIR "/audio/ready_extract.wav",SND_DIR "/audio/ready_steam.wav",SND_DIR "/audio/ready_extract.wav"};
+static const char*const SND_STOCK[NSE]={"/customer/audio/power.mp3","/customer/audio/preheatCompele.mp3","/customer/audio/preheatCompele.mp3","/customer/audio/keyboard.mp3"};
+static struct {
+    int init, st, seen_off, cold_boot, settle, armed[2], ready[2];
+    int n[NSE], n_played[NSE], n_out[NSO];
+    ms_t t_on;
+    struct { ms_t t; signed char ev, out; } log[SND_LOGN]; int log_n;
+    int q[SND_QMAX], qn; int pid; ms_t t_start; int cur, last_rc, n_spawn, stuck, n_stuck;
+    char last_file[64];
+} snd;
+static int snd_steam_thr(void){   /* MCU boiler_heat 0x36F6..0x3714 (target by gear) + 0x37F4 (ready = target - 10.0 °C) */
+    int g=reg[14], t=g==1?1200:(g==2?1250:(g==3?1300:1350)); return t-100;
+}
+static int snd_ready(int b){
+    int w=b?63:62;
+    if(reg_seen[w]) return reg[w]>=100;                               /* the MCU's own heat stage (stock: > 99) */
+    if(!b) return reg_seen[40]&&reg_seen[11]&&(int)reg[40]>=(int)reg[11];
+    return reg_seen[47]&&(int)reg[47]>=snd_steam_thr();
+}
+static int snd_cooled(int b){
+    int w=b?63:62;
+    if(reg_seen[w]&&reg[w]<=30) return 1;                            /* stage 0/30: extract < 60 °C, steam < 80 °C */
+    if(!b) return reg_seen[40]&&reg_seen[11]&&(int)reg[40]<(int)reg[11]-SND_REARM_DROP;
+    return reg_seen[47]&&(int)reg[47]<snd_steam_thr()-SND_REARM_DROP;
+}
+/* 0 = no decision (no link while the UI thinks the machine is on), 1 = off / sleeping / turning on, 2 = on */
+static int snd_machine(ms_t now){
+    if(pw.state!=PW_ON||view==V_OFF) return 1;
+    if(!link_up(now)) return 0;
+    if(phase_raw(now)==PH_SLEEP||(reg_seen[0]&&reg[0]!=1)) return 1;
+    return 2;
+}
+static int snd_vol(void){ int v=SET[S_VOL].loaded?SET[S_VOL].val:SET[S_VOL].def; return v<0?0:(v>SND_VOL_CAP?SND_VOL_CAP:v); }
+static double snd_uptime_ovr=-1;                                  /* preview/selftest: a fixed SoC uptime (s) */
+static int snd_cold_boot(void){
+    char b[64]; int fd=snd_uptime_ovr>=0?-1:open(rp("/proc/uptime"),O_RDONLY); double up=snd_uptime_ovr;
+    if(fd>=0){ int n=(int)read(fd,b,sizeof b-1); close(fd); if(n>0){ b[n]=0; up=atof(b); } }
+    if(up<0) up=(double)now_ms()/1000.0;                             /* CLOCK_MONOTONIC = time since boot */
+    return up<SND_BOOT_WINDOW_S;
+}
+static const char* snd_file(int ev){
+    if(SET[S_SOUND].val==2&&access(rp(SND_STOCK[ev]),R_OK)==0) return SND_STOCK[ev];   /* the stock UI's own files (never shipped) */
+    return SND_OURS[ev];
+}
+#ifdef DEVICE_RT
+static int snd_spawn(int ev){
+    char vb[8]; snprintf(vb,sizeof vb,"%d",snd_vol()); const char*f=snd_file(ev);
+    if(access(SND_HELPER,X_OK)!=0||access(f,R_OK)!=0) return -1;
+    fflush(stdout); fflush(stderr);
+    pid_t c=fork(); if(c<0) return -1;
+    if(c==0){
+        setsid(); if(chdir("/")!=0){}
+        int nul=open("/dev/null",O_RDWR), o=open("/tmp/merakiplus_snd.log",O_WRONLY|O_CREAT|O_APPEND,0644);
+        if(nul>=0){ dup2(nul,0); dup2(o>=0?o:nul,1); dup2(o>=0?o:nul,2); }
+        for(int fd=3;fd<1024;fd++) close(fd);
+        signal(SIGINT,SIG_DFL); signal(SIGTERM,SIG_DFL);
+        setenv("LD_LIBRARY_PATH","/lib:/customer/libs",1);           /* libmi_*.so (/lib) + libhvplayer & ffmpeg (stock's libs dir) */
+        execl(SND_HELPER,"merakiplus_snd",f,vb,(char*)NULL);
+        _exit(127);
+    }
+    snprintf(snd.last_file,sizeof snd.last_file,"%s",f);
+    return (int)c;
+}
+#endif
+/* the player: one at a time; device = helper process (reaped with waitpid, never signalled), SIM/preview = the event log only */
+static void snd_service(ms_t now){
+#ifdef DEVICE_RT
+    if(snd.pid>0){
+        int st=0; pid_t r=waitpid(snd.pid,&st,WNOHANG);
+        if(r==snd.pid||r<0){ snd.last_rc=(r==snd.pid&&WIFEXITED(st))?WEXITSTATUS(st):-1; snd.pid=0; snd.stuck=0; }
+        else { if(now-snd.t_start>SND_TIMEOUT_MS&&!snd.stuck){ snd.stuck=1; snd.n_stuck++; snd.qn=0; } return; }   /* a hung helper: no new sound until it is gone */
+    }
+    while(snd.qn>0&&snd.pid==0){
+        int ev=snd.q[0]; memmove(snd.q,snd.q+1,(size_t)(--snd.qn)*sizeof snd.q[0]);
+        int c=snd_spawn(ev); if(c>0){ snd.pid=c; snd.t_start=now; snd.cur=ev; snd.n_spawn++; } else snd.last_rc=127;
+    }
+#else
+    (void)now; snd.qn=0;                                              /* SIM / preview: "played" = queued for the speaker */
+#endif
+}
+static void snd_log(int ev,int out,ms_t now){
+    snd.n[ev]++; snd.n_out[out]++; if(out==SO_PLAYED) snd.n_played[ev]++;
+    memmove(snd.log+1,snd.log,sizeof snd.log[0]*(SND_LOGN-1)); snd.log[0].t=now; snd.log[0].ev=(signed char)ev; snd.log[0].out=(signed char)out;
+    if(snd.log_n<SND_LOGN) snd.log_n++;
+#ifdef DEVICE_RT
+    { FILE*f=fopen("/tmp/merakiplus_snd.log","a");                   /* for the on-device check: one line per event */
+      if(f){ fprintf(f,"%lld %s %s vol=%d mode=%d ready=%d\n",(long long)now,SE_KEY[ev],SO_KEY[out],snd_vol(),SET[S_SOUND].val,SET[S_SNDRDY].val); fclose(f); } }
+#endif
+}
+static void snd_emit(int ev,ms_t now){
+    int out=SO_PLAYED, m=SET[S_SOUND].val, r=SET[S_SNDRDY].val;
+    if(m<=0) out=SO_OFF;
+    else if((ev==SE_READY_E&&!(r&1))||(ev==SE_READY_S&&!(r&2))) out=SO_OFF;
+    else if(snd_vol()<=0) out=SO_MUTED;                               /* stock: volume 0 = mute */
+#ifdef DEVICE_RT
+    else if(access(SND_HELPER,X_OK)!=0||snd.stuck) out=SO_NOPLAYER;
+#endif
+    else if(snd.qn>=SND_QMAX) out=SO_DROPPED;
+    if(out==SO_PLAYED){
+#ifndef DEVICE_RT
+        snprintf(snd.last_file,sizeof snd.last_file,"%s",snd_file(ev));
+#endif
+        snd.q[snd.qn++]=ev; snd_service(now); }
+    snd_log(ev,out,now);
+}
+static void snd_flush(void){ snd.qn=0; }                              /* off/sleep: nothing still waiting may play later */
+static int snd_activity(ms_t now){ return phase_active(phase_raw(now))||steam_bits()||act.pending!=ACT_NONE; }
+static void snd_tick(ms_t now){
+    if(!snd.init){ memset(&snd,0,sizeof snd); snd.init=1; snd.cold_boot=snd_cold_boot(); snd.armed[0]=snd.armed[1]=1; }
+    snd_service(now);
+    int st=snd_machine(now);
+    if(st==0) return;                                                 /* OFFLINE: hold (a link glitch is not a power cycle) */
+    if(st==1){
+        if(snd.st!=1){ snd.seen_off=1; snd.armed[0]=snd.armed[1]=1; snd_flush(); }
+        snd.st=1; return;
+    }
+    if(snd.st!=2){                                                    /* -> on */
+        int power_on=snd.seen_off||snd.cold_boot;
+        snd.st=2; snd.t_on=now; snd.cold_boot=0;
+        if(power_on){ snd.armed[0]=snd.armed[1]=1; snd.settle=0; snd_emit(SE_JINGLE,now); }
+        else snd.settle=1;                                            /* already hot when Meraki+ started: announced (by the stock UI) */
+    }
+    if(snd.settle){                                                   /* the first samples after a (re)start may still be stale */
+        for(int b=0;b<2;b++){ snd.ready[b]=snd_ready(b); snd.armed[b]=!snd.ready[b]; }
+        if(now-snd.t_on>=SND_SETTLE_MS) snd.settle=0;
+        return;
+    }
+    int busy=snd_activity(now);
+    for(int b=0;b<2;b++){
+        int r=snd_ready(b);
+        if(!snd.armed[b]&&!r&&snd_cooled(b)) snd.armed[b]=1;
+        if(snd.armed[b]&&r){ snd.armed[b]=0; if(busy) snd_log(b?SE_READY_S:SE_READY_E,SO_SUPPRESSED,now); else snd_emit(b?SE_READY_S:SE_READY_E,now); }
+        snd.ready[b]=r;
+    }
+}
+static void snd_preview(ms_t now){ if(snd_machine(now)==2) snd_emit(SE_PREVIEW,now); }
+/* DIAGNOSTICS: "ON · 31" / "STOCK · 31" / "OFF" / "VOLUME 0" / "NO PLAYER" + the last event "BREW · PLAYED"; returns the mode cell's colour */
+static uint32_t snd_diag_text(char*m,size_t mn,char*l,size_t ln){
+    static const short EV[NSE]={TX_DV_SE_JINGLE,TX_DV_SE_BREW,TX_DV_SE_STEAM,TX_DV_SE_PREVIEW};
+    static const short OUT[NSO]={TX_DV_SO_PLAYED,TX_DV_SND_OFF,TX_DV_SO_MUTED,TX_DV_SO_SKIP,TX_DV_SO_FAIL,TX_DV_SO_DROP};
+    uint32_t c=C_TXT; int v=snd_vol(), md=SET[S_SOUND].val;
+    if(md<=0){ snprintf(m,mn,"%s",TR(TX_DV_SND_OFF)); c=C_TXT2; }
+    else if(v<=0){ snprintf(m,mn,"%s",TR(TX_DV_SND_MUTE)); c=C_WARN; }
+#ifdef DEVICE_RT
+    else if(access(SND_HELPER,X_OK)!=0){ snprintf(m,mn,"%s",TR(TX_DV_SND_NOHELPER)); c=C_WARN; }
+#endif
+    else snprintf(m,mn,TR(md==2?TX_DV_SND_STOCK:TX_DV_SND_ON),v);
+    if(snd.log_n) snprintf(l,ln,"%s · %s",TR(EV[(int)snd.log[0].ev]),TR(OUT[(int)snd.log[0].out]));
+    else snprintf(l,ln,"%s",TR(TX_DV_T_NONE));
+    return c;
 }
 static void ui_touch(int ev,int x,int y,ms_t now){
     ui_kick=1;
@@ -5277,6 +5549,11 @@ static void draw_diag(ms_t now){
               text_c(cx,y,TR(L[k]),F_XS,C_TXT3,255); text_c(cx,y+16,vv[k],k==0?F_S:F_XS,k==0?tcc:C_TXT,255); }
           int y=DG_TIME+28+2*DG_P-sc;
           if(y+30>=vr.y0&&y<=vr.y1){ text_c(CX,y,TR(TX_DG_L_NEXT),F_XS,C_TXT3,255); text_c(CX,y+16,tnx,F_XS,sch.on?C_TXT:C_TXT2,255); } }
+        /* v6.18: SOUND — mode · volume (amber: muted / no player), the last event and what became of it */
+        dg_caption(DG_SND-sc,TR(TX_DG_SNDCAP),vr);
+        { char sm[40], sl[64]; uint32_t smc=snd_diag_text(sm,sizeof sm,sl,sizeof sl); const short L[2]={TX_DL_SND,TX_DL_SND_LAST}; const char*vv[2]={sm,sl};
+          for(int k=0;k<2;k++){ int cx=k?DG_COL_R:DG_COL_L, y=DG_SND+28-sc; if(y+30<vr.y0||y>vr.y1) continue;
+              text_c(cx,y,TR(L[k]),F_XS,C_TXT3,255); text_c(cx,y+16,vv[k],F_XS,k?C_TXT:smc,255); } }
         /* v6.3: ABOUT — UI language (+ source), wordmark w/ version, tagline */
         dg_caption(DG_ABOUT-sc,TR(TX_DG_ABOUT),vr);
         { int y=DG_ABOUT+28-sc;
@@ -5642,6 +5919,8 @@ static void sim_env(void){
     if((e=getenv("MERAKIPLUS_LANGFILE"))){ if(strlen(e)>=sizeof lang_path) sim_die(2,"MERAKIPLUS_LANGFILE is too long"); } else snprintf(lang_path,sizeof lang_path,"%s/new_customer/merakiplus/lang",sysroot);
     if((e=getenv("MERAKIPLUS_SCHEDFILE"))){ if(strlen(e)>=sizeof sched_path) sim_die(2,"MERAKIPLUS_SCHEDFILE is too long"); snprintf(sched_path,sizeof sched_path,"%s",e); }
     else snprintf(sched_path,sizeof sched_path,"%s/new_customer/merakiplus/schedule",sysroot);   /* v6.16 */
+    if((e=getenv("MERAKIPLUS_SOUNDFILE"))){ if(strlen(e)>=sizeof snd_path) sim_die(2,"MERAKIPLUS_SOUNDFILE is too long"); snprintf(snd_path,sizeof snd_path,"%s",e); }
+    else snprintf(snd_path,sizeof snd_path,"%s/new_customer/merakiplus/sound",sysroot);         /* v6.18 */
     if((e=getenv("MERAKIPLUS_SIM_CLOCK"))&&*e){ int64_t u=sim_parse_utc(e); if(u<0) sim_die(2,"MERAKIPLUS_SIM_CLOCK: expected YYYY-MM-DDTHH:MM:SSZ"); clk_off=u-(int64_t)time(NULL); }   /* v6.16: the wall clock (UTC) */
     sim_env_path("MERAKIPLUS_SIM_TTY",sim_tty,sizeof sim_tty,1);
     sim_env_path("MERAKIPLUS_SIM_FB",sim_fb_path,sizeof sim_fb_path-8,1);
@@ -5748,7 +6027,8 @@ static const struct { const char*id; int idx; } SIM_PARAM[]={
  {"hotwater_mode",S_HOTMODE},{"hotwater_temp",S_HOTT},{"ui_language",S_UILANG},{"backlight",S_BL},{"volume",S_VOL},
  {"temp_unit",S_TUNIT},{"language",S_LANG},{"hotwater_shortcut",S_HOTSC},{"sumtime",S_DST},{"cleartip",S_CLEARTIP},
  {"timemode",S_TIMEMODE},{"automatically",S_AUTOTIME},{"timezone",S_TZ},
- {"preheat",S_PREHEAT},{"preheat_at",S_PHAT},{"preheat_repeat",S_PHREP},{"auto_off",S_AUTOOFF}};   /* v6.16: merakiplus's own (schedule file) */
+ {"preheat",S_PREHEAT},{"preheat_at",S_PHAT},{"preheat_repeat",S_PHREP},{"auto_off",S_AUTOOFF},   /* v6.16: merakiplus's own (schedule file) */
+ {"sound",S_SOUND},{"ready_tone",S_SNDRDY}};                                                         /* v6.18: merakiplus's own (sound file) */
 #define SIM_NPARAM ((int)(sizeof SIM_PARAM/sizeof SIM_PARAM[0]))
 static int sim_param_idx(const char*id){
     for(int k=0;k<SIM_NPARAM;k++) if(!strcmp(SIM_PARAM[k].id,id)) return SIM_PARAM[k].idx;
@@ -5803,7 +6083,7 @@ static void sim_state_emit(ms_t now,int force){   /* force=0: only if the line's
     static char buf[12288]; JB j={buf,buf+sizeof buf-4};
     static const char*const VW[]={"splash","main","detail","sys","bye","off"};
     static const char*const TAB[]={"home","grind","brew","water","steam","system","diag"};   /* v6.17: one page per feature + SYSTEM (v6.4-v6.16: home/brew/steam/system/diag) */
-    static const short SHOWN[]={0,1,2,3,4,6,9,11,14,16,17,19,22,23,24,25,33,34,35,36,37,38,39,40,41,42,44,46,47,48,50,51,52,58,112,113,114};   /* v6.6: + 44, 46 (the wand switch) */
+    static const short SHOWN[]={0,1,2,3,4,6,9,11,14,16,17,19,22,23,24,25,33,34,35,36,37,38,39,40,41,42,44,46,47,48,50,51,52,58,62,63,112,113,114};   /* v6.6: + 44, 46 (the wand switch); v6.18: + 62, 63 (heat stages) */
     int pr=phase_raw(now); struct stat st; char rn[340], stamp[160]="", a[40], b[40];
     static uint32_t last_h; jb(&j,"\"client\":\"merakiplus-sim\",\"version\":\"" MERAKIPLUS_VERSION "\"");
     jb(&j,",\"view\":\"%s\",\"view_raw\":\"%s\",\"page\":\"%s\",\"tab\":\"%s\"",view==V_BYE?"bye":"main",VW[view],sim_page_key(),TAB[page]);
@@ -5821,6 +6101,14 @@ static void sim_state_emit(ms_t now,int force){   /* force=0: only if the line's
       jb(&j,",\"req\":%ld,\"ok\":%ld,\"fail\":%ld}",stp.n_req,stp.n_ok,stp.n_fail); }
     jb(&j,",\"regs\":{"); for(unsigned k=0;k<sizeof SHOWN/sizeof SHOWN[0];k++) jb(&j,"%s\"%d\":%u",k?",":"",SHOWN[k],reg[SHOWN[k]]);
     jb(&j,"},\"regs_s\":{\"38\":%d,\"39\":%d}",s16(38),s16(39));
+    /* v6.18 (addendum): the sound engine — events by name with their outcome; log = newest first "event:outcome" */
+    { static const char*const MK[]={"off","on","stock"};
+      jb(&j,",\"audio\":{\"mode\":\"%s\",\"ready_mask\":%d,\"vol\":%d,\"machine\":%d,\"armed\":[%d,%d],\"ready\":[%d,%d],\"cold_boot\":%s",
+         MK[clampi(SET[S_SOUND].val,0,2)],SET[S_SNDRDY].val,snd_vol(),snd.st,snd.armed[0],snd.armed[1],snd.ready[0],snd.ready[1],snd.cold_boot?"true":"false");
+      for(int e=0;e<NSE;e++) jb(&j,",\"n_%s\":%d,\"played_%s\":%d",SE_KEY[e],snd.n[e],SE_KEY[e],snd.n_played[e]);
+      jb(&j,",\"n_suppressed\":%d,\"n_muted\":%d,\"n_off\":%d,\"log\":\"",snd.n_out[SO_SUPPRESSED],snd.n_out[SO_MUTED],snd.n_out[SO_OFF]);
+      for(int k=snd.log_n-1;k>=0;k--) jb(&j,"%s%s:%s",k==snd.log_n-1?"":",",SE_KEY[(int)snd.log[k].ev],SO_KEY[(int)snd.log[k].out]);
+      jb(&j,"\",\"file\":"); jb_s(&j,snd.last_file); jb(&j,",\"last\":"); if(snd.log_n) jb(&j,"\"%s\"",SE_KEY[(int)snd.log[0].ev]); else jb(&j,"null"); jb(&j,"}"); }
     /* v6.9 (addendum): display conditioning + latest chart scale (display only — regs above are raw) */
     jb(&j,",\"cond\":{\"raw\":%s,\"a_chart\":%.3f,\"a_hero\":%.3f,\"med\":%d,\"scale\":\"%s\",\"pct\":%d,\"hold\":%d,\"head\":%.2f,\"hero_snaps\":%d,\"wdb\":%.1f,\"gate\":%d}",
        cd.raw?"true":"false",cd.a_chart,cd.a_hero,cd.med,CS_KEY[cd.scale],cd.pct,cd.hold,cd.head,hf.n_snap,(double)CD_WDB,cd.gate);
@@ -5994,7 +6282,7 @@ static int sim_save_now(int idx,int val,const char*param,ms_t now){
     save_begin(now);
     if(sav.active){ ssave.state=SSV_PENDING; return 1; }
     if(was==val){ ssave.state=SSV_UNCHANGED; return 1; }    /* SAVE without a change just closes the editor */
-    if(s->flags&(SF_LOCAL|SF_OWN)){ ssave.state=SSV_OK; return 1; }
+    if(s->flags&(SF_LOCAL|SF_OWN|SF_SND)){ ssave.state=SSV_OK; return 1; }
     ssave.state=SSV_REJECTED; if(view==V_DETAIL) detail_close(now);   /* a guard rejected it (toast shown): the user cancels */
     return 0;
 }
@@ -6318,6 +6606,7 @@ int main(int argc,char**argv){
     if((e=getenv("MERAKIPLUS_ROOT"))) snprintf(sysroot,sizeof sysroot,"%s",e);
     if((e=getenv("MERAKIPLUS_LANGFILE"))) snprintf(lang_path,sizeof lang_path,"%s",e);
     if((e=getenv("MERAKIPLUS_SCHEDFILE"))) snprintf(sched_path,sizeof sched_path,"%s",e);   /* v6.16 */
+    if((e=getenv("MERAKIPLUS_SOUNDFILE"))) snprintf(snd_path,sizeof snd_path,"%s",e);       /* v6.18 */
     if(getenv("MERAKIPLUS_SWITCH_DRY")) sw_dry=1;
     if(getenv("MERAKIPLUS_NOBOOTPUSH")) bp_on=0;
     SIM_ENV
@@ -6353,6 +6642,7 @@ int main(int argc,char**argv){
 #endif
         pw_step(now);                      /* v6.14: hold -> off frames / OFF / TURNING ON… */
         sched_step(now);                   /* v6.16: pre-arm the pre-heat alarm, one-shot use, auto off */
+        snd_tick(now);                     /* v6.18: start jingle + per-boiler ready tones (display/audio only, no frames) */
         net_step(now);                     /* v6.7: non-blocking; does nothing between two probes */
 #ifdef DEVICE_RT
         boot_push_step(now);
@@ -6402,6 +6692,7 @@ static void sim_base(void){
     reg[0]=1; reg[1]=0; reg[33]=0x0101; reg[2]=1; reg[4]=185; reg[11]=870; reg[14]=3; reg[17]=400; reg[23]=360; reg[25]=650;
     reg[40]=999; reg[41]=999; reg[42]=702; reg[47]=1297; reg[48]=226; reg[49]=236; reg[61]=50; reg[50]=5; reg[58]=5;
     reg[37]=16; reg[71]=41; reg[72]=39; reg[112]=0x0104; reg[113]=0x0605; reg[114]=70;
+    reg[62]=100; reg[63]=100;                                         /* v6.18: both boilers at their heat stage 100 (hot) */
     rx_ok=8794; rx_bad=0; last_bad_ms=-100000;
 }
 static void sim_run(ms_t ms){
@@ -6414,6 +6705,7 @@ static void sim_run(ms_t ms){
         wq_step(sim_now);
         pw_step(sim_now);                  /* v6.14 */
         if(pv_sched) sched_step(sim_now);  /* v6.16 (only where a scenario/selftest switches it on) */
+        snd_tick(sim_now);                 /* v6.18: the sound engine (the preview build only logs) */
         sim_last=ui_frame(sim_now);
     }
 }
@@ -6433,6 +6725,7 @@ static void sim_reset(void){
     memset(&stm,0,sizeof stm); memset(&stp,0,sizeof stp); stp.kind=ACT_NONE; memset(&rps,0,sizeof rps); memset(&lt,0,sizeof lt); ver_n=0; rx_n112=0;      /* v6.6 */
     memset(&pw,0,sizeof pw); pw.kbd_ok=1; snprintf(pw.node,sizeof pw.node,"%s · %s",INP_KBD,KBD_NAME); bl_is_off=0; ka_next=0;   /* v6.14: the button node as on the device */
     nm_reset(0); memset(&net,0,sizeof net); net.on=1; net.cfg_logged=-1; nh_probe(&net.p,sim_now,1); net.state=NS_UP; net.booted=net.was_up=net.gw_seen=1;   /* v6.7: healthy stack (DIAGNOSE: 841 / 192.168.1.100 / UP) */
+    memset(&snd,0,sizeof snd); snd_uptime_ovr=86400;               /* v6.18: the sound engine restarts; the display has been up for a day (no cold boot) */
 }
 static void tick_brew(ms_t t){
     if(t<300){ reg[33]=0x0101; reg[51]=2; reg[52]=0; reg[39]=0; }
@@ -7803,6 +8096,126 @@ static int st_q_snap(char*o,size_t n){   /* the write queue as hex, frame by fra
 static int st_hold(int x,int y,ms_t ms){   /* a real hold: DOWN, frames for ms (the write queue is NOT stepped, so what was queued stays), UP */
     ms_t t=sim_now; ui_touch(TE_DOWN,x,y,t); for(ms_t e=t+ms;t<e;t+=11){ if(sim_link) last_rx_ms=t; ui_frame(t); } int f=tch.fired; ui_touch(TE_UP,x,y,t); sim_now=t; return f;
 }
+/* ============================ v6.18: sound (start jingle + per-boiler ready tones; docs/audio.md) ============================ */
+static int st_own_save(int i,int val,ms_t t);
+static int st_sn(int ev){ return snd.n[ev]; }
+static int st_sp(int ev){ return snd.n_played[ev]; }
+static int st_slast(int ev,int out){ return snd.log_n&&snd.log[0].ev==ev&&snd.log[0].out==out; }
+static void st_v618(const char*dir){
+    printf("== selftest: v6.18 sound (stock: deal_play 0x13725C, page_logo power.mp4, preheatCompele once per power-on when words 62 AND 63 > 99; MCU boiler_heat 0x3502 heat stages) ==\n");
+    char keep_sp[256]; snprintf(keep_sp,sizeof keep_sp,"%s",snd_path); snprintf(snd_path,sizeof snd_path,"%s/sound",dir); unlink(snd_path);
+    int tx0, sq0;
+    /* ---- (1) settings: own file, DISPLAY · SOUND section, volume = stock config ---- */
+    settings_load();
+    st_check("SOUND (OFF / ON / STOCK SOUNDS) and READY TONE (OFF / BREW BOILER / STEAM BOILER / BOTH BOILERS) are merakiplus's own (SF_SND): no config key, no MCU word; defaults ON + BOTH",
+             !SET[S_SOUND].key&&!SET[S_SNDRDY].key&&SET[S_SOUND].mcu==M_NONE&&SET[S_SNDRDY].mcu==M_NONE&&(SET[S_SOUND].flags&SF_SND)&&(SET[S_SNDRDY].flags&SF_SND)
+             &&SET[S_SOUND].val==1&&SET[S_SNDRDY].val==3&&sndc.src==SCS_DEFAULT&&SET[S_SNDRDY].max==3&&SET[S_SOUND].max==2);
+    st_check("DISPLAY · SOUND holds UI LANGUAGE, BRIGHTNESS, TEMP. UNIT, SOUND, READY TONE, VOLUME (VOLUME moved from STOCK UI: it sets Meraki+'s sounds too; still config \"volume\")",
+             sec_of_set(S_SOUND)==SEC_DISPLAY&&sec_of_set(S_SNDRDY)==SEC_DISPLAY&&sec_of_set(S_VOL)==SEC_DISPLAY&&!strcmp(SET[S_VOL].key,"volume")&&SEC_ROWS[SEC_DISPLAY][3]==S_SOUND&&SEC_ROWS[SEC_DISPLAY][5]==S_VOL);
+    { sim_reset(); int a=st_own_save(S_SOUND,0,sim_now); char rb[96]; int fd=open(snd_path,O_RDONLY); int rn=fd>=0?(int)read(fd,rb,sizeof rb-1):-1; if(fd>=0) close(fd); if(rn<0) rn=0; rb[rn]=0;
+      int b=st_own_save(S_SNDRDY,1,sim_now); fd=open(snd_path,O_RDONLY); char rb2[96]; int rn2=fd>=0?(int)read(fd,rb2,sizeof rb2-1):-1; if(fd>=0) close(fd); if(rn2<0) rn2=0; rb2[rn2]=0;
+      char tp[300]; snprintf(tp,sizeof tp,"%s.tmp",snd_path);
+      st_check("SAVE writes the sound file atomically: \"sound=off\\nready=both\\n\", then \"sound=off\\nready=brew\\n\"; toast SOUND SAVED; no tmp file left",
+               a&&b&&!strcmp(rb,"sound=off\nready=both\n")&&!strcmp(rb2,"sound=off\nready=brew\n")&&access(tp,F_OK)!=0&&!strcmp(toast.msg,TR(TX_T_SND_SAVED)));
+      settings_load(); int c=SET[S_SOUND].val==0&&SET[S_SNDRDY].val==1&&sndc.src==SCS_FILE;
+      put_bytes(snd_path,"sound=loud\nready=7\nvolume=99\n",28); settings_load(); int d=SET[S_SOUND].val==1&&SET[S_SNDRDY].val==3;
+      put_bytes(snd_path,"sound=stock\nready=steam\n",24); settings_load(); int e=SET[S_SOUND].val==2&&SET[S_SNDRDY].val==2;
+      unlink(snd_path); settings_load(); int f=SET[S_SOUND].val==1&&SET[S_SNDRDY].val==3&&sndc.src==SCS_DEFAULT;
+      st_check("read back after a restart; unknown values -> the default; \"stock\"/\"steam\" parse; no file -> ON + BOTH",c&&d&&e&&f); }
+    /* ---- (2) a cold boot: jingle once, then one tone per boiler as each reaches its heat stage 100 ---- */
+    sim_reset(); snd_uptime_ovr=25; reg[62]=30; reg[63]=0; reg[40]=520; reg[47]=310; tx0=txq_len; sq0=(int)wq.seq;
+    sim_run(1500);
+    st_check("cold boot of the display (uptime 25 s < 120 s): the START JINGLE plays once on the first \"on\"; cold boilers (stage 30 / 0) -> no ready tone",
+             st_sn(SE_JINGLE)==1&&st_sp(SE_JINGLE)==1&&st_sn(SE_READY_E)==0&&st_sn(SE_READY_S)==0&&snd.armed[0]&&snd.armed[1]&&!strcmp(snd.last_file,SND_OURS[SE_JINGLE]));
+    reg[62]=60; reg[40]=850; sim_run(600); int e60=st_sn(SE_READY_E)==0;
+    reg[62]=100; reg[40]=871; sim_run(300);
+    st_check("EXTRACT boiler: stage 60 (60 °C .. set temp) -> nothing; stage 100 (MCU: e boiler >= word 11) -> its OWN tone once, the steam boiler still heating",
+             e60&&st_sp(SE_READY_E)==1&&st_sn(SE_READY_S)==0&&st_slast(SE_READY_E,SO_PLAYED)&&!strcmp(snd.last_file,SND_OURS[SE_READY_E]));
+    reg[63]=60; sim_run(600); int s60=st_sn(SE_READY_S)==0; reg[63]=100; reg[47]=1255; sim_run(300);
+    st_check("STEAM boiler: stage 100 (MCU: s boiler >= steam target - 10 °C) -> a DIFFERENT tone (ready_steam.wav vs ready_extract.wav), once",
+             s60&&st_sp(SE_READY_S)==1&&st_slast(SE_READY_S,SO_PLAYED)&&!strcmp(snd.last_file,SND_OURS[SE_READY_S])&&strcmp(SND_OURS[SE_READY_S],SND_OURS[SE_READY_E])&&strcmp(SND_OURS[SE_JINGLE],SND_OURS[SE_READY_S]));
+    /* ---- (3) no spam: brew/steam dips, link glitches ---- */
+    for(int k=0;k<6;k++){ reg[62]=60; reg[40]=835; reg[63]=60; reg[47]=1215; sim_run(400); reg[62]=100; reg[40]=872; reg[63]=100; reg[47]=1262; sim_run(400); }
+    st_check("no spam: six dips to stage 60 (3.5 °C below the brew set temp, 4 °C below the steam threshold — a shot, a steam session) re-trigger nothing",
+             st_sn(SE_READY_E)==1&&st_sn(SE_READY_S)==1&&!snd.armed[0]&&!snd.armed[1]);
+    sim_link=0; last_rx_ms=sim_now-5000; sim_run(3000); int off_held=snd.st==2; sim_link=1; sim_run(800);
+    st_check("a link glitch (OFFLINE 3 s) is not a power cycle: no second jingle, nothing re-armed",off_held&&st_sn(SE_JINGLE)==1&&st_sn(SE_READY_E)==1&&!snd.armed[0]);
+    /* ---- (4) re-arm only after real cooling ---- */
+    reg[62]=60; reg[40]=(uint16_t)(reg[11]-SND_REARM_DROP+5); sim_run(600); int still=!snd.armed[0];
+    reg[40]=(uint16_t)(reg[11]-SND_REARM_DROP-5); sim_run(400); int re=snd.armed[0]&&!snd.armed[1];
+    reg[62]=100; reg[40]=reg[11]; sim_run(300);
+    st_check("re-arm: 14.5 °C below the set temp -> still announced; 15.5 °C below -> re-armed; back at stage 100 -> the extract tone again (2), the steam tone not",
+             still&&re&&st_sp(SE_READY_E)==2&&st_sp(SE_READY_S)==1);
+    reg[63]=30; sim_run(300); int sre=snd.armed[1]; reg[63]=100; sim_run(300);
+    st_check("re-arm by the MCU stage: steam stage <= 30 (< 80 °C) -> re-armed; stage 100 -> the steam tone again",sre&&st_sp(SE_READY_S)==2);
+    st_check("the jingle played exactly ONCE across all of the above, and no audio event queued a UART frame (txq + write queue unchanged)",
+             st_sn(SE_JINGLE)==1&&txq_len==tx0&&(int)wq.seq==sq0);
+    /* ---- (5) off / sleep: silent; power-on: jingle + both tones (stock: the logo latch resets at every power-on) ---- */
+    { int n0=snd.n[SE_JINGLE]+snd.n[SE_READY_E]+snd.n[SE_READY_S];
+      reg[1]=1; reg[33]=0x0001; sim_run(800); int sl=snd.st==1&&snd.armed[0]&&snd.armed[1];
+      reg[62]=30; reg[63]=30; sim_run(500); reg[62]=100; reg[63]=100; sim_run(500);
+      int quiet=snd.n[SE_JINGLE]+snd.n[SE_READY_E]+snd.n[SE_READY_S]==n0&&snd.qn==0;
+      reg[1]=0; reg[33]=0x0101; sim_run(800);
+      st_check("SLEEP: nothing plays (heat stages change while asleep: no event); WAKE = power-on: the jingle again + both boilers' tones (both hot) — in that order",
+               sl&&quiet&&st_sn(SE_JINGLE)==2&&st_sp(SE_READY_E)==3&&st_sp(SE_READY_S)==3&&snd.log[2].ev==SE_JINGLE&&snd.log[1].ev==SE_READY_E&&snd.log[0].ev==SE_READY_S); }
+    { pw.state=PW_OFF; view=V_OFF; sim_link=0; reg[0]=0; last_rx_ms=sim_now-5000; sim_run(600);   /* OFF: the MCU sleeps and does not reply */
+      int n0=snd.n[SE_JINGLE]; reg[62]=30; sim_run(300); reg[62]=100; sim_run(300);
+      int quiet=snd.n[SE_JINGLE]==n0&&snd.n[SE_READY_E]==3&&snd.st==1;
+      sim_link=1; reg[0]=1; sim_run(2500);                                      /* the controller answers with word 0 = 1 -> merakiplus powers on (pw_step) */
+      st_check("the UI's OFF (power button): silent while OFF; ON again -> the jingle (3rd power-on) and the re-armed tones",quiet&&st_sn(SE_JINGLE)==3&&st_sp(SE_READY_E)==4); }
+    /* ---- (6) a Meraki+ start on a machine that is already on (switch from the stock UI): no jingle, hot boilers count as announced ---- */
+    sim_reset(); sim_run(1500);
+    st_check("Meraki+ started on a running machine (uptime 1 day): no jingle, both boilers already hot -> no ready tone",st_sn(SE_JINGLE)==0&&st_sn(SE_READY_E)==0&&st_sn(SE_READY_S)==0&&!snd.armed[0]&&!snd.armed[1]);
+    sim_reset(); reg[63]=60; reg[47]=1100; sim_run(2200); reg[63]=100; reg[47]=1300; sim_run(300);
+    st_check("... a boiler still heating then is armed: its tone plays when it gets hot (steam), the hot one stays quiet",st_sn(SE_JINGLE)==0&&st_sp(SE_READY_S)==1&&st_sn(SE_READY_E)==0);
+    sim_reset(); reg[62]=0; reg[63]=0; sim_run(500); reg[62]=100; reg[63]=100; sim_run(2500);
+    st_check("... stale first samples (words 62/63 = 0 for 0.5 s, then 100) inside the 1.5 s settle window do not count as \"heated up\": no tone",
+             st_sn(SE_READY_E)==0&&st_sn(SE_READY_S)==0&&!snd.settle&&!snd.armed[0]&&!snd.armed[1]);
+    /* ---- (7) fallback thresholds when words 62/63 were never received ---- */
+    sim_reset(); snd_uptime_ovr=10; reg_seen[62]=reg_seen[63]=0; reg[11]=900; reg[40]=880; reg[14]=1; reg[47]=1050; sim_run(800);
+    int f0=st_sn(SE_READY_E)==0&&st_sn(SE_READY_S)==0;
+    reg[40]=900; sim_run(300); int f1=st_sp(SE_READY_E)==1;
+    reg[47]=1099; sim_run(300); int f2=st_sn(SE_READY_S)==0; reg[47]=1100; sim_run(300); int f3=st_sp(SE_READY_S)==1;
+    reg[14]=4; reg[40]=900-SND_REARM_DROP-1; sim_run(300); reg[40]=900; sim_run(300);
+    st_check("fallback without words 62/63: extract = word 40 >= word 11 (88.0 < 90.0 -> no, 90.0 -> tone); steam = word 47 >= gear target - 10 °C (gear 1: 110.0 °C)",
+             f0&&f1&&f2&&f3&&snd_steam_thr()==1250&&st_sp(SE_READY_E)==2);
+    /* ---- (8) mute, off, per boiler, volume cap, stock files ---- */
+    sim_reset(); snd_uptime_ovr=10; SET[S_VOL].val=0; reg[62]=reg[63]=30; sim_run(800); reg[62]=reg[63]=100; sim_run(400);
+    st_check("config volume 0 = mute (stock: 0 -> MI_AO mute): jingle + both tones are logged \"muted\", nothing is played",
+             st_sn(SE_JINGLE)==1&&st_sp(SE_JINGLE)==0&&snd.n_out[SO_MUTED]==3&&st_sp(SE_READY_E)==0&&st_sp(SE_READY_S)==0);
+    sim_reset(); snd_uptime_ovr=10; SET[S_SOUND].val=0; reg[62]=reg[63]=30; sim_run(800); reg[62]=reg[63]=100; sim_run(400);
+    st_check("SOUND OFF: no jingle, no tone (logged \"off\")",snd.n_out[SO_OFF]==3&&snd.n_out[SO_PLAYED]==0);
+    sim_reset(); snd_uptime_ovr=10; SET[S_SNDRDY].val=1; reg[62]=reg[63]=30; sim_run(800); reg[62]=reg[63]=100; sim_run(400);
+    int pb=st_sp(SE_JINGLE)==1&&st_sp(SE_READY_E)==1&&st_sn(SE_READY_S)==1&&st_sp(SE_READY_S)==0;
+    sim_reset(); snd_uptime_ovr=10; SET[S_SNDRDY].val=2; reg[62]=reg[63]=30; sim_run(800); reg[62]=reg[63]=100; sim_run(400);
+    st_check("READY TONE per boiler: BREW BOILER -> only the extract tone; STEAM BOILER -> only the steam tone; the jingle is independent",pb&&st_sp(SE_READY_E)==0&&st_sp(SE_READY_S)==1&&st_sp(SE_JINGLE)==1);
+    sim_reset(); SET[S_VOL].val=100; int c1=snd_vol()==SND_VOL_CAP; SET[S_VOL].val=40; int c2=snd_vol()==40; SET[S_VOL].loaded=0; int c3=snd_vol()==SET[S_VOL].def;
+    st_check("volume = config \"volume\" capped at 70 like stock deal_play (100 -> 70, 40 -> 40; no config -> the default 40)",c1&&c2&&c3);
+    sim_reset(); SET[S_SOUND].val=2; int s1=!strcmp(snd_file(SE_JINGLE),SND_OURS[SE_JINGLE]);
+    { char d1[400],d2[400]; snprintf(d1,sizeof d1,"%s/customer",sysroot); mkdir(d1,0755); snprintf(d2,sizeof d2,"%s/customer/audio",sysroot); mkdir(d2,0755);
+      put_bytes(rp(SND_STOCK[SE_JINGLE]),"ID3",3); int s2=!strcmp(snd_file(SE_JINGLE),SND_STOCK[SE_JINGLE]); unlink(rp(SND_STOCK[SE_JINGLE]));
+      st_check("STOCK SOUNDS: the stock UI's own /customer/audio/*.mp3 when present (never shipped), else Meraki+'s tones",s1&&s2&&!strcmp(SND_STOCK[SE_READY_E],"/customer/audio/preheatCompele.mp3")); }
+    /* ---- (9) activity: a tone that comes due while something runs is dropped (stock: no sound during its animations) ---- */
+    sim_reset(); snd_uptime_ovr=10; reg[63]=60; sim_run(800); reg[33]=0x1307; reg[63]=100; sim_run(400); int sup=snd.n_out[SO_SUPPRESSED]==1&&st_sp(SE_READY_S)==0;
+    reg[33]=0x0101; sim_run(800);
+    st_check("brew running when the steam boiler gets hot: the tone is dropped (logged \"suppressed\"), and NOT played late after the shot",sup&&st_sp(SE_READY_S)==0&&!snd.armed[1]);
+    /* ---- (10) preview tone on SAVE ---- */
+    sim_reset(); snprintf(snd_path,sizeof snd_path,"%s/sound",dir); sim_run(800); int n0=st_sn(SE_PREVIEW); st_own_save(S_SNDRDY,3,sim_now); int pv1=st_sn(SE_PREVIEW)==n0;   /* unchanged value: no save, no tone */
+    st_own_save(S_SNDRDY,2,sim_now); int pv2=st_sp(SE_PREVIEW)==n0+1;
+    st_own_save(S_SOUND,0,sim_now); int pv3=st_sn(SE_PREVIEW)==n0+2&&st_sp(SE_PREVIEW)==n0+1&&st_slast(SE_PREVIEW,SO_OFF);
+    st_check("SAVE of SOUND / READY TONE plays a short preview at the current volume (unless the result is OFF); an unchanged value plays nothing",pv1&&pv2&&pv3);
+    /* ---- (11) names + DIAGNOSTICS ---- */
+    st_check("event / outcome names (state JSON \"audio\", /tmp/merakiplus_snd.log) = start_jingle, boiler_ready_extract, boiler_ready_steam, preview / played, off, muted, suppressed",
+             !strcmp(SE_KEY[SE_JINGLE],"start_jingle")&&!strcmp(SE_KEY[SE_READY_E],"boiler_ready_extract")&&!strcmp(SE_KEY[SE_READY_S],"boiler_ready_steam")&&!strcmp(SE_KEY[SE_PREVIEW],"preview")
+             &&!strcmp(SO_KEY[SO_PLAYED],"played")&&!strcmp(SO_KEY[SO_MUTED],"muted")&&!strcmp(SO_KEY[SO_SUPPRESSED],"suppressed")&&!strcmp(SO_KEY[SO_OFF],"off"));
+    { unlink(snd_path); sim_reset(); snd_uptime_ovr=20; reg[63]=60; sim_run(1200); reg[63]=100; sim_run(400); char m1[40],l1[64],m2[40],l2[64],e1[48],e2[64];
+      uint32_t c1=snd_diag_text(m1,sizeof m1,l1,sizeof l1); SET[S_VOL].val=0; uint32_t c2=snd_diag_text(m2,sizeof m2,l2,sizeof l2); SET[S_VOL].val=31;
+      snprintf(e1,sizeof e1,TR(TX_DV_SND_ON),31); snprintf(e2,sizeof e2,"%s · %s",TR(TX_DV_SE_STEAM),TR(TX_DV_SO_PLAYED));
+      printf("       DIAGNOSTICS SOUND: '%s' | '%s' | muted '%s' (DG_SND %d, ABOUT %d)\n",m1,l1,m2,DG_SND,DG_ABOUT);
+      st_check("DIAGNOSTICS › SOUND: mode · volume (\"ON · 31\"; amber \"VOLUME 0\" when muted) and the last event + outcome (\"STEAM · PLAYED\"); the block sits between TIME and ABOUT",
+               !strcmp(m1,e1)&&c1==C_TXT&&!strcmp(m2,TR(TX_DV_SND_MUTE))&&c2==C_WARN&&!strcmp(l1,e2)&&DG_SND>DG_TIME+28+2*DG_P+30&&DG_SND+28+DG_P<DG_ABOUT); }
+    unlink(snd_path); snprintf(snd_path,sizeof snd_path,"%s",keep_sp); sim_reset(); settings_load();
+}
 static void st_v617(void){
     printf("== selftest: v6.17 IA consolidation (HOME = live root; one page per feature w. its settings + HOLD TO START; SYSTEM in sections; DIAGNOSTICS behind SYSTEM; one way back) ==\n");
     int ok,w,h; char a[96],b[96];
@@ -7813,7 +8226,7 @@ static void st_v617(void){
       ok=1; for(int i=0;i<NSET;i++) if(seen[i]!=(i==S_HOTT?0:1)){ ok=0; printf("     SET[%d] (%s) is listed %d time(s)\n",i,TR(SET[i].label),seen[i]); }
       printf("       %d settings: GRIND %d · BREW %d · WATER %d · STEAM %d · SYSTEM %d in %d sections + %d actions (v6.16: BREW 9 · STEAM·WATER 5 · SYSTEM 15 + 2 actions, three flat lists)\n",NSET,
              page_rows(PG_GRIND),page_rows(PG_BREW),page_rows(PG_WATER),page_rows(PG_STEAM),n_sys,NSEC,n_x);
-      st_check("row model: every one of the 29 parameters is on exactly ONE page (its SET[].tier), nothing is dropped; the only one that is not a row is the read-only WATER SENSOR (it is the WATER page's live line)",
+      st_check("row model: every one of the 31 parameters (v6.18: + SOUND, READY TONE) is on exactly ONE page (its SET[].tier), nothing is dropped; the only one that is not a row is the read-only WATER SENSOR (it is the WATER page's live line)",
                ok&&tier_ok&&n_feat+n_sys==NSET-1&&n_x==2&&(SET[S_HOTT].flags&SF_SENSOR)&&SET[S_HOTT].tier==2);
       st_check("feature pages carry what the feature uses: GRIND 2 rows, BREW 6, WATER 2, STEAM 2 — each at most 2 rows away from fitting without scrolling (4 rows are in view above HOLD TO START)",
                page_rows(PG_GRIND)==2&&page_rows(PG_BREW)==6&&page_rows(PG_WATER)==2&&page_rows(PG_STEAM)==2&&scroll_max(PG_GRIND)==0&&scroll_max(PG_WATER)==0&&scroll_max(PG_STEAM)==0&&scroll_max(PG_BREW)<=2*ROW_P); }
@@ -7841,7 +8254,7 @@ static void st_v617(void){
       tap(240,row_y0(PG_SYS,NSEC)+25); st_settle(); int dg=page==PG_DIAG&&diag_from==PG_SYS; tap(CX,PG_TITLE_Y+6); st_settle(); int bs1=page==PG_SYS; tap(CX,PG_TITLE_Y+6); st_settle();
       st_check("SYSTEM: BOOT UI and SWITCH TO ORIGINAL NOW open from STOCK UI; a tap on the open header closes the section again; the DIAGNOSTICS row opens DIAGNOSTICS, whose chevron leads back to SYSTEM and from there to HOME",x1&&x2&&cl&&dg&&bs1&&page==PG_HOME&&wq.n==0&&txq_len==0);
       st_home(); tap(CX,GEAR_Y); st_settle(); tap(240,row_y0(PG_SYS,SEC_DISPLAY)+25); st_settle(); int o1=sec_open==SEC_DISPLAY&&row_find(PG_SYS,RK_SET,S_UILANG)==1;
-      { int g[]={240,300, 240,280, 240,200}; st_gest(g,3); sim_run(100); }                                      /* DISPLAY is open: SCHEDULE's header is below the fold -> scroll */
+      { int g[]={240,360, 240,330, 240,100}; st_gest(g,3); sim_run(100); }                                      /* DISPLAY is open: SCHEDULE's header is below the fold -> scroll (v6.18: 6 rows in DISPLAY · SOUND) */
       tap(240,row_y0(PG_SYS,row_find(PG_SYS,RK_SEC,SEC_SCHED))-(int)scroll[PG_SYS]+25); st_settle();
       int o2=sec_open==SEC_SCHED&&row_find(PG_SYS,RK_SET,S_UILANG)<0&&row_find(PG_SYS,RK_SET,S_PREHEAT)==SEC_SCHED+1&&(int)scroll[PG_SYS]==(int)clampf((float)(SEC_SCHED*ROW_P),0,scroll_max(PG_SYS));
       tap(CX,PG_TITLE_Y+6); st_settle(); tap(CX,GEAR_Y); st_settle();
@@ -7905,7 +8318,7 @@ static void st_v617(void){
       int bad=0; for(int i=0;i<NSTR;i++){ int k=STR_K[i]; if(k==KCON||k==KDL||k==KDV||k==KDF) continue; for(int lg=0;lg<NLANG;lg++){ const char*t=STR[lg][i];
             if(strstr(t,"CONFIG ONLY")||strstr(t,"KUN CONFIG")||strstr(t,"CMD8")||strstr(t,"CONFIG.JSON")||strstr(t,"OR STOP")||strstr(t,"ELLER STOP")||strstr(t,"EST.")){ bad++; printf("     [%s] %s: '%s'\n",LANG_CODE[lg],STR_ID[i],t); } } }
       printf("       string table: %d ids (v6.16: 449)\n",NSTR);
-      st_check("text: no user-facing string says CONFIG ONLY / CONFIG.JSON / CMD8 / '· OR STOP' / 'EST.' any more; the string table is smaller than v6.16's 449 ids although v6.17 adds pages",bad==0&&NSTR<449);
+      st_check("text: no user-facing string says CONFIG ONLY / CONFIG.JSON / CMD8 / '· OR STOP' / 'EST.' any more; the string table is smaller than v6.16's 449 ids although v6.17 adds pages (v6.18's sound block aside)",bad==0&&NSTR-(TX_DV_SO_DROP-TX_SL_SOUND+1)<449);   /* v6.18: the sound feature's own strings (one contiguous block) are not counted */
       st_home(); home_model(sim_now); int one=!strcmp(hm.hint1,TR(TX_C_HINT))&&hm.hint2==NULL&&!strcmp(hm.label,TR(TX_H_BOILER))&&!st_has(hm.label,"\xC2\xB7");
       reg[33]=0x0141; sim_run(600); home_model(sim_now); fmt_fix(a,sizeof a,sv(S_GRINDW),1); snprintf(b,sizeof b,TR(TX_H_AUTOSTOP_G),a); int g=!strcmp(hm.label,TR(TX_H_DOSE))&&!st_has(hm.label,a)&&!strcmp(hm.sub,b)&&sub_font(&hm)==F_S;
       st_check("HOME: one hint line; the label is the name of the number only ('BREW BOILER', 'DOSE' — no '· NOW', no repeated target); during an activity the target is said once, in F_S ('STOPS AT 18.5 G')",one&&g); }
@@ -8533,7 +8946,7 @@ static int selftest(const char*cfgsrc){
     st_check("brewTemper 880 -> 870 (revert)",cfg_set_int("brewTemper",870));
     st_check("md5 after revert == baseline",!strcmp(cfg_md5,m0));
     /* the whole table: every editable field is saved as min, max and back */
-    { int ok=1,nf=0; for(int i=0;i<NSET;i++){ Setting*s=&SET[i]; if(s->flags&(SF_LOCK|SF_SENSOR|SF_LOCAL|SF_OWN)) continue; int o; nf++;
+    { int ok=1,nf=0; for(int i=0;i<NSET;i++){ Setting*s=&SET[i]; if(s->flags&(SF_LOCK|SF_SENSOR|SF_LOCAL|SF_OWN|SF_SND)) continue; int o; nf++;
           if(!cfg_get_int(s->key,&o)||!cfg_set_int(s->key,s->min)||!cfg_set_int(s->key,s->max)||!cfg_set_int(s->key,o)){ ok=0; printf("     %s: %s\n",s->key,cfg_err); } }
       char nm[120]; snprintf(nm,sizeof nm,"all %d editable fields: save min -> max -> original",nf); st_check(nm,ok&&nf==21);
       st_check("md5 after a full table round trip == baseline",!strcmp(cfg_md5,m0)&&cfglen==on&&!memcmp(cfgbuf,orig,on)); }
@@ -8997,6 +9410,7 @@ static int selftest(const char*cfgsrc){
     /* ============================ v6.11 ============================ */
     st_v611();
     st_v617();
+    st_v618(dir);                      /* v6.18 */
     /* ============================ v6.15 ============================ */
     st_graph();
     printf("== selftest [%s]: %s (%d checks, %d failed) — work dir %s ==\n",LANG_CODE[base_lang],st_fail?"FAILED":"ALL OK",st_n,st_fail,dir);
@@ -9006,7 +9420,7 @@ static void dump_table(void){
     printf("#key\tlabel\tpage\tspec_tier\tmin\tmax\tstep\tdefault\thard\tlock\test\tsensor\tmcu\thint\n");
     static const char*const MW[]={"-","4","23","11","112","113","114","25","14","17","2"};
     for(int i=0;i<NSET;i++){ const Setting*s=&SET[i];
-        if(s->flags&(SF_LOCAL|SF_OWN)) continue;   /* merakiplus's own settings (UI language, v6.16 schedule) are not spec parameters */
+        if(s->flags&(SF_LOCAL|SF_OWN|SF_SND)) continue;   /* merakiplus's own settings (UI language, v6.16 schedule, v6.18 sound) are not spec parameters */
         printf("%s\t%s\t%s\t%d\t%d\t%d\t%d\t%d\t%d\t%d\t%d\t%d\t%s\t%s\n",s->key?s->key:"-",TR(s->label),TR(TIER_NAME[s->tier]),s->ptier,s->min,s->max,s->step,s->def,s->hard,
                !!(s->flags&SF_LOCK),!!(s->flags&SF_EST),!!(s->flags&SF_SENSOR),MW[s->mcu],s->hint?TR(s->hint):"-"); }
 }
@@ -9045,7 +9459,8 @@ int main(int argc,char**argv){
     const char*cfgsrc=argc>ai+1?argv[ai+1]:"artifacts/config.json";
     gfx_init(); lang_set(pv_lang);
     snprintf(sched_path,sizeof sched_path,"%s/_preview_schedule",out);   /* v6.16: never the host's /new_customer (the selftest uses its work dir) */
-    if(!strcmp(out,"--selftest")){ snprintf(sched_path,sizeof sched_path,"/nonexistent/merakiplus_preview_schedule"); return selftest(cfgsrc); }
+    snprintf(snd_path,sizeof snd_path,"%s/_preview_sound",out);           /* v6.18: likewise */
+    if(!strcmp(out,"--selftest")){ snprintf(sched_path,sizeof sched_path,"/nonexistent/merakiplus_preview_schedule"); snprintf(snd_path,sizeof snd_path,"/nonexistent/merakiplus_preview_sound"); return selftest(cfgsrc); }
     if(!strcmp(out,"--dump-table")){ dump_table(); return 0; }
     if(!strcmp(out,"--dump-strings")){ dump_strings(); return 0; }
     if(!strcmp(out,"--textw")){ for(int i=ai+1;i<argc;i++) printf("%4d %4d %4d %4d %4d  %s\n",text_w(argv[i],F_XS),text_w(argv[i],F_S),text_w(argv[i],F_M),text_w(argv[i],F_L),text_w(argv[i],F_XL),argv[i]); return 0; }
@@ -9231,6 +9646,13 @@ int main(int argc,char**argv){
     sim_reset(); PV_SEC(SEC_CLOCK); sim_run(600); dump(out,"97_system_clock_open");
     sim_reset(); reg[35]=0x01; sim_run(1500); tap(240,262); sim_run(700); dump(out,"98_diag_from_home_error");                         /* HOME's "CODE E2 · TAP FOR DETAILS" -> DIAGNOSTICS */
     sim_reset(); page=PG_SYS; sim_run(400); ui_touch(TE_DOWN,CX,PG_TITLE_Y+6,sim_now); sim_run(120); dump(out,"99_page_back_pressed"); memset(&tch,0,sizeof tch);
+    /* v6.18: sound — DISPLAY · SOUND scrolled to its sound rows, the two own editors and the (moved) VOLUME editor */
+    sim_reset(); PV_SEC(SEC_DISPLAY); scroll[PG_SYS]=clampf((float)(3*ROW_P),0,scroll_max(PG_SYS)); sim_run(600); dump(out,"100_system_display_sound");
+    sim_reset(); PV_SEC(SEC_DISPLAY); sim_run(300); detail_open(S_SOUND,sim_now); sim_run(900); dump(out,"101_detail_sound");
+    sim_reset(); PV_SEC(SEC_DISPLAY); sim_run(300); detail_open(S_SNDRDY,sim_now); sim_run(900); dump(out,"102_detail_ready_tone");
+    sim_reset(); PV_SEC(SEC_DISPLAY); sim_run(300); detail_open(S_VOL,sim_now); sim_run(900); dump(out,"103_detail_volume");
+    sim_reset(); PV_SEC(SEC_DISPLAY); sim_run(300); detail_open(S_SNDRDY,sim_now); edit_val=1; save_begin(sim_now); sim_run(500); dump(out,"104_sound_saved_toast");
+    unlink(snd_path); sim_reset(); snd_uptime_ovr=20; reg[63]=60; sim_run(1200); reg[63]=100; sim_run(400); page=PG_DIAG; scroll[PG_DIAG]=DG_SND-LIST_VY0-12; static_dirty=1; force_all=1; sim_run(600); dump(out,"105_diag_sound");
     return 0;
 }
 #endif

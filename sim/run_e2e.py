@@ -265,6 +265,14 @@ class ScenarioRun:
         self.lang_path = sb / "new_customer" / "merakiplus" / "lang"
         if self.ui_lang:
             self.lang_path.write_text(self.ui_lang)
+        # v6.18 (additive): files a scenario wants in the sandbox before the UI starts, e.g.
+        # {"new_customer/merakiplus/sound": "sound=off\n", "proc/uptime": "21.5 3.0\n"}. Paths stay inside the sandbox.
+        for rel, text in (self.scen.get("sandbox_files") or {}).items():
+            dst = (sb / rel).resolve()
+            if not str(dst).startswith(str(sb.resolve()) + os.sep):
+                raise RuntimeError(f"sandbox_files: {rel} leaves the sandbox")
+            dst.parent.mkdir(parents=True, exist_ok=True)
+            dst.write_text(text)
         # fb buffer + touch FIFO are created by client/sim; placeholder:
         self.fb_path.write_bytes(bytes(FB_BYTES))
         self.touch_path = sb / "dev" / "input" / "event0.fifo"
@@ -319,6 +327,9 @@ class ScenarioRun:
                 time.sleep(0.05)
         else:
             self.sim_ctrl.call({"cmd": "ping"})
+        # v6.18 (additive): sim events applied BEFORE the UI starts (e.g. cold boilers for the audio scenarios)
+        for ev in simcfg.get("init_events") or []:
+            self.sim_ctrl.call({"cmd": "inject", "event": ev})
 
     # ------------------------------------------------------------ (c) UI client
     def start_ui(self):

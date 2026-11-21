@@ -94,6 +94,7 @@ last toast, **config md5** (updated live and logged on every change), MCU mode/t
 | **Page** | ctrl `page` home/grind/brew/water/steam/system/detail/sys/diag (v6.17: one page per feature + SYSTEM) |
 | **Settings SAVE** | choose a parameter (brew_temp, grind_weight, …) + value → ctrl `save` (parity write + config persistence). See the `save` state, toast, config md5 and the protocol log's `WRITE sub11=[880]` + `CONFIG md5 …`. |
 | **Faults & link** | Fault cycle (none→E1→E2→E3→none), CRC garbage (2 s), Offline (link silent)/Back online, Close pty (closed → a new pty on reopen + automatic UI restart). Wand on/off (v6.6: the flush path, also during a brew) + legacy "require wand for steam" (no-op). |
+| **Audio (v6.18)** | The UI's sound log (`state.audio.log`, newest first — *played* green, *muted*/*suppressed* amber), mode · ready tones · volume · armed/ready per boiler · words 62/63. *Cold boilers (heat up)* = `boilers` e 55 °C / s 70 °C with the heat model on; *Cool brew boiler* = e 65 °C (re-arms its tone); *Hot (model off)*. The SIM plays nothing — it shows what the speaker would get. |
 | **ACK profile** | normal/observed_v3/slow/lossy/no_ack — switched **live** (mcu_sim ctrl `ack_profile`). `no_ack` blocks SAVE (retransmit→FAIL, config unchanged). |
 | **System & time** | Speed 1×/2×/8×, pause/resume, UI language Danish/English (lang file), stock language (config index 0..10), boot flag toggle, runtime switch (dry: bye view), MCU restart (boot push), Restart UI, Reset sandbox. |
 | **Snapshot** | Export PNG + state (+ a config copy) to `sim/reports/play-exports/<ts>_<label>/`. The latest exports are listed with links. |
@@ -137,7 +138,7 @@ curl -s -XPOST localhost:8765/api/reset                     # fresh sandbox
 ```
 
 Others: `/api/garbage`, `/api/link {state:silent|up|closed}`, `/api/wand {on}`,
-`/api/require_wand {value}`, `/api/boot_flag {value}`, `/api/runtime_switch`, `/api/page {name}`,
+`/api/require_wand {value}`, `/api/boilers {e,s,e_rate,s_rate,model}` (v6.18), `/api/boot_flag {value}`, `/api/runtime_switch`, `/api/page {name}`,
 `/api/stock_lang {value}`, `/api/config {field,value,reload}`, `/api/layout` (the real touch targets
 in the current view), `/api/scenarios`, `/exports/<file>` (snapshot files).
 

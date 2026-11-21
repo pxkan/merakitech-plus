@@ -162,6 +162,10 @@ class McuSim:
         # cur decay) is INDEPENDENT of primary activities — live, the milk keeps
         # cooling through grind/brew. {"t0","auto"|"flush","milk_stop","milk_peak"}
         self.steam_post = None
+        # v6.18 (additive): the boiler heat model for words 62/63. None = the pre-v6.18 behaviour
+        # (62 = 63 = 100 whenever awake). Switched on by the "boilers" event:
+        # {"e_rate": units/s, "s_rate": units/s} (0.1 °C per second while heating toward 997 / 1300).
+        self.heat = None
         self.wand_state = bool(self.regs[44] & 1)   # PE.2 switch (debounced)
         self.steam_consumed = False   # steam has lowered the s water level → refill
         # float accumulators for slow temperatures/levels (int regs
@@ -1138,13 +1142,17 @@ class McuSim:
         flush_post = bool(self.steam_post and self.steam_post.get("flush"))
         # boiler maintenance (awake) / cooling (sleep/drain/off)
         if awake:
-            self.ft[40] = self._approach(self.ft[40], 997, 5.0 * dt)
+            er, sr = (self.heat["e_rate"], self.heat["s_rate"]) if self.heat else (5.0, 5.0)
+            self.ft[40] = self._approach(self.ft[40], 997, er * dt)
             r[40] = int(self.ft[40]) + self.rng.randint(-3, 3)
             if not steam_act and not steam_post:
-                self.ft[47] = self._approach(self.ft[47], 1300, 5.0 * dt)
+                self.ft[47] = self._approach(self.ft[47], 1300, sr * dt)
                 r[47] = int(self.ft[47]) + self.rng.randint(-3, 3)
-            r[62] = 100
-            r[63] = 100
+            if self.heat:
+                r[62], r[63] = self.heat_stage(r)
+            else:
+                r[62] = 100
+                r[63] = 100
         else:
             # SESSION §5.1: s-boiler 102.5→94.3 °C / 729 s = 0.1125 units/s;
             # e-boiler 85.2→80.1 °C / 729 s = 0.07 units/s (heating off, drain)
@@ -1152,6 +1160,8 @@ class McuSim:
             self.ft[40] = max(200.0, self.ft[40] - 0.07 * dt)
             r[47] = int(self.ft[47])
             r[40] = int(self.ft[40])
+            if self.heat:                 # heating off (sleep/drain): boiler_heat writes 0
+                r[62] = r[63] = 0
         r[40] = max(0, min(65535, r[40]))
         r[41] = r[40]                     # mirror always identical (proven live)
         r[47] = max(0, min(65535, r[47]))
@@ -1265,6 +1275,25 @@ class McuSim:
                             "p": (self.rng.randint(400, 900)
                                   if self.rng.random() < 0.6 else 0)}
                         self.next_small = self.t + self.rng.uniform(1.5, 4.0)
+
+    @staticmethod
+    def heat_stage(r):
+        """v6.18: words 62/63 as the MCU's boiler_heat (MEM03 0x3502) writes them — a heat STAGE, not a power:
+        extract (62): e boiler (word 40) < 40.0 °C -> 0, < 60.0 -> 30, < brew set temp (word 11) -> 60, else 100;
+                      100 while work_sta bit 12.
+        steam (63):   s boiler (word 47) < 50.0 °C -> 0, < 80.0 -> 30, < steam target - 10.0 °C -> 60, else 100;
+                      target by steam gear (word 14): 1 -> 120.0, 2 -> 125.0, 3 -> 130.0, else 135.0 °C; 100 while bit 5.
+        (The MCU's extra internal-state test before 100 is not modelled.) The stock UI plays preheatCompele.mp3 once
+        per power-on when BOTH are > 99 (docs/audio.md)."""
+        e, s, ws = r[40], r[47], r[33]
+        st_e = 0 if e < 400 else 30 if e < 600 else 60 if e < r[11] else 100
+        tgt = {1: 1200, 2: 1250, 3: 1300}.get(r[14], 1350)
+        st_s = 0 if s < 500 else 30 if s < 800 else 60 if s < tgt - 100 else 100
+        if ws & 0x1000:
+            st_e = 100
+        if ws & 0x0020:
+            st_s = 100
+        return st_e, st_s
 
     @staticmethod
     def _approach(cur, target, step):
@@ -1873,6 +1902,26 @@ class McuSim:
                 self.faults.pop(w, None)
                 r[w] = 0
             self.alog.log(self.t, "fault_clear", word="all")
+            return True
+        if typ == "boilers":
+            # v6.18 (additive): boiler temperatures + the heat-stage model for words 62/63.
+            # {"e": 0.1 °C, "s": 0.1 °C, "e_rate": 0.1 °C/s, "s_rate": 0.1 °C/s}; every key optional.
+            # Rates default to the idle model's 5.0 (0.5 °C/s). "model": false switches the model off again.
+            if ev.get("model", True) is False:
+                self.heat = None
+            else:
+                self.heat = {"e_rate": float(ev.get("e_rate", (self.heat or {}).get("e_rate", 5.0))),
+                             "s_rate": float(ev.get("s_rate", (self.heat or {}).get("s_rate", 5.0)))}
+            for w, key in ((40, "e"), (47, "s")):
+                if key in ev:
+                    self.ft[w] = float(int(ev[key]))
+                    r[w] = int(ev[key]) & 0xFFFF
+                    self.ft_last[w] = r[w]
+            r[41] = r[40]
+            if self.heat:
+                r[62], r[63] = self.heat_stage(r)
+            self.alog.log(self.t, "boilers", e=r[40], s=r[47], st62=r[62], st63=r[63],
+                          model=self.heat is not None)
             return True
         if typ == "set_reg":
             w = int(ev["word"])

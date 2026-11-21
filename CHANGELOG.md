@@ -3,6 +3,46 @@
 All notable changes to Meraki+. Details (with evidence, frames and test figures) are in
 [docs/dev/UI_v6.md](docs/dev/UI_v6.md) under *CHANGES-v6.x*. All dates are 2026.
 
+## [6.18] — 2026-11-21
+Audio feedback: a start jingle and **one ready tone per boiler**. The stock audio path was reversed first:
+[docs/audio.md](docs/audio.md). **Display and audio only** — no UART frame, guard, limit or timing changed.
+### Added
+- **Start jingle** once per power-on (button off → on, sleep → wake, or the first start after the display boots).
+  Stock plays the audio track of `video/power.mp4` on its logo page.
+- **A different tone per boiler**: one when the **brew boiler** is ready, another when the **steam boiler** is — so you
+  can hear which one is hot. Stock plays a single *preheatCompele.mp3* once **both** are. The signal is the controller's
+  own heat stage (words 62/63 = 100), the same one stock uses.
+- Once per power-on; **re-armed only after the boiler has really cooled** (stage ≤ 30 or 15 °C below its ready point),
+  so a shot or a steam session never re-triggers it. Silent while off or asleep; a tone that comes due while
+  something runs is dropped, as stock drops sounds during its animations. A link glitch is not a power cycle.
+- **SYSTEM › DISPLAY · SOUND** (the section was DISPLAY): **SOUND** off / on / stock sounds (the display's own mp3s,
+  if present — never shipped), **READY TONE** off / brew boiler / steam boiler / both boilers, and **VOLUME** (config
+  `volume`, moved here from STOCK UI because it now sets Meraki+'s sounds too; capped at 70 like stock, 0 = mute).
+  SOUND and READY TONE live in Meraki+'s own file `/new_customer/merakiplus/sound`. SAVE plays a short test tone.
+- **DIAGNOSTICS › SOUND**: mode · volume and the last sound with its outcome (*STEAM · PLAYED*, *BREW · SKIPPED*, …).
+- **Our own sounds** in `audio/` (`start.wav`, `ready_extract.wav`, `ready_steam.wav`; 16 kHz mono, ~68 KB),
+  synthesized by `tools/gen_audio.py` (stdlib only). No vendor audio is in the repository; `tests/hygiene.py`
+  rejects any other audio/video file.
+- **`bin/merakiplus_snd`** (8 KB, `src/merakiplus_snd.c`): plays one sound through the display's own
+  `libmi_ao.so` with exactly the MI_AO calls and parameters of the stock player `libhvplayer.so` (48 kHz, 16 bit,
+  6 × 2048 frames, the stock volume → dB curve). It is linked against the display's glibc and loads the vendor
+  libraries at run time. The installer now also installs it and the three sounds (md5-gated) and revert removes them.
+- Simulator: words 62/63 follow the controller's stage rules once the new `boilers` event switches the heat model on;
+  state JSON `audio`; scenarios `audio_boiler_ready`, `audio_muted`, `audio_power_cycle`, `audio_sound_off`; the play
+  viewer shows the audio log. Runner keys `sim.init_events` and `sandbox_files` (additive).
+- Self-test section *v6.18 sound* (27 checks) + a host self-test of the helper against a mock MI_AO (14 checks).
+  Meraki+ never signals the helper (it still contains no `kill()`): the helper ends itself after 8 s.
+### Changed
+- `docs/registermap.md`: words 62/63 are the boilers' **heat stage** (0/30/60/100), not a heating power.
+### Notes
+- `bin/`: `merakiplus` `fa2c1f4d…`, `merakiplus_sim_arm` `e9b279ac…`, the host SIM builds and the new
+  `merakiplus_snd` `0ffff0ba…`; `switcher`, `grab_shim.so`, `tinj_hold` and `keyinj` are byte-identical.
+- Verified locally: UI self-test 537/0 EN + DA (also as a 32-bit ARM binary), 9/9 mutation probes caught by the new
+  section, simulator self-test 192/0, full E2E 43/43 scenarios (1126/1126 checks) in EN and in DA, installer tests.
+- **Not yet heard on a machine** (install deferred). The helper resolves every MI symbol against the display's real
+  `libmi_sys.so` / `libmi_ao.so` in a 32-bit ARM container; the speaker path itself is pending a hardware check
+  ([docs/audio.md](docs/audio.md#on-device-check-pending)).
+
 ## [6.17] — 2026-11-20
 A UX audit of v6.16 and the redesign it led to: [docs/ux-audit-v617.md](docs/ux-audit-v617.md).
 **Display and navigation only** — no UART frame, guard, limit or timing changed.

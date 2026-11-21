@@ -117,6 +117,16 @@
       <div id="toasts"></div>
     </div>
     <div class="card">
+      <h2>Audio (v6.18)</h2>
+      <div id="audiostat" style="font-size:12.5px;color:var(--dim)"></div>
+      <div class="row">
+        <button id="btn-cold">Cold boilers (heat up)</button>
+        <button id="btn-cool">Cool brew boiler</button>
+        <button id="btn-hot">Hot (model off)</button>
+      </div>
+      <div id="audiolog" style="max-height:110px;overflow-y:auto;font-size:12.5px"></div>
+    </div>
+    <div class="card">
       <h2>Snapshot export</h2>
       <div class="row">
         <button id="btn-snap" class="primary">Export PNG + state</button>
@@ -358,6 +368,13 @@ function render(){
     ["client t", s.t_ms!=null?(s.t_ms/1000).toFixed(1)+" s":"–"],
   ];
   $("statetab").innerHTML = rows.map(r=>"<tr><td>"+r[0]+"</td><td>"+r[1]+"</td></tr>").join("");
+  // v6.18: audio events (the UI's own log, newest first) — the SIM plays nothing, it reports what the speaker would get
+  const au = s.audio;
+  $("audiostat").textContent = au ? ("mode "+au.mode+" · ready tones "+["off","brew","steam","both"][au.ready_mask]+" · vol "+au.vol+
+      " · armed "+au.armed.join("/")+" · ready "+au.ready.join("/")+" · words 62/63 = "+((s.regs||{})["62"])+"/"+((s.regs||{})["63"])) : "no audio state (pre-v6.18 client)";
+  $("audiolog").innerHTML = au && au.log ? au.log.split(",").reverse().map(x=>{ const p=x.split(":");
+      return "<div class='"+(p[1]==="played"?"ok":(p[1]==="suppressed"||p[1]==="muted"?"warn":""))+"'>"+p[0]+" · "+p[1]+"</div>"; }).join("")
+      : "<div style='color:var(--dim)'>none yet</div>";
   // toasts
   $("toasts").innerHTML = (SNAP.toasts||[]).map(t=>
     "<div class='"+(t.kind||"")+"'>"+((t.t_ms||0)/1000).toFixed(1)+" s · "+t.text+"</div>").join("")
@@ -577,6 +594,9 @@ $("btn-garbage").onclick = ()=>post("/api/garbage",{dur:2});
 $("btn-offline").onclick = ()=>post("/api/link",{state:"silent"});
 $("btn-online").onclick = ()=>post("/api/link",{state:"up"});
 $("btn-closed").onclick = ()=>post("/api/link",{state:"closed"});
+$("btn-cold").onclick = ()=>post("/api/boilers",{e:550,s:700,e_rate:30,s_rate:24});
+$("btn-cool").onclick = ()=>post("/api/boilers",{e:650,e_rate:30});
+$("btn-hot").onclick = ()=>post("/api/boilers",{e:997,s:1300,model:false});
 $("ack").onchange = e=>post("/api/ack",{profile:e.target.value});
 $("btn-wand").onclick = async ()=>{
   // toggles based on the last known wand state in the log

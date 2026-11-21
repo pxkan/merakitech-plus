@@ -2,7 +2,8 @@
 
 | File | What | Built from |
 |---|---|---|
-| `merakiplus` | **Meraki+ v6.17** device binary (static ARMv7, musl). Installed as `/new_customer/demo_v9`. | `src/merakiplus.c` |
+| `merakiplus` | **Meraki+ v6.18** device binary (static ARMv7, musl). Installed as `/new_customer/demo_v9`. | `src/merakiplus.c` |
+| `merakiplus_snd` | sound helper (ARMv7, dynamic against the display's glibc 2.28; `dlopen`s the display's own `libmi_*.so` at run time). Installed as `/new_customer/merakiplus/merakiplus_snd`, next to `audio/` | `src/merakiplus_snd.c` |
 | `switcher` | gesture switcher daemon (center-hold 5 s → stock to Meraki+), only with `--gesture` | `boot/switcher.c` |
 | `grab_shim.so` | tiny LD_PRELOAD shim so the switcher can see touches while the stock UI runs (only with `--gesture`) | `boot/grab_shim.c` |
 | `tinj_hold` | touch injector used for on-device testing of the gesture | `boot/tinj_hold.c` |
@@ -14,6 +15,17 @@
 **No vendor firmware, libraries or scripts are included here or anywhere in this repository.**
 
 ## Provenance of the ARM binaries
+
+**v6.18 (2026-11-21, start jingle + per-boiler ready tones):** `merakiplus`, `merakiplus_sim_arm` and the two host
+SIM builds were rebuilt from the v6.18 source; **`merakiplus_snd` is new** (`./build.sh`: `zig cc -target
+arm-linux-gnueabihf.2.28 -mcpu=cortex_a7 -O2 -s -fno-PIE -no-pie … -ldl`; bit-reproducible, checked by
+`tests/check_bins.py`). It links only `libc.so.6` + `libdl.so.2` and loads the display's own `libmi_common.so`,
+`libmi_sys.so`, `libmi_ao.so` (and, for the optional stock sounds, `libhvplayer.so`) at run time — no vendor code is
+linked or shipped. The change is display and audio only (no UART frame changed; see CHANGELOG / docs/audio.md).
+`switcher`, `tinj_hold`, `keyinj` and `grab_shim.so` are byte-identical. **Not yet verified on a machine**: covered
+by the UI self-test (EN + DA, also as a 32-bit ARM binary), the helper's self-test against a mock MI_AO, a symbol
+check of the helper against the display's real `libmi_sys.so` / `libmi_ao.so` in an ARMv7 container, and the
+simulator scenarios `audio_boiler_ready`, `audio_muted`, `audio_power_cycle`, `audio_sound_off`.
 
 **v6.17 (2026-11-20, UX audit + IA consolidation):** `merakiplus`, `merakiplus_sim_arm` and the two host SIM
 builds were rebuilt from the v6.17 source. The change is display and navigation only — one page per function
@@ -62,25 +74,26 @@ self-test and the simulator E2E suite.
 
 | File | md5 (this repo) | Built with |
 |---|---|---|
-| `merakiplus` (V6.17) | `532e4bd5aa06e625e3b2c80ace5921f4` | `./build.sh` → `build/merakiplus` |
-| `merakiplus_sim_arm` (V6.17) | `dcb74a9407f2989b995527c75784ad7f` | `./build.sh` → `build/merakiplus_sim_arm` |
+| `merakiplus` (V6.18) | `fa2c1f4dd2b85660cb6e6b9fa71ee1af` | `./build.sh` → `build/merakiplus` |
+| `merakiplus_sim_arm` (V6.18) | `e9b279aca96161101d35ef35afc0bf7f` | `./build.sh` → `build/merakiplus_sim_arm` |
+| `merakiplus_snd` (V6.18) | `0ffff0ba1bca3617fcb38b4496ea50a5` | `./build.sh` → `build/merakiplus_snd` |
 | `switcher` | `a5e0128bdd77ff5697df2100e889604a` | `./build.sh` → `build/switcher` |
 | `tinj_hold` | `795e5d66bc22a724da89ccce6c9c95b1` | `./build.sh` → `build/tinj_hold` |
 | `keyinj` | `645d223205a66b20d16cb408f03a73a4` | `./build.sh` → `build/keyinj` |
-| `merakiplus_sim-linux-x86_64` (V6.17) | `5470e1289839db0fe1b83cec9765cd1f` | `zig cc -target x86_64-linux-musl -DMERAKIPLUS_SIM -O2 -static -s src/merakiplus.c -lm` |
-| `merakiplus_sim-macos-arm64` (V6.17) | `ddbb0ef2a6443c45a1bddfec5b1cbb16` | `zig cc -DMERAKIPLUS_SIM -O2 -s src/merakiplus.c -lm` (Mach-O builds are not bit-reproducible) |
+| `merakiplus_sim-linux-x86_64` (V6.18) | `ae9e9794e4b2c662936a57601a4f09ca` | `zig cc -target x86_64-linux-musl -DMERAKIPLUS_SIM -O2 -static -s src/merakiplus.c -lm` |
+| `merakiplus_sim-macos-arm64` (V6.18) | `13dde8b2c02c675e57b8bca9aa0a026c` | `zig cc -DMERAKIPLUS_SIM -O2 -s src/merakiplus.c -lm` (Mach-O builds are not bit-reproducible) |
 
 The ARM builds above are reproducible: running `./build.sh` on the same sources with zig 0.17.1 gives
 the same md5, independent of the build directory. The Linux SIM build (`-target x86_64-linux-musl
 -static -s`) is reproducible the same way. CI enforces this on every push and PR
-(`tests/check_bins.py`): the committed `bin/` must be byte-identical to fresh builds of these six
+(`tests/check_bins.py`): the committed `bin/` must be byte-identical to fresh builds of these seven
 reproducible targets, so a source change without a `bin/` rebuild fails CI. `grab_shim.so` (trimmed
 verified build, see below) and `merakiplus_sim-macos-arm64` (Mach-O is not bit-reproducible) are
 excluded from that check; `tests/hygiene.py` still md5-gates every file in `bin/`.
 
 GitHub releases are maintained automatically by `.github/workflows/release.yml`: a `v*` tag push, a
 manual dispatch, or a push to `main` that bumps `VERSION` past the latest release builds, runs the
-full quick test gate and publishes the committed `bin/` assets (device binary, ARM SIM, Linux SIM,
+full quick test gate and publishes the committed `bin/` assets (device binary, sound helper, ARM SIM, Linux SIM,
 macOS SIM, `MD5SUMS`) with the CHANGELOG section as notes. Re-runs update the existing release
 instead of creating a duplicate. The macOS SIM asset is the committed build from the table above —
 CI does not rebuild it (no macOS runner needed), it ships exactly what `bin/MD5SUMS` lists.

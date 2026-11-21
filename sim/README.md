@@ -134,6 +134,10 @@ For an interactive browser view of the simulator, see [PLAY.md](PLAY.md).
 | `ia_navigation` | 34 s | **v6.17 (merakiplus-only):** the new IA with REAL taps (layout targets): cup icon → BREW page (6 rows, live line) → BREW TEMP editor → CANCEL → header chevron → HOME; gear → SYSTEM (closed: 5 rows) → SCHEDULE opens/closes → PRE-HEAT AT editor; DIAGNOSTICS row → DIAGNOSTICS → back to SYSTEM → HOME. No frame, no config write (45 checks) |
 | `feature_page_start` | 43 s | **v6.17 (merakiplus-only):** a brew started from the BREW page (tap the icon, then HOLD TO START 0.8 s): the UI returns to HOME with STOP BREW and the brew runs to its auto-stop — the `brew` scenario's expectations, shifted by 2.15 s |
 | `activity_takes_home` | 22 s | **v6.17 (merakiplus-only):** the GRIND page is open when the wand starts steam on the machine → the UI slides to HOME (the live view); SYSTEM opened during the steam stays; afterwards the WATER page opens normally |
+| `audio_boiler_ready` | 44 s | **v6.18 (merakiplus-only):** cold display boot + cold boilers (`boilers` init event): START JINGLE once → the EXTRACT boiler's tone when word 62 reaches stage 100 (~11 s) → the STEAM boiler's own tone at ~21 s → cool-down → re-armed → extract tone again; no UART write (27 checks) |
+| `audio_muted` | 24 s | **v6.18 (merakiplus-only):** config volume 0: the jingle and both boiler events are detected and logged `muted`, nothing is played |
+| `audio_power_cycle` | 46 s | **v6.18 (merakiplus-only):** hot boilers at a cold boot → jingle + tones; button OFF → silent; wake → jingle + tones again; READY TONE = steam only (sound file via `sandbox_files`) |
+| `audio_sound_off` | 40 s | **v6.18 (merakiplus-only):** ctrl SAVE `sound` = 0 → both boiler events logged `off`; SOUND on + READY TONE = brew → only the extract tone after the next cool-down |
 | `fault_e1/e2/e3` | 12–16 s | error bits words 34/35/36 → error UI + safety stop of the activity |
 | `crc_garbage` | 12 s | garbage stream + CRC corruption → resync, the link is kept |
 | `no_ack` | 12 s | **SAVE is blocked** (retransmit→FAIL, config unchanged) → recovery with the normal profile |
@@ -369,6 +373,14 @@ Details: `sim/reports/v6.13-sim/SUMMARY.md` + CONTRACT.md ADDENDUM v6.13.
 | Regression (stop×4/gesture×2/steam×4/brew/grind/hotwater/sleep_wake/replay-serve×4 = 18, EN+DA) | **18/18 · 394/394 in each language** — the recordings have no word0=0 writes; sleep never occurs in replay |
 
 Details: `sim/reports/v6.14-sim/SUMMARY.md` + CONTRACT.md ADDENDUM v6.14-sim.
+
+### v6.18 status (2026-11-21, sound — heat stages words 62/63)
+
+| Check | Result |
+|---|---|
+| `sim/selftest.py` | **192 PASS / 0 FAIL** (+ T14: the MCU's heat-stage rules for words 62/63 and the `boilers` event) |
+| New scenarios (EN + DA, v6.18 SIM build) | `audio_boiler_ready` 27/27, `audio_muted` 20/20, `audio_power_cycle` 25/25, `audio_sound_off` 24/24 — green in both languages; reference client: SKIP (`ui_only`) |
+| `run_e2e.py --all --parallel 4` (EN and DA) | **43/43 scenarios, 1126/1126 checks** in each language — no existing scenario needed a change (the heat model is off unless a scenario switches it on) |
 
 ## 8. File inventory
 

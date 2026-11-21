@@ -5,6 +5,8 @@
   * no vendor firmware/binaries: the only ELF/Mach-O files tracked are our builds in bin/
   * no personal paths, private IP addresses (other than documented placeholders), MAC addresses
   * sim/fixtures/config.json carries placeholder Wi-Fi credentials only
+  * audio/ holds exactly our own generated sounds (tools/merakiplus.py AUDIO_MD5; tools/gen_audio.py --check runs in
+    ./build.sh) and no audio/video file of any other origin is tracked (no vendor .mp3/.mp4 — docs/audio.md)
   * the pre-rename identifier (tools/merakiplus.py LEGACY_ID) appears nowhere — not in file names,
     text or binaries — except inside the "legacy-compat" block of tools/merakiplus.py
 """
@@ -58,6 +60,21 @@ for p in (ROOT / "bin").iterdir():
 for name, h in merakiplus.BIN_MD5.items():
     if sums.get(name) != h:
         fail(f"tools/merakiplus.py BIN_MD5[{name}] != bin/MD5SUMS")
+
+# 1b. v6.18: audio/ = exactly AUDIO_MD5 (our own sounds); no other audio/video file anywhere in the repository
+adir = ROOT / "audio"
+have = {p.name for p in adir.iterdir()} if adir.is_dir() else set()
+if have != set(merakiplus.AUDIO_MD5):
+    fail(f"audio/ holds {sorted(have)}, expected exactly {sorted(merakiplus.AUDIO_MD5)}")
+for name, h in merakiplus.AUDIO_MD5.items():
+    p = adir / name
+    if p.is_file() and hashlib.md5(p.read_bytes()).hexdigest() != h:
+        fail(f"audio/{name} does not match AUDIO_MD5 in tools/merakiplus.py")
+MEDIA = re.compile(r"\.(mp3|mp4|aac|m4a|ogg|flac|wav)$", re.I)
+for p in files:
+    rel = p.relative_to(ROOT).as_posix()
+    if MEDIA.search(rel) and not (rel.startswith("audio/") and p.name in merakiplus.AUDIO_MD5):
+        fail(f"media file outside our own audio set (vendor audio must never be committed): {rel}")
 
 # 2. binaries only in bin/, no vendor file names anywhere
 VENDOR = re.compile(r"(^|/)(demo_v9[^/]*|MEM03_[^/]*\.bin|config\.bin|upgrade\.sh|test\.sh|demo\.sh|[^/]*\.dis)$")

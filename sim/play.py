@@ -845,6 +845,15 @@ class Handler(BaseHTTPRequestHandler):
                 "crc_too": bool(b.get("crc_too", True))}})
         if path == "/api/link":
             return play.link(b.get("state", "up"))
+        if path == "/api/boilers":
+            # v6.18 (additive): boiler temperatures + the heat-stage model (words 62/63) for the sound engine
+            ev = {"type": "boilers"}
+            for k in ("e", "s", "e_rate", "s_rate"):
+                if k in b:
+                    ev[k] = b[k]
+            if b.get("model") is False:
+                ev["model"] = False
+            return play._sim_call({"cmd": "inject", "event": ev})
         if path == "/api/ack":
             return play._sim_call({"cmd": "ack_profile", "profile": b.get("profile", "normal")})
         if path == "/api/speed":

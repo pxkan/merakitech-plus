@@ -1,0 +1,159 @@
+{
+  "name": "audio_sound_off",
+  "description": "v6.18: SOUND set to OFF with the real SAVE path (ctrl save -> the sound file, no MCU write, no config.json change) on a running machine; then the boilers go cold and heat up again: both ready events are detected and logged \"off\", nothing plays; READY TONE = BREW BOILER + SOUND ON again -> only the extract tone plays after the next cool-down",
+  "duration_s": 40,
+  "ui_only": true,
+  "sim": {
+    "init_events": []
+  },
+  "events": [
+    {
+      "t": 2,
+      "target": "ui",
+      "cmd": "save",
+      "param": "sound",
+      "value": 0
+    },
+    {
+      "t": 4,
+      "target": "sim",
+      "event": {
+        "type": "boilers",
+        "e": 600,
+        "s": 750,
+        "e_rate": 40,
+        "s_rate": 40
+      }
+    },
+    {
+      "t": 18,
+      "target": "ui",
+      "cmd": "save",
+      "param": "sound",
+      "value": 1
+    },
+    {
+      "t": 19,
+      "target": "ui",
+      "cmd": "save",
+      "param": "ready_tone",
+      "value": 1
+    },
+    {
+      "t": 21,
+      "target": "sim",
+      "event": {
+        "type": "boilers",
+        "e": 600,
+        "s": 750,
+        "e_rate": 40,
+        "s_rate": 40
+      }
+    },
+    {
+      "t": 38,
+      "target": "runner",
+      "op": "snapshot",
+      "label": "done"
+    }
+  ],
+  "expect": [
+    {
+      "kind": "state",
+      "path": "audio.n_start_jingle",
+      "t0": 1,
+      "t1": 39,
+      "equals": 0,
+      "mode": "all"
+    },
+    {
+      "kind": "state",
+      "path": "audio.mode",
+      "t": 3,
+      "window": 0.8,
+      "equals": "off"
+    },
+    {
+      "kind": "state",
+      "path": "audio.n_boiler_ready_extract",
+      "t": 17,
+      "window": 1,
+      "equals": 1
+    },
+    {
+      "kind": "state",
+      "path": "audio.n_boiler_ready_steam",
+      "t": 17,
+      "window": 1,
+      "equals": 1
+    },
+    {
+      "kind": "state",
+      "path": "audio.n_off",
+      "t": 17,
+      "window": 1,
+      "equals": 3,
+      "note": "the SAVE preview (SOUND just set OFF) + the two ready events"
+    },
+    {
+      "kind": "state",
+      "path": "audio.log",
+      "t": 17,
+      "window": 1,
+      "contains": "preview:off,boiler_ready_extract:off,boiler_ready_steam:off"
+    },
+    {
+      "kind": "state",
+      "path": "audio.mode",
+      "t": 20,
+      "window": 0.8,
+      "equals": "on"
+    },
+    {
+      "kind": "state",
+      "path": "audio.ready_mask",
+      "t": 20,
+      "window": 0.8,
+      "equals": 1
+    },
+    {
+      "kind": "state",
+      "path": "audio.played_boiler_ready_extract",
+      "t": 37,
+      "window": 1.5,
+      "equals": 1
+    },
+    {
+      "kind": "state",
+      "path": "audio.n_boiler_ready_steam",
+      "t": 37,
+      "window": 1.5,
+      "equals": 2
+    },
+    {
+      "kind": "state",
+      "path": "audio.played_boiler_ready_steam",
+      "t0": 1,
+      "t1": 39,
+      "equals": 0,
+      "mode": "all"
+    },
+    {
+      "kind": "config",
+      "t": 38,
+      "field": "volume",
+      "value": 31
+    },
+    {
+      "kind": "sim_log",
+      "assert": "no_writes_between",
+      "t0": 1,
+      "t1": 39,
+      "except_subs": [
+        0,
+        1,
+        112
+      ]
+    }
+  ]
+}

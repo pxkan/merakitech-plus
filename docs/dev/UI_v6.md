@@ -1,4 +1,4 @@
-# UI_v6 — Meraki+ (identifier merakiplus) v6.17: one page per feature + SYSTEM in sections + DIAGNOSTICS behind SYSTEM (UX audit) + clock + correct 24-hour flag + planned pre-heat and auto off + graph reset on activity start + the physical power button + manual STOP for water / brew / grind + settings parity (spec-aligned) + boot slot integration + EN/DA + design for the round screen + SIM build/E2E + boot push and RX resync on the device + live-proven phase semantics, 64-bit clock and re-push after an MCU restart + Wi-Fi at startup and self-healing (network guard) + HOME without REVERT + calm graph and stable weight (display conditioning, weight latch, dead band) + pressure as a ≈bar estimate (anchor: pre-infusion = config pressure) + UX review (plain language, contrast, start hint, gear, close chevron, swipe guard, DIAGNOSTICS groups)
+# UI_v6 — Meraki+ (identifier merakiplus) v6.18: start jingle + one ready tone per boiler (sound) + one page per feature + SYSTEM in sections + DIAGNOSTICS behind SYSTEM (UX audit) + clock + correct 24-hour flag + planned pre-heat and auto off + graph reset on activity start + the physical power button + manual STOP for water / brew / grind + settings parity (spec-aligned) + boot slot integration + EN/DA + design for the round screen + SIM build/E2E + boot push and RX resync on the device + live-proven phase semantics, 64-bit clock and re-push after an MCU restart + Wi-Fi at startup and self-healing (network guard) + HOME without REVERT + calm graph and stable weight (display conditioning, weight latch, dead band) + pressure as a ≈bar estimate (anchor: pre-infusion = config pressure) + UX review (plain language, contrast, start hint, gear, close chevron, swipe guard, DIAGNOSTICS groups)
 
 > **Note (public edition):** Development notes written during development. Paths such as
 > `artifacts/…`, `boot_install.py` steps and md5 tables refer to the author's working environment; as
@@ -10,7 +10,7 @@
 > `SESSION.md`, `HOTWATER.md`, `WRITETEST.md`, `FINDINGS` and `GROUND-TRUTH.md` are to the author's
 > capture/analysis notes.
 
-**Date:** 2026-11-20 · **Version:** v6.17 (v6.16 + **UX audit / IA consolidation** — display and navigation only: HOME is the root, each feature has its own page with its settings and HOLD TO START, SYSTEM has four sections, DIAGNOSTICS sits behind SYSTEM, the STOP button is larger, the texts are shorter; see [CHANGES-v6.17](#changes-v617) and [ux-audit-v617.md](../ux-audit-v617.md). §3 below describes v6.17; older sections and CHANGES-v6.x describe the UI as it was at the time). v6.16 = v6.15 + **time & scheduling** — user bugs: the 24-hour flag was inverted relative to the stock UI, merakiplus showed no clock, and there was no planned pre-heat; the clock, the fixed TIME FORMAT, a pre-heat schedule sent as the stock cmd8 alarm and an optional auto off, see [CHANGES-v6.16](#changes-v616) + [time-scheduling.md](../time-scheduling.md)). v6.15 = (v6.14 + **the graph resets when an activity starts** — user bug: the cup placed before a brew dominated the graph scale, so the 0 → 36 g curve looked flat; display only, §14.7 + [CHANGES-v6.15](#changes-v615)). v6.14 = (v6.13 + **the physical power button** — user bug: the button did not work in merakiplus; the k62091 node (event1) is now read, and the stock UI's power-off/power-on semantics have been reverse-engineered and mirrored, §19 + [CHANGES-v6.14](#changes-v614)). v6.13 = (v6.12 + **manual STOP for WATER, BREW and GRIND** — user bug: hot water could not be stopped from the screen; the stop words were reverse-engineered from the MCU firmware and cross-checked against the stock UI's own stop calls; auto-stop is unchanged — see [§18](#18-manual-stop-v613) and [CHANGES-v6.13](#changes-v613); v6.12 = the v6.11 UI + the boot work stream's gesture fix ([gesture.md](../gesture.md)), source kept as `merakiplus_v6_12.c`; v6.11 = v6.10 + **UX review**: a critical design pass over all pages and states — plain language instead of word numbers and raw codes, raised contrast, a start hint in the empty chart field, a visible gear for the settings, a close chevron + swipe-down in the details, a swipe guard with axis lock, short stat labels and DIAGNOSTICS in sections; control logic and protocol are unchanged — see [§17](#17-ux-review-v611) and [CHANGES-v6.11](#changes-v611); v6.10 = v6.9 + **pressure estimate**: "PRESSURE\* UNCALIBRATED" has been replaced by **≈BAR · EST.** with a single linear anchor — the pre-infusion plateau of 358 raw in the recording = config `preInfusionPressure` (4 bar) — and a pulse limit of 20 bar; display only — see [§16](#16-pressure-estimate-v610) and [CHANGES-v6.10](#changes-v610); v6.9 = v6.8 + **display conditioning** of the graph and hero — median-3 + EMA, a robust scale, pulse gate, pressure curve only during brew/water —, a **stable weight source** (a latch instead of the phase per sample: the user's periodic weight spikes) and a **weight dead band** < 0.25 g; display only, all control logic reads raw values — see [§14](#14-display-conditioning-and-stable-weight-v69) and [CHANGES-v6.9](#changes-v69); v6.8 = v6.7 without the REVERT button on HOME — see [CHANGES-v6.8](#changes-v68); v6.7 = v6.6 + **network guard**: Wi-Fi at startup (a slot B boot had no network) and self-healing of the Wi-Fi stack, plus word 113 in the boot push as the stock UI's recorded value — see [CHANGES-v6.7](#changes-v67); v6.6 = v6.5 + phase semantics after the live session — two steam paths and concurrent phases —, a **64-bit clock** (v6.5's clock wrapped after 24.86 days on the device) and a **re-push of the boot push after an MCU restart** — see [CHANGES-v6.6](#changes-v66); v6.5 = v6.4 + a boot push from the config at startup **also on the device**, with an activity guard, and a resync watchdog in the RX parser — see [CHANGES-v6.5](#changes-v65); v6.4 = v6.3 + a SIM build against the simulated test environment — see [§13](#13-sim-build-and-e2e-v64) and [CHANGES-v6.4](#changes-v64); v6.3 = v6.2 + the product name **Meraki+** and two UI languages, English default / Danish — see [CHANGES-v6.3](#changes-v63); v6.2 = v6.1 + BOOT UI, runtime switch to the stock UI, exit reminder — see [CHANGES-v6.2](#changes-v62)) · **Status:** implemented, cross-compiled and **only verified locally** (offline previews + self-test + automated spec alignment). **Nothing has been run on the machine, and no network device has been contacted.** The on-device work belongs to the integration engineer (§11).
+**Date:** 2026-11-21 · **Version:** v6.18 (v6.17 + **sound**: a start jingle once per power-on and a different ready tone per boiler when the controller's heat stage (words 62/63) reaches 100 — the stock UI plays one sound once both are; display and audio only, no frame changed; see [CHANGES-v6.18](#changes-v618) and [audio.md](../audio.md)). v6.17 = (v6.16 + **UX audit / IA consolidation** — display and navigation only: HOME is the root, each feature has its own page with its settings and HOLD TO START, SYSTEM has four sections, DIAGNOSTICS sits behind SYSTEM, the STOP button is larger, the texts are shorter; see [CHANGES-v6.17](#changes-v617) and [ux-audit-v617.md](../ux-audit-v617.md). §3 below describes v6.17; older sections and CHANGES-v6.x describe the UI as it was at the time). v6.16 = v6.15 + **time & scheduling** — user bugs: the 24-hour flag was inverted relative to the stock UI, merakiplus showed no clock, and there was no planned pre-heat; the clock, the fixed TIME FORMAT, a pre-heat schedule sent as the stock cmd8 alarm and an optional auto off, see [CHANGES-v6.16](#changes-v616) + [time-scheduling.md](../time-scheduling.md)). v6.15 = (v6.14 + **the graph resets when an activity starts** — user bug: the cup placed before a brew dominated the graph scale, so the 0 → 36 g curve looked flat; display only, §14.7 + [CHANGES-v6.15](#changes-v615)). v6.14 = (v6.13 + **the physical power button** — user bug: the button did not work in merakiplus; the k62091 node (event1) is now read, and the stock UI's power-off/power-on semantics have been reverse-engineered and mirrored, §19 + [CHANGES-v6.14](#changes-v614)). v6.13 = (v6.12 + **manual STOP for WATER, BREW and GRIND** — user bug: hot water could not be stopped from the screen; the stop words were reverse-engineered from the MCU firmware and cross-checked against the stock UI's own stop calls; auto-stop is unchanged — see [§18](#18-manual-stop-v613) and [CHANGES-v6.13](#changes-v613); v6.12 = the v6.11 UI + the boot work stream's gesture fix ([gesture.md](../gesture.md)), source kept as `merakiplus_v6_12.c`; v6.11 = v6.10 + **UX review**: a critical design pass over all pages and states — plain language instead of word numbers and raw codes, raised contrast, a start hint in the empty chart field, a visible gear for the settings, a close chevron + swipe-down in the details, a swipe guard with axis lock, short stat labels and DIAGNOSTICS in sections; control logic and protocol are unchanged — see [§17](#17-ux-review-v611) and [CHANGES-v6.11](#changes-v611); v6.10 = v6.9 + **pressure estimate**: "PRESSURE\* UNCALIBRATED" has been replaced by **≈BAR · EST.** with a single linear anchor — the pre-infusion plateau of 358 raw in the recording = config `preInfusionPressure` (4 bar) — and a pulse limit of 20 bar; display only — see [§16](#16-pressure-estimate-v610) and [CHANGES-v6.10](#changes-v610); v6.9 = v6.8 + **display conditioning** of the graph and hero — median-3 + EMA, a robust scale, pulse gate, pressure curve only during brew/water —, a **stable weight source** (a latch instead of the phase per sample: the user's periodic weight spikes) and a **weight dead band** < 0.25 g; display only, all control logic reads raw values — see [§14](#14-display-conditioning-and-stable-weight-v69) and [CHANGES-v6.9](#changes-v69); v6.8 = v6.7 without the REVERT button on HOME — see [CHANGES-v6.8](#changes-v68); v6.7 = v6.6 + **network guard**: Wi-Fi at startup (a slot B boot had no network) and self-healing of the Wi-Fi stack, plus word 113 in the boot push as the stock UI's recorded value — see [CHANGES-v6.7](#changes-v67); v6.6 = v6.5 + phase semantics after the live session — two steam paths and concurrent phases —, a **64-bit clock** (v6.5's clock wrapped after 24.86 days on the device) and a **re-push of the boot push after an MCU restart** — see [CHANGES-v6.6](#changes-v66); v6.5 = v6.4 + a boot push from the config at startup **also on the device**, with an activity guard, and a resync watchdog in the RX parser — see [CHANGES-v6.5](#changes-v65); v6.4 = v6.3 + a SIM build against the simulated test environment — see [§13](#13-sim-build-and-e2e-v64) and [CHANGES-v6.4](#changes-v64); v6.3 = v6.2 + the product name **Meraki+** and two UI languages, English default / Danish — see [CHANGES-v6.3](#changes-v63); v6.2 = v6.1 + BOOT UI, runtime switch to the stock UI, exit reminder — see [CHANGES-v6.2](#changes-v62)) · **Status:** implemented, cross-compiled and **only verified locally** (offline previews + self-test + automated spec alignment). **Nothing has been run on the machine, and no network device has been contacted.** The on-device work belongs to the integration engineer (§11).
 **Source:** `merakiplus.c` (one file, plain C, no new dependencies) · **Binary:** `merakiplus_v6` (static ARMv7 EABI5 musl) · **Previews:** `round_v6/` (English; contact sheet) + `round_v6/da/` (Danish; contact sheet) · `EN | DA side by side` · **Revert:** `REVERT.md` · **Boot integration:** `boot/BOOT.md` (the boot work stream's; §9 = the UI requirements for v6.2) · **Spec:** [PARITY.md](PARITY.md) / `parity_spec.json` · **Predecessor:** `ROUNDUI.md` (v4)
 
 > **Status of the caveat in v6:** the spec was missing when v6 was written, and all limits were assumptions. v6.1 has replaced them with the spec's proven ranges. The alignment is automated: `parity_check.py` compares `SET[]` in the binary with `parity_spec.json` and fails on any unjustified deviation (`round_v6/parity_check.txt`: **41 spec parameters → 24 rows, 17 left out with a rationale, ALL ALIGNED**). What is still estimated or locked is in §4.4. All changes are listed in [CHANGES-v6.1](#changes-v61).
@@ -93,8 +93,8 @@ whole header is the target), or swipe right. There are no page dots, no edge zon
 | **BREW** | tap the cup icon | live line *BOILER 92.4° · GROUP 70°* · BREW WEIGHT, BREW TEMP, PRE-INFUSION, PRE-INF. TIME, PRE-INF. PRESSURE, GROUP HEAD (4 in view, the list scrolls) · HOLD TO START |
 | **WATER** | tap the drop icon | live line *WATER 99.9°* (word 40 — the "water sensor") · HOT WATER, WATER MODE · HOLD TO START |
 | **STEAM** | tap the steam icon | live line *BOILER 130° · MILK 22.6°* · MILK TEMP, STEAM LEVEL · HOLD TO START |
-| **SYSTEM** | the gear | *MERAKI+ V6.17* · four section headers with a summary (**DISPLAY** *ENGLISH* · **CLOCK** *16:35* · **SCHEDULE** *06:30 / OFF* · **STOCK UI**) + the **DIAGNOSTICS** row (*OK* / the error code / *DOWN*). Closed: 5 rows, no scrolling. A tap on a header opens it (and closes the other) |
-| **DIAGNOSTICS** | SYSTEM's last row, or a tap on HOME's error / offline hint | STATUS, BOOT · SLOT · SWITCHER, NET, GRAPH (smooth / raw), PRESSURE · ESTIMATE, RAW COUNTERS, POWER BUTTON, TIME · SCHEDULE, ABOUT — scrolls vertically. Its chevron returns to where it was opened from |
+| **SYSTEM** | the gear | *MERAKI+ V6.18* · four section headers with a summary (**DISPLAY · SOUND** *ENGLISH* · **CLOCK** *16:35* · **SCHEDULE** *06:30 / OFF* · **STOCK UI**) + the **DIAGNOSTICS** row (*OK* / the error code / *DOWN*). Closed: 5 rows, no scrolling. A tap on a header opens it (and closes the other) |
+| **DIAGNOSTICS** | SYSTEM's last row, or a tap on HOME's error / offline hint | STATUS, BOOT · SLOT · SWITCHER, NET, GRAPH (smooth / raw), PRESSURE · ESTIMATE, RAW COUNTERS, POWER BUTTON, TIME · SCHEDULE, SOUND (v6.18), ABOUT — scrolls vertically. Its chevron returns to where it was opened from |
 
 A feature page's live line turns **amber and names the reason** when a start is not possible (*NO
 CONNECTION*, *ERROR ACTIVE · START BLOCKED*, *GRIND = TIME · USE STOCK UI*, *CONFIG OUT OF SPEC · FIX
@@ -161,10 +161,11 @@ estimate · **LOCKED** = shown without an editor · **SENSOR** = read-only measu
 The tables below keep the grouping of the spec (tier 1 espresso, tier 1 steam/water, config-only). **Where
 a row is shown since v6.17:** GRIND DOSE, GRIND MODE → **GRIND** · BREW WEIGHT, BREW TEMP, PRE-INFUSION,
 PRE-INF. TIME, PRE-INF. PRESSURE, GROUP HEAD → **BREW** · HOT WATER, WATER MODE → **WATER** (the WATER SENSOR
-is that page's live line, not a row) · MILK TEMP, STEAM LEVEL → **STEAM** · UI LANGUAGE, BRIGHTNESS, TEMP UNIT →
-**SYSTEM › DISPLAY** · TIME FORMAT, DAYLIGHT SAVING, TIME ZONE → **SYSTEM › CLOCK** · PRE-HEAT, PRE-HEAT AT,
-REPEAT, AUTO OFF → **SYSTEM › SCHEDULE** · BOOT UI, SWITCH TO ORIGINAL NOW, VOLUME, STOCK LANG., WATER SHORTCUT,
-CLEANING REMINDER, AUTO TIME, PAUSE TIME → **SYSTEM › STOCK UI** (what only the stock UI reads).
+is that page's live line, not a row) · MILK TEMP, STEAM LEVEL → **STEAM** · UI LANGUAGE, BRIGHTNESS, TEMP UNIT,
+SOUND, READY TONE, VOLUME → **SYSTEM › DISPLAY · SOUND** (v6.18: + the two sound rows; VOLUME moved here from STOCK
+UI because it now sets Meraki+'s sounds too) · TIME FORMAT, DAYLIGHT SAVING, TIME ZONE → **SYSTEM › CLOCK** ·
+PRE-HEAT, PRE-HEAT AT, REPEAT, AUTO OFF → **SYSTEM › SCHEDULE** · BOOT UI, SWITCH TO ORIGINAL NOW, STOCK LANG.,
+WATER SHORTCUT, CLEANING REMINDER, AUTO TIME, PAUSE TIME → **SYSTEM › STOCK UI** (what only the stock UI reads).
 
 ### 4.1 Espresso (spec tier 1) — the GRIND and BREW pages
 | Label | config field | Word | Write on SAVE | Min..max / step | Shown as | Status |
@@ -2310,11 +2311,43 @@ In addition: the RX counters are `uint32_t` (wrap around in a well-defined way),
 11. **Not done / open** (also §7 of the audit): no on-device run; a page left open stays open (no idle return to HOME); the editor's lower third is empty now that the footers are gone; DIAGNOSTICS was moved, not redesigned.
 12. **Files:** `src/merakiplus.c`, `docs/ux-audit-v617.md` + `docs/img/ux-audit-v617/` (new), `docs/ui-guide.md`, `README.md`, `screenshots/`, `sim/scenarios/{ia_navigation,feature_page_start,activity_takes_home}.json` (new), `sim/CONTRACT.md`, `sim/README.md`, `sim/PLAY.md`, `sim/play.py`, `sim/play_viewer.html`, `bin/` (`merakiplus`, `merakiplus_sim_arm`, host SIM builds; md5 in `bin/MD5SUMS`), `tools/merakiplus.py` (VERSION 6.17 + md5).
 
+## CHANGES-v6.18
+
+**Sound: a start jingle + one ready tone per boiler.** The owner: *the stock UI plays a start jingle and a sound when the machine is hot in both boilers — do the same, but with a distinct sound per boiler*. The stock audio path was reversed first ([audio.md](../audio.md): `deal_play` 0x13725C, the logo page's `power.mp4`, `preheatCompele.mp3` once per power-on when words 62 **and** 63 > 99, libhvplayer's MI_AO sequence, the MCU's heat stages). **Display and audio only:** no UART frame, guard, limit or timing changed; the self-test proves that no sound event touches the write queue or the TX buffer.
+
+1. **Signal = the controller's heat stage** (words 62/63, MCU `boiler_heat` 0x3502: 0/30/60/100; 100 = extract boiler ≥ word 11 / steam boiler ≥ gear target − 10 °C). `docs/registermap.md` called them "heating power" — corrected. Fallback without the words: word 40 ≥ word 11 / word 47 ≥ steam target − 10 °C (`snd_ready`).
+2. **Engine** (`snd_tick`, after `sched_step` in the main loop, also in the preview loop): `snd_machine()` = 0 hold (no link while PW_ON) / 1 off (PW_OFFING/OFF/WAKING, V_OFF, PH_SLEEP, word 0 ≠ 1) / 2 on. On → **jingle** if the machine was seen off/asleep or the display cold-booted (`/proc/uptime` < 120 s); otherwise a 1.5 s **settle** window decides which boilers are already hot (announced). Per boiler: re-arm when `snd_cooled()` (stage ≤ 30 or 15.0 °C below the ready point), fire once when ready — dropped (`suppressed`) while `phase_active`/steam bits/a start is pending. Off → both re-armed, queue flushed.
+3. **Outcome per event** (`snd_emit`): SOUND off or the boiler not in READY TONE → `off`; config volume 0 → `muted`; no helper / a stuck helper → `noplayer` (device); queue full → `dropped`; else `played` (queued). Logged in a ring of 8 (state JSON, DIAGNOSTICS, `/tmp/merakiplus_snd.log` on the device).
+4. **Device playback** (`snd_spawn`/`snd_service`, `DEVICE_RT` only): fork + exec `/new_customer/merakiplus/merakiplus_snd <file> <vol>` with `LD_LIBRARY_PATH=/lib:/customer/libs`, all fds closed, one at a time, reaped with `waitpid(WNOHANG)`; merakiplus sends **no signal** (still 0 `kill()` calls) — the helper ends itself after 8 s (`alarm`). Volume = config `volume` capped at 70 (stock `deal_play`).
+5. **Helper** `src/merakiplus_snd.c` (new binary `bin/merakiplus_snd`, glibc 2.28 armhf, `-ldl`): `dlopen` libmi_common (RTLD_GLOBAL — libmi_ao's `CamOs*` symbols), libmi_sys, libmi_ao; `MI_SYS_Init`; libhvplayer's exact `MI_AO` sequence and attributes (48 kHz, 16 bit, mono, FrmNum 6, PtNumPerFrm 2048; SendFrame retry on 0xA005200D; dB = min(vol·90/100 − 60, 15), 0 = mute). WAV 16 kHz is upsampled ×3. MP3 (STOCK SOUNDS) via libhvplayer's `mm_player_*` like stock. `--check` resolves the symbols only.
+6. **Sounds** `audio/start.wav`, `ready_extract.wav`, `ready_steam.wav` — our own, synthesized by `tools/gen_audio.py` (stdlib), checked by `./build.sh` (`--check`) and `tests/hygiene.py` (`AUDIO_MD5`; no other audio/video file allowed).
+7. **Settings / IA:** `S_SOUND` (OFF/ON/STOCK SOUNDS) and `S_SNDRDY` (OFF/BREW BOILER/STEAM BOILER/BOTH BOILERS), flag `SF_SND`, own file `/new_customer/merakiplus/sound` (`snd_cfg_load`/`snd_cfg_save`, atomic like the schedule; env `MERAKIPLUS_SOUNDFILE`). Section DISPLAY → **DISPLAY · SOUND** = UI LANGUAGE, BRIGHTNESS, TEMP UNIT, SOUND, READY TONE, **VOLUME** (moved from STOCK UI). SYSTEM closed is still 5 rows. SAVE of SOUND/READY TONE/VOLUME plays a test tone (`snd_preview`). New DIAGNOSTICS block **SOUND** (`DG_SND`, between TIME · SCHEDULE and ABOUT).
+8. **Strings:** 435 → 461 ids: + 26 in one contiguous block (`TX_SL_SOUND` … `TX_DV_SO_DROP`); `TX_SEC_DISPLAY` → *DISPLAY · SOUND* / *SKÆRM · LYD*; `TX_SN_VOL` → *MERAKI+ + STOCK UI SOUNDS*. The v6.17 "the table is smaller than v6.16's" guard ignores the sound block. Appendix A regenerated.
+9. **SIM (additive, [CONTRACT.md](../../sim/CONTRACT.md) ADDENDUM v6.18):** state `audio` + words 62/63 in `regs`; `mcu_sim.py` heat-stage model behind the new `boilers` event (off by default — nothing else changes); runner keys `sim.init_events`, `sandbox_files`; play viewer audio card + `/api/boilers`; four `ui_only` scenarios.
+10. **Verification (local, §15):**
+
+| What | Result |
+|---|---|
+| Self-test | **537 / 0** EN and DA (repo fixture config), **538 / 0** with the device's config. New section "v6.18 sound" **27/27**: settings + file (atomic, round trip, bad values), cold boot → jingle once, per-boiler stage thresholds and distinct files, no spam on dips, link glitch ≠ power cycle, re-arm by temperature and by stage, no frame / TX bytes, sleep and the OFF view silent + jingle again on power-on, start on a running machine (no jingle, settle window), fallback thresholds, mute / OFF / per-boiler mask / volume cap / stock files, activity suppression, SAVE test tone, event names, DIAGNOSTICS text |
+| Self-test as a 32-bit ARM binary | **537 / 0** EN + DA (ARMv7 container, non-root) |
+| Mutation probes | **9/9** caught by the v6.18 section: `rearm_any`, `linkoff`, `nosuppress`, `nomask`, `nocap`, `sametone`, `asleep`, `nosettle`, `frame` |
+| Helper | host self-test against a mock MI_AO **14/14** (call order, attributes, chunking, retry, dB curve, the three files); ARMv7 container: runs, fails cleanly (rc 4) without the libraries, `--check` resolves all 9 symbols against the display's real `libmi_sys.so` / `libmi_ao.so` (with `libmi_common.so` stubbed — vendor files stay outside the repository) |
+| Builds | device, SIM ARM, SIM host, helper: **0 warnings** (fresh zig cache); helper also `-Wall -Wextra -Werror` |
+| Previews | 106 scenarios × 2 languages (+ `100`…`105`: DISPLAY · SOUND rows, the three editors, the SAVE toast, DIAGNOSTICS › SOUND); **circle 0 violations** |
+| Spec alignment | **ALL ALIGNED** (the two sound rows are merakiplus's own, not spec parameters) |
+| `sim/selftest.py` | **192 / 0** (T14 new) |
+| `run_e2e.py --all --parallel 4`, EN and DA | **43/43 scenarios, 1126/1126 checks** in each language |
+| `boot/test_switcher.py`, `tests/test_installer.py` (84 checks, incl. helper + sounds installed md5-gated and removed by revert), `tests/hygiene.py`, `tests/check_bins.py` | green |
+| On-device | **not run** — the speaker path is pending a hardware check ([audio.md § On-device check](../audio.md#on-device-check-pending)) |
+
+11. **Not done / open:** no sound has been heard on a machine; amplifier-enable GPIO and MI multi-process behaviour are unverified (audio.md); no fault / water-tank sounds (stock has them; out of scope); the stock UI's "both boilers" sound is replaced, not added.
+12. **Files:** `src/merakiplus.c`, `src/merakiplus_snd.c` (new), `audio/` (new), `tools/gen_audio.py` (new), `build.sh`, `bin/` (+ `merakiplus_snd`), `tools/merakiplus.py` (VERSION 6.18, `BIN_MD5`, `AUDIO_MD5`, install/revert), `tools/release_notes.py`, `.github/workflows/release.yml`, `tests/{hygiene,check_bins,test_installer}.py`, `docs/audio.md` (new), `docs/registermap.md`, `docs/ui-guide.md`, `README.md`, `CHANGELOG.md`, `sim/{mcu_sim,run_e2e,play,selftest}.py`, `sim/play_viewer.html`, `sim/{CONTRACT,README,PLAY}.md`, `sim/scenarios/audio_*.json` (new).
+
 ## Appendix A — string table (id / EN / DA)
 
 <!-- I18N-APPENDIX:BEGIN (generated by i18n_appendix.py — edit STR_TABLE in merakiplus.c, not here) -->
 
-**435 string ids × 2 languages** (49 are the same in EN and DA: units, proper names, technical words and commands). Class = the field the string is shown in; the self-test measures every classified string in both languages against the field's pixel budget (`-` = measured in its context by the layout tests). `%s`/`%d` are placeholders for numbers and names; text in `code font` inside a string is shown in lower case (paths, commands). Source: `round_v6/strings.tsv` (`--dump-strings`). The EN and DA columns are the UI's actual strings and are deliberately kept in both languages.
+**461 string ids × 2 languages** (52 are the same in EN and DA: units, proper names, technical words and commands). Class = the field the string is shown in; the self-test measures every classified string in both languages against the field's pixel budget (`-` = measured in its context by the layout tests). `%s`/`%d` are placeholders for numbers and names; text in `code font` inside a string is shown in lower case (paths, commands). Source: `round_v6/strings.tsv` (`--dump-strings`). The EN and DA columns are the UI's actual strings and are deliberately kept in both languages.
 
 
 **Units (identical in both languages)**
@@ -2336,7 +2369,7 @@ In addition: the RX counters are `uint32_t` (wrap around in a well-defined way),
 | `TX_SPL_CFG_MISSING` | - | `CONFIG MISSING` | `CONFIG MANGLER` |
 | `TX_PG_SYSTEM` | page-title | `SYSTEM` | `SYSTEM` |
 | `TX_PG_DIAG` | page-title | `DIAGNOSTICS` | `DIAGNOSE` |
-| `TX_SEC_DISPLAY` | - | `DISPLAY` | `SKÆRM` |
+| `TX_SEC_DISPLAY` | - | `DISPLAY · SOUND` | `SKÆRM · LYD` |
 | `TX_SEC_CLOCK` | - | `CLOCK` | `UR` |
 | `TX_SEC_SCHED` | - | `SCHEDULE` | `TIDSPLAN` |
 | `TX_SEC_STOCK` | - | `STOCK UI` | `STOCK-UI` |
@@ -2382,7 +2415,7 @@ In addition: the RX counters are `uint32_t` (wrap around in a well-defined way),
 | `TX_SL_BL` | - | `BRIGHTNESS` | `LYSSTYRKE` |
 | `TX_SN_BL` | note | `LIVE PREVIEW` | `LIVE PREVIEW` |
 | `TX_SL_VOL` | - | `VOLUME` | `LYDSTYRKE` |
-| `TX_SN_VOL` | note | `STOCK UI SOUND` | `STOCK-UI LYD` |
+| `TX_SN_VOL` | note | `MERAKI+ + STOCK UI SOUNDS` | `MERAKI+ + STOCK-UI LYDE` |
 | `TX_SH_VOL` | - | `STEPS = ESTIMATE` | `TRIN = SKØN` |
 | `TX_SL_TUNIT` | - | `TEMP UNIT` | `TEMP-ENHED` |
 | `TX_SN_TUNIT` | note | `ALSO APPLIES IN MERAKI+` | `GÆLDER OGSÅ I MERAKI+` |
@@ -2699,8 +2732,8 @@ In addition: the RX counters are `uint32_t` (wrap around in a well-defined way),
 | `TX_DV_YES` | diag-value | `YES` | `JA` |
 | `TX_DV_NO` | diag-value | `NO` | `NEJ` |
 | `TX_DV_MAINS` | - | `%u V · %u HZ` | `%u V · %u HZ` |
-| `TX_DV_VERSION` | - | `MERAKI+ V6.17` | `MERAKI+ V6.17` |
-| `TX_DV_VERSION_RO` | - | `MERAKI+ V6.17 RO` | `MERAKI+ V6.17 RO` |
+| `TX_DV_VERSION` | - | `MERAKI+ V6.18` | `MERAKI+ V6.18` |
+| `TX_DV_VERSION_RO` | - | `MERAKI+ V6.18 RO` | `MERAKI+ V6.18 RO` |
 | `TX_DV_MISSING` | diag-value | `MISSING` | `MANGLER` |
 | `TX_DV_FLAG_YES` | diag-value | `EXISTS` | `FINDES` |
 | `TX_DV_FLAG_NO` | diag-value | `NOT PRESENT` | `FINDES IKKE` |
@@ -2802,6 +2835,57 @@ In addition: the RX counters are `uint32_t` (wrap around in a well-defined way),
 |---|---|---|---|
 | `TX_T_OWN_SAVED` | toast | `SCHEDULE SAVED` | `TIDSPLAN GEMT` |
 | `TX_T_OWN_NOFILE` | toast | `ACTIVE · FILE NOT SAVED` | `AKTIV · FIL IKKE GEMT` |
+
+**Settings: row labels (SL), notes (SN) and hints (SH)**
+
+| id | class | EN | DA |
+|---|---|---|---|
+| `TX_SL_SOUND` | - | `SOUND` | `LYD` |
+| `TX_SL_SNDRDY` | - | `READY TONE` | `KLAR-TONE` |
+| `TX_SN_SOUND` | note | `START JINGLE + BOILER READY TONES` | `START-JINGLE + KLAR-TONER` |
+| `TX_SN_SNDRDY` | note | `ITS OWN TONE PER BOILER · WHEN HOT` | `SIN EGEN TONE PR. KEDEL · NÅR VARM` |
+
+**Enum names**
+
+| id | class | EN | DA |
+|---|---|---|---|
+| `TX_E_SND_STOCK` | - | `STOCK SOUNDS` | `STOCK-LYDE` |
+| `TX_E_RDY_BREW` | - | `BREW BOILER` | `BRYGKEDEL` |
+| `TX_E_RDY_STEAM` | - | `STEAM BOILER` | `DAMPKEDEL` |
+| `TX_E_RDY_BOTH` | - | `BOTH BOILERS` | `BEGGE KEDLER` |
+
+**Guards and toasts**
+
+| id | class | EN | DA |
+|---|---|---|---|
+| `TX_T_SND_SAVED` | toast | `SOUND SAVED` | `LYD GEMT` |
+
+**DIAGNOSTICS (labels, values, full-width lines, ABOUT block)**
+
+| id | class | EN | DA |
+|---|---|---|---|
+| `TX_DG_SNDCAP` | full-line | `SOUND` | `LYD` |
+| `TX_DL_SND` | diag-label | `SOUND · VOLUME` | `LYD · LYDSTYRKE` |
+| `TX_DL_SND_LAST` | diag-label | `LAST SOUND` | `SIDSTE LYD` |
+| `TX_DV_SND_ON` | diag-value | `ON · %d` | `TIL · %d` |
+| `TX_DV_SND_STOCK` | diag-value | `STOCK · %d` | `STOCK · %d` |
+| `TX_DV_SND_OFF` | diag-value | `OFF` | `FRA` |
+| `TX_DV_SND_MUTE` | diag-value | `VOLUME 0` | `LYDSTYRKE 0` |
+| `TX_DV_SND_NOHELPER` | diag-value | `NO PLAYER` | `INGEN AFSPILLER` |
+| `TX_DV_SE_JINGLE` | diag-value | `JINGLE` | `JINGLE` |
+| `TX_DV_SE_BREW` | diag-value | `BREW` | `BRYG` |
+| `TX_DV_SE_STEAM` | diag-value | `STEAM` | `DAMP` |
+| `TX_DV_SE_PREVIEW` | diag-value | `TEST` | `TEST` |
+| `TX_DV_SO_PLAYED` | diag-value | `PLAYED` | `SPILLET` |
+| `TX_DV_SO_MUTED` | diag-value | `MUTED` | `LYDLØS` |
+| `TX_DV_SO_SKIP` | diag-value | `SKIPPED` | `UDELADT` |
+| `TX_DV_SO_FAIL` | diag-value | `FAILED` | `FEJL` |
+| `TX_DV_SO_DROP` | diag-value | `BUSY` | `OPTAGET` |
+
+**Guards and toasts**
+
+| id | class | EN | DA |
+|---|---|---|---|
 | `TX_T_AUTOOFF_SOON` | toast | `AUTO OFF IN 30 S · TOUCH TO STAY ON` | `AUTO-SLUK OM 30 S · RØR SKÆRMEN` |
 | `TX_T_ONCE_USED` | toast | `ONE-TIME PRE-HEAT USED · NOW OFF` | `FORVARMNING BRUGT · NU FRA` |
 | `TX_T_NOCLOCK` | toast | `CLOCK NOT SET · NO PRE-HEAT ALARM` | `UR IKKE SAT · INGEN FORVARM-ALARM` |

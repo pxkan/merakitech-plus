@@ -1,0 +1,95 @@
+{
+  "name": "audio_muted",
+  "description": "v6.18: config volume 0 = mute (like stock: MI_AO mute): the jingle and both boiler events are still DETECTED and logged as \"muted\", nothing is played; no UART write",
+  "duration_s": 24,
+  "ui_only": true,
+  "config": {
+    "volume": 0
+  },
+  "sandbox_files": {
+    "proc/uptime": "18.0 2.0\n"
+  },
+  "sim": {
+    "init_events": [
+      {
+        "type": "boilers",
+        "e": 700,
+        "s": 900,
+        "e_rate": 40,
+        "s_rate": 40
+      }
+    ]
+  },
+  "events": [],
+  "expect": [
+    {
+      "kind": "state",
+      "path": "audio.vol",
+      "t": 3,
+      "window": 2,
+      "equals": 0
+    },
+    {
+      "kind": "state",
+      "path": "audio.n_start_jingle",
+      "t": 3,
+      "window": 2,
+      "equals": 1
+    },
+    {
+      "kind": "state",
+      "path": "audio.played_start_jingle",
+      "t": 3,
+      "window": 2,
+      "equals": 0
+    },
+    {
+      "kind": "state",
+      "path": "audio.n_boiler_ready_extract",
+      "t": 20,
+      "window": 2,
+      "equals": 1
+    },
+    {
+      "kind": "state",
+      "path": "audio.n_boiler_ready_steam",
+      "t": 20,
+      "window": 2,
+      "equals": 1
+    },
+    {
+      "kind": "state",
+      "path": "audio.n_muted",
+      "t": 20,
+      "window": 2,
+      "equals": 3
+    },
+    {
+      "kind": "state",
+      "path": "audio.played_boiler_ready_extract",
+      "t0": 1,
+      "t1": 23,
+      "equals": 0,
+      "mode": "all"
+    },
+    {
+      "kind": "state",
+      "path": "audio.played_boiler_ready_steam",
+      "t0": 1,
+      "t1": 23,
+      "equals": 0,
+      "mode": "all"
+    },
+    {
+      "kind": "sim_log",
+      "assert": "no_writes_between",
+      "t0": 1,
+      "t1": 23,
+      "except_subs": [
+        0,
+        1,
+        112
+      ]
+    }
+  ]
+}

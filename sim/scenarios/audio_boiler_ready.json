@@ -1,0 +1,165 @@
+{
+  "name": "audio_boiler_ready",
+  "description": "v6.18: cold display boot (uptime 21 s) with cold boilers: the START JINGLE once, then the EXTRACT boiler's tone when word 62 reaches stage 100 (~11 s) and the STEAM boiler's own tone when word 63 does (~21 s); the extract boiler cools to 65 °C (15+ °C below 87.0) -> re-armed -> its tone again when hot; the jingle never repeats; no UART write from the sound engine",
+  "duration_s": 44,
+  "ui_only": true,
+  "sandbox_files": {
+    "proc/uptime": "21.5 3.0\n"
+  },
+  "sim": {
+    "init_events": [
+      {
+        "type": "boilers",
+        "e": 550,
+        "s": 700,
+        "e_rate": 30,
+        "s_rate": 24
+      }
+    ]
+  },
+  "events": [
+    {
+      "t": 4,
+      "target": "runner",
+      "op": "snapshot",
+      "label": "heating"
+    },
+    {
+      "t": 30,
+      "target": "sim",
+      "event": {
+        "type": "boilers",
+        "e": 650,
+        "e_rate": 30
+      }
+    },
+    {
+      "t": 42,
+      "target": "runner",
+      "op": "snapshot",
+      "label": "rearmed"
+    }
+  ],
+  "expect": [
+    {
+      "kind": "state",
+      "path": "audio.n_start_jingle",
+      "t": 3,
+      "window": 2,
+      "equals": 1
+    },
+    {
+      "kind": "state",
+      "path": "audio.played_start_jingle",
+      "t": 3,
+      "window": 2,
+      "equals": 1
+    },
+    {
+      "kind": "state",
+      "path": "audio.cold_boot",
+      "t": 3,
+      "window": 2,
+      "equals": false
+    },
+    {
+      "kind": "state",
+      "path": "audio.played_boiler_ready_extract",
+      "t": 6,
+      "window": 1,
+      "equals": 0
+    },
+    {
+      "kind": "state",
+      "path": "regs.62",
+      "t": 6,
+      "window": 1.5,
+      "equals": 60
+    },
+    {
+      "kind": "state",
+      "path": "audio.played_boiler_ready_extract",
+      "t": 16,
+      "window": 1,
+      "equals": 1
+    },
+    {
+      "kind": "state",
+      "path": "audio.played_boiler_ready_steam",
+      "t": 16,
+      "window": 1,
+      "equals": 0
+    },
+    {
+      "kind": "state",
+      "path": "audio.played_boiler_ready_steam",
+      "t": 27,
+      "window": 1,
+      "equals": 1
+    },
+    {
+      "kind": "state",
+      "path": "regs.63",
+      "t": 27,
+      "window": 1,
+      "equals": 100
+    },
+    {
+      "kind": "state",
+      "path": "audio.log",
+      "t": 28,
+      "window": 1.0,
+      "contains": "start_jingle:played,boiler_ready_extract:played,boiler_ready_steam:played"
+    },
+    {
+      "kind": "state",
+      "path": "audio.armed",
+      "t": 31.5,
+      "window": 1,
+      "equals": [
+        1,
+        0
+      ]
+    },
+    {
+      "kind": "state",
+      "path": "audio.played_boiler_ready_extract",
+      "t": 42,
+      "window": 1.5,
+      "equals": 2
+    },
+    {
+      "kind": "state",
+      "path": "audio.n_start_jingle",
+      "t0": 3,
+      "t1": 43,
+      "equals": 1,
+      "mode": "all"
+    },
+    {
+      "kind": "state",
+      "path": "audio.played_boiler_ready_steam",
+      "t0": 27,
+      "t1": 43,
+      "equals": 1,
+      "mode": "all"
+    },
+    {
+      "kind": "phase",
+      "t": 20,
+      "window": 3,
+      "value": "READY"
+    },
+    {
+      "kind": "sim_log",
+      "assert": "no_writes_between",
+      "t0": 1,
+      "t1": 43,
+      "except_subs": [
+        0,
+        1,
+        112
+      ]
+    }
+  ]
+}

@@ -97,6 +97,15 @@ def stock_a(srv, root):
     check("old stock UI was stopped (SIGSTOP first, then killed)",
           "kill -STOP 600" in (root / "events").read_text() and not (root / "proc/600").exists())
     check("state records original flag=0", "orig_flag=0" in (root / "new_customer/merakiplus/boot/merakiplus.state").read_text())
+    snd = root / mp.SND_HELPER.lstrip("/")
+    aud = root / mp.AUDIO_DIR.lstrip("/")
+    check("v6.18: sound helper installed (md5-gated, executable)",
+          snd.is_file() and md5f(snd) == mp.BIN_MD5["merakiplus_snd"] and (snd.stat().st_mode & 0o111) != 0)
+    check("v6.18: our three sounds installed, byte-identical to audio/",
+          sorted(p.name for p in aud.iterdir()) == sorted(mp.AUDIO_MD5)
+          and all(md5f(aud / n) == h and md5f(ROOT / "audio" / n) == h for n, h in mp.AUDIO_MD5.items()))
+    check("v6.18: no vendor audio touched (/customer/audio unchanged or absent)",
+          not (root / "customer/audio").exists() or all(p.suffix == ".mp3" for p in (root / "customer/audio").iterdir()))
 
     pid_before = ui(root)
     rc, out = run(srv, root, "install")
@@ -127,6 +136,8 @@ def stock_a(srv, root):
     check("slot B vendor binary restored", md5f(root / "new_customer/demo_v9") == orig_b)
     check("boot flag removed (it was not set originally)", not (root / "customer/new").exists())
     check("switcher removed", not (root / "new_customer/merakiplus/boot/switcher").exists())
+    check("v6.18: sound helper and sounds removed by revert",
+          not (root / mp.SND_HELPER.lstrip("/")).exists() and not (root / mp.AUDIO_DIR.lstrip("/")).exists())
     check("stock UI running from slot A, nothing else", [e for _, e in ui(root)] == ["/customer/demo_v9"], ui(root))
     check("slot A still untouched", md5f(root / "customer/demo_v9") == orig_a)
 
