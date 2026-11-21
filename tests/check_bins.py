@@ -6,9 +6,12 @@ Run after ./build.sh and the Linux SIM cross-build:
     zig cc -target x86_64-linux-musl -DMERAKIPLUS_SIM -O2 -static -s src/merakiplus.c -lm \
         -o build/merakiplus_sim-linux-x86_64
 
-These targets are bit-reproducible with zig 0.17.1, independent of the build machine
-(see bin/README.md). A mismatch means bin/ was not rebuilt after a source change:
-rebuild, then update bin/MD5SUMS and BIN_MD5 in tools/merakiplus.py (CONTRIBUTING.md).
+These targets are bit-reproducible with the OFFICIAL zig 0.17.1 release (ziglang.org tarball,
+the one CI installs), independent of the build machine and directory (see bin/README.md). A
+mismatch means bin/ was not rebuilt after a source change — or it was built with a distribution
+zig (e.g. Homebrew's), whose clang/LLD write their own name into the ELF .comment section, so
+every byte of code matches but the md5 does not. Rebuild with the official toolchain (and its
+own cache dir), then update bin/MD5SUMS and BIN_MD5 in tools/merakiplus.py (CONTRIBUTING.md).
 
 Excluded on purpose:
   * grab_shim.so — the committed file is the on-device-verified build with only the
@@ -52,5 +55,7 @@ for name in REPRODUCIBLE:
         fails.append(f"bin/{name} drifted: committed {b} != fresh build {a} — "
                      "rebuild bin/ and update bin/MD5SUMS + BIN_MD5")
 
+for f in fails:
+    print("  [FAIL]  " + f)
 print("BIN DRIFT: " + ("OK" if not fails else f"{len(fails)} problem(s)"))
 sys.exit(1 if fails else 0)

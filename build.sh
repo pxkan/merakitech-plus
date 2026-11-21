@@ -10,6 +10,12 @@ set -eu
 cd "$(dirname "$0")"
 MODE=${1:-all}
 command -v zig >/dev/null 2>&1 || { echo "build.sh: zig not found (https://ziglang.org/download/ — tested with 0.17.1)" >&2; exit 1; }
+# bin/ is byte-identical to CI only with the OFFICIAL zig release: distribution builds (e.g. Homebrew's) put their own
+# name into the ELF .comment ("Homebrew clang/LLD"), and a shared zig cache can even hand their objects to the official zig.
+case "$(zig cc --version 2>/dev/null | head -n 1)" in
+  *Homebrew*) echo "build.sh: WARNING: this is Homebrew's zig — fine for development, but builds for bin/ must use the official" >&2
+              echo "          zig 0.17.1 tarball with its own ZIG_GLOBAL_CACHE_DIR, or tests/check_bins.py fails in CI (bin/README.md)" >&2 ;;
+esac
 
 mkdir -p build
 ARM="-target arm-linux-musleabihf -mcpu=cortex_a7 -static -O2 -s"

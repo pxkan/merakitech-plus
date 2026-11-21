@@ -48,10 +48,10 @@ RAW_AUDIO = "https://raw.githubusercontent.com/" + REPO + "/{ref}/audio/{name}"
 
 # md5 of the shipped device binaries in bin/ (kept in sync with bin/MD5SUMS by CI).
 BIN_MD5 = {
-    "merakiplus": "fa2c1f4dd2b85660cb6e6b9fa71ee1af",
-    "switcher": "a5e0128bdd77ff5697df2100e889604a",
+    "merakiplus": "3f02369bbaaee542979cb7f45595c23b",
+    "switcher": "f2b95b16b33a9e1bc868a2f5b2414e6b",
     "grab_shim.so": "c42076c807c54d477a5868977404186d",
-    "merakiplus_snd": "0ffff0ba1bca3617fcb38b4496ea50a5",
+    "merakiplus_snd": "161edd2c477f4aa6238060ba0b09162b",
 }
 # v6.18: Meraki+'s own sounds (tools/gen_audio.py; docs/audio.md) — installed next to the sound helper
 AUDIO_MD5 = {

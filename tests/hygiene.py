@@ -116,6 +116,10 @@ for p in files:
 for p in (ROOT / "bin").iterdir():
     if HOME.search(p.read_bytes().decode("latin-1")):
         fail(f"bin/{p.name} embeds a home-directory path")
+    elf = p.read_bytes()
+    if elf[:4] == b"\x7fELF" and (b"Homebrew clang" in elf or b"Homebrew LLD" in elf):
+        fail(f"bin/{p.name} was built with Homebrew's zig (its .comment differs from the official toolchain "
+             "CI uses) — rebuild with the official zig 0.17.1 tarball (bin/README.md)")
 
 # 4. fixture credentials are placeholders
 cfg = json.loads((ROOT / "sim/fixtures/config.json").read_text())

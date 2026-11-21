@@ -22,7 +22,9 @@ arm-linux-gnueabihf.2.28 -mcpu=cortex_a7 -O2 -s -fno-PIE -no-pie … -ldl`; bit-
 `tests/check_bins.py`). It links only `libc.so.6` + `libdl.so.2` and loads the display's own `libmi_common.so`,
 `libmi_sys.so`, `libmi_ao.so` (and, for the optional stock sounds, `libhvplayer.so`) at run time — no vendor code is
 linked or shipped. The change is display and audio only (no UART frame changed; see CHANGELOG / docs/audio.md).
-`switcher`, `tinj_hold`, `keyinj` and `grab_shim.so` are byte-identical. **Not yet verified on a machine**: covered
+All reproducible files were built with the **official** zig 0.17.1 release (see below), so `switcher`, `tinj_hold`
+and `keyinj` differ from v6.17 in the ELF `.comment` section only (no code change); `grab_shim.so` is byte-identical.
+**Not yet verified on a machine**: covered
 by the UI self-test (EN + DA, also as a 32-bit ARM binary), the helper's self-test against a mock MI_AO, a symbol
 check of the helper against the display's real `libmi_sys.so` / `libmi_ao.so` in an ARMv7 container, and the
 simulator scenarios `audio_boiler_ready`, `audio_muted`, `audio_power_cycle`, `audio_sound_off`.
@@ -74,17 +76,23 @@ self-test and the simulator E2E suite.
 
 | File | md5 (this repo) | Built with |
 |---|---|---|
-| `merakiplus` (V6.18) | `fa2c1f4dd2b85660cb6e6b9fa71ee1af` | `./build.sh` → `build/merakiplus` |
-| `merakiplus_sim_arm` (V6.18) | `e9b279aca96161101d35ef35afc0bf7f` | `./build.sh` → `build/merakiplus_sim_arm` |
-| `merakiplus_snd` (V6.18) | `0ffff0ba1bca3617fcb38b4496ea50a5` | `./build.sh` → `build/merakiplus_snd` |
-| `switcher` | `a5e0128bdd77ff5697df2100e889604a` | `./build.sh` → `build/switcher` |
-| `tinj_hold` | `795e5d66bc22a724da89ccce6c9c95b1` | `./build.sh` → `build/tinj_hold` |
-| `keyinj` | `645d223205a66b20d16cb408f03a73a4` | `./build.sh` → `build/keyinj` |
-| `merakiplus_sim-linux-x86_64` (V6.18) | `ae9e9794e4b2c662936a57601a4f09ca` | `zig cc -target x86_64-linux-musl -DMERAKIPLUS_SIM -O2 -static -s src/merakiplus.c -lm` |
+| `merakiplus` (V6.18) | `3f02369bbaaee542979cb7f45595c23b` | `./build.sh` → `build/merakiplus` |
+| `merakiplus_sim_arm` (V6.18) | `d2266f86d503dbc04fb3ebaa4df8ee10` | `./build.sh` → `build/merakiplus_sim_arm` |
+| `merakiplus_snd` (V6.18) | `161edd2c477f4aa6238060ba0b09162b` | `./build.sh` → `build/merakiplus_snd` |
+| `switcher` | `f2b95b16b33a9e1bc868a2f5b2414e6b` | `./build.sh` → `build/switcher` |
+| `tinj_hold` | `e9806fb92e9b8a7e506a34639173c648` | `./build.sh` → `build/tinj_hold` |
+| `keyinj` | `a0cbd4bc2a670abe0e250ec34a193843` | `./build.sh` → `build/keyinj` |
+| `merakiplus_sim-linux-x86_64` (V6.18) | `e4e7915f84c56a0ef6be84ca8a054f32` | `zig cc -target x86_64-linux-musl -DMERAKIPLUS_SIM -O2 -static -s src/merakiplus.c -lm` |
 | `merakiplus_sim-macos-arm64` (V6.18) | `13dde8b2c02c675e57b8bca9aa0a026c` | `zig cc -DMERAKIPLUS_SIM -O2 -s src/merakiplus.c -lm` (Mach-O builds are not bit-reproducible) |
 
-The ARM builds above are reproducible: running `./build.sh` on the same sources with zig 0.17.1 gives
-the same md5, independent of the build directory. The Linux SIM build (`-target x86_64-linux-musl
+The ARM builds above are reproducible: running `./build.sh` on the same sources with the **official**
+zig 0.17.1 release (the ziglang.org tarball CI installs) gives the same md5 on macOS and Linux,
+independent of the build directory and cache location. A distribution zig such as Homebrew's produces the
+same code but writes "Homebrew clang/LLD" into the ELF `.comment` section, so its md5 differs — that is
+why CI's drift check failed for the v6.17 binaries (built with Homebrew's zig) until v6.18 rebuilt every
+reproducible file with the official toolchain (`switcher`, `tinj_hold`, `keyinj` changed only in `.comment`).
+Note that a zig cache shared with a Homebrew zig of the same version can hand its objects to the official
+zig: use a separate `ZIG_GLOBAL_CACHE_DIR`. `tests/hygiene.py` rejects Homebrew-built files in `bin/`. The Linux SIM build (`-target x86_64-linux-musl
 -static -s`) is reproducible the same way. CI enforces this on every push and PR
 (`tests/check_bins.py`): the committed `bin/` must be byte-identical to fresh builds of these seven
 reproducible targets, so a source change without a `bin/` rebuild fails CI. `grab_shim.so` (trimmed

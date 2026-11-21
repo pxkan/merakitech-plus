@@ -2332,7 +2332,7 @@ In addition: the RX counters are `uint32_t` (wrap around in a well-defined way),
 | Self-test as a 32-bit ARM binary | **537 / 0** EN + DA (ARMv7 container, non-root) |
 | Mutation probes | **9/9** caught by the v6.18 section: `rearm_any`, `linkoff`, `nosuppress`, `nomask`, `nocap`, `sametone`, `asleep`, `nosettle`, `frame` |
 | Helper | host self-test against a mock MI_AO **14/14** (call order, attributes, chunking, retry, dB curve, the three files); ARMv7 container: runs, fails cleanly (rc 4) without the libraries, `--check` resolves all 9 symbols against the display's real `libmi_sys.so` / `libmi_ao.so` (with `libmi_common.so` stubbed — vendor files stay outside the repository) |
-| Builds | device, SIM ARM, SIM host, helper: **0 warnings** (fresh zig cache); helper also `-Wall -Wextra -Werror` |
+| Builds | device, SIM ARM, SIM host, helper: **0 warnings** (fresh zig cache); helper also `-Wall -Wextra -Werror`. `bin/` rebuilt with the **official** zig 0.17.1 tarball (macOS) = byte-identical to the same builds on linux/amd64 (the CI toolchain); the v6.17 files had been built with Homebrew's zig (`.comment` "Homebrew clang/LLD") — the cause of CI's failing drift check since it was added |
 | Previews | 106 scenarios × 2 languages (+ `100`…`105`: DISPLAY · SOUND rows, the three editors, the SAVE toast, DIAGNOSTICS › SOUND); **circle 0 violations** |
 | Spec alignment | **ALL ALIGNED** (the two sound rows are merakiplus's own, not spec parameters) |
 | `sim/selftest.py` | **192 / 0** (T14 new) |

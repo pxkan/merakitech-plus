@@ -35,8 +35,13 @@ Audio feedback: a start jingle and **one ready tone per boiler**. The stock audi
 ### Changed
 - `docs/registermap.md`: words 62/63 are the boilers' **heat stage** (0/30/60/100), not a heating power.
 ### Notes
-- `bin/`: `merakiplus` `fa2c1f4d…`, `merakiplus_sim_arm` `e9b279ac…`, the host SIM builds and the new
-  `merakiplus_snd` `0ffff0ba…`; `switcher`, `grab_shim.so`, `tinj_hold` and `keyinj` are byte-identical.
+- `bin/`: `merakiplus` `3f02369b…`, `merakiplus_sim_arm` `d2266f86…`, the host SIM builds and the new
+  `merakiplus_snd` `161edd2c…`. **All reproducible files are now built with the official zig 0.17.1 release**
+  (the toolchain CI installs): the v6.17 files had been built with Homebrew's zig, which writes its own name into
+  the ELF `.comment` section — same code, different md5 — so CI's new drift check had failed since it was added.
+  `switcher` (`f2b95b16…`), `tinj_hold` and `keyinj` therefore changed in `.comment` only; `grab_shim.so` is unchanged.
+  `tests/check_bins.py` now names each mismatch, `tests/hygiene.py` rejects Homebrew-built files in `bin/`, and
+  `./build.sh` warns when it runs with a Homebrew zig.
 - Verified locally: UI self-test 537/0 EN + DA (also as a 32-bit ARM binary), 9/9 mutation probes caught by the new
   section, simulator self-test 192/0, full E2E 43/43 scenarios (1126/1126 checks) in EN and in DA, installer tests.
 - **Not yet heard on a machine** (install deferred). The helper resolves every MI symbol against the display's real
