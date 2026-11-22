@@ -371,6 +371,12 @@ class Device:
         m = re.search(r"\b([0-9a-f]{32})\b", out)
         return m.group(1) if (rc == 0 and m) else None
 
+    def size(self, path):
+        """Size in bytes of a file on the display, or None."""
+        rc, out = self.sh(f"wc -c < {self.d(path)} 2>/dev/null", check=False)
+        last = out.strip().splitlines()[-1].strip() if out.strip() else ""
+        return int(last) if rc == 0 and last.isdigit() else None
+
     def is_ours(self, path):
         pats = " ".join(f"-e '{m}'" for m in (MERAKIPLUS_MARK,) + LEGACY_MARKS)
         return self.sh(f"grep -q -F {pats} {self.d(path)} 2>/dev/null && echo Y || echo N",
@@ -485,7 +491,10 @@ class Device:
             if ncpid:
                 self.sh(f"kill {ncpid} 2>/dev/null; true", check=False)
             if got == want:
-                self.sh(f"chmod {mode} {part} && mv -f {part} {dpath} && sync")
+                rc, out = self.sh(f"chmod {mode} {part} && mv -f {part} {dpath} && sync", check=False)
+                if rc != 0:
+                    self.sh(f"rm -f {part}; sync", check=False)
+                    raise Abort(f"Could not move the verified upload into place: {dest} (rc={rc}) {out[-300:]}")
                 if self.md5(dest) != want:
                     raise Abort(f"md5 mismatch after rename: {dest}")
                 self.o.debug(f"push ok {dest} {want}")
@@ -503,12 +512,19 @@ class Device:
             self.o.say(f"  [dry-run] would copy {src} -> {dest} via {tmp} (md5 {want_md5[:8]}…)")
             return
         self.changed = True
-        self.sh(f"rm -f {tmp}; cp {self.d(src)} {tmp} && chmod {mode} {tmp} && sync")
+        rc, out = self.sh(f"rm -f {tmp}; cp {self.d(src)} {tmp} && chmod {mode} {tmp} && sync", check=False)
+        if rc != 0:                   # e.g. ENOSPC after a partial write: never leave the partial file
+            self.sh(f"rm -f {tmp}; sync", check=False)
+            raise Abort(f"Copying {src} -> {dest} failed on the display (rc={rc}): {out[-300:]}\n"
+                        f"{dest} left untouched; the partial temp file was removed.")
         got = self.md5(str(pathlib.PurePosixPath(dest).parent / ("." + dp.name + ".tmp")))
         if got != want_md5:
             self.sh(f"rm -f {tmp}", check=False)
             raise Abort(f"Copy to {tmp} has md5 {got}, expected {want_md5}; {dest} left untouched.")
-        self.sh(f"mv -f {tmp} {self.d(dest)} && sync")
+        rc, out = self.sh(f"mv -f {tmp} {self.d(dest)} && sync", check=False)
+        if rc != 0:
+            self.sh(f"rm -f {tmp}; sync", check=False)
+            raise Abort(f"Could not rename {tmp} over {dest} (rc={rc}): {out[-300:]}")
         if self.md5(dest) != want_md5:
             raise Abort(f"{dest} has the wrong md5 after rename — run revert.sh.")
 
@@ -655,6 +671,53 @@ def write_state(dev, state):
     dev.w(f"printf '{lines}' > {dev.d(STATE)}.tmp && mv -f {dev.d(STATE)}.tmp {dev.d(STATE)} && sync")
 
 
+def leftover_globs(dev):
+    """Shell globs of the temp files an interrupted install can leave (atomic_copy .X.tmp,
+    push X.part, STATE.tmp). All are ours by name; revert removes them."""
+    return " ".join(dev.d(g) for g in (
+        B_DIR + "/.demo_v9.tmp", A_DIR + "/.demo.sh.tmp", DEMO_SH + ".part",
+        BOOTDIR + "/.*.tmp", BOOTDIR + "/*.tmp", BOOTDIR + "/*.part",
+        OURDIR + "/.*.tmp", OURDIR + "/*.part", AUDIO_DIR + "/*.part"))
+
+
+def clean_leftovers(dev, o):
+    globs = leftover_globs(dev)
+    _, out = dev.sh(f"for f in {globs}; do [ -e \"$f\" ] && echo \"L $f\"; done; true", check=False)
+    found = [l[2:] for l in out.splitlines() if l.startswith("L ")]
+    if found:
+        dev.w(f"rm -f {globs}; sync")
+        o.ok(f"removed {len(found)} temporary file(s) left by an interrupted run")
+
+
+def check_free_space(dev, o, st, uploads, merakiplus):
+    """Space on /new_customer for what this install writes: the vendor backup (if one is taken),
+    the staged binary plus the temp copy that sits beside slot B's old inode while the running
+    UI still holds it, and every helper/sound that is not already up to date (each is written
+    as X.part next to the old file)."""
+    if st["b_free_kb"] is None:
+        return
+    want = BIN_MD5["merakiplus"]
+    need, parts = 0, []
+    if plan_vendor_backup(dev, st):
+        bsize = dev.size(B_EXE) or 0
+        need += bsize
+        parts.append(f"vendor backup {bsize // 1024} KB")
+    m = (len(merakiplus) if dev.md5(STAGE) != want else 0) + (len(merakiplus) if st["b_md5"] != want else 0)
+    up = sum(len(data) for dest, data in uploads if dev.md5(dest) != md5b(data))
+    need += m + up
+    if m:
+        parts.append(f"Meraki+ {m // 1024} KB")
+    if up:
+        parts.append(f"helpers/sounds {up // 1024} KB")
+    if not need:
+        return
+    need_kb = (need + 1023) // 1024 + 64          # + a margin for directory blocks / the log
+    if st["b_free_kb"] < need_kb:
+        raise Abort(f"Only {st['b_free_kb']} KB free on /new_customer — this install needs about {need_kb} KB "
+                    f"({', '.join(parts)}). Nothing was changed.")
+    o.ok(f"free space on /new_customer: {st['b_free_kb']} KB (needs about {need_kb} KB)")
+
+
 def require_device(st):
     if not st["fingerprint"]:
         raise Abort("This does not look like a MerakiTech/Sanbon display (no /customer/demo.sh, "
@@ -795,8 +858,6 @@ def cmd_install(dev, o, args):
     print_status(o, st)
     require_device(st)
     st = resume_stopped(dev, o, st)
-    if st["b_free_kb"] is not None and st["b_free_kb"] < 1200 and not st["b_ours"]:
-        raise Abort(f"Only {st['b_free_kb']} KB free on /new_customer — need about 1.2 MB.")
     if not st["procs"]:
         o.warn("no UI process running right now (the watchdog usually restarts one within a second)")
 
@@ -813,6 +874,9 @@ def cmd_install(dev, o, args):
         check_arm_elf(extra["switcher"], "switcher")
         extra["grab_shim.so"] = get_binary("grab_shim.so", args, o)
         check_arm_elf(extra["grab_shim.so"], "grab_shim.so", shared=True)
+    uploads = [(SND_HELPER, snd)] + [(AUDIO_DIR + "/" + n, d) for n, d in sounds.items()] + \
+        [(dest, extra[name]) for name, dest in (("switcher", SWITCHER), ("grab_shim.so", SHIM)) if name in extra]
+    check_free_space(dev, o, st, uploads, merakiplus)
 
     o.say("")
     o.say("  Meraki+ will replace the display's touch UI. The coffee machine's own controller is not")
@@ -988,6 +1052,7 @@ def cmd_revert(dev, o, args):
     # OTA the stock UI itself runs from B with the boot flag set, and that must be left alone
     nothing = not st["b_ours"] and not st["guard_lines"] and not st["switcher_pids"] and not st["state"]
     if nothing and not args.purge:
+        clean_leftovers(dev, o)
         o.say("\nMeraki+ is not installed here — nothing to revert.")
         return
     if not dev.dry and not confirm("  Revert this display to the stock UI now?", args.yes):
@@ -1065,6 +1130,7 @@ def cmd_revert(dev, o, args):
         o.ok("boot flag removed: next boot starts the stock UI (slot A)")
     else:
         o.ok("boot flag not set: next boot starts the stock UI (slot A)")
+    clean_leftovers(dev, o)
     if args.purge:
         dev.w(f"rm -rf {dev.d(OURDIR)} {dev.d(LEGACY_DIR)} && sync")
         o.ok(f"{OURDIR} removed (backups, language file and settings backups included)")

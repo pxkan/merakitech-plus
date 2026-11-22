@@ -21,6 +21,8 @@ check for the file on every call, so a test can switch a failure on and off betw
   * gzip_fail        gzip exits 1 without output (busybox gzip OOM); base64 still exits 0.
   * ui_start=die     `nohup ./demo_v9` kills the shell: the telnet connection drops mid-switch.
   * ui_start=never   `nohup ./demo_v9` starts nothing (the binary fails to come up).
+  * cp_enospc=SUFFIX `cp X DEST` with DEST ending in SUFFIX writes 100 bytes, then fails (disk full).
+  * df_free_kb=N     `df` reports N KB available on every filesystem.
 
 When the shell exits, the server closes the connection (like telnetd), so a client sees a
 transport drop at once instead of waiting for its timeout.
@@ -74,6 +76,12 @@ FUNCS = r'''
 R="$MOCK_ROOT"
 uname() { [ "$1" = "-m" ] && echo armv7l || command uname "$@"; }
 mock_inject() { [ -f "$R/inject/$1" ]; }
+# `env cp`, not `command cp`: bash 3.2 (macOS) execs a `command` builtin inside a background
+# subshell, which would end mock_spawn (run under `nohup ./demo_v9 &`) right after its cp.
+cp() { if mock_inject cp_enospc; then case "$2" in *"$(cat "$R/inject/cp_enospc")")
+  head -c 100 "$1" > "$2"; echo "cp: write error: No space left on device" >&2; return 1;; esac; fi; env cp "$@"; }
+df() { if mock_inject df_free_kb; then echo "Filesystem 1K-blocks Used Available Use% Mounted on"
+  echo "ubi0:mock 100000 90000 $(cat "$R/inject/df_free_kb") 90% /mock"; else command df "$@"; fi; }
 gzip() { if mock_inject gzip_fail; then echo "gzip: out of memory" >&2; return 1; fi; command gzip "$@"; }
 command -v md5sum >/dev/null 2>&1 || md5sum() {
   rc=0; for f in "$@"; do if [ -e "$f" ]; then echo "$(md5 -q "$f")  $f"; else echo "md5sum: $f: No such file" >&2; rc=1; fi; done; return $rc; }

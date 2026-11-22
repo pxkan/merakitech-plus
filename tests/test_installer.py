@@ -455,6 +455,65 @@ def persist_start_fails(srv, root):
     check("revert afterwards exits 0 and removes the flag", rc == 0 and not (root / "customer/new").exists())
 
 
+def tmp_files(root):
+    return sorted(str(q.relative_to(root)) for q in root.rglob("*") if q.name.endswith((".tmp", ".part")))
+
+
+def free_space(srv, root):
+    """Review finding 6: the free-space gate counts the vendor backup, and still applies when B is ours."""
+    big = b"\x7fELF MOCK VENDOR UI (large build)\n" + bytes(1500 * 1024)
+    (root / "new_customer/demo_v9").write_bytes(big)
+    m = (ROOT / "bin/merakiplus").read_bytes()
+    small = 2 * len(m) + len((ROOT / "bin/merakiplus_snd").read_bytes()) + \
+        sum(len((ROOT / "audio" / n).read_bytes()) for n in mp.AUDIO_MD5)
+    md.inject(root, "df_free_kb", str((small + len(big) // 2) // 1024 + 64))
+    before = tree_digest(root)
+    rc, out = run(srv, root, "install", quiet=True)
+    check("too little space for the vendor backup: install refuses (exit 1)",
+          rc == 1 and "KB free" in out and "vendor backup" in out, out[-400:])
+    check("too little space: nothing changed", tree_digest(root) == before)
+    md.inject(root, "df_free_kb", str((small + len(big)) // 1024 + 200))
+    rc, out = run(srv, root, "install")
+    check("enough space incl. the vendor backup: install exits 0", rc == 0)
+    md.inject(root, "df_free_kb", "8")
+    rc, out = run(srv, root, "install")
+    check("re-install with nothing to write passes the gate on a full disk", rc == 0 and "already" in out)
+    old = b"\x7fELF FAKE OLDER BUILD " + mp.MERAKIPLUS_MARK.encode() + b"V6.0\n" * 40
+    (root / "new_customer/demo_v9").write_bytes(old)
+    (root / mp.STAGE.lstrip("/")).write_bytes(old)
+    before = tree_digest(root)
+    rc, out = run(srv, root, "install", quiet=True)
+    check("update of an older Meraki+ in slot B is still space-checked", rc == 1 and "KB free" in out, out[-300:])
+    check("... and changes nothing", tree_digest(root) == before)
+    md.uninject(root, "df_free_kb")
+
+
+def disk_full_copy(srv, root):
+    """Review finding 6: a cp that fails mid-way leaves no partial temp file; revert cleans leftovers."""
+    md.inject(root, "cp_enospc", ".demo_v9.vendor.tmp")
+    orig_b = md5f(root / "new_customer/demo_v9")
+    rc, out = run(srv, root, "install", quiet=True)
+    md.uninject(root, "cp_enospc")
+    check("disk full during the vendor backup: install exits 1", rc == 1 and "No space left" in out, out[-400:])
+    check("no partial temp file left behind", not tmp_files(root), tmp_files(root))
+    check("slot B untouched", md5f(root / "new_customer/demo_v9") == orig_b)
+
+    # leftovers of a run that was killed outright (e.g. the laptop went to sleep)
+    leftovers = ["new_customer/merakiplus/boot/.demo_v9.vendor.tmp", "new_customer/.demo_v9.tmp",
+                 "customer/demo.sh.part", "new_customer/merakiplus/merakiplus.part"]
+    for f in leftovers:
+        (root / f).write_bytes(b"partial")
+    rc, out = run(srv, root, "revert")
+    check("revert with only leftovers: nothing to revert, exit 0", rc == 0 and "nothing to revert" in out, out[-300:])
+    check("revert removed the leftover temp files", not tmp_files(root), tmp_files(root))
+    rc, _ = run(srv, root, "install")
+    for f in leftovers + ["new_customer/merakiplus/audio/start.wav.part", "new_customer/merakiplus/boot/merakiplus.state.tmp"]:
+        (root / f).write_bytes(b"partial")
+    rc, out = run(srv, root, "revert")
+    check("full revert also removes leftover temp files", rc == 0 and not tmp_files(root), tmp_files(root))
+    check("vendor slot B restored", md5f(root / "new_customer/demo_v9") == orig_b)
+
+
 def not_a_display(srv, root):
     (root / "customer/test.sh").unlink()
     before = tree_digest(root)
@@ -472,6 +531,8 @@ if __name__ == "__main__":
     scenario("interrupted stop-first switch (Ctrl-C, connection drop)", "stock_a", switch_interrupted)
     scenario("revert on a vendor build in slot B, never installed", "vendor_b", vendor_b_no_install)
     scenario("--persist when Meraki+ fails to start", "stock_a", persist_start_fails)
+    scenario("free-space gate", "stock_a", free_space)
+    scenario("disk full during a copy; leftover temp files", "stock_a", disk_full_copy)
     scenario("vendor OTA into slot B after install", "stock_a", ota_after_install)
     scenario("vendor OTA into slot B after install + revert", "stock_a", ota_after_revert)
     scenario("stock UI left SIGSTOPped by an older run", "stock_a", stopped_ui)
