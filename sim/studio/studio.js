@@ -77,12 +77,14 @@ function layout() {
   const availW = stage.clientWidth - parseFloat(cs.paddingLeft) - parseFloat(cs.paddingRight);
   const availH = stage.clientHeight - parseFloat(cs.paddingTop) - parseFloat(cs.paddingBottom) - 40;
   let size;
-  if (narrow) size = Math.min(availW, 640);
+  // phone: the DISPLAY fills the width; the ring runs off the screen edges and is trimmed top/bottom
+  if (narrow) size = Math.min(availW / (GEOM.display * 2), 900);
   else size = Math.max(240, Math.min(availH, (availW - (n - 1) * 40) / n, 760));
   size = Math.floor(size);
   const dpr = Math.min(3, window.devicePixelRatio || 1);
   for (const u of S.rigs) {
     u.machineEl.style.setProperty('--msize', size + 'px');
+    u.machineEl.style.setProperty('--mtrim', narrow ? `${-Math.round(size * (GEOM.ring - GEOM.display) * 0.75)}px` : '0');
     const px = Math.round(size * dpr);
     for (const c of [u.bezel, u.glass]) { c.width = c.height = px; }
     drawBezel(u.bezel.getContext('2d'), px, { label: S.rigs.length > 1 ? u.key : '' });
@@ -187,7 +189,7 @@ async function scenario(name) {
     const { machine: m, ui } = u.rig;
     baseline(m, ui);
     switch (name) {
-      case 'cold': m.coldStart(); if (S.speed < 20) setSpeed(20); break;
+      case 'cold': m.coldStart(); m.setMilk(m.params.ambientC + 3); if (S.speed < 20) setSpeed(20); break;
       case 'ready': m.preheat(); break;
       case 'shot': m.preheat(); await waitSim(u.rig, 400); if (!await holdTarget(u.rig, 'brew')) ui.ctrl({ cmd: 'action', name: 'brew' }); break;
       case 'steam': m.preheat(); await waitSim(u.rig, 400); if (!await holdTarget(u.rig, 'steam')) ui.ctrl({ cmd: 'action', name: 'steam' }); break;
@@ -345,7 +347,7 @@ const REGS = [
 function refreshPanels() {
   const f = S.fps;
   const r0 = S.rigs[0];
-  if (r0) $('#simclock').textContent = `${simClock(r0.rig.t)} · ${f.val} fps · ${f.step.toFixed(1)} ms`;
+  if (r0) $('#simclock').innerHTML = `<span>${simClock(r0.rig.t)}</span><span class="cx"> · ${f.val} fps · ${f.step.toFixed(1)} ms</span>`;
   for (const u of S.rigs) {
     const st = u.rig.ui.state(false) || {};
     u.ph.textContent = u.rig.ui.stopped ? 'STOPPED' : (st.phase || '—');

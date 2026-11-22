@@ -89,7 +89,7 @@ body.paused .paused-badge { display: block; }
 .tabs button { border: 1px solid var(--line2); background: none; border-radius: 6px; padding: 1px 7px; font-size: 11px; color: var(--dim); }
 .tabs button.on { color: var(--text); background: #2a2c31; }
 
-.scen { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+.scen { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px; }
 .scen button { text-align: left; background: rgba(255,255,255,0.035); border: 1px solid var(--line); border-radius: 10px; padding: 8px 10px; display: flex; flex-direction: column; gap: 1px; transition: background .12s, border-color .12s; }
 .scen button:hover { background: rgba(255,255,255,0.07); border-color: var(--line2); }
 .scen button:active { transform: translateY(1px); }
@@ -108,8 +108,8 @@ body.paused .paused-badge { display: block; }
 .hold.down { background: var(--accent); border-color: var(--accent); color: #fff; }
 input[type=time], input[type=search] { background: #1b1c20; border: 1px solid var(--line2); border-radius: 7px; padding: 4px 8px; color: var(--text); color-scheme: dark; }
 
-.gauge-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; margin-bottom: 8px; }
-.gauge { background: rgba(255,255,255,0.035); border: 1px solid var(--line); border-radius: 10px; padding: 7px 8px; }
+.gauge-row { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px; margin-bottom: 8px; }
+.gauge { min-width: 0; background: rgba(255,255,255,0.035); border: 1px solid var(--line); border-radius: 10px; padding: 7px 8px; }
 .gauge label { display: block; font-size: 10.5px; color: var(--faint); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .gauge output { display: block; font: 600 15px var(--mono); font-variant-numeric: tabular-nums; margin-top: 2px; }
 .gauge output small { font-size: 10px; color: var(--faint); font-weight: 400; margin-left: 1px; }
@@ -134,8 +134,8 @@ input[type=time], input[type=search] { background: #1b1c20; border: 1px solid va
 .kv { flex: 1; display: grid; grid-template-columns: auto 1fr; gap: 1px 10px; font-size: 11.5px; align-content: center; }
 .kv span:nth-child(odd) { color: var(--faint); }
 .kv span:nth-child(even) { font-family: var(--mono); color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.regs { display: grid; grid-template-columns: repeat(4, 1fr); gap: 4px; }
-.regs div { background: rgba(255,255,255,0.03); border-radius: 7px; padding: 4px 6px; border: 1px solid transparent; transition: border-color .4s; }
+.regs { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 4px; }
+.regs div { min-width: 0; background: rgba(255,255,255,0.03); border-radius: 7px; padding: 4px 6px; border: 1px solid transparent; transition: border-color .4s; }
 .regs div.chg { border-color: rgba(200,131,79,0.55); transition: none; }
 .regs label { display: block; font-size: 9.5px; color: var(--faint); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .regs output { font: 12px var(--mono); font-variant-numeric: tabular-nums; }
@@ -158,13 +158,15 @@ input[type=time], input[type=search] { background: #1b1c20; border: 1px solid va
   .topbar { gap: 8px; padding: 0 10px; padding-top: env(safe-area-inset-top); }
   .brand .sub, .builds, .toggle span:not(.sw) { display: none; }
   .clock { min-width: 0; font-size: 11px; }
+  .clock .cx { display: none; }
+  .gauge output { font-size: 13px; }
   .seg button { padding: 5px 8px; }
-  .stage { align-items: flex-start; padding: 10px 8px calc(var(--sheet, 34vh) + 8px); flex-direction: column; gap: 10px; justify-content: flex-start; overflow-y: auto; }
+  .stage { align-items: center; padding: 4px 8px calc(var(--sheet, 34vh) + 8px); flex-direction: column; gap: 10px; justify-content: flex-start; overflow-x: hidden; overflow-y: auto; }
+  .stage .machine { margin: var(--mtrim, 0) 0 calc(var(--mtrim, 0) * 0.45); }
   .unit { width: 100%; }
   .drawer { position: fixed; left: 0; right: 0; bottom: 0; height: var(--sheet, 34vh); border-left: 0; border-top: 1px solid var(--line2); border-radius: 16px 16px 0 0; box-shadow: 0 -12px 40px rgba(0,0,0,0.5); transition: height .2s ease; padding-bottom: env(safe-area-inset-bottom); }
   .drawer.dragging { transition: none; }
   .handle { display: flex; justify-content: center; align-items: center; height: 22px; flex: none; touch-action: none; cursor: grab; }
   .handle span { width: 40px; height: 4px; border-radius: 2px; background: rgba(255,255,255,0.25); }
-  .scen { grid-template-columns: 1fr 1fr; }
 }
 @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }

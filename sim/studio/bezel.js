@@ -41,7 +41,7 @@ export function drawBezel(ctx, s, opts = {}) {
   const step = Math.max(0.6, s / 900);
   for (let r = Rl; r < R; r += step) {
     const v = rnd();
-    ctx.strokeStyle = v > 0.5 ? `rgba(255,255,255,${(v - 0.5) * 0.09})` : `rgba(0,0,0,${(0.5 - v) * 0.16})`;
+    ctx.strokeStyle = v > 0.5 ? `rgba(255,255,255,${(v - 0.5) * 0.05})` : `rgba(0,0,0,${(0.5 - v) * 0.10})`;
     ctx.lineWidth = step;
     ctx.beginPath(); ctx.arc(cx, cy, r, 0, Math.PI * 2); ctx.stroke();
   }
