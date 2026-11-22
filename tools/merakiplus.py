@@ -318,11 +318,12 @@ class Device:
             self.close()
             raise Abort(f"Lost the telnet connection ({e}).")
         end_re = re.compile(rb"(?:^|\n)E_" + tag.encode() + rb":(\d+)\r?\n")
-        data, deadline = b"", time.time() + timeout
+        data, deadline, hung_up = b"", time.time() + timeout, False
         while time.time() < deadline:
             try:
                 c = self.sock.recv(65536)
                 if not c:
+                    hung_up = True
                     break
                 data += self._strip_iac(c)
                 if end_re.search(data):
@@ -332,6 +333,8 @@ class Device:
         m = end_re.search(data)
         if not m:
             self.close()
+            if hung_up:
+                raise Abort(f"The display closed the telnet connection during: {cmd[:80]}")
             raise Abort(f"No answer from the display within {timeout}s for: {cmd[:80]}")
         text = data[:m.start()].decode("utf-8", "replace").replace("\r", "")
         lines = text.split("\n")
@@ -388,15 +391,21 @@ class Device:
         return data
 
     def ui_procs(self):
-        """[(pid, exe)] for every running process whose exe is a demo_v9.
+        """[(pid, exe)] for every running process whose exe is a demo_v9."""
+        return [(p, e) for p, e, _ in self.ui_procs_state()]
+
+    def ui_procs_state(self):
+        """[(pid, exe, stopped)] for every process whose exe is a demo_v9; stopped is True for a
+        process in state T (SIGSTOPped, e.g. by an interrupted stop-first switch).
         Scans /proc instead of `pidof demo_v9`: the vendor watchdog greps `ps` for 'demo_v9',
         and a helper process with that string in its command line would fool it."""
         # After a binary is renamed over, the kernel reports "<path> (deleted)" for the old
         # inode that is still running — that process must still be seen (and stopped).
         _, out = self.sh(f"for d in {self.d('/proc')}/[0-9]*; do e=$(readlink $d/exe 2>/dev/null); "
-                         f"case \"$e\" in */demo_v9|*'/demo_v9 (deleted)') echo \"P ${{d##*/}} $e\";; esac; done",
+                         f"case \"$e\" in */demo_v9|*'/demo_v9 (deleted)') echo \"P ${{d##*/}} $e\"; "
+                         f"echo \"S ${{d##*/}} $(grep '^State:' $d/status 2>/dev/null)\";; esac; done",
                          check=False)
-        res = []
+        res, stopped = [], set()
         for ln in out.splitlines():
             parts = ln.split(" ", 2)
             if len(parts) == 3 and parts[0] == "P" and parts[1].isdigit():
@@ -406,7 +415,11 @@ class Device:
                 if self.p and exe.startswith(self.p):
                     exe = exe[len(self.p):]
                 res.append((int(parts[1]), exe))
-        return res
+            elif len(parts) == 3 and parts[0] == "S" and parts[1].isdigit():
+                f = parts[2].split()
+                if len(f) > 1 and f[0] == "State:" and f[1] in ("T", "t"):
+                    stopped.add(int(parts[1]))
+        return [(p, e, p in stopped) for p, e in res]
 
     def watchdog_slot(self):
         """'A' / 'B' / None — which slot the vendor watchdog (test.sh <slot>) restarts."""
@@ -547,7 +560,9 @@ def inspect(dev):
     st["arch"] = out.splitlines()[-1].strip() if out.strip() else "?"
     _, mnt = dev.sh("cat /proc/mounts", check=False)
     st["b_mounted"] = bool(dev.p) or any(len(l.split()) > 1 and l.split()[1] == B_DIR for l in mnt.splitlines())
-    st["procs"] = dev.ui_procs()
+    ps = dev.ui_procs_state()
+    st["procs"] = [(p, e) for p, e, _ in ps]
+    st["stopped"] = [p for p, _, stop in ps if stop]
     st["watchdog"] = dev.watchdog_slot()
     st["flag"] = dev.exists(FLAG)
     st["b_exists"] = dev.exists(B_EXE)
@@ -587,7 +602,9 @@ def slot_of(exe):
 def print_status(o, st):
     o.say(f"  device fingerprint : {'MerakiTech/Sanbon display (OK)' if st['fingerprint'] else 'NOT RECOGNISED'}"
           f"  arch={st['arch']}")
-    o.say(f"  running UI         : " + (", ".join(f"pid {p} = {slot_of(e)}" for p, e in st["procs"]) or "none"))
+    o.say(f"  running UI         : " + (", ".join(f"pid {p} = {slot_of(e)}"
+                                                    + (" (PAUSED by SIGSTOP)" if p in st.get("stopped", ()) else "")
+                                                    for p, e in st["procs"]) or "none"))
     o.say(f"  watchdog restarts  : slot {st['watchdog'] or '?'}")
     o.say(f"  boot flag          : {'SET -> next boot starts slot B' if st['flag'] else 'not set -> next boot starts slot A (stock)'}")
     b = "missing" if not st["b_exists"] else ("Meraki+" if st["b_ours"] else "vendor/other") + f" (md5 {st['b_md5']})"
@@ -611,6 +628,24 @@ def require_device(st):
                     "installed there. Nothing was changed.")
 
 
+def resume_stopped(dev, o, st):
+    """A UI left SIGSTOPped (frozen screen) by an interrupted earlier run is resumed before
+    anything else; the watchdog never restarts it, because its pid still exists."""
+    if not st.get("stopped"):
+        return st
+    pids = " ".join(map(str, st["stopped"]))
+    if dev.dry:
+        o.say(f"  [dry-run] would resume the paused UI process(es) {pids} (kill -CONT)")
+        return st
+    o.warn(f"UI process(es) {pids} are paused (SIGSTOP), probably by an interrupted earlier run — resuming")
+    dev.sh(f"kill -CONT {pids}", check=False)
+    st2 = inspect(dev)
+    if st2["stopped"]:
+        raise Abort(f"Could not resume the paused UI process(es) {st2['stopped']}. Power-cycle the machine.")
+    o.ok("paused UI resumed")
+    return st2
+
+
 # ============================================================ activation (no reboot)
 def find_new(dev, exe, old, budget):
     t_end = time.time() + budget
@@ -630,11 +665,17 @@ def stop_first_switch(dev, o, target_dir, target_exe, ldp, logname):
     old = [p for p, _ in dev.ui_procs()]
     olds = " ".join(map(str, old))
     dev.changed = True
-    if olds:
-        dev.sh(f"for p in {olds}; do kill -STOP $p; done")
-    dev.sh(f"cd {dev.d(target_dir)} && LD_LIBRARY_PATH={ldp} nohup ./demo_v9 > {dev.d('/tmp/' + logname)} "
-           f"2>&1 < /dev/null & sleep 2")
-    pid, procs = find_new(dev, target_exe, old, 8)
+    try:
+        if olds:
+            dev.sh(f"for p in {olds}; do kill -STOP $p; done")
+        dev.sh(f"cd {dev.d(target_dir)} && LD_LIBRARY_PATH={ldp} nohup ./demo_v9 > {dev.d('/tmp/' + logname)} "
+               f"2>&1 < /dev/null & sleep 2")
+        pid, procs = find_new(dev, target_exe, old, 8)
+    except BaseException:
+        # Ctrl-C, a dropped connection or a timeout between STOP and the final kill: never leave
+        # the old UI frozen. Reconnect, resume it, stop a half-started new one, then re-raise.
+        undo_switch(dev, o, olds, old, target_exe)
+        raise
     if pid is None:
         if olds:
             dev.sh(f"for p in {olds}; do kill -CONT $p; done", check=False)
@@ -646,6 +687,20 @@ def stop_first_switch(dev, o, target_dir, target_exe, ldp, logname):
     if olds:
         dev.sh(f"kill -9 {olds}; sleep 1", check=False)
     return pid
+
+
+def undo_switch(dev, o, olds, old, target_exe):
+    dev.close()                       # the connection may be dead or mid-command; sh() reconnects
+    try:
+        if olds:
+            dev.sh(f"for p in {olds}; do kill -CONT $p; done", timeout=10, check=False)
+        stray = [p for p, e in dev.ui_procs() if e == target_exe and p not in old]
+        if stray:
+            dev.sh("kill -9 " + " ".join(map(str, stray)), timeout=10, check=False)
+        o.warn("the UI switch was interrupted; the previous UI was resumed")
+    except BaseException as e:        # best effort; the original error is re-raised by the caller
+        o.warn(f"the UI switch was interrupted and the previous UI could not be resumed ({e}). "
+               f"Run the same command again: it resumes a paused UI first.")
 
 
 def activate_meraki(dev, o, st, want_md5):
@@ -701,6 +756,7 @@ def cmd_install(dev, o, args):
     st = inspect(dev)
     print_status(o, st)
     require_device(st)
+    st = resume_stopped(dev, o, st)
     if st["b_free_kb"] is not None and st["b_free_kb"] < 1200 and not st["b_ours"]:
         raise Abort(f"Only {st['b_free_kb']} KB free on /new_customer — need about 1.2 MB.")
     if not st["procs"]:
@@ -864,6 +920,7 @@ def cmd_revert(dev, o, args):
     st = inspect(dev)
     print_status(o, st)
     require_device(st)
+    st = resume_stopped(dev, o, st)
     nothing = (not st["b_ours"] and not st["guard_lines"] and not st["switcher_pids"]
                and not any(e == B_EXE for _, e in st["procs"]) and not st["state"])
     if nothing and not args.purge:
@@ -1081,7 +1138,9 @@ def main(argv=None):
             o.say(f"Log: {logfile}")
         return 1
     except KeyboardInterrupt:
-        o.say("\nInterrupted. Every step is atomic; run ./install.sh again or ./revert.sh to get a clean state.")
+        o.say("\nInterrupted. Files on the display are only replaced atomically (temp file + rename) and a paused "
+              "UI is resumed, but the run may be incomplete. Run the same command again to finish it, or "
+              "./revert.sh to go back to the stock UI.")
         return 130
     finally:
         if dev:

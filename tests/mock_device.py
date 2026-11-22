@@ -8,7 +8,9 @@ sandbox cannot do for real are emulated with shell functions:
   * processes: <root>/proc/<pid>/{exe,cmdline,exe_path,image}. `readlink .../exe` reports the
     launched path, or "<path> (deleted)" once that file was replaced (inode semantics).
   * kill -STOP/-CONT/-TERM/-9 act on fake pids; when no UI is left the vendor watchdog is
-    emulated (it restarts the slot recorded in <root>/watchdog_slot).
+    emulated (it restarts the slot recorded in <root>/watchdog_slot). A stopped process keeps
+    its pid (so the watchdog does not restart it), gets a <root>/proc/<pid>/stopped marker and
+    reports "State:\tT (stopped)" in /proc/<pid>/status, as Linux does.
   * nohup ./demo_v9 spawns a fake UI process; nc -l -p PORT is a tiny Python listener.
   * uname -m says armv7l.
 
@@ -17,6 +19,11 @@ inject(root, name[, value]) and remove it with uninject(root, name). The shell f
 check for the file on every call, so a test can switch a failure on and off between runs:
 
   * gzip_fail        gzip exits 1 without output (busybox gzip OOM); base64 still exits 0.
+  * ui_start=die     `nohup ./demo_v9` kills the shell: the telnet connection drops mid-switch.
+  * ui_start=never   `nohup ./demo_v9` starts nothing (the binary fails to come up).
+
+When the shell exits, the server closes the connection (like telnetd), so a client sees a
+transport drop at once instead of waiting for its timeout.
 
 Everything here is synthetic — no vendor files are used. demo.sh below only reproduces the
 lines the installer anchors on.
@@ -74,7 +81,10 @@ mock_next_pid() { n=$(cat "$R/pidcounter"); n=$((n+1)); echo $n > "$R/pidcounter
 mock_spawn() {  # $1 = absolute exe path, $2 = argv0
   p=$(mock_next_pid); mkdir -p "$R/proc/$p"; cp "$1" "$R/proc/$p/image"
   printf '%s' "$1" > "$R/proc/$p/exe_path"; ln -s "$R/proc/$p/image" "$R/proc/$p/exe"
-  printf '%s\000' "$2" > "$R/proc/$p/cmdline"; echo "spawn $p $1" >> "$R/events"; }
+  printf '%s\000' "$2" > "$R/proc/$p/cmdline"; mock_state $p S; echo "spawn $p $1" >> "$R/events"; }
+mock_state() {  # $1 = pid, $2 = S (running) / T (stopped)
+  if [ "$2" = T ]; then touch "$R/proc/$1/stopped"; printf 'Name:\tdemo_v9\nState:\tT (stopped)\n' > "$R/proc/$1/status"
+  else rm -f "$R/proc/$1/stopped"; printf 'Name:\tdemo_v9\nState:\tS (sleeping)\n' > "$R/proc/$1/status"; fi; }
 mock_ui_left() { for d in "$R"/proc/[0-9]*; do [ -f "$d/exe_path" ] && case "$(cat $d/exe_path)" in */demo_v9) return 0;; esac; done; return 1; }
 readlink() {
   case "$1" in
@@ -90,7 +100,7 @@ kill() {
     if [ -d "$R/proc/$p" ]; then
       echo "kill -$sig $p" >> "$R/events"
       case "$sig" in
-        STOP) touch "$R/proc/$p/stopped";; CONT) rm -f "$R/proc/$p/stopped";;
+        STOP) mock_state $p T;; CONT) mock_state $p S;;
         *) rm -rf "$R/proc/$p"
            if ! mock_ui_left; then ws=$(cat "$R/watchdog_slot" 2>/dev/null)
              [ "$ws" = B ] && [ -f "$R/new_customer/demo_v9" ] && mock_spawn "$R/new_customer/demo_v9" ./demo_v9
@@ -111,7 +121,11 @@ while True:
 sys.stdout.flush(); c.close()' "$3"; }
 nohup() {
   case "$1" in
-    ./demo_v9) mock_spawn "$PWD/demo_v9" ./demo_v9;;
+    ./demo_v9) case "$(cat "$R/inject/ui_start" 2>/dev/null)" in
+                 die) command kill -9 $$;;
+                 never) :;;
+                 *) mock_spawn "$PWD/demo_v9" ./demo_v9;;
+               esac;;
     nc) shift; nc "$@";;
     *) command nohup "$@";;
   esac; }
@@ -153,7 +167,22 @@ def make_root(root, scenario="stock_a"):
     (p / "exe_path").write_text(str(ui))
     os.symlink(p / "image", p / "exe")
     (p / "cmdline").write_bytes(b"./demo_v9\0")
+    set_stopped(root, 600, False)
     return root
+
+
+def set_stopped(root, pid, stopped=True):
+    """Put a fake process into the state `kill -STOP` (True) / `kill -CONT` (False) leaves it in."""
+    d = pathlib.Path(root) / "proc" / str(pid)
+    (d / "status").write_text("Name:\tdemo_v9\nState:\t" + ("T (stopped)" if stopped else "S (sleeping)") + "\n")
+    if stopped:
+        (d / "stopped").touch()
+    elif (d / "stopped").exists():
+        (d / "stopped").unlink()
+
+
+def is_stopped(root, pid):
+    return (pathlib.Path(root) / "proc" / str(pid) / "stopped").exists()
 
 
 def inject(root, name, value=""):
@@ -203,6 +232,10 @@ class MockServer:
                     c.sendall(chunk.replace(b"\n", b"\r\n"))
                 except OSError:
                     break
+            try:                        # the shell is gone: hang up, as telnetd does
+                c.shutdown(socket.SHUT_RDWR)
+            except OSError:
+                pass
         threading.Thread(target=pump_out, daemon=True).start()
         try:
             while True:

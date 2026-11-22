@@ -320,6 +320,57 @@ def read_fail(srv, root):
     check("demo.sh guard: any other change is refused", refused(guarded, sh.replace(b"insmod", b"#insmod")))
 
 
+def no_stopped(root):
+    return [d.name for d in (root / "proc").iterdir() if md.is_stopped(root, d.name)]
+
+
+def switch_interrupted(srv, root):
+    """Review finding 2: an interrupted stop-first switch must not leave the stock UI SIGSTOPped."""
+    real_find_new = mp.find_new
+
+    def ctrl_c(*a, **k):
+        raise KeyboardInterrupt
+    mp.find_new = ctrl_c
+    try:
+        rc, out = run(srv, root, "install", quiet=True)
+    finally:
+        mp.find_new = real_find_new
+    check("Ctrl-C inside the switch: install exits 130", rc == 130, out[-400:])
+    check("Ctrl-C inside the switch: no UI left stopped", not no_stopped(root), no_stopped(root))
+    check("Ctrl-C inside the switch: only the resumed stock UI runs", ui(root) == [("600", "/customer/demo_v9")], ui(root))
+    check("Ctrl-C message no longer claims every step is atomic", "Every step is atomic" not in out
+          and "Run the same command again" in out)
+
+    md.inject(root, "ui_start", "die")
+    rc, out = run(srv, root, "install", quiet=True)
+    md.uninject(root, "ui_start")
+    check("connection drop inside the switch: install exits 1", rc == 1, out[-400:])
+    check("connection drop inside the switch: no UI left stopped", not no_stopped(root), no_stopped(root))
+    check("connection drop inside the switch: the stock UI runs", ui(root) == [("600", "/customer/demo_v9")], ui(root))
+
+    rc, out = run(srv, root, "install")
+    check("install afterwards succeeds (no 'several UIs')", rc == 0 and [e for _, e in ui(root)] == ["/new_customer/demo_v9"])
+
+
+def stopped_ui(srv, root):
+    """Review finding 2: revert / install resume a stock UI left stopped by an older run."""
+    md.set_stopped(root, 600)
+    rc, out = run(srv, root, "status")
+    check("status reports the paused UI", rc == 0 and "PAUSED" in out, out[-400:])
+    rc, out = run(srv, root, "revert")
+    check("revert on a device with a stopped stock UI exits 0", rc == 0 and "nothing to revert" in out, out[-400:])
+    check("revert resumed the stopped stock UI", not md.is_stopped(root, 600) and ui(root) == [("600", "/customer/demo_v9")])
+    md.set_stopped(root, 600)
+    rc, out = run(srv, root, "install")
+    check("install on a device with a stopped stock UI resumes it first and exits 0",
+          rc == 0 and "resuming" in out and [e for _, e in ui(root)] == ["/new_customer/demo_v9"], ui(root))
+    check("no UI left stopped after install", not no_stopped(root), no_stopped(root))
+    md.set_stopped(root, ui(root)[0][0])
+    rc, out = run(srv, root, "revert")
+    check("revert with a stopped Meraki+ UI exits 0, stock UI runs, nothing stopped",
+          rc == 0 and ui(root) == [(ui(root)[0][0], "/customer/demo_v9")] and not no_stopped(root), ui(root))
+
+
 def not_a_display(srv, root):
     (root / "customer/test.sh").unlink()
     before = tree_digest(root)
@@ -334,6 +385,8 @@ if __name__ == "__main__":
     scenario("slot B empty", "empty_b", empty_b)
     scenario("not a MerakiTech display", "stock_a", not_a_display)
     scenario("failing device read (gzip) during revert and legacy migration", "stock_a", read_fail)
+    scenario("interrupted stop-first switch (Ctrl-C, connection drop)", "stock_a", switch_interrupted)
+    scenario("stock UI left SIGSTOPped by an older run", "stock_a", stopped_ui)
     scenario("upgrade of a pre-rename install (legacy migration)", "stock_a", legacy_upgrade)
     scenario("revert of a pre-rename install (legacy migration)", "stock_a", legacy_revert)
     scenario("revert --purge with both layouts present", "stock_a", legacy_purge)
