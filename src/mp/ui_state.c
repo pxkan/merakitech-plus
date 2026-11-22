@@ -471,11 +471,11 @@ static int home_mode_of(int ph){
 #define ED_NOTE_Y 322
 #define ED_OK_Y 390
 #define ED_OK_R 36
-#define BTN_Y 350
-#define BTN_H 50
-#define BTN_W 136
-#define BTN_CX0 (CX-BTN_W-8-4)
-#define BTN_CX1 (CX+8-4)
+#define SB_Y 350
+#define SB_H 50
+#define SB_W 136
+#define SB_X0 (CX-SB_W-8-4)
+#define SB_X1 (CX+8-4)
 /* v6.17: a page's header = chevron (y 22..30) + title (y 44) + one line under it (y 70). The whole header is the close target. */
 #define PBACK_X0 (CX-80)
 #define PBACK_Y0 4
@@ -511,10 +511,10 @@ static int hit_test(int x,int y,ms_t now){
     if(view==V_SPLASH||view==V_BYE||view==V_OFF||tr.type) return T_NONE;
     if((view==V_SYS||view==V_DETAIL)&&in_r(x,y,BACK_X0,BACK_Y0,BACK_W,BACK_H)) return T_BACK;   /* v6.11: close chevron at the top */
     if(view==V_SYS){
-        if(sys_locked()){ if(in_r(x,y,170,BTN_Y-4,140,BTN_H+8)) return T_CANCEL; return T_NONE; }
+        if(sys_locked()){ if(in_r(x,y,170,SB_Y-4,140,SB_H+8)) return T_CANCEL; return T_NONE; }
         if(xsel==X_BOOTUI){ if(in_c(x,y,ED_MX,ED_CY,40)) return T_MINUS; if(in_c(x,y,ED_PX,ED_CY,40)) return T_PLUS; }
-        if(in_r(x,y,BTN_CX0,BTN_Y-4,BTN_W+8,BTN_H+8)) return T_CANCEL;
-        if(in_r(x,y,BTN_CX1,BTN_Y-4,BTN_W+8,BTN_H+8)) return T_SAVE;
+        if(in_r(x,y,SB_X0,SB_Y-4,SB_W+8,SB_H+8)) return T_CANCEL;
+        if(in_r(x,y,SB_X1,SB_Y-4,SB_W+8,SB_H+8)) return T_SAVE;
         return T_NONE;
     }
     if(view==V_DETAIL){

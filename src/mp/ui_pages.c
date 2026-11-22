@@ -774,9 +774,10 @@ static void draw_roller(const Setting*s,int lock,int eoor){
         set_fmt(sel,v,b,sizeof b-4);
         float yc=ED_CY+k*ED_STEP_PX+off; float dist=fabsf(yc-ED_CY)/ED_STEP_PX;
         int f=dist<0.5f?F_ROLL:F_ROLL2;
-        if(f==F_ROLL&&text_wf(b,f)>(num?200:240)){ f=F_L; if(text_wf(b,f)>250) fit_text(b,f,250); }
-        if(f==F_ROLL2&&text_wf(b,f)>230) fit_text(b,F_ROLL2,230);
-        int a=(int)(255*clampf(1.1f-dist*0.45f,0.12f,1));
+        if(f==F_ROLL&&text_wf(b,f)>(num?200:212)){ f=F_L; if(text_wf(b,f)>212) fit_text(b,f,212); }
+        if(f==F_ROLL2&&text_wf(b,f)>212) fit_text(b,F_ROLL2,212);
+        float edge=(yc<ED_CY?ROLL_UP:ROLL_DN)-fabsf(yc-ED_CY)-FS[f].cap/2;          /* fade out before the roller's edge */
+        int a=(int)(255*clampf(1.1f-dist*0.45f,0.12f,1)*clampf(edge/22.f,0,1)); if(a<=0) continue;
         uint32_t c=(k==0)?(eoor?C_ERR:(lock?C_TXT2:C_TXT)):C_TXT2;
         float nw=text_wf(b,f); int y=(int)lroundf(yc-FS[f].cap/2);
         float uw=(num&&*u&&k==0)?text_wf(u,F_MB)+8:0;
@@ -885,13 +886,13 @@ static void draw_sys(ms_t now){
     }
     if(W_begin(W_DCHG,R(60,ED_STAT_Y-3,360,20),hi(hs(H0,t.status?t.status:""),(int)t.c_status))){ if(t.status) text_c(CX,ED_STAT_Y,t.status,F_XS,t.c_status,255); W_end(); }
     if(W_begin(W_XNOTE,R(40,ED_NOTE_Y-3,400,20),hi(hs(H0,t.note),(int)t.c_note))){ char nb[110]; snprintf(nb,sizeof nb-4,"%s",t.note); fit_text(nb,F_XS,340); text_c(CX,ED_NOTE_Y,nb,F_XS,t.c_note,255); W_end(); }
-    if(W_begin(W_CANCEL,lock?R(166,BTN_Y-6,148,BTN_H+12):R(BTN_CX0-4,BTN_Y-6,BTN_W+8,BTN_H+12),hi(hi(H0,pressed(T_CANCEL)),lock))){
-        draw_pill_btn(lock?R(170,BTN_Y,140,BTN_H):R(BTN_CX0,BTN_Y,BTN_W,BTN_H),t.cancel,F_S,C_SURF,C_SURF,C_TXT,pressed(T_CANCEL)); W_end();
+    if(W_begin(W_CANCEL,lock?R(166,SB_Y-6,148,SB_H+12):R(SB_X0-4,SB_Y-6,SB_W+8,SB_H+12),hi(hi(H0,pressed(T_CANCEL)),lock))){
+        draw_pill_btn(lock?R(170,SB_Y,140,SB_H):R(SB_X0,SB_Y,SB_W,SB_H),t.cancel,F_S,C_SURF,C_SURF,C_TXT,pressed(T_CANCEL)); W_end();
     }
     int act_ok=(xsel!=X_BOOTUI)||(x_edit!=x_orig);
-    if(!lock&&W_begin(W_SAVE,R(BTN_CX1-4,BTN_Y-6,BTN_W+8,BTN_H+12),hi(hi(hs(H0,t.ok),pressed(T_SAVE)),act_ok))){
-        if(act_ok) draw_pill_btn(R(BTN_CX1,BTN_Y,BTN_W,BTN_H),t.ok,text_wf(t.ok,F_S)>BTN_W-24?F_XS:F_S,C_TXT,C_TXT,C_ACCD,pressed(T_SAVE));
-        else draw_pill_btn(R(BTN_CX1,BTN_Y,BTN_W,BTN_H),t.ok,F_S,C_SURF,C_SURF,C_DIS,0);
+    if(!lock&&W_begin(W_SAVE,R(SB_X1-4,SB_Y-6,SB_W+8,SB_H+12),hi(hi(hs(H0,t.ok),pressed(T_SAVE)),act_ok))){
+        if(act_ok) draw_pill_btn(R(SB_X1,SB_Y,SB_W,SB_H),t.ok,text_wf(t.ok,F_S)>SB_W-24?F_XS:F_S,C_TXT,C_TXT,C_ACCD,pressed(T_SAVE));
+        else draw_pill_btn(R(SB_X1,SB_Y,SB_W,SB_H),t.ok,F_S,C_SURF,C_SURF,C_DIS,0);
         W_end();
     }
     if(W_begin(W_XFOOT,R(84,414,312,36),hi(hs(hs(H0,t.l1),t.l2),(int)t.c_l1))){
@@ -1140,8 +1141,11 @@ static void static_build(void){
     memcpy(slay,bgbase,(size_t)W*H*4);
     cv=canvas;
 }
+static uint32_t static_key_last=0;
 static void compose(ms_t now){
     dmg.n=0; pres.n=0;
+    { uint32_t k=hi(hi(hi(hi(hi(H0,view),page),hm_mode),sel*16+xsel),ui_lang);   /* v7.0: whatever selects the static layer — a change rebuilds it */
+      if(k!=static_key_last){ static_key_last=k; static_dirty=1; } }
     if(static_dirty){ static_build(); static_dirty=0; force_all=1; }
     Rect bb;
     if(arc_paint(&garc,force_all,&bb)) rl_add(&dmg,bb);
