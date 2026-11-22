@@ -149,10 +149,10 @@ For an interactive browser view of the simulator, see [PLAY.md](PLAY.md).
 
 | Scenario | Duration | What it proves |
 |---|---|---|
-| `idle` | 12 s | poll rotation, keep-awake, boot push, version handshake, circle/color/region checks |
+| `idle` | 12 s | poll rotation, keep-awake, boot push, version handshake, circle/color/region checks (v7.0: BREW + STEAM rings solid white = READY, the SYSTEM chevron, the copper background) |
 | `sleep_wake` | 28 s | word1=1 → drain (ws 0x0001, cooling boilers) → word1=0 → HEAT → READY |
 | `grind` | 17 s | **touch hold-to-start (650 ms)** → bit6 → weight ramp → auto-stop ~187/185 (live) → word6 consumed |
-| `brew` | 40 s | pre-infusion plateau word51≈358 (6 s) → extraction ≈1346 → predictive stop 352 (live) → after-drip 364 → word22 cleared by the MCU (+0.16 s) |
+| `brew` | 40 s | pre-infusion plateau word51≈358 (6 s) → extraction ≈1346 → predictive stop 352 (live) → after-drip 364 → word22 cleared by the MCU (+0.16 s); v7.0: the white STOP pill in the live view |
 | `hotwater` | 15 s | sub9 len11 → ws 0x030B → dispensing → auto-stop word39≥word17 → word16 cleared |
 | `steam_auto` | 40 s | display steam (sub24 len8, latch) + wand switch → ws 0x4121 → milk ramp → **auto-stop word48≥word25 without a stop write** (word24 MCU clear +0.18 s) |
 | `steam_wand_flush` | 34 s | **v6.6:** wand flush DURING a brew → ws 0x5327 (union), word24=0/word46=1, **no auto-stop >650**, release stop, the brew weight continues, no flush writes |
@@ -175,7 +175,7 @@ For an interactive browser view of the simulator, see [PLAY.md](PLAY.md).
 | `audio_muted` | 24 s | **v6.18 (merakiplus-only):** config volume 0: the jingle and both boiler events are detected and logged `muted`, nothing is played |
 | `audio_power_cycle` | 46 s | **v6.18 (merakiplus-only):** hot boilers at a cold boot → jingle + tones; button OFF → silent; wake → jingle + tones again; READY TONE = steam only (sound file via `sandbox_files`) |
 | `audio_sound_off` | 40 s | **v6.18 (merakiplus-only):** ctrl SAVE `sound` = 0 → both boiler events logged `off`; SOUND on + READY TONE = brew → only the extract tone after the next cool-down |
-| `fault_e1/e2/e3` | 12–16 s | error bits words 34/35/36 → error UI + safety stop of the activity |
+| `fault_e1/e2/e3` | 12–16 s | error bits words 34/35/36 → error UI + safety stop of the activity (`fault_e1`, v7.0: the dark error layer + red error ring) |
 | `crc_garbage` | 12 s | garbage stream + CRC corruption → resync, the link is kept |
 | `no_ack` | 12 s | **SAVE is blocked** (retransmit→FAIL, config unchanged) → recovery with the normal profile |
 | `offline` | 14 s | link silent → OFFLINE after 1.5 s → recovery. A real pty close (`link closed` → a new pty on reopen) is proven in selftest T10. |
@@ -205,7 +205,7 @@ Scenarios are JSON files in `sim/scenarios/` (they can be written by hand or gen
   "replay": {"csv": "sim/fixtures/captures/uart_live_v3.csv.gz", "mode": "serve", "speed": 8},
   "events": [
     {"t": 2.0, "target": "ui", "cmd": "action", "name": "brew"},
-    {"t": 2.0, "target": "ui", "cmd": "touch", "x": 350, "y": 160, "ms": 700},
+    {"t": 2.0, "target": "ui", "cmd": "touch", "layout": "brew", "ms": 700},   // a layout-hook target; raw "x"/"y" also work
     {"t": 2.0, "target": "ui", "cmd": "save", "param": "brew_temp", "value": 880},
     {"t": 3.0, "target": "sim", "event": {"type": "fault", "e1": 32, "dur": 5}},
     {"t": 3.0, "target": "sim", "event": {"type": "garbage", "dur": 2}},
@@ -230,8 +230,8 @@ Scenarios are JSON files in `sim/scenarios/` (they can be written by hand or gen
     {"kind": "sim_log", "assert": "activity_stop", "activity": "brew", "reason_contains": "weight", "t0": 29, "t1": 34},
     {"kind": "config", "field": "brewTemper", "t": 3, "value": 880},
     {"kind": "circle"},
-    {"kind": "point", "t": 6, "point": [240, 8], "color": [98, 222, 168], "tol": 30},
-    {"kind": "region", "t": 6, "rect": [200, 200, 80, 80], "color": [24, 104, 92], "tol": 30},
+    {"kind": "point", "t": 6, "point": [239, 23], "color": [248, 244, 242], "tol": 30},
+    {"kind": "region", "t": 15, "rect": [152, 376, 20, 32], "color": [255, 255, 255], "tol": 20},
     {"kind": "replay_truth", "word": 39, "t0": 17.7, "t1": 18.05, "val_min": 320, "val_max": 370, "signed": true}
   ],
   "universal": {"keepawake": true, "ranges": true, "no_cmd6_fail": true}
@@ -272,7 +272,8 @@ Then run: `python3 sim/run_e2e.py --scenario my_scenario`.
 5. **UI state:** phase/page/toasts/language/boot flag/config-oor per frame against expectations; SAVE
    blocked when ACKs are missing (config unchanged!); hold-to-start; locked fields rejected.
 6. **Framebuffer:** circle check (nothing outside r240, corners black, max radius ≤ 234.71 — ported
-   from `check_circle.py`); color/region checks (phase ring, page region, background, toast).
+   from `check_circle.py`); color/region checks (v7.0 look: the HOME rings solid white = READY, the
+   SYSTEM chevron, the copper background, the white STOP pill, the dark error layer + red error ring).
 7. **Settings matrix:** word-for-word writes against `parity_spec.json` (min/max/step/original), byte
    packing 112/113 with a running config state, config-only parameters without MCU writes.
 8. **Gesture:** the real switcher daemon is triggered by the trigger gesture and not by an incomplete
