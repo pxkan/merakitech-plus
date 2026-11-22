@@ -229,7 +229,7 @@ static void ui_update(ms_t now){
         }
     }
     /* v7.0: HOME's mode (rings / dimmed rings / live view / error) changes the static layer -> rebuild, and cross-fade if it is on screen */
-    { int nm=home_mode_of(act.ph);
+    { int nm=home_mode_of(act.ph,now);
       if(nm!=hm_mode){
           int vis=view==V_MAIN&&page==PG_HOME&&!tr.type&&hm_mode>=0;
           if(vis) memcpy(snapA,canvas,(size_t)W*H*4);
@@ -455,6 +455,7 @@ static uint32_t home_status_text(const HomeM*m,char*o,size_t n,int*warn,ms_t now
     if(now-last_bad_ms<10000&&rx_bad>0){ snprintf(o,n,TR(TX_H_CRC),rx_bad); *warn=1; return C_WARN; }   /* line noise: CRC errors in the last 10 s */
     if(m->hint1[0]&&m->hc1==C_WARN){ snprintf(o,n,"%s",m->hint1); *warn=1; return C_WARN; }
     if(act.pending!=ACT_NONE||(tch.down&&!tch.moved&&tch.target>=T_ACT0&&tch.target<=T_ACT3)){ snprintf(o,n,"%s",m->sub); return C_TXT; }
+    if(ph==PH_DONE){ snprintf(o,n,"%s %s · %s",m->hero,m->unit,m->sub); return C_TXT; }   /* v7.0: the result, after the DONE view */
     if(ph==PH_HEAT){ snprintf(o,n,"%s",m->sub); return C_TXT2; }
     if(m->hint2){ snprintf(o,n,"%s",m->hint2); return C_TXT2; }
     return C_TXT2;
@@ -518,7 +519,7 @@ static void draw_home_error(ms_t now){
 static void draw_home(ms_t now){
     const HomeM*m=&hm; uint32_t h;
     /* the chevron (SYSTEM) at the top */
-    if(hm_mode!=HM_ACTIVE&&W_begin(W_GEAR,R(CX-30,HOME_CHEV_Y-6,60,20),hi(hi(H0,pressed(T_GEAR)),hm_mode))){
+    if(W_begin(W_GEAR,R(CX-30,HOME_CHEV_Y-6,60,20),hi(hi(H0,pressed(T_GEAR)),hm_mode))){
         draw_chev(CX,HOME_CHEV_Y,C_TXT,pressed(T_GEAR)?255:200,1.4f); W_end(); }
     /* the clock at the bottom (the wordmark while the clock is not set) */
     if(hm_mode!=HM_ACTIVE){ char c[24]; int ok=home_clock_text(c,sizeof c);

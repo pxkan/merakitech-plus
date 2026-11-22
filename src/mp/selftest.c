@@ -1208,8 +1208,8 @@ static void st_v7(void){
       st_home(); int g2[]={CX,150, CX,170, CX,260}; st_gest(g2,3); st_settle(); int p2=page==PG_HOME;                 /* starts below the top band: nothing */
       int g3[]={CX,20, CX+20,40, CX+90,110}; st_gest(g3,3); st_settle(); int p3=page==PG_HOME;                         /* diagonal: nothing */
       int g4[]={CX,20, CX,30, CX,60}; st_gest(g4,3); st_settle(); int p4=page==PG_HOME;                                /* too short (40 px) */
-      st_home(); reg[33]=0x1307; sim_run(600); int g5[]={CX,20, CX,40, CX,130}; st_gest(g5,3); st_settle(); int p5=page==PG_HOME&&hm_mode==HM_ACTIVE;   /* the live view: no SYSTEM while something runs */
-      st_check("pull down from the top of HOME (>= 70 px, vertical, starting above y 96) opens SYSTEM, sending nothing; a drag that starts lower, a diagonal or a short one does nothing; in the live view it does nothing",p1&&p2&&p3&&p4&&p5); }
+      st_home(); reg[33]=0x1307; sim_run(600); int g5[]={CX,20, CX,40, CX,130}; st_gest(g5,3); st_settle(); int p5=page==PG_SYS&&wq.n==n0;   /* the live view too: SYSTEM stays reachable while something runs (v6.17 behaviour) */
+      st_check("pull down from the top of HOME (>= 70 px, vertical, starting above y 96) opens SYSTEM, sending nothing; a drag that starts lower, a diagonal or a short one does nothing; it works in the live view too (SYSTEM stays reachable during an activity)",p1&&p2&&p3&&p4&&p5); }
     /* ---- (3) the static layer follows view / page / hm_mode: the ring labels exist only on HOME's ring grid ---- */
     { float la=ring_lab_ang(0)*(float)M_PI/180.f; int lx=RING_X[0]+(int)(RING_R*cosf(la)), ly=RING_Y[0]+(int)(RING_R*sinf(la)); Rect lb=R(lx-22,ly-22,44,44);   /* clear of the live view's edge ring (r 229, in the static layer too) */
       sim_reset(); sim_run(600); int home=st_slay_diff(lb,bgpure); uint32_t k1=static_key_last;

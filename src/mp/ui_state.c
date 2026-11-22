@@ -45,7 +45,7 @@ enum { V_SPLASH=0, V_MAIN, V_DETAIL, V_SYS, V_BYE, V_OFF };   /* v6.14: V_OFF = 
  * the settings lived in three lists that followed the spec's tiers, not the activity they belong to. */
 enum { PG_HOME=0, PG_GRIND, PG_BREW, PG_WATER, PG_STEAM, PG_SYS, PG_DIAG, NPAGE };
 #define PG_T0 PG_GRIND     /* first list page (page = PG_T0 + SET[].tier) */
-enum { T_NONE=0, T_ACT0, T_ACT1, T_ACT2, T_ACT3, T_STOP, T_MINUS, T_PLUS, T_SAVE, T_CANCEL, T_START, T_DIAG, T_GRAPH, T_PINFO, T_GEAR, T_BACK, T_STOPS, T_ROLL, T_ROW0=32 };   /* v6.11: T_GEAR (HOME -> SYSTEM), T_BACK (close chevron); v6.17: T_START (a feature page's HOLD TO START), T_DIAG (HOME's error/offline hint -> DIAGNOSTICS) */
+enum { T_NONE=0, T_ACT0, T_ACT1, T_ACT2, T_ACT3, T_STOP, T_MINUS, T_PLUS, T_SAVE, T_CANCEL, T_START, T_DIAG, T_GRAPH, T_PINFO, T_GEAR, T_BACK, T_STOPS, T_ROLL, T_DONE, T_ROW0=32 };   /* v6.11: T_GEAR (HOME -> SYSTEM), T_BACK (close chevron); v6.17: T_START (a feature page's HOLD TO START), T_DIAG (HOME's error/offline hint -> DIAGNOSTICS) */
 static int pinfo_hit(int x,int y);   /* v6.10: tap on the chart / BAR field -> toast w. the basis for ≈BAR (defined at draw_chart) */
 static int diag_hint_shown(void);    /* v6.17: HOME's error/offline hint is on screen (the chart field is empty) -> it is the tap target for DIAGNOSTICS */
 #define SPLASH_MS 1500
@@ -441,8 +441,12 @@ static const int RING_ACT[4]={ACT_GRIND,ACT_WATER,ACT_BREW,ACT_STEAM};
 static int ring_of_act(int k){ for(int i=0;i<4;i++) if(RING_ACT[i]==k) return i; return 0; }
 enum { HM_IDLE=0, HM_DIM, HM_ACTIVE, HM_ERROR };
 static int hm_mode=-1;
-static int home_mode_of(int ph){
-    if(phase_active(ph)||ph==PH_DONE) return HM_ACTIVE;
+#define DONE_LIVE_MS 3000      /* v7.0: the big DONE number stays this long (a tap dismisses it); then the rings are back and the
+                                  result sits on the status line for the rest of the 8 s DONE time — the next start is never blocked */
+static ms_t done_dismissed=-1;   /* act.t_done of the DONE view that was tapped away */
+static int home_mode_of(int ph,ms_t now){
+    if(phase_active(ph)) return HM_ACTIVE;
+    if(ph==PH_DONE) return (now-act.t_done<DONE_LIVE_MS&&done_dismissed!=act.t_done)?HM_ACTIVE:HM_IDLE;
     if(ph==PH_ERROR) return HM_ERROR;
     if(ph==PH_OFFLINE||ph==PH_SLEEP) return HM_DIM;
     return HM_IDLE;
@@ -529,7 +533,7 @@ static int hit_test(int x,int y,ms_t now){
     if(page==PG_HOME){
         int sk[2], sn=stop_btns(now,sk);
         if(sn){ for(int i=0;i<sn;i++){ Rect r=stop_hit(sn,i); if(in_r(x,y,r.x0,r.y0,r.x1-r.x0,r.y1-r.y0)) return i?T_STOPS:T_STOP; } }   /* v6.13: STOP for grind/brew/water + latched steam */
-        if(hm_mode==HM_ACTIVE){ if(pinfo_hit(x,y)) return T_PINFO; return T_NONE; }
+        if(hm_mode==HM_ACTIVE){ if(in_r(x,y,CX-60,0,120,44)) return T_GEAR; if(pinfo_hit(x,y)) return T_PINFO; if(act.ph==PH_DONE&&!sn) return T_DONE; return T_NONE; }   /* v7.0: SYSTEM stays reachable while something runs (as v6's gear) */
         if(diag_hint_shown()&&in_r(x,y,70,HOME_STAT_Y-2,340,32)) return T_DIAG;   /* offline: the status line -> DIAGNOSTICS (before the chevron, whose area reached down over it) */
         if(in_r(x,y,CX-60,0,120,58)) return T_GEAR;                                 /* v7.0: the chevron at the top -> SYSTEM */
         if(hm_mode==HM_ERROR){ if(in_r(x,y,60,96,360,250)) return T_DIAG; return T_NONE; }
@@ -572,6 +576,7 @@ static void activate(int t,ms_t now){
     if(t==T_STOP||t==T_STOPS){ int sk[2]; stop_btns(now,sk); int k=sk[t==T_STOPS]; if(k!=ACT_NONE) stop_request(k,now); return; }   /* v6.13 */
     if(t>=T_ACT0&&t<=T_ACT3){ nav_open(PG_GRIND+(t-T_ACT0),now); return; }          /* v6.17: a TAP opens the feature's page (v6.6-v6.16: only a toast "HOLD THE BUTTON TO START"); the HOLD still starts */
     if(t==T_START){ const char*g=act_guard(page-PG_GRIND,now); toast_show(g?g:TR(TX_T_HOLD_HINT),g?C_WARN:C_TXT,now); return; }   /* a tap on HOLD TO START: say what is missing */
+    if(t==T_DONE){ done_dismissed=act.t_done; return; }                             /* v7.0: a tap on the DONE view brings the rings back */
     if(t==T_GEAR){ nav_open(PG_SYS,now); return; }                                   /* v6.11; v6.17: -> SYSTEM */
     if(t==T_DIAG){ nav_open(PG_DIAG,now); return; }                                  /* v6.17 */
     if(t==T_BACK&&view==V_MAIN){ nav_back(now); return; }                            /* v6.17: a page's header chevron */

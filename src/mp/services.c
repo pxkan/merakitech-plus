@@ -413,7 +413,7 @@ static void ui_touch(int ev,int x,int y,ms_t now){
         }
         if((view==V_DETAIL||view==V_SYS)&&!tr.type&&swipe_down(tch.axis,tch.target,dx,dy)){ activate(T_CANCEL,now); return; }   /* v6.11: swipe down = close */
         if(view==V_MAIN&&page!=PG_HOME&&!tr.type&&tch.y0<LIST_VY0&&swipe_down(tch.axis,tch.target,dx,dy)){ nav_back(now); return; }
-        if(view==V_MAIN&&page==PG_HOME&&!tr.type&&tch.y0<96&&hm_mode!=HM_ACTIVE&&swipe_down(tch.axis,tch.target,dx,dy)){ nav_open(PG_SYS,now); return; }   /* v7.0: pull down from the top of HOME = SYSTEM (the stock chevron) */   /* v6.17: pulling the header down closes a page (inside the list a vertical drag scrolls) */
+        if(view==V_MAIN&&page==PG_HOME&&!tr.type&&tch.y0<96&&swipe_down(tch.axis,tch.target,dx,dy)){ nav_open(PG_SYS,now); return; }   /* v7.0: pull down from the top of HOME = SYSTEM (the stock chevron) */   /* v6.17: pulling the header down closes a page (inside the list a vertical drag scrolls) */
         if(!tch.moved&&tch.target&&!tch.fired&&tch.target!=T_MINUS&&tch.target!=T_PLUS&&hit_test(tch.x,tch.y,now)==tch.target) activate(tch.target,now);
     }
 }

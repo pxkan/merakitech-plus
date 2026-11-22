@@ -603,7 +603,7 @@ static void sim_dispatch(const char*line,char*out,size_t on,ms_t now){
             else if(!phase_active(phase_raw(now))&&hm_mode!=HM_ERROR) for(int k=0;k<4;k++){ int i=ring_of_act(k); LT_C(ACT_KEY[k],RING_X[i],RING_Y[i],RING_R); }   /* v7.0: the rings: tap = the feature's page, hold = start */
             if(hm_mode==HM_ERROR) LT_R("diag",60,96,360,250);
             else if(diag_hint_shown()) LT_R("diag",70,HOME_STAT_Y-2,340,32);
-            if(hm_mode!=HM_ACTIVE) LT_R("gear",CX-60,0,120,58);               /* v7.0: the chevron at the top -> SYSTEM */
+            LT_R("gear",CX-60,0,120,hm_mode==HM_ACTIVE?44:58);               /* v7.0: the chevron at the top -> SYSTEM */
         } else if(view==V_MAIN){                                               /* v6.17: every page but HOME: "back" (the header) */
             LT_R("back",PBACK_X0,PBACK_Y0,PBACK_W,PBACK_H);
             if(pg_list(page)){
