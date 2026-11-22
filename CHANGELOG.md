@@ -3,6 +3,44 @@
 All notable changes to Meraki+. Details (with evidence, frames and test figures) are in
 [docs/dev/UI_v6.md](docs/dev/UI_v6.md) under *CHANGES-v6.x*. All dates are 2026.
 
+## [7.0] — 2026-11-22
+**The OEM redesign.** Meraki+ now looks like the machine's own UI, only better crafted, and keeps all of its power,
+revealed step by step instead of crammed onto HOME. **Display and navigation only:** the model, the guards, the save
+path (MCU write + ACK, then config.json), the frame policy, the activity recipes, STOP, the boot push, keep-awake and
+every other thing that reaches the UART are the same code as before. Before/after: [docs/design/](docs/design/).
+### Changed
+- **The look.** A copper background with a fine guilloche (pre-rendered once), white on copper everywhere; colour is
+  reserved for what must not be missed: errors switch to a dark espresso layer with a red ring, blocked starts carry a
+  warning icon in pale yellow.
+- **Real typography.** Montserrat (SIL OFL 1.1) in four weights, baked into `src/mp/font_data.c` by the new
+  `tools/gen_font.py` as TrueType outlines + GPOS kerning and rasterized on the display with exact-area coverage
+  (glyph cache with ¼-px phases, tabular digits). Text is drawn as written: the string table is Title Case / sentence
+  case in English and sentence case in Danish (was all caps with letter spacing). `build.sh` checks the generated file.
+- **HOME = the stock 2×2 ring buttons** (Grinder, Hot Water / Brew, Steam) with line icons, each ring's name set along its
+  arc and its target inside ("18.5 g", "36 g", "65°"). A ring whose boiler is heating fills up as an arc. Tap = the
+  feature's page, hold = start (an arc sweeps around inside the ring). The chevron at the top (tap, or pull down from the
+  top) opens SYSTEM — the gear is gone; the clock sits at the bottom; a one-line status under the chevron says only what
+  matters now (heating, blocked, no connection, CRC errors, a planned pre-heat).
+- **The live view** while something runs: the phase name, the big white weight (or milk temperature), a thin progress
+  ring at the edge of the screen (weight / target, milk / target), a fine trace, three numbers (time, ≈bar, flow …) and
+  a solid white **STOP** pill — the brightest thing on the screen. The DONE screen stays for 8 s as before.
+- **Pages and settings:** white rows on copper with hairlines; HOLD TO START is a ring button with a play icon. The
+  editor is a **roller** like the stock pickers: drag it, tap or hold −/+ (repeat + acceleration as before), OK saves;
+  the chevron, a pull down or a swipe right cancels.
+- **Every other screen** in the same language: SYSTEM, the system action (BOOT UI / SWITCH TO ORIGINAL NOW), DIAGNOSTICS,
+  the splash (with a ring sweep), the power-off pages (dark layer), errors, offline (dimmed rings), sleep, toasts.
+### Added
+- **Sim Studio** (`sim/studio.sh`): the real UI compiled to WebAssembly with a tunable JS machine model, in the browser
+  at ≥ 30 fps with real pointer input; scenarios, a control drawer, a UART log, PNG export and a side-by-side compare
+  with v6.19. See [sim/README.md](sim/README.md#sim-studio).
+- `third_party/montserrat/` (the four TTFs + OFL), `tools/gen_font.py`, `tools/previews.py` (preview frames → PNG /
+  contact sheet).
+### Notes
+- Frame budget (host, Apple silicon; the device must still be read on DIAGNOSTICS): brew frame 0.027 ms (v6.19: 0.041),
+  full rebuild 0.20 ms (0.30), HOME rebuild with the four arc labels 0.36 ms, start-up (two background layers + font)
+  4.1 ms. Device binary 429 KB (v6.19: 304 KB; +125 KB of font outlines), well inside the installer's 1.2 MB check.
+- **Not yet verified on a machine.**
+
 ## [6.19] — 2026-11-21
 Two sound changes from user feedback. Display and audio only — no UART frame, guard, limit, timing, setting or helper
 changed (`bin/merakiplus_snd` is byte-identical to v6.18.1).
