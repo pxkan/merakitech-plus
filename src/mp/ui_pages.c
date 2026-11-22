@@ -774,7 +774,7 @@ static void draw_roller(const Setting*s,int lock,int eoor){
         set_fmt(sel,v,b,sizeof b-4);
         float yc=ED_CY+k*ED_STEP_PX+off; float dist=fabsf(yc-ED_CY)/ED_STEP_PX;
         int f=dist<0.5f?F_ROLL:F_ROLL2;
-        if(f==F_ROLL&&text_wf(b,f)>(num?200:212)){ f=F_L; if(text_wf(b,f)>212) fit_text(b,f,212); }
+        if(f==F_ROLL&&text_wf(b,f)>(num?200:220)){ f=F_L; if(text_wf(b,f)>222) fit_text(b,f,222); }
         if(f==F_ROLL2&&text_wf(b,f)>212) fit_text(b,F_ROLL2,212);
         float edge=(yc<ED_CY?ROLL_UP:ROLL_DN)-fabsf(yc-ED_CY)-FS[f].cap/2;          /* fade out before the roller's edge */
         int a=(int)(255*clampf(1.1f-dist*0.45f,0.12f,1)*clampf(edge/22.f,0,1)); if(a<=0) continue;
