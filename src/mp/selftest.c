@@ -1233,6 +1233,15 @@ static void st_v7(void){
       sim_reset(); sim_run(400); reg[33]=0x1307; sim_run(1500); reg[33]=0x0101; sim_run(DONE_LIVE_MS+600); int a4=act.ph==PH_DONE&&hm_mode==HM_IDLE;
       int i=ring_of_act(ACT_WATER); tap(RING_X[i],RING_Y[i]); sim_run(700); int a5=page==PG_WATER;
       st_check("after an activity the DONE view stays DONE_LIVE_MS (tap = rings back at once), then the rings are usable during the rest of DONE and the status line carries the result (v6.19 parity: the next start is never blocked)",a1&&a2&&a3&&a4&&a5); }
+    /* ---- (2c) touches are live during a cross-fade (HOME's mode change: offline -> ready at boot); only slides block ---- */
+    { sim_reset(); sim_run(1500); hm_mode=HM_DIM; sim_run(20); int fading=tr.type==TR_FADE&&hm_mode==HM_IDLE;
+      int i=ring_of_act(ACT_BREW); int ht=hit_test(RING_X[i],RING_Y[i],sim_now); tap(RING_X[i],RING_Y[i]); sim_run(600); int opened=page==PG_BREW;
+      sim_reset(); sim_run(1500); hm_mode=HM_DIM; sim_run(20); int f2=tr.type==TR_FADE; int n0=wq.n_ok;
+      ui_touch(TE_DOWN,RING_X[i],RING_Y[i],sim_now); sim_run(HOLD_MS+120); ui_touch(TE_UP,RING_X[i],RING_Y[i],sim_now); sim_run(400);
+      int started=act.pending==ACT_BREW||phase_active(phase_raw(sim_now))||wq.n_ok>n0;
+      go_page(PG_SYS,1,sim_now); int slide=tr.type==TR_SLIDE&&hit_test(RING_X[i],RING_Y[i],sim_now)==T_NONE; sim_run(600);
+      st_check("a tap / hold during HOME's mode cross-fade (offline -> ready) reaches the ring: the tap opens its page (cutting the fade short), the hold starts it; a page SLIDE still blocks taps",
+               fading&&ht==T_ACT0+ACT_BREW&&opened&&f2&&started&&slide); }
     /* ---- (3) the static layer follows view / page / hm_mode: the ring labels exist only on HOME's ring grid ---- */
     { float la=ring_lab_ang(0)*(float)M_PI/180.f; int lx=RING_X[0]+(int)(RING_R*cosf(la)), ly=RING_Y[0]+(int)(RING_R*sinf(la)); Rect lb=R(lx-22,ly-22,44,44);   /* clear of the live view's edge ring (r 229, in the static layer too) */
       sim_reset(); sim_run(600); int home=st_slay_diff(lb,bgpure); uint32_t k1=static_key_last;

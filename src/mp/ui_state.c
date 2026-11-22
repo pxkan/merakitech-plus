@@ -318,7 +318,8 @@ static void save_step(ms_t now){
 static void compose(ms_t now);
 static void arc_targets(ms_t now);
 static void go_page(int np,int dir,ms_t now){
-    if(np==page||tr.type) return;
+    if(np==page||tr.type==TR_SLIDE) return;
+    if(tr.type==TR_FADE) tr.type=TR_NONE;          /* v7.0: a page change may cut a cross-fade short (taps are live during fades) */
     memcpy(snapA,canvas,(size_t)W*H*4);
     page=np; static_dirty=1; if(np==PG_HOME) act.gkind=-1; arc_targets(now); compose(now);
     memcpy(snapB,canvas,(size_t)W*H*4);
@@ -328,13 +329,13 @@ static void fade_to(ms_t now,int dur){ tr.type=TR_FADE; tr.t0=now; tr.dur=dur; t
 /* v6.17: sheets. nav_open() slides a page in from the right, nav_back() slides back to its parent. SYSTEM always opens with its sections
  * closed and at the top; DIAGNOSTICS remembers where it was opened from. */
 static void nav_open(int np,ms_t now){
-    if(np==page||tr.type) return;
+    if(np==page||tr.type==TR_SLIDE) return;
     if(np==PG_DIAG) diag_from=(page==PG_SYS)?PG_SYS:PG_HOME;
     if(np==PG_SYS&&page==PG_HOME){ sec_open=-1; scroll[PG_SYS]=0; }
     if(pg_feat(np)) scroll[np]=0;
     go_page(np,1,now);
 }
-static void nav_back(ms_t now){ if(page!=PG_HOME&&!tr.type) go_page(page_parent(page),-1,now); }
+static void nav_back(ms_t now){ if(page!=PG_HOME&&tr.type!=TR_SLIDE) go_page(page_parent(page),-1,now); }
 static void sec_toggle(int sc){
     sec_open=(sec_open==sc)?-1:sc;
     scroll[PG_SYS]=clampf(sec_open<0?0:(float)(sc*ROW_P),0,scroll_max(PG_SYS));   /* the opened header goes to the top of the field */
@@ -519,7 +520,7 @@ static int stop_font(int n){ return n>1?F_S:F_M; }
 static int diag_hint(int ph){ return ph==PH_ERROR||ph==PH_OFFLINE; }      /* HOME's hint line points to DIAGNOSTICS -> it is a tap target */
 static int hit_test(int x,int y,ms_t now){
     if(view==V_SPLASH||view==V_BYE||view==V_OFF) return T_NONE;
-    if(tr.type&&!(view==V_MAIN&&page==PG_HOME&&hm_mode==HM_ACTIVE)) return T_NONE;   /* v7.0: the fade/slide INTO the live view must not swallow STOP */
+    if(tr.type==TR_SLIDE&&!(view==V_MAIN&&page==PG_HOME&&hm_mode==HM_ACTIVE)) return T_NONE;   /* v7.0: only a SLIDE (the geometry moves) blocks taps; during a cross-fade the state and its targets are already the new ones (HOME's mode fades, editor open/close) — and the fade/slide INTO the live view must never swallow STOP */
     if((view==V_SYS||view==V_DETAIL)&&in_r(x,y,BACK_X0,BACK_Y0,BACK_W,BACK_H)) return T_BACK;   /* v6.11: close chevron at the top */
     if(view==V_SYS){
         if(sys_locked()){ if(in_r(x,y,170,SB_Y-4,140,SB_H+8)) return T_CANCEL; return T_NONE; }

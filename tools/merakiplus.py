@@ -48,7 +48,7 @@ RAW_AUDIO = "https://raw.githubusercontent.com/" + REPO + "/{ref}/audio/{name}"
 
 # md5 of the shipped device binaries in bin/ (kept in sync with bin/MD5SUMS by CI).
 BIN_MD5 = {
-    "merakiplus": "cb6f2b12f18621fa4e9759b0a8d63b08",
+    "merakiplus": "f33ce8a1e8c8591cdcd65bf8aea5f97e",
     "switcher": "c9d937fa36c51e2e58276041b6761ac0",
     "grab_shim.so": "c42076c807c54d477a5868977404186d",
     "merakiplus_snd": "a7659c176b8ef78385b0b612a69e81ca",

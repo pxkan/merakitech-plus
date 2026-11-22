@@ -106,14 +106,14 @@ self-test and the simulator E2E suite.
 
 | File | md5 (this repo) | Built with |
 |---|---|---|
-| `merakiplus` (V7.0) | `cb6f2b12f18621fa4e9759b0a8d63b08` | `./build.sh` → `build/merakiplus` |
-| `merakiplus_sim_arm` (V7.0) | `01075812f6f6493ee247b170a3ad9de7` | `./build.sh` → `build/merakiplus_sim_arm` |
+| `merakiplus` (V7.0) | `f33ce8a1e8c8591cdcd65bf8aea5f97e` | `./build.sh` → `build/merakiplus` |
+| `merakiplus_sim_arm` (V7.0) | `b3746ba90cf547bcb0c67b3ad9c5680b` | `./build.sh` → `build/merakiplus_sim_arm` |
 | `merakiplus_snd` (V6.18.1) | `a7659c176b8ef78385b0b612a69e81ca` | `./build.sh` → `build/merakiplus_snd` |
 | `switcher` (v6.20) | `c9d937fa36c51e2e58276041b6761ac0` | `./build.sh` → `build/switcher` |
 | `tinj_hold` | `e9806fb92e9b8a7e506a34639173c648` | `./build.sh` → `build/tinj_hold` |
 | `keyinj` | `a0cbd4bc2a670abe0e250ec34a193843` | `./build.sh` → `build/keyinj` |
-| `merakiplus_sim-linux-x86_64` (V7.0) | `f61e56dd060774e463751e0743b9096f` | `zig cc -target x86_64-linux-musl -DMERAKIPLUS_SIM -O2 -static -s src/merakiplus.c -lm` |
-| `merakiplus_sim-macos-arm64` (V7.0) | `b60733ccb7b51fc9e6041ecfe16c17c0` | `zig cc -DMERAKIPLUS_SIM -O2 -s src/merakiplus.c -lm` (Mach-O builds are not bit-reproducible) |
+| `merakiplus_sim-linux-x86_64` (V7.0) | `4b9aec3ead3b50f6c6a11b6445592ac4` | `zig cc -target x86_64-linux-musl -DMERAKIPLUS_SIM -O2 -static -s src/merakiplus.c -lm` |
+| `merakiplus_sim-macos-arm64` (V7.0) | `47d42a1b43649212625fb62f60b6b4f4` | `zig cc -DMERAKIPLUS_SIM -O2 -s src/merakiplus.c -lm` (Mach-O builds are not bit-reproducible) |
 
 The ARM builds above are reproducible: running `./build.sh` on the same sources with the **official**
 zig 0.17.1 release (the ziglang.org tarball CI installs) gives the same md5 on macOS and Linux,
