@@ -297,13 +297,13 @@ static void vis_text(const char*s,char*o,size_t n,int keep_code){
         o[k++]=(char)toupper(*p); }
     o[k]=0;
 }
-/* does the stroke font have a glyph for every char? (unknown chars are otherwise drawn as '?') */
+/* does the font have a glyph for every char? (unknown chars are otherwise drawn as '?') */
 static int glyphs_ok(const char*s,char*bad,size_t bn){
-    const unsigned char*p=(const unsigned char*)s; g_lc=0;
+    const unsigned char*p=(const unsigned char*)s; int qm=fg_index('?');
     while(*p){ const unsigned char*q=p; int g=glyph_next(&p);
         if(g<0) continue;
-        if((g=='?'&&*q!='?')||g>=NG||!GD[g].path){ snprintf(bad,bn,"%.*s",(int)(p-q),(const char*)q); g_lc=0; return 0; } }
-    g_lc=0; return 1;
+        if((g==qm&&*q!='?')||(g>=G_ICON&&(g-G_ICON>=NG||!GD[g-G_ICON].path))){ snprintf(bad,bn,"%.*s",(int)(p-q),(const char*)q); return 0; } }
+    return 1;
 }
 static int put_bytes(const char*path,const char*d,int n){ int fd=open(path,O_WRONLY|O_CREAT|O_TRUNC,0644); if(fd<0) return 0; int ok=n==0||write(fd,d,n)==n; close(fd); return ok; }
 static int file_is(const char*path,const char*want){ char b[64]; int fd=open(path,O_RDONLY); if(fd<0) return 0; int n=(int)read(fd,b,sizeof b); close(fd); return n==(int)strlen(want)&&!memcmp(b,want,n); }

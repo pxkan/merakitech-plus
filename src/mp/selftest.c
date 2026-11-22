@@ -1,3 +1,11 @@
+/* v7.0 TRANSITION: the v6 HOME geometry names, mapped onto the ring grid so the old layout checks compile (rewritten below) */
+static const int ACT_X[4]={160,160,320,320};     /* index = ACT_* (grind, brew, water, steam) -> ring centre */
+#define ACT_Y_OF(i) ((i)==ACT_GRIND||(i)==ACT_WATER?154:326)
+#define ACT_Y 326
+#define GEAR_Y 16
+#define GEAR_HW 60
+#define ACT_LAB_Y 346
+static int sub_font(const HomeM*m){ return text_wf(m->sub,F_S)<=SUB_W-8?F_S:F_XS; }
 /* src/mp/selftest.c — PREVIEW build: --selftest, bench, previews, entry point.
  * Part of the merakiplus.c unity build: #included by src/merakiplus.c in a fixed order, never compiled on its own. */
 /* ====================== v6.5: selftest — boot push on the device + RX resync ====================== */

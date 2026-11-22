@@ -363,6 +363,7 @@ static ms_t now_ms(void){ struct timespec ts; clock_gettime(CLOCK_MONOTONIC,&ts)
 #include "mp/i18n.c"
 #include "mp/bootslot.c"
 #include "mp/model.c"
+#include "mp/font_data.c"
 #include "mp/gfx.c"
 #include "mp/ui_state.c"
 #include "mp/services.c"

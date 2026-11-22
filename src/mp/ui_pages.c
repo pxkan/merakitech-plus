@@ -4,7 +4,7 @@
 static int gauge_kind(int ph){ switch(ph){ case PH_GRIND: case PH_WATER: return 1; case PH_PRE: case PH_EXT: return 2; case PH_STEAM: return 3; default: return 0; } }
 typedef struct { int ph,eff; uint32_t hi,lo; char hero[16]; const char*unit; char label[64],sub[80]; const char*sl[3]; char svv[3][16]; float gf,gmark,pf; int pvis;
                  int sk,conc; const char*chip,*badge;
-                 char hint1[72]; const char*hint2; uint32_t hc1; char hint2b[72]; char alab[4][16]; } HomeM;   /* v6.17: alab = each icon's target, drawn under it */   /* v6.11: empty-state hint in the chart area (only when the chart is inactive) */   /* v6.6: steam class, concurrent steam, chip text, steam marker (NULL = none) */
+                 char hint1[72]; const char*hint2; uint32_t hc1; char hint2b[72]; char alab[4][16]; float ef; } HomeM;   /* v6.17: alab = each icon's target, drawn under it */   /* v6.11: empty-state hint in the chart area (only when the chart is inactive) */   /* v6.6: steam class, concurrent steam, chip text, steam marker (NULL = none) */
 /* the three stat labels per HOME state (the selftest measures each trio against the columns, in both languages) */
 enum { SS_IDLE=0, SS_BREW, SS_GRIND, SS_WATER, SS_STEAM, SS_BREW_M, SS_GRIND_M, SS_WATER_M, NSS };   /* _M: concurrent steam — the 3rd field is the milk temperature */
 _Static_assert(SS_GRIND_M-SS_GRIND==SS_BREW_M-SS_BREW&&SS_WATER_M-SS_WATER==SS_BREW_M-SS_BREW,"SS_*_M must be at the same offset from SS_*");
@@ -18,7 +18,6 @@ static const short STAT_SET[NSS][3]={
  [SS_GRIND_M]={TX_ST_TIME,TX_ST_CURRENT,TX_ST_MILK},
  [SS_WATER_M]={TX_ST_TIME,TX_ST_FLOW,TX_ST_MILK},
 };
-#define STAT_PITCH 94
 #define STAT_GAP 16        /* v6.11: minimum space between two stat labels (v6.10: 6 px — "GROUP STEAM BOILER WEIGHT" read as one line) */
 #define SUB_X0 72          /* the HOME subline's area (v6.3: 336 px — also room for °F values and the English texts) */
 #define SUB_W 336
@@ -61,7 +60,7 @@ static void home_model(ms_t now){
         snprintf(m->label,sizeof m->label,"%s",TR(e==PH_GRIND?TX_H_DOSE:TX_H_CUP));   /* v6.17: the target is said ONCE — in the sub-line ("STOPS AT 36.0 G"); v6.16 had it in the label too */
         if(ph==PH_DONE) snprintf(m->sub,sizeof m->sub,TR(TX_H_DONE_IN),tb);
         else snprintf(m->sub,sizeof m->sub,TR(TX_H_AUTOSTOP_G),a);
-        float fr=tgt>0? (float)w/tgt : 0;
+        float fr=tgt>0? (float)w/tgt : 0; m->ef=clampf(fr,0,1);
         if(e==PH_PRE||e==PH_EXT){
             float pd=p_disp(now);                                   /* v6.9: gauge + BAR = conditioned pressure (like the chart) */
             m->gf=clampf(pd/1600.f,0,1); m->pf=clampf(fr,0,1); m->pvis=1; ss=SS_BREW;
@@ -83,7 +82,7 @@ static void home_model(ms_t now){
         int mk=hero_v(ph<<8|48,reg[48],tgt*4+sk,now);              /* v6.9: conditioned milk temperature */
         fmt_t10(m->hero,sizeof m->hero,mk,1); m->unit=t_unit(); ss=SS_STEAM;
         fmt_t10(a,sizeof a,tgt,1);
-        m->gf=clampf((mk-200)/600.f,0,1);
+        m->gf=clampf((mk-200)/600.f,0,1); m->ef=(sk==SK_WAND||tgt<=210)?m->gf:clampf((mk-200)/(float)(tgt-200),0,1);
         if(sk==SK_WAND){            /* momentary wand/flush: no target, no auto-stop expectation — not even above the target */
             snprintf(m->label,sizeof m->label,"%s",TR(TX_H_MILK_PROBE));
             if(ph==PH_DONE) snprintf(m->sub,sizeof m->sub,TR(TX_H_DONE_IN),tb);
@@ -157,28 +156,13 @@ static void home_model(ms_t now){
 static void arc_targets(ms_t now){
     if(view==V_SPLASH){
         float t=clampf((now-ui_start)/(float)(SPLASH_MS-250),0,1);
-        garc.vis=1; garc.c_hi=C_ACC; garc.c_lo=rgb(120,80,36); garc.mark=-1; garc.f_t=garc.f_d=ease_io(t); parc.vis=0; ui_anim=1;
-    } else if(view==V_DETAIL){
-        const Setting*s=&SET[sel]; float span=(float)(s->hi-s->lo);
-        garc.vis=1; garc.c_hi=C_ACC; garc.c_lo=rgb(120,80,36); parc.vis=0;
-        garc.f_t=span>0? clampf((edit_val-s->lo)/span,0,1) : 0;
-        garc.mark=(span>0&&!(s->flags&SF_SENSOR))? clampf((edit_orig-s->lo)/span,0,1) : -1;
-    } else if(view==V_SYS){
-        parc.vis=0; garc.vis=1; garc.mark=-1;
-        if(xsel==X_EXIT){ garc.c_hi=C_WARN; garc.c_lo=rgb(128,80,24); garc.f_t=1; }            /* full warning ring */
-        else {
-            garc.c_hi=C_ACC; garc.c_lo=rgb(120,80,36); garc.f_t=0;
-            if(xsel==X_BOOTUI&&!sys_locked()){ garc.f_t=x_edit?1:0; garc.mark=x_orig?1:0; }
-        }
+        garc.vis=1; garc.c_hi=garc.c_lo=C_TXT; garc.track=rgb(196,110,64); garc.mark=-1; garc.f_t=garc.f_d=ease_io(t); parc.vis=0; ui_anim=1;
+    } else if(view==V_DETAIL||view==V_SYS){ garc.vis=0; parc.vis=0;
     } else if(view==V_BYE||view==V_OFF){ garc.vis=0; parc.vis=0;
     } else if(page==PG_HOME){
         home_model(now);
-        int gk=gauge_kind(hm.eff); if(gk!=act.gkind){ act.gkind=gk; garc.f_d=0; }   /* sweep from zero on a new quantity */
-        float ct=clampf((now-act.t_col)/300.f,0,1);
-        garc.vis=1; garc.f_t=hm.gf; garc.mark=hm.gmark;
-        if(ct<1){ int q=(int)(ct*8); garc.c_hi=lerpc(act.c_from_hi,hm.hi,q/8.f); garc.c_lo=lerpc(act.c_from_lo,hm.lo,q/8.f); ui_anim=1; }
-        else { garc.c_hi=hm.hi; garc.c_lo=hm.lo; }
-        parc.vis=hm.pvis; parc.c_hi=C_TXT; parc.c_lo=rgb(160,167,180);   /* v6.11: v6.10's C_TXT2 — the progress ring is unchanged (C_TXT2 was raised for text) */ parc.f_t=hm.pf; parc.mark=-1;
+        garc.vis=hm_mode==HM_ACTIVE; garc.f_t=hm.ef; garc.mark=-1; garc.c_hi=garc.c_lo=C_TXT; garc.track=rgb(204,122,80);
+        parc.vis=0;
     } else { garc.vis=0; parc.vis=0; }
 }
 static void ui_update(ms_t now){
@@ -244,6 +228,14 @@ static void ui_update(ms_t now){
             ui_anim=1;
         }
     }
+    /* v7.0: HOME's mode (rings / dimmed rings / live view / error) changes the static layer -> rebuild, and cross-fade if it is on screen */
+    { int nm=home_mode_of(act.ph);
+      if(nm!=hm_mode){
+          int vis=view==V_MAIN&&page==PG_HOME&&!tr.type&&hm_mode>=0;
+          if(vis) memcpy(snapA,canvas,(size_t)W*H*4);
+          hm_mode=nm; static_dirty=1; if(nm==HM_ACTIVE) garc.f_d=0;
+          if(vis){ arc_targets(now); compose(now); memcpy(snapB,canvas,(size_t)W*H*4); fade_to(now,280); }
+      } }
     arc_targets(now);
     if(garc.vis&&view!=V_SPLASH) ui_anim|=arc_ease(&garc,dt);
     if(parc.vis) ui_anim|=arc_ease(&parc,dt);
@@ -253,22 +245,14 @@ static void ui_update(ms_t now){
 }
 
 /* ================= drawing: shared parts ================= */
-/* The wordmark: BRAND_WORD + "+" badge. Large fonts (cap height >= 24 px): crema disc with
- * a dark plus, raised like a superscript. Small fonts: the plus glyph in the accent colour.
- * brand_at() returns x after the mark (incl. normal letter spacing), so text can continue. */
+/* The wordmark (v7.0): "Meraki" in the style's face + a small raised "+" in a lighter weight. brand_at() returns x after the mark. */
 static int brand_disc(int f){ return FS[f].cap>=24; }
-static float brand_wf(int f){
-    if(!brand_disc(f)) return text_wf(PRODUCT,f);
-    return text_wf(BRAND_WORD,f)+FS[f].cap*0.14f+FS[f].cap*0.60f;
-}
+static int brand_plus_f(int f){ return FS[f].cap>=24? F_M : F_XS; }
+static float brand_wf(int f){ return text_wf(BRAND_WORD,f)+FS[f].cap*0.08f+text_wf(BRAND_BADGE,brand_plus_f(f)); }
 static float brand_at(float x,int y,int f,uint32_t cw,int a){
-    float cap=FS[f].cap, trail=cap*FS[f].gap+FS[f].track;
-    x=text_at(x,y,BRAND_WORD,f,cw,a);
-    if(!brand_disc(f)) return text_at(x,y,BRAND_BADGE,f,C_ACC,a);
-    float r=cap*0.30f, bx=x-trail+cap*0.14f+r, by=y+r+cap*0.02f, l=r*0.50f;
-    disc(bx,by,r,C_ACC,a);
-    capsule(bx-l,by,bx+l,by,cap*0.052f,C_ACCD,a); capsule(bx,by-l,bx,by+l,cap*0.052f,C_ACCD,a);
-    return bx+r+trail;
+    x=text_at(x,y,BRAND_WORD,f,cw,a)-FS[f].track+FS[f].cap*0.08f;
+    int pf=brand_plus_f(f);
+    return text_at(x,y-(int)(FS[pf].cap*0.15f),BRAND_BADGE,pf,cw,a);
 }
 static void brand_c(int cx,int y,int f,uint32_t cw,int a){ brand_at(cx-brand_wf(f)/2,y,f,cw,a); }
 static void draw_pill_btn(Rect r,const char*txt,int font,uint32_t bg_t,uint32_t bg_b,uint32_t fg,int press){
@@ -307,7 +291,7 @@ static void overlays_draw(ms_t now){
 }
 
 /* ================= page: HOME ================= */
-enum { W_CHIP=1, W_LABEL, W_HERO, W_SUB, W_CHART, W_STATS, W_ACT, W_FOOT, W_LIST, W_SCROLL, W_DHERO, W_DCHG, W_MINUS, W_PLUS, W_CANCEL, W_SAVE, W_DIAG, W_SPL, W_XNOTE, W_XFOOT, W_BYE, W_GEAR, W_BACKCH, W_OFF, W_CLOCK, W_LIVE, W_START };   /* v6.16: W_CLOCK = HOME's top line (clock / wordmark); v6.17: W_LIVE / W_START (a page's live line, HOLD TO START) */
+enum { W_CHIP=1, W_LABEL, W_HERO, W_SUB, W_CHART, W_STATS, W_ACT, W_FOOT, W_LIST, W_SCROLL, W_DHERO, W_DCHG, W_MINUS, W_PLUS, W_CANCEL, W_SAVE, W_DIAG, W_SPL, W_XNOTE, W_XFOOT, W_BYE, W_GEAR, W_BACKCH, W_OFF, W_CLOCK, W_LIVE, W_START, W_RING0=60, W_RING1, W_RING2, W_RING3 };   /* v6.16: W_CLOCK = HOME's top line (clock / wordmark); v6.17: W_LIVE / W_START (a page's live line, HOLD TO START) */
 /* v6.9: latest chart scale (state JSON "chart" + selftest) */
 static struct { int mode,active,full,top,raw_max,disp_max,ticks,bticks,n,clip,na,wmax,wtop; } cst;   /* v6.15: + wmax/wtop (weight line, mode 0) */
 static int cmp_int(const void*a,const void*b){ int x=*(const int*)a,y=*(const int*)b; return (x>y)-(x<y); }
@@ -390,99 +374,158 @@ static void draw_chart(Rect r,ms_t now,const HomeM*m){
     if(raw) text_r(r.x1-4,r.y0+1,TR(TX_C_RAW),F_XS,C_WARN,235);                  /* v6.9: the raw view is marked (instead of the right-hand heading) */
     else if(mode==0||tline) text_r(r.x1-4,r.y0+1,TR(mode==0?TX_C_WEIGHT:TX_C_TARGET),F_XS,C_TXT2,235);
 }
-/* v6.11: the sub-line at idle (TARGET 87.0°, NO CONNECTION …, errors in plain language) is the screen's most important message -> F_S when it
- * fits in the field; during activities (AUTO-STOP AT …) and for too-long text F_XS as before */
-/* v6.17: the activity sub-lines are short now ("STOPS AT 36.0 G"), so they get F_S too — readable from where you stand while brewing */
-static int sub_font(const HomeM*m){ return text_wf(m->sub,F_S)<=SUB_W-8?F_S:F_XS; }
-/* v6.11: gear (settings) drawn with primitives — no new glyph in the font */
-static void draw_gear(float cx,float cy,float r,uint32_t c,uint32_t hole){
-    for(int k=0;k<8;k++){ float a=k*(float)M_PI/4.f, ca=cosf(a), sa=sinf(a); capsule(cx+ca*r*0.55f,cy+sa*r*0.55f,cx+ca*r*0.92f,cy+sa*r*0.92f,r*0.16f,c,255); }
-    disc(cx,cy,r*0.70f,c,255); disc(cx,cy,r*0.30f,hole,255);
+/* ================= v7.0 HOME: four ring buttons in the OEM language =================
+ * Idle: the stock 2x2 grid of white ring buttons (Grinder, Hot Water / Brew, Steam), each with a line icon, its target inside
+ * ("18.5 g", "36 g", "65°") and its name set along the ring's arc in a gap of the ring. A ring whose boiler is still heating
+ * shows the heat-up as a filling arc (a faint track + a white arc = temperature / ready point). Tap = the feature's page,
+ * hold = start (an inner arc sweeps around during the hold). The chevron at the top (tap or pull down) opens SYSTEM; the clock
+ * sits at the bottom. A thin status line under the chevron says only what matters now (heating, blocked, no connection, a
+ * planned pre-heat). While something runs, HOME becomes the live view: the big white number, a thin progress ring at the
+ * edge, a fine trace, three numbers and a solid white STOP. An error turns the screen dark with a red ring. */
+#define RING_HW 1.5f
+static float ring_lab_ang(int i){ static const float A[4]={225,315,135,45}; return A[i]; }   /* the label faces the display's rim */
+static int ring_lab_out(int i){ return i<2; }                                                  /* upper rings: tops outward */
+static const char* ring_label(int i){ return TR(ACT_NAME[RING_ACT[i]]); }
+static float ring_gap_deg(int i){ return text_arc_deg(ring_label(i),F_LAB,RING_R)/2+7.f; }
+/* how far a ring's boiler is: 1 = ready (or no boiler: the grinder), else the share of the way from 20 °C to its ready point */
+static float ring_heat(int i){
+    int k=RING_ACT[i];
+    if(k==ACT_GRIND) return 1;
+    int b=(k==ACT_STEAM), tw=b?47:40;
+    int r=b?snd_steam_thr():(reg_seen[11]?(int)reg[11]:sv(S_BREWT));
+    if(!reg_seen[tw]) return snd_ready(b)?1:0;
+    int t=reg[tw];
+    if(t>=r-20&&(snd_ready(b)||t>=r)) return 1;                  /* the MCU's heat stage (or the temperature itself) says ready */
+    if(r<=210) return 0;
+    return clampf((t-200)/(float)(r-200),0,0.98f);                /* the way from 20 °C to the ready point */
+}
+static void draw_chev(int cx,int y,uint32_t c,int a,float hw){ capsule(cx-10,y,cx,y+8,hw,c,a); capsule(cx,y+8,cx+10,y,hw,c,a); }
+static void static_home(void){
+    if(hm_mode==HM_ERROR){ memcpy(bgbase,bgdark,(size_t)W*H*4); return; }
+    if(hm_mode==HM_ACTIVE) return;
+    int dim=hm_mode==HM_DIM; int a=dim?120:255;
+    for(int i=0;i<4;i++){
+        text_arc(RING_X[i],RING_Y[i],RING_R,ring_lab_ang(i),ring_lab_out(i),ring_label(i),F_LAB,C_TXT,a);
+        const char*ic=ACT_ICON[RING_ACT[i]]; float iw=text_wf(ic,F_ICL);
+        text_at(RING_X[i]-iw/2,RING_Y[i]-34,ic,F_ICL,C_TXT,a);
+    }
+}
+/* one ring: track/heat arc (with the label gap), pressed fill, hold sweep, the target inside */
+static void draw_ring(int i,float heat,int en,int pr,float hp,const char*val,int dim){
+    float cx=RING_X[i], cy=RING_Y[i], la=ring_lab_ang(i), g=ring_gap_deg(i);
+    float a0=la+g, span=360-2*g;
+    int base=dim?110:255;
+    if(pr&&en) disc(cx,cy,RING_R-3,C_TXT,30);
+    if(heat>=1) arc_aa(cx,cy,RING_R,RING_HW,a0,a0+span,C_TXT,base);
+    else {
+        arc_aa(cx,cy,RING_R,RING_HW*0.8f,a0,a0+span,C_TXT,dim?60:95);
+        if(heat>0.01f) arc_aa(cx,cy,RING_R,RING_HW+0.4f,a0,a0+span*heat,C_TXT,base);
+    }
+    if(hp>0) arc_aa(cx,cy,RING_R-10,2.2f,-90,-90+360*hp,C_TXT,255);
+    text_c((int)cx,(int)cy+20,val,F_S,dim?C_DIS:C_TXT2,255);
+}
+static void draw_status_line(const char*t,uint32_t c,int warn){
+    if(!t[0]) return;
+    if(warn){ char b[96]; snprintf(b,sizeof b,IC_WARN " %s",t); fit_text(b,F_XS,270); text_c(CX,HOME_STAT_Y,b,F_XS,c,255); }
+    else text_c(CX,HOME_STAT_Y,t,F_XS,c,255);
+}
+/* HOME's status line (shared w/ the selftest): what matters now, or nothing */
+static uint32_t home_status_text(const HomeM*m,char*o,size_t n,int*warn,ms_t now){
+    o[0]=0; *warn=0; (void)now;
+    int ph=m->ph;
+    if(ph==PH_OFFLINE||ph==PH_SLEEP){ snprintf(o,n,"%s",m->sub); *warn=ph==PH_OFFLINE; return ph==PH_OFFLINE?C_WARN:C_TXT2; }
+    if(m->hint1[0]&&m->hc1==C_WARN){ snprintf(o,n,"%s",m->hint1); *warn=1; return C_WARN; }
+    if(act.pending!=ACT_NONE||(tch.down&&!tch.moved&&tch.target>=T_ACT0&&tch.target<=T_ACT3)){ snprintf(o,n,"%s",m->sub); return C_TXT; }
+    if(ph==PH_HEAT){ snprintf(o,n,"%s",m->sub); return C_TXT2; }
+    if(m->hint2){ snprintf(o,n,"%s",m->hint2); return C_TXT2; }
+    return C_TXT2;
+}
+static void draw_stop_pill(Rect r,const char*txt,int font,int press){
+    int w=r.x1-r.x0,h=r.y1-r.y0;
+    rrect(r.x0,r.y0+3,w,h,h/2.f,rgb(60,20,6),60);
+    rrect(r.x0,r.y0,w,h,h/2.f,press?rgb(255,232,214):C_STOP_T,255);
+    text_c((r.x0+r.x1)/2,r.y0+(h-(int)FS[font].cap)/2,txt,font,C_STOP_FG,255);
+}
+/* live view (an activity runs, or its DONE screen): phase name, the big number + unit, the target line, the trace, 3 numbers, STOP */
+#define AV_PH_Y 62
+#define AV_HERO_Y 98
+#define AV_SUB_Y 196
+#define AV_CHART_Y 226
+#define AV_STAT_Y 298
+
+static void draw_home_active(ms_t now){
+    const HomeM*m=&hm; uint32_t h; char b[64];
+    int crc=now-last_bad_ms<10000&&rx_bad>0;
+    h=hi(hi(hs(hs(H0,m->chip),m->badge?m->badge:""),crc?(int)rx_bad:0),m->ph==PH_DONE);
+    if(W_begin(W_CHIP,R(90,AV_PH_Y-6,300,28),h)){
+        if(m->badge){ snprintf(b,sizeof b,"%s · %s",m->chip,m->badge); text_c(CX,AV_PH_Y,b,F_S,C_TXT2,255); }
+        else text_c(CX,AV_PH_Y,m->chip,F_S,C_TXT2,255);
+        if(crc){ snprintf(b,sizeof b,TR(TX_H_CRC),rx_bad); text_c(CX,AV_PH_Y+18,b,F_TINY,C_WARN,255); }
+        W_end();
+    }
+    h=hi(hs(hs(H0,m->hero),m->unit),m->ph);
+    if(W_begin(W_HERO,R(70,AV_HERO_Y-6,340,96),h)){
+        float nw=text_wf(m->hero,F_XXL), uw=text_wf(m->unit,F_L); float x=CX-(nw+8+uw)/2;
+        text_at(x,AV_HERO_Y,m->hero,F_XXL,C_TXT,255);
+        text_at(x+nw+8,AV_HERO_Y+(int)FS[F_XXL].cap-(int)FS[F_L].cap,m->unit,F_L,C_TXT,255);
+        W_end();
+    }
+    if(W_begin(W_SUB,R(SUB_X0,AV_SUB_Y-4,SUB_W,26),hi(hs(H0,m->sub),m->ph))){
+        int sf=text_wf(m->sub,F_S)<=SUB_W-8?F_S:F_XS; text_c(CX,AV_SUB_Y,m->sub,sf,C_TXT2,255); W_end();
+    }
+    if(W_begin(W_CHART,R(CX-HINT_W/2,AV_CHART_Y,HINT_W,60),hs(hs(hi(hi(hi(hi(hi(H0,g_head),g_n),(int)m->hi),m->sk*8+(m->eff==PH_STEAM)),cd.raw*16+cd.scale),m->hint1),m->hint2?m->hint2:""))){ draw_chart(R(CX-130,AV_CHART_Y,260,60),now,m); W_end(); }
+    h=H0; for(int i=0;i<3;i++){ h=hs(h,m->sl[i]); h=hs(h,m->svv[i]); }
+    if(W_begin(W_STATS,R(84,AV_STAT_Y-4,312,56),h)){
+        for(int i=0;i<3;i++){ int x=CX+(i-1)*STAT_PITCH; text_c(x,AV_STAT_Y,m->svv[i],F_STAT,C_TXT,255); text_c(x,AV_STAT_Y+31,m->sl[i],F_TINY,C_TXT3,255); }
+        W_end();
+    }
+    int sk[2], sn=stop_btns(now,sk);
+    h=hi(hi(hi(hi(H0,sn*25+(sk[0]+1)*5+sk[1]+1),pressed(T_STOP)),pressed(T_STOPS)),ui_lang);
+    if(W_begin(W_ACT,R(64,STOP_Y,352,STOP_H+6),h)){
+        for(int i=0;i<sn;i++) draw_stop_pill(stop_pill(sn,i),TR(STOP_BTN[sk[i]]),stop_font(sn),pressed(i?T_STOPS:T_STOP));
+        W_end();
+    }
+}
+static void draw_home_error(ms_t now){
+    const HomeM*m=&hm; (void)now;
+    if(W_begin(W_HERO,R(60,96,360,250),hi(hs(hs(H0,m->sub),m->hint1),pressed(T_DIAG)))){
+        float cy=170; ring(CX,cy,44,47,C_RED,255);
+        capsule(CX,cy-22,CX,cy+6,3.2f,C_TXT,255); disc(CX,cy+20,3.6f,C_TXT,255);
+        char t[64]; snprintf(t,sizeof t,"%s",err_code()); text_c(CX,238,t,F_L,C_TXT,255);
+        char s[96]; snprintf(s,sizeof s-4,"%s",m->sub); fit_text(s,F_S,330); text_c(CX,276,s,F_S,C_TXT2,255);
+        text_c(CX,312,m->hint1,F_XS,C_TXT3,255);
+        W_end();
+    }
 }
 static void draw_home(ms_t now){
-    const HomeM*m=&hm; uint32_t h; char b[64];
-    { char c[24]; int ok=home_clock_text(c,sizeof c);                  /* v6.16: the clock (stock update_time format) instead of the wordmark */
-      if(W_begin(W_CLOCK,R(CX-70,HOME_BRAND_Y-6,140,24),hs(hi(H0,ok),ok?c:""))){
-          if(ok) text_c(CX,HOME_BRAND_Y-2,c,F_S,C_TXT2,255); else brand_c(CX,HOME_BRAND_Y,F_XS,C_TXT3,255);
+    const HomeM*m=&hm; uint32_t h;
+    /* the chevron (SYSTEM) at the top */
+    if(hm_mode!=HM_ACTIVE&&W_begin(W_GEAR,R(CX-30,HOME_CHEV_Y-6,60,20),hi(hi(H0,pressed(T_GEAR)),hm_mode))){
+        draw_chev(CX,HOME_CHEV_Y,C_TXT,pressed(T_GEAR)?255:200,1.4f); W_end(); }
+    /* the clock at the bottom (the wordmark while the clock is not set) */
+    if(hm_mode!=HM_ACTIVE){ char c[24]; int ok=home_clock_text(c,sizeof c);
+      if(W_begin(W_CLOCK,R(CX-70,HOME_CLOCK_Y-4,140,26),hs(hi(hi(H0,ok),hm_mode),ok?c:""))){
+          if(ok) text_c(CX,HOME_CLOCK_Y,c,F_CLK,hm_mode==HM_DIM?C_TXT2:C_TXT,255); else brand_c(CX,HOME_CLOCK_Y,F_S,C_TXT2,255);
           W_end(); } }
-    /* phase chip (+ CRC warning) */
-    int crc=now-last_bad_ms<10000&&rx_bad>0;
-    h=hi(hs(H0,m->chip),crc?(int)rx_bad:0);
-    if(W_begin(W_CHIP,R(110,74,260,32),h)){
-        const char*nm=m->chip; int tw=text_w(nm,F_S); int w=tw+40; int x=CX-w/2; if(crc) x-=40;
-        rrect(x,76,w,28,14,mix(C_SURF,m->hi,38),255);
-        disc(x+15,90,4.2f,m->hi,255); text_at(x+26,83,nm,F_S,m->hi,255);
-        if(crc){ snprintf(b,sizeof b,TR(TX_H_CRC),rx_bad); int cw2=text_w(b,F_XS)+20; rrect(x+w+8,78,cw2,24,12,mix(C_SURF,C_WARN,44),255); text_at(x+w+18,85,b,F_XS,C_WARN,255); }
-        W_end();
-    }
-    /* v6.6: during concurrent steam the steam badge (STEAM·WAND / STEAM·AUTO) sits on the label line — the main activity's
-     * target stays in the sub-line ("AUTO-STOP AT … G"), so both activities are named on screen */
-    if(W_begin(W_LABEL,R(110,110,260,18),hi(hs(hs(H0,m->label),m->badge?m->badge:""),m->conc))){
-        if(m->badge){
-            uint32_t sc=ph_hi(PH_STEAM); int bw=text_w(m->badge,F_XS)+30, bx=CX-bw/2;
-            rrect(bx,110,bw,18,9,mix(C_SURF,sc,44),255); disc(bx+11,119,3.2f,sc,255); text_at(bx+20,114,m->badge,F_XS,sc,255);
-        } else text_c(CX,113,m->label,F_XS,C_TXT3,255);
-        W_end();
-    }
-    h=hi(hs(hs(H0,m->hero),m->unit),m->ph==PH_OFFLINE||m->ph==PH_SLEEP);
-    if(W_begin(W_HERO,R(92,130,296,80),h)){
-        float nw=text_wf(m->hero,F_XXL), uw=text_wf(m->unit,F_M); float x=CX-(nw+10+uw)/2;
-        uint32_t c=(m->ph==PH_OFFLINE||m->ph==PH_SLEEP)?C_DIS:C_TXT;
-        text_at(x,136,m->hero,F_XXL,c,255); text_at(x+nw+10,136+66-18,m->unit,F_M,C_TXT2,255);
-        W_end();
-    }
-    if(W_begin(W_SUB,R(SUB_X0,212,SUB_W,24),hi(hs(H0,m->sub),m->ph))){
-        int sf=sub_font(m); text_c(CX,sf==F_S?215:217,m->sub,sf,(m->ph==PH_ERROR)?C_ERR:(phase_active(m->ph)||m->ph==PH_DONE?m->hi:C_TXT2),255); W_end();
-    }
-    if(W_begin(W_CHART,R(CX-HINT_W/2,240,HINT_W,54),hs(hs(hi(hi(hi(hi(hi(H0,g_head),g_n),(int)m->hi),m->sk*8+(m->eff==PH_STEAM)),cd.raw*16+cd.scale),m->hint1),m->hint2?m->hint2:""))){ draw_chart(R(118,240,244,54),now,m); W_end(); }
-    h=H0; for(int i=0;i<3;i++){ h=hs(h,m->sl[i]); h=hs(h,m->svv[i]); }
-    if(W_begin(W_STATS,R(96,298,288,40),h)){
-        for(int i=0;i<3;i++){ int x=CX+(i-1)*STAT_PITCH; text_c(x,300,m->sl[i],F_XS,C_TXT3,255); text_c(x,317,m->svv[i],F_M,C_TXT,255); }
-        W_end();
-    }
-    /* action row */
-    int running=phase_active(m->ph); int akind=m->ph==PH_GRIND?0:(m->ph==PH_WATER?2:(m->ph==PH_STEAM?3:1));
-    int st_on=stm.kind!=SK_NONE, sk[2], sn=stop_btns(now,sk);   /* v6.6: steam STOP only for latched steam; v6.13: + STOP for grind/brew/water */
+    if(hm_mode==HM_ACTIVE){ draw_home_active(now); return; }
+    if(hm_mode==HM_ERROR){ draw_home_error(now); return; }
+    { char st[96]; int warn; uint32_t c=home_status_text(m,st,sizeof st-8,&warn,now);
+      if(W_begin(W_CHIP,R(70,HOME_STAT_Y-4,340,22),hi(hi(hs(H0,st),(int)c),warn))){ draw_status_line(st,c,warn); W_end(); } }
     float hp=0; int hk=-1;
     if(tch.down&&!tch.moved&&tch.target>=T_ACT0&&tch.target<=T_ACT3){ hk=tch.target-T_ACT0; hp=clampf((now-tch.t0)/(float)HOLD_MS,0,1); }
-    h=hi(hi(hi(hi(H0,m->ph),hk),(int)(hp*40)),act.pending); h=hi(h,pressed(T_STOP)); h=hi(h,pressed(T_STOPS)); h=hi(h,sn*25+(sk[0]+1)*5+sk[1]+1); h=hi(h,stm.kind); if(running) h=hi(h,(int)((now/66)&0x7FFFFFFF)); h=hi(h,sv(S_GRINDMODE)*4+sv(S_HOTMODE)); for(int i=0;i<NSET;i++) h=hi(h,set_oor(&SET[i]));
-    for(int i=0;i<4;i++) h=hs(h,m->alab[i]);
-    if(W_begin(W_ACT,R(72,338,336,82),h)){                        /* v6.17: 336 x 82 (STOP 216 / 2 x 152, + the icons' targets); v6.13: 296 x 64 */
-        if(sn){
-            for(int i=0;i<sn;i++) draw_pill_btn(stop_pill(sn,i),TR(STOP_BTN[sk[i]]),stop_font(sn),C_STOP_T,C_STOP_B,C_STOP_FG,pressed(i?T_STOPS:T_STOP));
-        } else {
-            for(int i=0;i<4;i++){
-                int en=!running&&!act_guard(i,now); uint32_t ac=ph_hi(ACT_PH[i]); int pr=(hk==i);
-                if(running&&(i==akind||(i==ACT_STEAM&&st_on))){   /* active activity (v6.6: also steam on top of another): filled button + pulsing ring */
-                    uint32_t on_c=(i==ACT_STEAM)?ph_hi(PH_STEAM):m->hi;
-                    float pu=0.5f+0.5f*sinf((float)(now&0xFFFFFF)/260.f);   /* v6.6: the phase is taken from the lower 24 bits — a float can't hold a clock of several days in ms */
-                    ring(ACT_X[i],ACT_Y,27.5f+pu*2,29.5f+pu*2,on_c,(int)(150-90*pu));
-                    disc(ACT_X[i],ACT_Y,25,on_c,255);
-                    float iw2=text_wf(ACT_ICON[i],F_IC); text_at(ACT_X[i]-iw2/2,ACT_Y-10,ACT_ICON[i],F_IC,rgb(16,18,22),255);
-                    continue;
-                }
-                disc(ACT_X[i],ACT_Y+2,25,rgb(0,0,0),70);
-                disc(ACT_X[i],ACT_Y,25,pr?C_SURF3:C_SURF2,255);
-                ring(ACT_X[i],ACT_Y,24,25.2f,en?mix(C_SURF3,ac,90):C_SURF3,255);
-                float iw=text_wf(ACT_ICON[i],F_IC);
-                text_at(ACT_X[i]-iw/2,ACT_Y-10,ACT_ICON[i],F_IC,en?ac:C_DIS,255);
-                if(pr&&en&&hp>0) arc_aa(ACT_X[i],ACT_Y,28.5f,1.8f,-90,-90+360*hp,ac,255);
-                if(!running) text_c(ACT_X[i],ACT_LAB_Y,m->alab[i],F_XS,en?C_TXT2:C_DIS,255);   /* v6.17: the icon's target */
-            }
+    int dim=hm_mode==HM_DIM;
+    for(int i=0;i<4;i++){
+        int k=RING_ACT[i]; int en=!act_guard(k,now); int pr=(hk==k); float ht=ring_heat(i);
+        float hpi=(pr&&en)?hp:0;
+        h=hi(hi(hi(hi(hi(hs(H0,m->alab[k]),en),pr),(int)(hpi*60)),(int)(ht*200)),dim);
+        if(W_begin(W_RING0+i,R(RING_X[i]-RING_R-4,RING_Y[i]-RING_R-4,2*RING_R+8,2*RING_R+8),h)){
+            draw_ring(i,dim?1:ht,en,pr,hpi,m->alab[k],dim); W_end();
         }
-        W_end();
-    }
-    /* v6.11: visible path to the settings; v6.17: the gear opens SYSTEM (each feature's settings are behind its own icon), no page dots */
-    if(W_begin(W_GEAR,R(CX-22,GEAR_Y-20,44,40),hi(H0,pressed(T_GEAR)))){
-        int pr=pressed(T_GEAR); uint32_t bg=pr?C_SURF3:C_SURF2;
-        disc(CX,GEAR_Y+1,15,rgb(0,0,0),60); disc(CX,GEAR_Y,15,bg,255); ring(CX,GEAR_Y,14,15.2f,C_LINE,255);
-        draw_gear(CX,GEAR_Y,9,pr?C_TXT:C_TXT2,bg); W_end();
     }
 }
 
 /* ================= page: SETTINGS LIST ================= */
 /* HOME: discreet title line at the top inside the gauge ring — the wordmark w/ "+" badge */
-static void static_home(void){ }   /* v6.16: the wordmark is drawn by W_CLOCK (draw_home) — it gives way to the clock */
 /* v6.17: a page's title. Feature pages: the feature's icon in its colour + its name (the same icon as on HOME, so the page is
  * recognisably "the thing behind that button"); SYSTEM / DIAGNOSTICS: the name. No descriptive sub-line any more. */
 static const char* page_title(int pg){ return pg==PG_DIAG?TR(TX_PG_DIAG):TR(TIER_NAME[clampi(tier_of_page(pg),0,4)]); }

@@ -5,7 +5,7 @@
 /* ====================================================================== */
 /* The product name lives in ONE place. UI strings use PRODUCT; the word mark is drawn as BRAND_WORD +
  * "+" badge (brand_at()). "merakiplus" is only the technical identifier: paths, binaries, logs. */
-#define BRAND_WORD  "MERAKI"
+#define BRAND_WORD  "Meraki"
 #define BRAND_BADGE "+"
 #define PRODUCT     BRAND_WORD BRAND_BADGE
 
