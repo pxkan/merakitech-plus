@@ -458,7 +458,7 @@ static int home_mode_of(int ph){
 #define BACK_H 54
 /* v7.0: the editor (a roller like the stock pickers + −/+ rings + an OK ring) and the system action (two pills) */
 #define ED_TITLE_Y 32
-#define TITLE_W 232        /* v7.0: a title near the top must fit the circle's chord there: F_L, else F_M, else F_S (+ … ) */
+#define TITLE_W 214        /* v7.0: a title near the top must fit the circle's chord there (2 x chord at the cap top, y 32) — F_L, else F_M, else F_S (+ … ); 232 let the ends of long F_L titles reach under the bezel */
 #define ED_RANGE_Y 66
 #define ED_CY 190          /* the roller's centre line */
 #define ED_MX 82
@@ -530,9 +530,9 @@ static int hit_test(int x,int y,ms_t now){
         int sk[2], sn=stop_btns(now,sk);
         if(sn){ for(int i=0;i<sn;i++){ Rect r=stop_hit(sn,i); if(in_r(x,y,r.x0,r.y0,r.x1-r.x0,r.y1-r.y0)) return i?T_STOPS:T_STOP; } }   /* v6.13: STOP for grind/brew/water + latched steam */
         if(hm_mode==HM_ACTIVE){ if(pinfo_hit(x,y)) return T_PINFO; return T_NONE; }
+        if(diag_hint_shown()&&in_r(x,y,70,HOME_STAT_Y-2,340,32)) return T_DIAG;   /* offline: the status line -> DIAGNOSTICS (before the chevron, whose area reached down over it) */
         if(in_r(x,y,CX-60,0,120,58)) return T_GEAR;                                 /* v7.0: the chevron at the top -> SYSTEM */
         if(hm_mode==HM_ERROR){ if(in_r(x,y,60,96,360,250)) return T_DIAG; return T_NONE; }
-        if(diag_hint_shown()&&in_r(x,y,70,HOME_STAT_Y-10,340,34)) return T_DIAG;  /* offline: the status line -> DIAGNOSTICS */
         if(!phase_active(phase_raw(now))) for(int i=0;i<4;i++) if(in_c(x,y,RING_X[i],RING_Y[i],RING_R+4)) return T_ACT0+RING_ACT[i];
         return T_NONE;
     }

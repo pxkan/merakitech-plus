@@ -317,7 +317,7 @@ static int pinfo_hit(int x,int y){
     if(cst.active&&cst.mode==0&&in_r(x,y,118,240,244,54)) return 1;
     return (hm.eff==PH_PRE||hm.eff==PH_EXT)&&in_r(x,y,CX-STAT_PITCH/2,298,STAT_PITCH,40);
 }
-static int diag_hint_shown(void){ return diag_hint(act.ph)&&!cst.active&&hm.hint1[0]; }
+static int diag_hint_shown(void){ return diag_hint(act.ph)&&hm_mode!=HM_ACTIVE&&hm.hint1[0]; }   /* v7.0: the chart is drawn only in the live view, so cst.active is stale outside it */
 static void draw_chart(Rect r,ms_t now,const HomeM*m){
     int x0=r.x0+4, w=r.x1-r.x0-8, yb=r.y1-5, h=r.y1-r.y0-20, raw=cd.raw;
     static int c1[260], c2[260], cr[260], ci[260], vs[GN], rs[GN];
@@ -482,7 +482,7 @@ static void draw_home_active(ms_t now){
         W_end();
     }
     h=hi(hs(hs(H0,m->hero),m->unit),m->ph);
-    if(W_begin(W_HERO,R(70,AV_HERO_Y-6,340,96),h)){
+    if(W_begin(W_HERO,R(CX-186,AV_HERO_Y-6,372,96),h)){   /* 372: a °F milk temperature ('150.2 °F', 352 px) was clipped by the 340 px widget */
         float nw=text_wf(m->hero,F_XXL), uw=text_wf(m->unit,F_L); float x=CX-(nw+8+uw)/2;
         text_at(x,AV_HERO_Y,m->hero,F_XXL,C_TXT,255);
         text_at(x+nw+8,AV_HERO_Y+(int)FS[F_XXL].cap-(int)FS[F_L].cap,m->unit,F_L,C_TXT,255);
@@ -702,7 +702,7 @@ static void draw_list(ms_t now){
             } else if(rw[k].kind==RK_X){
                 const char*label,*sub,*val; int lock; xrow_text(rw[k].a,&label,&sub,&val,&lock);
                 text_at(102,y+9,label,F_M,lock?C_TXT2:C_TXT,255);
-                { char sb[96]; snprintf(sb,sizeof sb-4,"%s",sub); fit_text(sb,F_TINY,val?200:270); text_at(102,y+31,sb,F_TINY,lock?C_WARN:C_TXT2,255); }
+                { char sb[96]; snprintf(sb,sizeof sb-4,"%s",sub); fit_text(sb,F_TINY,270);   /* its own line: the value is on the label's line */ text_at(102,y+31,sb,F_TINY,lock?C_WARN:C_TXT2,255); }
                 if(val) text_r(lock?398:378,y+9,val,F_S,lock?C_TXT2:C_TXT,255);
                 if(!lock) draw_chev_r(394,y+ROW_H/2,C_TXT2);
             } else {
@@ -857,8 +857,9 @@ static int sys_hero_font(const char*hero){ if(xsel==X_BOOTUI) return F_H; int f=
 static void static_sys(void){
     SysT t; sys_text(&t);
     if(xsel==X_EXIT){
-        float iw=text_wf(IC_WARN,F_L)+10, tw=text_wf(t.title,F_L); float x=CX-(iw+tw)/2;
-        text_at(x,ED_TITLE_Y,IC_WARN,F_L,C_WARN,255); text_at(x+iw,ED_TITLE_Y,t.title,F_L,C_TXT,255);
+        int f=F_L; while(f!=F_S&&text_wf(IC_WARN,f)+10+text_wf(t.title,f)>TITLE_W) f=(f==F_L)?F_M:F_S;   /* fit the chord like every title (F_L overflowed the circle) */
+        float iw=text_wf(IC_WARN,f)+10, tw=text_wf(t.title,f); float x=CX-(iw+tw)/2; int y=ED_TITLE_Y+((int)FS[F_L].cap-(int)FS[f].cap)/2;
+        text_at(x,y,IC_WARN,f,C_WARN,255); text_at(x+iw,y,t.title,f,C_TXT,255);
     } else title_c(ED_TITLE_Y,t.title,C_TXT);
     { char sb[96]; snprintf(sb,sizeof sb-4,"%s",t.sub); fit_text(sb,F_XS,320); text_c(CX,ED_RANGE_Y,sb,F_XS,C_TXT2,255); }
 }
