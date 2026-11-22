@@ -180,6 +180,25 @@ class Ctrl:
             raise RuntimeError(f"ctrl got no reply: {req}")
         return json.loads(line)
 
+    def call_raw(self, data, n_replies, timeout=3.0):
+        """v6.20: send raw bytes on ONE connection and read n reply lines (robustness tests of the ctrl parser)."""
+        s = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+        s.settimeout(timeout)
+        s.connect(self.path)
+        s.sendall(data)
+        f = s.makefile("r", encoding="utf-8", errors="replace")
+        out = []
+        try:
+            for _ in range(n_replies):
+                line = f.readline()
+                if not line:
+                    break
+                out.append(line.strip())
+        except socket.timeout:
+            pass
+        s.close()
+        return out
+
 
 def find_ui_bin(explicit=None):
     if explicit:
@@ -454,6 +473,24 @@ class ScenarioRun:
                 self.flag_path.unlink(missing_ok=True)
         elif op == "gesture":
             self.run_gesture(ev)
+        elif op == "ctrl_raw":
+            # v6.20: raw lines on ONE ctrl connection (e.g. with an embedded NUL); every line must get a reply and
+            # the replies must be valid JSON — a bad line must not wedge the connection for the lines after it
+            data = ("\n".join(ev["lines"]) + "\n").encode("utf-8")
+            replies = self.ui_ctrl.call_raw(data, len(ev["lines"]))
+            def _valid(r):
+                try:
+                    return isinstance(json.loads(r), dict)
+                except ValueError:
+                    return False
+            want_ok = ev.get("ok", [])
+            ok = len(replies) == len(ev["lines"]) and all(_valid(r) for r in replies)
+            for i, w in enumerate(want_ok):
+                if ok and w is not None:
+                    ok = json.loads(replies[i]).get("ok") is w
+            self.checks.append({"name": f"ctrl_raw {ev.get('name', '')}@{ev.get('t')}: {len(ev['lines'])} lines -> "
+                                        f"{len(ev['lines'])} valid replies", "ok": ok,
+                                "detail": json.dumps(replies, ensure_ascii=False)[:400]})
         elif op == "touch_stream":
             stream = touch_stream(ev.get("presses", 1), ev.get("x", 240),
                                   ev.get("y", 240), ev.get("hold_ms", 80),

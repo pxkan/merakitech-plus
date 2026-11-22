@@ -608,6 +608,26 @@ def gen_matrix():
 
 SCENARIOS.append(gen_matrix())
 
+# ---------------------------------------------------------------- v6.20: ctrl hook hardening
+# Review 2026-11 (mem-ui-sim #3/#5/#6): a NaN/Inf from the ctrl "cond" hook used to be printed as "nan" and made
+# every later state line invalid JSON; absurd numbers were converted to int with UB; an embedded NUL wedged the
+# connection. Test hook only — no UART frame changes (the universal checks still hold).
+SCENARIOS.append(base(
+    "ctrl_hardening", "SIM ctrl hook robustness: -nan/inf in cond keep the old values (state stays valid JSON), "
+    "touch at 1e10 is clamped, a line with an embedded NUL gets an error reply and the next line on the "
+    "same connection is still answered", 10,
+    [ui(3, "cond", a_chart="-nan", head="inf"),
+     ui(3.5, "cond", a_hero="nan"),
+     ui(4, "touch", x=1e10, y=-1e10),
+     ev(5, "runner", op="ctrl_raw", name="nul", lines=['{"cmd":"ping"\u0000garbage}', '{"cmd":"ping"}'],
+        ok=[False, True]),
+     snap(7, "after")],
+    [{"kind": "phase_hold", "t0": 2, "t1": 9.5, "value": "READY", "min_ratio": 0.95},
+     {"kind": "state", "path": "cond.a_chart", "t0": 3.5, "t1": 9.5, "min": 0.01, "max": 1, "mode": "all"},
+     {"kind": "state", "path": "cond.a_hero", "t0": 4, "t1": 9.5, "min": 0.01, "max": 1, "mode": "all"},
+     {"kind": "state", "path": "cond.head", "t0": 3.5, "t1": 9.5, "min": 1, "max": 3, "mode": "all"},
+     {"kind": "sim_log", "assert": "no_writes_between", "t0": 2, "t1": 9.5, "except_subs": [0, 1, 112]}]))
+
 
 def main():
     OUT.mkdir(exist_ok=True)

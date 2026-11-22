@@ -206,18 +206,23 @@ static float scroll_max(int pg){
 
 /* ---- formatting ---- */
 static int use_c(void){ return sv(S_TUNIT)!=0; }
+/* v6.20 (review 2026-11 mem-ui-sim #4): a hand-edited config.json can hold any int (INT_MIN/INT_MAX); the formatting and drawing
+ * paths clamp it first (abs(INT_MIN), v*10, v*9/5 overflowed). Display only — the frame policy still sees the real value. */
+#define DV_LIM 1000000
+static int dclamp(int v){ return v<-DV_LIM?-DV_LIM:(v>DV_LIM?DV_LIM:v); }
 static void fmt_fix(char*b,size_t n,int v,int dec){
+    v=dclamp(v);
     if(dec==1) snprintf(b,n,"%s%d.%d",v<0?"-":"",abs(v)/10,abs(v)%10);
     else if(dec==-1) snprintf(b,n,"%d",(v+(v<0?-5:5))/10);
     else snprintf(b,n,"%d",v);
 }
 static void fmt_t10(char*b,size_t n,int v10,int dec){   /* temperature in 0.1 °C -> text in the selected unit */
-    if(!use_c()) v10=v10*9/5+320;
+    v10=dclamp(v10); if(!use_c()) v10=v10*9/5+320;
     fmt_fix(b,n,v10,dec?1:-1);
 }
 static const char* t_unit(void){ return TR(use_c()?TX_U_C:TX_U_F); }
 static void set_fmt(int i,int v,char*b,size_t n){
-    const Setting*s=&SET[i];
+    const Setting*s=&SET[i]; v=dclamp(v);
     if((s->flags&SF_SENSOR)&&!s->loaded){ snprintf(b,n,"--"); return; }
     if(s->kind==K_ENUM){ if(v>=s->min&&v<=s->max) snprintf(b,n,"%s",TR(s->opts[v-s->min])); else snprintf(b,n,"(%d)",v); return; }
     if(s->flags&SF_HHMM){ fmt_hm(b,n,v/60,v%60,1); return; }                               /* v6.16 */
@@ -439,7 +444,7 @@ static void sys_confirm(ms_t now){
  * stock UI. In addition there is the switcher gesture and run.sh's trap. */
 static void edit_step(int dir,int mult){
     Setting*s=&SET[sel]; if(s->flags&SF_LOCK) return;
-    int v=edit_val+dir*s->step*mult;
+    int v=dclamp(edit_val)+dir*s->step*mult;
     if(mult>1) v=(v/(s->step*mult))*(s->step*mult);   /* snap to coarse grid during acceleration */
     v=clampi(v,s->lo,s->hi);
     v=s->lo+((v-s->lo)/s->step)*s->step;              /* always on the stock picker's step grid */

@@ -465,7 +465,8 @@ static void st_wrap(void){
     /* ---- seconds since boot + /proc start time ---- */
     { char root[300], p[400]; snprintf(root,sizeof root,"/tmp/merakiplus_v6_selftest_%d/wrap",(int)getpid()); snprintf(p,sizeof p,"%s/proc/4711",root); mk_p(root,"/proc/4711");
       char ksr[sizeof sysroot]; strcpy(ksr,sysroot); snprintf(sysroot,sizeof sysroot,"%s",root);
-      mock_put(root,"/proc/4711/stat","4711 (demo_v9) T 1 4711 4711 0 -1 4194560 0 0 0 0 0 0 0 0 20 0 1 0 300000000000 1404928 91 4294967295\n",120,0644);
+      { static const char ST[]="4711 (demo_v9) T 1 4711 4711 0 -1 4194560 0 0 0 0 0 0 0 0 20 0 1 0 300000000000 1404928 91 4294967295\n";
+        mock_put(root,"/proc/4711/stat",ST,(int)sizeof ST-1,0644); }   /* v6.20: the real length (was 120: an ASan global-buffer-overflow READ) */
       char stt='?'; int64_t s=proc_stat(4711,&stt); strcpy(sysroot,ksr);
       int64_t kf=mono_fake; mono_fake=(int64_t)5000000000LL; int64_t m=mono_s(); mono_fake=kf;
       st_check("/proc start time and seconds since boot are 64 bit: 300 000 000 000 ticks = 3 000 000 000 s (32-bit atol: saturated at 2^31 after 248 days); mono_s 5 000 000 000",
@@ -1318,6 +1319,19 @@ static void st_v620(const char*dir){
       snprintf(cfg_path,sizeof cfg_path,"%s",kc); sim_reset(); }
     st_r3();
     st_r5(dir);
+    /* R11 (review mem-ui-sim #4): INT_MAX / INT_MIN in config.json: rows are OUT OF SPEC, starts blocked, and every view renders
+     * (the formatting / drawing paths clamp; under UBSan this is the overflow regression test) */
+    { char kc[sizeof cfg_path], cp[400]; snprintf(kc,sizeof kc,"%s",cfg_path); snprintf(cp,sizeof cp,"%s/_r11_config.json",dir); copy_file(kc,cp); snprintf(cfg_path,sizeof cfg_path,"%s",cp);
+      int w=cfg_set_int("brewTemper",2147483647)&&cfg_set_int("autoGrindWeight",-2147483647-1); sim_reset();
+      int oor=set_oor(&SET[S_BREWT])&&set_oor(&SET[S_GRINDW])&&SET[S_BREWT].val==2147483647&&SET[S_GRINDW].val==-2147483647-1;
+      char b[64]; set_fmt(S_BREWT,SET[S_BREWT].val,b,sizeof b); int fm=strstr(b,"100000")!=NULL;
+      sim_run(1500); int blocked=act_guard(ACT_BREW,sim_now)!=NULL&&act_guard(ACT_GRIND,sim_now)!=NULL;
+      page=PG_BREW; sim_run(400); page=PG_GRIND; sim_run(400); detail_open(S_BREWT,sim_now); sim_run(500); tap(396,184); sim_run(200); tap(84,184); sim_run(200);
+      int ed=edit_val>=SET[S_BREWT].lo&&edit_val<=SET[S_BREWT].hi; detail_close(sim_now); sim_run(400);
+      sim_reset(); sim_t0=sim_now; sim_tick=tick_grind; sim_run(6000); sim_tick=NULL; home_model(sim_now);
+      st_check("R11 config with brewTemper = INT_MAX, autoGrindWeight = INT_MIN: both rows OUT OF SPEC, shown clamped (100000.0), starts blocked; HOME / pages / editor / grind chart render; the stepper lands in the spec interval",
+               w&&oor&&fm&&blocked&&ed);
+      snprintf(cfg_path,sizeof cfg_path,"%s",kc); sim_reset(); }
     /* R10 (review mem-ui-sim): a string cut off inside a UTF-8 sequence never makes the renderer read past its NUL */
     { static const unsigned char T1[]={'A',0xC3,0,'W','W','W','W',0}, T2[]={'A',0xE2,0,'W','W','W','W',0}, T3[]={'A',0xE2,0x80,0,'W','W','W','W',0},
                                   T4[]={'A',0xC2,0,'W','W','W','W',0};
