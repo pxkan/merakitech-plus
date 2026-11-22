@@ -6,9 +6,9 @@
 ![status](https://img.shields.io/badge/status-unofficial%20%C2%B7%20experimental-red)
 
 <p align="center">
-  <img src="screenshots/home-ready-en.png" width="220" alt="HOME screen, ready">
-  <img src="screenshots/brew-extraction.png" width="220" alt="Brewing: extraction with weight, time, pressure estimate and flow">
-  <img src="screenshots/hotwater-stopped.png" width="220" alt="Hot water stopped manually">
+  <img src="screenshots/home-ready-en.png" width="220" alt="HOME: four ring buttons with their targets, the clock at the bottom">
+  <img src="screenshots/brew-extraction.png" width="220" alt="Brewing: the live view with the weight in the cup, a progress ring, the trace, time, pressure estimate, flow and STOP">
+  <img src="screenshots/setting-brew-temp.png" width="220" alt="The editor: brew temperature on a roller with minus, plus and OK">
 </p>
 
 **Meraki+** is an open-source replacement UI for the round 480×480 touch display of the
@@ -93,6 +93,7 @@ By downloading, installing or using Meraki+ you confirm that you have read and a
 - [How it works](#how-it-works)
 - [Screenshots](#screenshots)
 - [Development, contributing and security issues](#development-contributing-and-security-issues)
+- [Credits / third-party](#credits--third-party)
 - [License and trademarks](#license-and-trademarks)
 
 ## What is Meraki+?
@@ -111,35 +112,40 @@ available to go back to.
 
 ## Features
 
-- **Touch-first design for the round display** — built for the 480×480 circle: large gauge, large
-  numbers, hold-to-start (650 ms) on GRIND / BREW / WATER / STEAM, so nothing starts by accident.
+- **Designed for the round display, in the stock look** — white on copper, like the original UI: four ring
+  buttons on HOME (Grinder, Hot Water, Brew, Steam), each with its target inside (*18.5 g*, *36 g*, *40 g*,
+  *65°*) and an arc that fills while its boiler heats up. **Tap** a ring for that function's page; **hold** it
+  (650 ms) to start, so nothing starts by accident. Text is set in Montserrat (see [Credits](#credits--third-party)).
+- **Live view while something runs** — the weight in the cup (or the milk temperature) as one large number, a
+  thin progress ring at the edge towards the target, a fine trace of pressure and weight, time / ≈bar / flow, and
+  a big white **STOP**. A calm graph (median + EMA) and a weight dead band, so the numbers do not flicker; the
+  pressure is an estimate (≈bar).
 - **Settings parity with the stock UI** — brew temperature, pre-infusion, auto weight, steam, hot
-  water, brightness, sound, language, time and more (24 config rows on 3 pages, plus Meraki+'s own UI language, pre-heat and auto-off rows), with the same limits
-  as stock, saved in the stock format (so the stock UI reads them afterwards) and with a backup
-  before every change.
-- **Manual STOP** for **water, grind and brew** (and steam) — the red button during an activity.
-  The stop commands are the same as the controller's own, with confirmation once the controller
-  reports the stop.
-- **One page per function** — tap the grind / brew / water / steam icon to see that function's live values
-  and settings and a labelled **HOLD TO START**; the icons on HOME show what they will do (*18.5 G*, *36 G*, …).
-- **Live brew view** — weight in the cup, time, flow and a **pressure estimate** (≈bar); a
-  calm graph (median + EMA) and a weight dead band, so the numbers do not flicker.
+  water, brightness, sound, language, time and more (24 config rows, plus Meraki+'s own UI language, sound,
+  pre-heat and auto-off rows), with the same limits as stock, saved in the stock format (so the stock UI reads
+  them afterwards) and with a backup before every change.
+- **A roller to pick values** — like the stock pickers: drag the value up or down, or use `−` / `+` (hold to go
+  fast), then **OK**. The chevron at the top, a pull down or a swipe right cancels.
+- **Manual STOP** for **water, grind and brew** (and steam). The stop commands are the same as the controller's
+  own, with confirmation once the controller reports the stop.
+- **One page per function** — tap a ring to see that function's live values (*Boiler 92.4° · group 70°*) and its
+  settings, and start it with **Hold to Start**.
 - **Center-hold gesture (optional, `--gesture`)** — hold one finger in the middle of the stock UI's
   screen for 5 seconds to switch to Meraki+ without a reboot (works from the first boot after
-  installation). To go back: *gear → SYSTEM → STOCK UI → SWITCH TO ORIGINAL NOW*.
+  installation). To go back: *System → Stock UI → Switch to Original Now*.
 - **The power button** is honored — but see the [hardware limitation](#the-power-button-hardware-limitation).
 - **Clock, planned pre-heat and auto off** — the time on HOME (12/24 h as in the stock UI), a daily /
   weekday / one-time **pre-heat** that wakes the machine through the controller's own alarm, and an
   optional **auto off** after 15–60 minutes without use. See [Clock and pre-heat](#clock-and-pre-heat).
 - **Sounds: a start jingle and one ready tone per boiler** — you hear when the **brew boiler** is ready and,
   with a different tone, when the **steam boiler** is (the stock UI plays one sound once both are). Meraki+'s own
-  short tones, at the stock *volume*; *SYSTEM → DISPLAY · SOUND* turns them off, picks which boiler announces itself,
+  short tones, at the stock *volume*; *System → Display · Sound* turns them off, picks which boiler announces itself,
   or uses the display's own stock sounds. See [Sounds](#sounds).
-- **Boot selection in the UI** — *SYSTEM → STOCK UI → BOOT UI* selects whether the machine starts Meraki+ or the
+- **Boot selection in the UI** — *System → Stock UI → Boot UI* selects whether the machine starts Meraki+ or the
   original UI.
-- **DIAGNOSTICS** (advanced, behind SYSTEM — or one tap on HOME's error line) — connection, error codes
+- **Diagnostics** (advanced, behind System — or one tap on HOME's error screen) — connection, error codes
   E1–E3, version, boot slot, network status, raw counters.
-- **English and Danish** (switch under *SYSTEM → DISPLAY · SOUND → UI LANGUAGE*).
+- **English and Danish** (switch under *System → Display · Sound → UI Language*).
 - **Simulator + E2E tests** — the whole UI can run without a machine against a simulated controller
   (`sim/`), and CI runs the tests on every change.
 
@@ -223,27 +229,27 @@ requires a clone of the repository.
 
 | What | How |
 |---|---|
-| **Start an activity** | **Hold** one of the four icons (grind · brew · water · steam) for ~0.7 s — the number under the icon is what it will do. Or **tap** the icon to open its page and hold **HOLD TO START** there. |
-| **Stop an activity** | Tap the big red **STOP** button (*STOP WATER / STOP BREW / STOP GRIND / STOP STEAM*). Green message = the controller has confirmed the stop. Yellow/red message = try again. Auto-stop at the target weight works as in the stock UI. |
-| **Get around** | **Tap an icon** = that function's page (GRIND · BREW · WATER · STEAM: live values + its settings). **Tap the gear** = SYSTEM (DISPLAY · CLOCK · SCHEDULE · STOCK UI · DIAGNOSTICS; tap a section to open it). **Back** = the arrow at the top of every page, or swipe right. |
-| **Change a setting** | Open the function's page (or SYSTEM) → tap the row → `−`/`+` (hold to go fast) → **SAVE**. Swipe down or tap the arrow at the top to cancel. |
-| **Language** | *gear → DISPLAY → UI LANGUAGE* (English/Danish; the DISPLAY row shows the current language). The stock UI's language is set separately (*STOCK UI → STOCK LANG.*). |
-| **Back to the original UI now** | *gear → STOCK UI → SWITCH TO ORIGINAL NOW* (no reboot). |
+| **Start an activity** | **Hold** one of the four rings (Grinder · Hot Water · Brew · Steam) for ~0.7 s — the number inside the ring is what it will do. Or **tap** the ring to open its page and hold **Hold to Start** there. |
+| **Stop an activity** | Tap the big white **STOP** button (*Stop Water / Stop Brew / Stop Grind / Stop Steam*). *Water stopped* (etc.) = the controller has confirmed the stop. A message with a yellow warning sign = try again. Auto-stop at the target weight works as in the stock UI. |
+| **Get around** | **Tap a ring** = that function's page (Grind · Brew · Water · Steam: live values + its settings). **Tap the chevron at the top of HOME, or pull down from the top** = System (Display · Sound · Clock · Schedule · Stock UI · Diagnostics; tap a section to open it). **Back** = the chevron at the top of every page, pull the header down, or swipe right. |
+| **Change a setting** | Open the function's page (or System) → tap the row → drag the roller, or `−`/`+` (hold to go fast) → **OK**. Pull down, swipe right or tap the chevron at the top to cancel. |
+| **Language** | *System → Display · Sound → UI Language* (English/Danish; the Display · Sound row shows the current language). The stock UI's language is set separately (*Stock UI → Stock Lang.*). |
+| **Back to the original UI now** | *System → Stock UI → Switch to Original Now* (no reboot). |
 | **To Meraki+ from the original UI** | With `--gesture`: hold **one finger still in the middle of the screen for 5 s** and release (active from the first boot after installation, because the gesture switcher is started by `demo.sh`). Without it: run `./install.sh --ip ADDR` again. |
-| **What starts at boot** | *gear → STOCK UI → BOOT UI* (takes effect at the next boot), or `--persist` / `./revert.sh`. |
-| **Something is wrong** | HOME says what (*BREW BOILER SENSOR FAULT*, *NO CONNECTION TO THE MACHINE*); tap the line under it (*TAP FOR DETAILS*) for DIAGNOSTICS. |
+| **What starts at boot** | *System → Stock UI → Boot UI* (takes effect at the next boot), or `--persist` / `./revert.sh`. |
+| **Something is wrong** | HOME says what: an error turns the screen dark with a red ring and the code (*E2 · Brew boiler sensor fault*); no connection dims the rings (*No connection to the machine*). Tap the message (*tap for details*) for Diagnostics. |
 
 ### Clock and pre-heat
 
-- **Clock:** HOME's top line shows the local time: the display's system clock (UTC) + the time zone set in
-  the stock UI + daylight saving if *SYSTEM → CLOCK → DAYLIGHT SAVING* is on. *TIME FORMAT* 24-HOUR / 12-HOUR
+- **Clock:** HOME shows the local time at the bottom: the display's system clock (UTC) + the time zone set in
+  the stock UI + daylight saving if *System → Clock → Daylight Saving* is on. *Time Format* 24-Hour / 12-Hour
   matches the stock UI's setting. Meraki+ does not set the clock itself; if it has never been set (no network
   time sync in the stock UI yet), the wordmark is shown instead.
-- **Pre-heat:** *SYSTEM → SCHEDULE → PRE-HEAT* (on/off), *PRE-HEAT AT* (time) and *REPEAT* (once / every day / Mon–Fri /
+- **Pre-heat:** *System → Schedule → Pre-Heat* (on/off), *Pre-Heat At* (time) and *Repeat* (once / every day / Mon–Fri /
   Sat–Sun). When the machine is switched off, the next pre-heat is handed to the controller as its wake alarm —
-  the same way the stock UI does it — and the controller wakes and heats at that time. HOME shows the next
+  the same way the stock UI does it — and the controller wakes and heats at that time. HOME's top line shows the next
   pre-heat while it is planned. Meraki+'s schedule is separate from the stock UI's schedules.
-- **Auto off:** *SYSTEM → SCHEDULE → AUTO OFF* (off / 15 / 20 / 30 / 60 min). After that long without a touch or an
+- **Auto off:** *System → Schedule → Auto Off* (off / 15 / 20 / 30 / 60 min). After that long without a touch or an
   activity the machine switches off (a warning appears 30 s before; touch the screen to stay on).
 
 Details: [docs/time-scheduling.md](docs/time-scheduling.md).
@@ -256,8 +262,8 @@ Details: [docs/time-scheduling.md](docs/time-scheduling.md).
   machine), it stays quiet — you hear only the jingle. A boiler announces itself again only after it has really cooled
   down (not after a shot or a steam session). Nothing plays while the machine is off or asleep, and a tone that comes
   due while you brew or steam is skipped.
-- *SYSTEM → DISPLAY · SOUND*: **SOUND** off / on / stock sounds, **READY TONE** off / brew boiler / steam boiler /
-  both boilers, **VOLUME** (the stock UI's volume, shared; 0 = silent). SAVE plays a short test tone.
+- *System → Display · Sound*: **Sound** off / on / stock sounds, **Ready Tone** off / brew boiler / steam boiler /
+  both boilers, **Volume** (the stock UI's volume, shared; 0 = silent). Saving any of them (OK) plays a short test tone.
 - The tones are Meraki+'s own (`audio/`, generated by `tools/gen_audio.py`); they are played through the display's
   own audio driver by the small helper `merakiplus_snd`, which the installer puts next to Meraki+.
   *DIAGNOSTICS → SOUND* shows the last sound. Details and the reversed stock audio path: [docs/audio.md](docs/audio.md).
@@ -345,21 +351,21 @@ IP address yourself).
 <details><summary><b>The display showed the original UI again after a power cut</b></summary>
 
 Expected without `--persist`. Run `./install.sh --ip ADDR` again, use the gesture (`--gesture`), or
-select *BOOT UI = Meraki+* on Meraki+'s SYSTEM page.
+select *Boot UI = Meraki+* under *System → Stock UI* in Meraki+.
 </details>
 
-<details><summary><b>Meraki+ shows "OFFLINE" / no connection to the controller</b></summary>
+<details><summary><b>Meraki+ shows "No connection to the machine"</b></summary>
 
 The controller may be asleep. Briefly press the power button. If it stays offline, switch to the
-original UI (*SWITCH TO ORIGINAL NOW*) and see whether it works there; otherwise open an issue with a
-photo of the DIAGNOSTICS page.
+original UI (*Switch to Original Now*) and see whether it works there; otherwise open an issue with a
+photo of the Diagnostics page.
 </details>
 
 <details><summary><b>An activity will not start</b></summary>
 
-Hold the icon for ~0.7 s (a short tap opens the function's page instead). The line under the page's
-title says why a start is blocked. If it says *OUT OF SPEC*, a setting is outside the stock UI's
-allowed range — the row is marked red on that page; open it and pick a value.
+Hold the ring for ~0.7 s (a short tap opens the function's page instead). The line under the page's
+title says why a start is blocked. If it says *Config out of spec*, a setting is outside the stock UI's
+allowed range — its value is yellow with a warning sign on that page; open it and pick a value.
 </details>
 
 <details><summary><b>Can I break the coffee machine?</b></summary>
@@ -409,18 +415,22 @@ description (including the gesture, the watchdog race and the OTA table) is in
 
 ## Screenshots
 
-From the simulator (the same code as on the machine):
+From the simulator (the same code as on the machine), v7.0:
 
 | | | |
 |---|---|---|
-| ![](screenshots/home-ready-en.png) | ![](screenshots/page-brew.png) | ![](screenshots/brew-extraction.png) |
-| HOME, ready (English) | The BREW page (tap the cup icon) | Brewing |
-| ![](screenshots/steam.png) | ![](screenshots/settings-system.png) | ![](screenshots/system-schedule.png) |
-| Steam | SYSTEM (the gear) | SYSTEM › SCHEDULE |
-| ![](screenshots/setting-brew-temp.png) | ![](screenshots/diagnostics.png) | ![](screenshots/home-ready-da.png) |
-| Brew temperature | DIAGNOSTICS | HOME (Danish UI) |
-| ![](screenshots/system-sound.png) | | |
-| SYSTEM › DISPLAY · SOUND (v6.18) | | |
+| ![](screenshots/home-ready-en.png) | ![](screenshots/home-heating.png) | ![](screenshots/page-brew.png) |
+| HOME, ready: tap a ring = its page, hold = start | HOME while the boilers heat up (the arcs fill) | The Brew page (tap the Brew ring) |
+| ![](screenshots/brew-extraction.png) | ![](screenshots/steam.png) | ![](screenshots/hotwater-stopped.png) |
+| Brewing: the live view | Steaming: the milk temperature | Hot water, just stopped with STOP |
+| ![](screenshots/setting-brew-temp.png) | ![](screenshots/editor-roller.png) | ![](screenshots/settings-system.png) |
+| Brew temperature on the roller | After a change: OK is filled | System (the chevron at the top of HOME) |
+| ![](screenshots/system-schedule.png) | ![](screenshots/system-sound.png) | ![](screenshots/diagnostics.png) |
+| System › Schedule | System › Display · Sound | Diagnostics |
+| ![](screenshots/home-error.png) | ![](screenshots/home-ready-da.png) | |
+| An error (tap for Diagnostics) | HOME (Danish UI) | |
+
+The full screen-by-screen description is in [docs/ui-guide.md](docs/ui-guide.md).
 
 ## Development, contributing and security issues
 
@@ -429,6 +439,14 @@ From the simulator (the same code as on the machine):
 - Changes: [CHANGELOG.md](CHANGELOG.md). Code of conduct: [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md).
 - Security issues: **not** as a public issue — see [SECURITY.md](SECURITY.md).
 - The shipped binaries and their md5 sums: [bin/README.md](bin/README.md).
+
+## Credits / third-party
+
+- **Montserrat** typeface by the Montserrat Project Authors (<https://github.com/JulietaUla/Montserrat>), licensed
+  under the **SIL Open Font License 1.1**. The four TTFs and the license are in
+  [third_party/montserrat/](third_party/montserrat/README.md); the font data in `src/mp/font_data.c` is a
+  converted subset of them (outlines, advances and kerning for the characters the UI uses), generated by
+  `tools/gen_font.py`, and is covered by the OFL, not by the MIT license below.
 
 ## License and trademarks
 
