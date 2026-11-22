@@ -1173,6 +1173,97 @@ static void st_v611(void){
       st_check("DIAGNOSE: STATUS at the top (link, phase, E1/E2/E3, awake, net, version, boot push), then boot/net/graph/pressure, RAW COUNTERS (rx, crc, work_sta, cmd6, current, frame, mirror, md5) in their own section, ABOUT at the bottom; every cell has exactly one slot",okp&&s8&&order); }
     sim_reset(); sim_tick=NULL;
 }
+/* ============================ v7.0: the OEM design's own behaviour (roller, pull-down, static layer, ring heat, arc labels, glyph engine) ============================ */
+static int st_slay_diff(Rect r,const uint32_t*ref){ int n=0; for(int y=r.y0;y<r.y1;y++) for(int x=r.x0;x<r.x1;x++){ uint32_t a=slay[y*W+x], b=ref[y*W+x];
+    int d=abs((int)((a>>16)&255)-(int)((b>>16)&255))+abs((int)((a>>8)&255)-(int)((b>>8)&255))+abs((int)(a&255)-(int)(b&255)); if(d>24) n++; } return n; }
+static float st_angd(float a,float b){ float d=fmodf(a-b+540.f,360.f)-180.f; return fabsf(d); }   /* |a - b| in degrees, 0..180 */
+static int st_white(uint32_t c){ return ((c>>16)&255)>=235&&((c>>8)&255)>=225&&(c&255)>=210; }
+static void st_v7(void){
+    printf("== selftest: v7.0 OEM design (roller drag, pull down to SYSTEM, static layer per view, ring heat, labels in the ring gap, glyph engine + kerning) ==\n");
+    /* ---- (1) the roller: drag down = smaller, one step per ED_STEP_PX (rounded), stops at the limits, nothing is sent ---- */
+    { sim_reset(); page=PG_BREW; static_dirty=1; sim_run(300); detail_open(S_BREWW,sim_now); sim_run(400); const Setting*s=&SET[S_BREWW]; int sv0=s->val; edit_val=edit_orig=s->lo+10*s->step; ka_next=sim_now+100000000L; int v0=edit_val, st=s->step; int n0=wq.n; int q0=txq_len;
+      int tgt=hit_test(CX,ED_CY,sim_now);
+      ui_touch(TE_DOWN,CX,ED_CY,sim_now); sim_run(33);
+      ui_touch(TE_MOVE,CX,ED_CY+(int)(ED_STEP_PX*0.4f),sim_now); sim_run(33); int a0=edit_val==v0;                     /* 0.4 step: nothing yet (it follows the finger: roll_off) */
+      float off=roll_off;
+      ui_touch(TE_MOVE,CX,ED_CY+ED_STEP_PX,sim_now); sim_run(33); int a1=edit_val==v0-st;                              /* 1 step down = one value smaller */
+      ui_touch(TE_MOVE,CX,ED_CY+3*ED_STEP_PX,sim_now); sim_run(33); int a3=edit_val==v0-3*st;                          /* 3 steps */
+      ui_touch(TE_MOVE,CX,ED_CY-2*ED_STEP_PX,sim_now); sim_run(33); int au=edit_val==v0+2*st;                          /* back up past the start: larger */
+      ui_touch(TE_UP,CX,ED_CY-2*ED_STEP_PX,sim_now); sim_run(500); int settle=roll_off==0&&view==V_DETAIL&&SET[S_BREWW].val==sv0&&wq.n==n0&&txq_len==q0;
+      printf("       roller: target %d · 0.4 step -> %d (offset %.1f) · 1 step -> %d · 3 steps -> %d · -2 steps -> %d · after release offset %.1f\n",tgt,edit_val==v0,(double)off,v0-st,v0-3*st,v0+2*st,(double)roll_off);
+      st_check("roller (v7.0): a vertical drag on the value turns it — DOWN = smaller, ONE step per ED_STEP_PX (a 0.4-step drag only moves it), back up = larger; it settles after the release and sends nothing (OK saves)",tgt==T_ROLL&&a0&&off>0&&a1&&a3&&au&&settle);
+      edit_val=s->lo+st; ui_touch(TE_DOWN,CX,ED_CY,sim_now); for(int k=1;k<=6;k++){ ui_touch(TE_MOVE,CX,ED_CY+k*ED_STEP_PX,sim_now); sim_run(33); }
+      int lo=edit_val==s->lo&&fabsf(roll_off)<=ED_STEP_PX*0.5f; ui_touch(TE_UP,CX,ED_CY+6*ED_STEP_PX,sim_now); sim_run(500);
+      edit_val=s->hi-st; ui_touch(TE_DOWN,CX,ED_CY,sim_now); for(int k=1;k<=4;k++){ ui_touch(TE_MOVE,CX,ED_CY-k*ED_STEP_PX,sim_now); sim_run(33); }
+      int hi=edit_val==s->hi&&fabsf(roll_off)<=ED_STEP_PX*0.5f; ui_touch(TE_UP,CX,ED_CY-4*ED_STEP_PX,sim_now); sim_run(500);
+      detail_close(sim_now); sim_run(400);
+      detail_open(S_PISW,sim_now); sim_run(400); int e0=edit_val; ui_touch(TE_DOWN,CX,ED_CY,sim_now); ui_touch(TE_MOVE,CX,ED_CY-ED_STEP_PX,sim_now); sim_run(33); ui_touch(TE_MOVE,CX,ED_CY-5*ED_STEP_PX,sim_now); sim_run(33);
+      int en=edit_val==SET[S_PISW].max&&(e0==SET[S_PISW].max||edit_val!=e0); ui_touch(TE_UP,CX,ED_CY-5*ED_STEP_PX,sim_now); sim_run(400); detail_close(sim_now); sim_run(400);
+      detail_open(S_BREAK,sim_now); sim_run(400); int l0=edit_val; ui_touch(TE_DOWN,CX,ED_CY,sim_now); ui_touch(TE_MOVE,CX,ED_CY+2*ED_STEP_PX,sim_now); sim_run(33); int lk=edit_val==l0&&roll_off==0&&hit_test(CX,ED_CY,sim_now)!=T_ROLL;
+      ui_touch(TE_UP,CX,ED_CY+2*ED_STEP_PX,sim_now); sim_run(400); detail_close(sim_now); sim_run(400);
+      st_check("roller: it stops at the limits (drag past the lowest / highest value = the limit, with only a short rubber band <= half a step); an ON/OFF setting rolls to its other option; a locked setting does not roll",lo&&hi&&en&&lk&&wq.n==n0); }
+    /* ---- (2) pull down from the top of HOME = SYSTEM (the stock chevron), nowhere else ---- */
+    { sim_reset(); sim_run(400); int n0=wq.n;
+      int g1[]={CX,20, CX,40, CX,130}; st_gest(g1,3); st_settle(); int p1=page==PG_SYS&&wq.n==n0;
+      st_home(); int g2[]={CX,150, CX,170, CX,260}; st_gest(g2,3); st_settle(); int p2=page==PG_HOME;                 /* starts below the top band: nothing */
+      int g3[]={CX,20, CX+20,40, CX+90,110}; st_gest(g3,3); st_settle(); int p3=page==PG_HOME;                         /* diagonal: nothing */
+      int g4[]={CX,20, CX,30, CX,60}; st_gest(g4,3); st_settle(); int p4=page==PG_HOME;                                /* too short (40 px) */
+      st_home(); reg[33]=0x1307; sim_run(600); int g5[]={CX,20, CX,40, CX,130}; st_gest(g5,3); st_settle(); int p5=page==PG_HOME&&hm_mode==HM_ACTIVE;   /* the live view: no SYSTEM while something runs */
+      st_check("pull down from the top of HOME (>= 70 px, vertical, starting above y 96) opens SYSTEM, sending nothing; a drag that starts lower, a diagonal or a short one does nothing; in the live view it does nothing",p1&&p2&&p3&&p4&&p5); }
+    /* ---- (3) the static layer follows view / page / hm_mode: the ring labels exist only on HOME's ring grid ---- */
+    { float la=ring_lab_ang(0)*(float)M_PI/180.f; int lx=RING_X[0]+(int)(RING_R*cosf(la)), ly=RING_Y[0]+(int)(RING_R*sinf(la)); Rect lb=R(lx-22,ly-22,44,44);   /* clear of the live view's edge ring (r 229, in the static layer too) */
+      sim_reset(); sim_run(600); int home=st_slay_diff(lb,bgpure); uint32_t k1=static_key_last;
+      page=PG_BREW; static_dirty=0; sim_run(100); int brew=st_slay_diff(lb,bgpure); uint32_t k2=static_key_last;
+      detail_open(S_BREWW,sim_now); sim_run(400); int det=st_slay_diff(lb,bgpure); detail_close(sim_now); sim_run(400);
+      page=PG_HOME; static_dirty=0; sim_run(100); int back=st_slay_diff(lb,bgpure);
+      int kl=ui_lang; lang_set(kl==LANG_EN?LANG_DA:LANG_EN); static_dirty=0; sim_run(100); uint32_t sl0=0; for(int y=lb.y0;y<lb.y1;y++) for(int x=lb.x0;x<lb.x1;x++) sl0=sl0*31u+slay[y*W+x];
+      lang_set(kl); static_dirty=0; sim_run(100); uint32_t sl1=0; for(int y=lb.y0;y<lb.y1;y++) for(int x=lb.x0;x<lb.x1;x++) sl1=sl1*31u+slay[y*W+x];
+      reg[33]=0x1307; sim_run(600); int act_=st_slay_diff(lb,bgpure); int am=hm_mode==HM_ACTIVE;
+      st_home(); reg[35]=1; sim_run(600); int er=st_slay_diff(R(CX-100,CY-100,200,200),bgdark)==0&&hm_mode==HM_ERROR; reg[35]=0; sim_run(600);
+      sim_link=0; sim_run(3000); int dim=st_slay_diff(lb,bgpure); int dm=hm_mode==HM_DIM; sim_link=1; sim_run(600);
+      printf("       ring-label pixels in the static layer: HOME %d · BREW page %d · editor %d · back on HOME %d · live view %d · offline (dimmed) %d · language switch %s\n",home,brew,det,back,act_,dim,sl0!=sl1?"rebuilt":"NOT rebuilt");
+      st_check("static layer (v7.0): rebuilt whenever view / page / HOME mode / language change — the ring labels are on HOME's grid only (not on a page, in the editor or in the live view), the error view is the dark layer, offline the labels are dimmed (fewer strong pixels), back on HOME they return",
+               home>40&&brew==0&&det==0&&back==home&&k1!=k2&&act_==0&&am&&er&&dm&&dim<home&&sl0!=sl1); }
+    /* ---- (4) ring heat: a boiler that is still heating fills its ring; ready = the whole ring ---- */
+    { sim_reset(); sim_run(400); reg[62]=0; reg[63]=0; reg[11]=870; reg[40]=200; reg[47]=200; sim_run(100);
+      float h0=ring_heat(2), hg=ring_heat(0); reg[40]=535; sim_run(100); float h5=ring_heat(2); int ph5=act.ph==PH_HEAT;
+      int i2=2; float cxr=RING_X[i2], cyr=RING_Y[i2]; int nh=0; for(int a=0;a<360;a++){ float t=a*(float)M_PI/180.f; int x=(int)lroundf(cxr+RING_R*cosf(t)), y=(int)lroundf(cyr+RING_R*sinf(t)); if(st_white(canvas[y*W+x])) nh++; }
+      reg[40]=860; sim_run(100); float h9=ring_heat(2); reg[62]=100; sim_run(100); float h1=ring_heat(2);
+      int nf=0; for(int a=0;a<360;a++){ float t=a*(float)M_PI/180.f; int x=(int)lroundf(cxr+RING_R*cosf(t)), y=(int)lroundf(cyr+RING_R*sinf(t)); if(st_white(canvas[y*W+x])) nf++; }
+      reg_seen[40]=0; reg[62]=0; float hu=ring_heat(2); reg_seen[40]=1; reg[62]=100;
+      printf("       ring heat (brew boiler, ready point 87.0°): 20° -> %.2f · 53.5° -> %.2f · 86.0° -> %.2f · heat stage 100 -> %.2f · unknown -> %.2f · grinder %.2f · lit ring pixels %d (half) vs %d (ready)\n",(double)h0,(double)h5,(double)h9,(double)h1,(double)hu,(double)hg,nh,nf);
+      st_check("ring heat (v7.0): the share of the way from 20 °C to the ready point (20° -> 0, half way -> 0.5, never 1 before the MCU / the temperature says ready), 1 when ready, 0 when the temperature is unknown and the MCU has not said ready; the grinder ring is always full; the drawn white arc follows (half heat ~ half the ring)",
+               h0==0&&fabsf(h5-0.5f)<0.01f&&ph5&&h9<=0.98f&&h9>0.9f&&h1==1&&hu==0&&hg==1&&nf>200&&fabsf((float)nh/nf-0.5f)<0.12f); }
+    /* ---- (5) the ring labels are set along the arc, inside the ring's gap (and the arc leaves that gap open) ---- */
+    { sim_reset(); sim_run(600); int ok=1;
+      for(int i=0;i<4;i++){ float la=ring_lab_ang(i), g=ring_gap_deg(i), half=text_arc_deg(ring_label(i),F_LAB,RING_R)/2; int nl=0, out=0, arc_in=0;
+          for(int y=RING_Y[i]-RING_R-24;y<=RING_Y[i]+RING_R+24;y++) for(int x=RING_X[i]-RING_R-24;x<=RING_X[i]+RING_R+24;x++){ if(x<0||x>=W||y<0||y>=H) continue;
+              float dx=x+0.5f-RING_X[i], dy=y+0.5f-RING_Y[i], r=hypotf(dx,dy), an=atan2f(dy,dx)*180.f/(float)M_PI; if(r<RING_R-18||r>RING_R+18) continue;   /* the icon and the target are further in */
+              uint32_t a=slay[y*W+x], b=bgpure[y*W+x]; int d=abs((int)((a>>16)&255)-(int)((b>>16)&255))+abs((int)((a>>8)&255)-(int)((b>>8)&255))+abs((int)(a&255)-(int)(b&255));
+              if(d>60){ nl++; if(st_angd(an,la)>g) out++; }
+              if(fabsf(r-RING_R)<1.5f&&st_angd(an,la)<half-1&&st_white(canvas[y*W+x])&&d<=60) arc_in++; }
+          printf("       ring %d '%s': label %.0f° wide in a %.0f° gap at %.0f° · %d label px, %d outside the gap · %d arc px inside the label's span\n",i,ring_label(i),(double)(2*half),(double)(2*g),(double)la,nl,out,arc_in);
+          if(nl<30||out>0||arc_in>0) ok=0; }
+      st_check("arc labels (text_arc): each ring's name is drawn along its ring, entirely inside the ring's gap (no label pixel outside it), and the ring's arc leaves the label's span open",ok); }
+    /* ---- (6) the glyph engine: every character the UI can draw exists in the font; kerning and tabular digits apply ---- */
+    { int ok=1; char bad[16];
+      for(int i=0;i<TZ_N;i++){ if(!glyphs_ok(TZT[i].name,bad,sizeof bad)||!glyphs_ok(TZT[i].utc,bad,sizeof bad)){ ok=0; printf("     time zone %d: '%s' has no glyph\n",i,bad); } }
+      static const char*const extra[]={PRODUCT,MERAKIPLUS_VERSION,"0123456789.,:-+%/()",
+          "\xC2\xB0" "\xE2\x89\x88" "\xE2\x80\xA6" "\xC2\xB7" "\xE2\x80\x94",IC_BEAN IC_CUP IC_DROP IC_STEAM IC_CHECK IC_CROSS IC_MOON IC_WARN IC_BOLT IC_CLOCK};
+      for(unsigned q=0;q<sizeof extra/sizeof extra[0];q++) if(!glyphs_ok(extra[q],bad,sizeof bad)){ ok=0; printf("     '%s': '%s' has no glyph\n",extra[q],bad); }
+      { char cb[24]; for(int h=0;h<24;h++) for(int tm=0;tm<2;tm++){ int k=SET[S_TIMEMODE].val; SET[S_TIMEMODE].val=tm; fmt_hm(cb,sizeof cb,h,7,1); SET[S_TIMEMODE].val=k; if(!glyphs_ok(cb,bad,sizeof bad)) ok=0; } }
+      for(int lg=0;lg<NLANG;lg++) for(int i=0;i<NSET;i++){ const Setting*q=&SET[i]; if(q->kind!=K_ENUM) continue; for(int v=q->min;v<=q->max;v++) if(!glyphs_ok(STR[lg][q->opts[v-q->min]],bad,sizeof bad)) ok=0; }
+      st_check("glyph engine: every character the UI draws outside the string table — 136 time-zone names + labels, the wordmark, version, clock in 12/24 h, numbers, ° ≈ … · —, the 10 line icons, every option name in both languages — exists in the font (nothing falls back to '?')",ok);
+      int A=fg_index('A'), V=fg_index('V'), T=fg_index('T'), o=fg_index('o'); int kf=1; for(int fc=0;fc<FG_NFACE;fc++) if(fg_kern(fc,A,V)>=0||fg_kern(fc,T,o)>=0) kf=0;
+      float wav=text_wf("AV",F_L), wsum=text_wf("A",F_L)+FS[F_L].track+text_wf("V",F_L), exp=wsum+fg_kern(FS[F_L].face,A,V)*fg_scale(F_L);
+      cv=canvas; set_clip(R(0,0,0,0)); float pen=text_at(100.f,100,"AVATAR To",F_L,C_TXT,255)-100.f; set_clip(FULL); static_dirty=1; force_all=1;
+      float tw=text_wf("AVATAR To",F_L)+FS[F_L].track;
+      int tn=fabsf(text_wf("1111",F_STAT)-text_wf("8888",F_STAT))<0.01f&&fabsf(text_wf("1111",F_XXL)-text_wf("0000",F_XXL))<0.01f&&text_wf("Il",F_LAB)<text_wf("WW",F_LAB);
+      printf("       kerning: 'AV' %.1f px vs A + V %.1f px (pair %d units) · text_at pen %.2f = text_wf %.2f · tabular digits %s\n",(double)wav,(double)wsum,fg_kern(FS[F_L].face,A,V),(double)pen,(double)tw,tn?"yes":"NO");
+      st_check("glyph engine: GPOS pair kerning is applied (AV / To are tighter than their glyphs side by side, in every weight), the measured width (text_wf) is exactly what text_at() advances, and digits are tabular where the style says so (numbers do not jitter)",
+               kf&&wav<wsum-0.5f&&fabsf(wav-exp)<0.01f&&fabsf(pen-tw)<0.02f&&tn); }
+    sim_reset(); sim_tick=NULL;
+}
 /* ============================ v6.17: IA consolidation (docs/ux-audit-v617.md) ============================ */
 static int st_q_snap(char*o,size_t n){   /* the write queue as hex, frame by frame (what WILL go out) */
     size_t l=0; o[0]=0;
@@ -2620,6 +2711,7 @@ static int selftest(const char*cfgsrc){
     /* ============================ v6.11 ============================ */
     st_v611();
     st_v617();
+    st_v7();                           /* v7.0 */
     st_v618(dir);                      /* v6.18 */
     st_v619();                         /* v6.19 */
     /* ============================ v6.15 ============================ */
