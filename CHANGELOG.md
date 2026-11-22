@@ -39,7 +39,20 @@ every other thing that reaches the UART are the same code as before. Before/afte
 - Frame budget (host, Apple silicon; the device must still be read on DIAGNOSTICS): brew frame 0.027 ms (v6.19: 0.041),
   full rebuild 0.20 ms (0.30), HOME rebuild with the four arc labels 0.36 ms, start-up (two background layers + font)
   4.1 ms. Device binary 429 KB (v6.19: 304 KB; +125 KB of font outlines), well inside the installer's 1.2 MB check.
+- Frame budget on ARMv7 (qemu, not the device): brew frame 0.78 ms (v6.19: 1.16), full rebuild 3.4 ms (5.9), HOME rebuild
+  with the arc labels 7.9 ms, start-up 177 ms (once, before the splash).
+- Tests: UI self-test 583 checks EN + DA (v6.20: 570; the v6 layout checks rewritten for v7, plus checks for the rings, the
+  roller drag, pull-down, the static layer, arc labels, the glyph engine, the DONE view and touches during cross-fades); the
+  same as a 32-bit ARM binary under qemu (one environment-only failure that v6.19 shows too); sim self-test 195; full E2E
+  46/46 EN + 46/46 DA (pixel checks for the copper look, the white rings, the STOP pill, the dark error layer); Sim Studio
+  machine tests 150 + headless smoke (v7 and v6.19); installer ALL PASS (Python 3.12 and 3.9.6).
+- Real bugs the new tests found and this release fixes: STOP dead during the cross-fade into the live view; the offline
+  "tap for details" line dead after a brew and under the chevron; titles and the °F hero wider than their space; SYSTEM not
+  reachable during an activity; the DONE screen blocking the rings; a boot-time cross-fade swallowing a hold.
+- `bin/`: `merakiplus` `f33ce8a1…`, `merakiplus_sim_arm` `b3746ba9…`, Linux SIM `4b9aec3e…`, macOS SIM `47d42a1b…` (official
+  zig 0.17.1); `merakiplus_snd`, `switcher`, `tinj_hold`, `keyinj`, `grab_shim.so` as in v6.20.
 - **Not yet verified on a machine.**
+
 ## [6.20] — 2026-11-22
 Fixes from a four-part code review (protocol, persistence, installer, memory/UI/simulator). Every finding was
 reproduced first and each fix has its own regression test. The full report, with deferrals and their reasons, is in
