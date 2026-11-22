@@ -303,7 +303,12 @@ class McuSim:
         reasons = []
         n = len(words)
         end = sub + n
-        band_ok = end < 33 or end in (113, 114, 115)
+        # v6.20 (review 2026-11 mem-ui-sim #7): the documented display write bands are words 0..31
+        # (sub+len < 33) and words 112..114 (sub >= 112, sub+len <= 115) — the UI's guard (wq_push_t).
+        # The MCU dispatch 0x9C54 itself only tests sub+len in {113,114,115}, so a write of words
+        # 100..112 would pass there; the sim is deliberately stricter so that a regression in the
+        # UI's band guard (writes into 33..111) fails the universal check no_band_rejects.
+        band_ok = end < 33 or (sub >= 112 and end <= 115)
         if not band_ok or end > REGN:
             reasons.append(f"band:sub{sub}+len{n}={end}")
         for i, w in enumerate(words):
