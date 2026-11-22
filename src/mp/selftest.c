@@ -653,6 +653,20 @@ static void st_net(const char*dir){
       unlink(cf); net_cfg_load(); ok&=net.cfg==NC_NOCFG;
       st_net_cfg(cf,1,"TestNet","abcdefgh12"); net_cfg_load(); ok&=net.cfg==NC_OK&&!strcmp(net.ssid,"TestNet");   /* presetStore's "ssid" (depth 2) is ignored */
       st_check("config guard: wifionoff 0 / empty ssid / password < 8 or with control characters / no config -> the guard is OFF; only the top-level keys are read",ok); }
+    { /* v6.20 R6 (review persist #2): a password that is PRESENT but unusable is a bad password — never an open network */
+      char pw90[100]; memset(pw90,'a',90); pw90[90]=0; int ok=1, sub[6];
+      st_net_cfg(cf,1,"TestNet",pw90); net_cfg_load(); sub[0]=net.cfg==NC_BADPSK;
+      st_net_cfg(cf,1,"TestNet","abcdefgh\\\\u12"); net_cfg_load(); sub[1]=net.cfg==NC_OK&&!strcmp(net.psk,"abcdefgh\\u12");   /* an escaped backslash is fine */
+      st_net_cfg(cf,1,"TestNet","abcdefgh\\\\"); net_cfg_load(); sub[1]&=net.cfg==NC_OK&&!strcmp(net.psk,"abcdefgh\\");
+      st_net_cfg(cf,1,"TestNet","abcdefgh\\uZZ12"); net_cfg_load(); sub[2]=net.cfg==NC_BADPSK;                            /* a malformed \u escape */
+      const char*NUL="{\n\t\"wifionoff\":\t1,\n\t\"ssid\":\t\"TestNet\",\n\t\"password\":\tnull\n}";
+      put_bytes(cf,NUL,(int)strlen(NUL)); net_cfg_load(); sub[3]=net.cfg==NC_BADPSK;
+      const char*NOPW="{\n\t\"wifionoff\":\t1,\n\t\"ssid\":\t\"TestNet\"\n}";
+      put_bytes(cf,NOPW,(int)strlen(NOPW)); net_cfg_load(); sub[4]=net.cfg==NC_OK&&net.psk[0]==0;           /* missing = open (as before) */
+      const char*NL="{\n\t\"wifionoff\":\t1,\n\t\"ssid\":\t\"TestNet\",\n\t\"password\":\n\t\"abcdefgh12\"\n}";
+      put_bytes(cf,NL,(int)strlen(NL)); net_cfg_load(); sub[5]=net.cfg==NC_OK&&!strcmp(net.psk,"abcdefgh12");  /* a line break after the colon is still the string */
+      for(int i=0;i<6;i++){ if(!sub[i]) printf("     R6 case %d failed (cfg=%d)\n",i,net.cfg); ok&=sub[i]; }
+      st_check("R6 net guard: a password that is present but unusable (90 bytes, a malformed \\u escape, null) is BAD PASSWORD — the network is left alone, never key_mgmt=NONE; a missing key is still an open network",ok); }
     /* --- 1. healthy stack at start (runtime B): left alone --- */
     unlink(conf); unlink(lg); nm_reset(0); t=T; net_start(t,1); st_net_run(&t,60000);
     diag_net_text(t1,sizeof t1,&col);
