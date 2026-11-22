@@ -352,10 +352,14 @@ static int glyph_next(const unsigned char**pp){
         return c;
     }
     int g='?';
-    if(c==0xC3){ int d=*p++; if(d==0x86||d==0xA6) g=G_AE; else if(d==0x98||d==0xB8) g=G_OE; else if(d==0x85||d==0xA5) g=G_AA; else if(d==0x97) g='X'; }
-    else if(c==0xC2){ int d=*p++; if(d==0xB0) g=G_DEG; else if(d==0xB7) g=G_MDOT; else if(d==0xA7) g=G_SECT; }
-    else if(c==0xE2){ int d=*p++; int e=*p++; if(d==0x89&&e==0x88) g=G_APPROX; else if(d==0x80&&(e==0x93||e==0x94)) g='-'; else if(d==0x80&&e==0xA6) g=G_ELL; else if(d==0x86&&e==0x92) g='>'; }
+    /* v6.20 (review 2026-11): only CONTINUATION bytes are consumed — a lead byte cut off by a truncation ("A\xC3", "A\xE2\x80")
+     * used to swallow the terminating NUL, and text_wf/text_at then read past the end of the string */
+#define CONT() (((*p)&0xC0)==0x80?*p++:0)
+    if(c==0xC3){ int d=CONT(); if(d==0x86||d==0xA6) g=G_AE; else if(d==0x98||d==0xB8) g=G_OE; else if(d==0x85||d==0xA5) g=G_AA; else if(d==0x97) g='X'; }
+    else if(c==0xC2){ int d=CONT(); if(d==0xB0) g=G_DEG; else if(d==0xB7) g=G_MDOT; else if(d==0xA7) g=G_SECT; }
+    else if(c==0xE2){ int d=CONT(); int e=d?CONT():0; if(d==0x89&&e==0x88) g=G_APPROX; else if(d==0x80&&(e==0x93||e==0x94)) g='-'; else if(d==0x80&&e==0xA6) g=G_ELL; else if(d==0x86&&e==0x92) g='>'; }
     else { while((*p&0xC0)==0x80) p++; }
+#undef CONT
     *pp=p; return g;
 }
 static float text_wf(const char*s,int f){

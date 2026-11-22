@@ -1318,6 +1318,13 @@ static void st_v620(const char*dir){
       snprintf(cfg_path,sizeof cfg_path,"%s",kc); sim_reset(); }
     st_r3();
     st_r5(dir);
+    /* R10 (review mem-ui-sim): a string cut off inside a UTF-8 sequence never makes the renderer read past its NUL */
+    { static const unsigned char T1[]={'A',0xC3,0,'W','W','W','W',0}, T2[]={'A',0xE2,0,'W','W','W','W',0}, T3[]={'A',0xE2,0x80,0,'W','W','W','W',0},
+                                  T4[]={'A',0xC2,0,'W','W','W','W',0};
+      int ref=text_w("A?",F_M), ok=text_w((const char*)T1,F_M)==ref&&text_w((const char*)T2,F_M)==ref&&text_w((const char*)T3,F_M)==ref&&text_w((const char*)T4,F_M)==ref;
+      char*h=malloc(3); memcpy(h,"A\xC3",3); ok&=text_w(h,F_M)==ref; free(h); h=malloc(4); memcpy(h,"A\xE2\x80",4); ok&=text_w(h,F_M)==ref; free(h);   /* exact-size heap copies (ASan) */
+      ok&=text_w("A\xC3\x86",F_M)==text_w("A\xC3\xA6",F_M)&&text_w("\xE2\x89\x88",F_M)>0;   /* whole sequences unchanged */
+      st_check("R10 glyph_next: a cut-off UTF-8 lead byte (\\xC3 / \\xC2 / \\xE2 / \\xE2\\x80 before the NUL) renders as one '?' and stops at the NUL — nothing behind it is read",ok); }
     /* R8 (review persist #6): config.json.orig via tmp + rename; an empty or cut-off .orig is re-created, a whole one is never touched */
     { char kc[sizeof cfg_path], kb[sizeof cfg_bakdir], cp[400], bd[400], op[460], ot[470], m0[33], m1[33]; snprintf(kc,sizeof kc,"%s",cfg_path); snprintf(kb,sizeof kb,"%s",cfg_bakdir);
       snprintf(cp,sizeof cp,"%s/_r8_config.json",dir); copy_file(kc,cp); snprintf(bd,sizeof bd,"%s/_r8_bak",dir); mkdir(bd,0755);
