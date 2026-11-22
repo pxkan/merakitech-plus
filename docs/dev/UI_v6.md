@@ -1,4 +1,4 @@
-# UI_v6 — Meraki+ (identifier merakiplus) v6.18: start jingle + one ready tone per boiler (sound) + one page per feature + SYSTEM in sections + DIAGNOSTICS behind SYSTEM (UX audit) + clock + correct 24-hour flag + planned pre-heat and auto off + graph reset on activity start + the physical power button + manual STOP for water / brew / grind + settings parity (spec-aligned) + boot slot integration + EN/DA + design for the round screen + SIM build/E2E + boot push and RX resync on the device + live-proven phase semantics, 64-bit clock and re-push after an MCU restart + Wi-Fi at startup and self-healing (network guard) + HOME without REVERT + calm graph and stable weight (display conditioning, weight latch, dead band) + pressure as a ≈bar estimate (anchor: pre-infusion = config pressure) + UX review (plain language, contrast, start hint, gear, close chevron, swipe guard, DIAGNOSTICS groups)
+# UI_v6 — Meraki+ (identifier merakiplus) v7.0: the redesign in the stock (OEM) look — white on copper, ring buttons on HOME, a roller editor, Montserrat typography (display and navigation only; CHANGES-v7.0) · v6.18–v6.19: start jingle + one ready tone per boiler (sound) + one page per feature + SYSTEM in sections + DIAGNOSTICS behind SYSTEM (UX audit) + clock + correct 24-hour flag + planned pre-heat and auto off + graph reset on activity start + the physical power button + manual STOP for water / brew / grind + settings parity (spec-aligned) + boot slot integration + EN/DA + design for the round screen + SIM build/E2E + boot push and RX resync on the device + live-proven phase semantics, 64-bit clock and re-push after an MCU restart + Wi-Fi at startup and self-healing (network guard) + HOME without REVERT + calm graph and stable weight (display conditioning, weight latch, dead band) + pressure as a ≈bar estimate (anchor: pre-infusion = config pressure) + UX review (plain language, contrast, start hint, gear, close chevron, swipe guard, DIAGNOSTICS groups)
 
 > **Note (public edition):** Development notes written during development. Paths such as
 > `artifacts/…`, `boot_install.py` steps and md5 tables refer to the author's working environment; as
@@ -38,116 +38,271 @@ Kept unchanged: the global circle clip (chord mask in `pset`/`hspan`, R=234), th
 
 ## 2. Design system
 
-**Colors** (near-black with a radial vignette, ordered dither against banding; pure black outside R=234):
+**v7.0** replaced the v6 look (near-black, a 270° gauge, a rainbow of phase colours, an upper-case stroke font)
+with the stock UI's own language: **white on copper**, ring buttons, a roller picker, real typography. The
+tokens live at the top of `src/mp/ui_state.c`; the type styles, the text engine and the background in
+`src/mp/gfx.c`; the pages in `src/mp/ui_pages.c`. The reference renders are
+[docs/design/v7-key-screens.png](../design/v7-key-screens.png) and
+[docs/design/v7-before-after.png](../design/v7-before-after.png).
+
+Hierarchy comes from **size and weight first**, then from a warm cream for secondary text. Colour is kept for
+what must not be missed (errors, blocked starts), and the error screen and the power pages switch to a dark
+espresso layer. The `C_*` names are kept from v6, so the logic that picks a colour (ok / warn / err /
+accent) did not change; only the values did.
+
+### 2.1 Colour tokens
 
 | Token | RGB | Use |
 |---|---|---|
-| text 1 / 2 / 3 | 242,244,247 / **176,183,196** / **140,147,162** (v6.11; v6.10: 160,167,180 / 104,111,126) | values / sub-lines / micro labels — contrast measured in the self-test: text 3 ≥ 4.5:1 on the background, surfaces 1 and 2; text 2 ≥ 7:1 |
-| disabled (v6.11) | 98,105,120 | inactive icons, stepper signs at the limit, offline hero, disabled SAVE — ≥ 3:1 (large glyphs), deliberately weaker than text 3 |
-| surface 1 / 2 / 3 | 25,28,35 / 37,41,51 / 52,57,70 | chips, buttons, pressed state |
-| accent "crema" | 244,192,122 | **the only UI accent**: settings values, SAVE, stepper ring, splash |
-| ok / warning / error | 98,222,168 / 255,190,84 / 255,96,96 | toasts, CRC chip, errors |
+| `C_TXT` | 255,255,255 | primary text, values, rings, icons, chevrons |
+| `C_TXT2` | 255,236,220 | secondary text (warm cream): live lines, sub-lines, ring targets, units, summaries |
+| `C_TXT3` | 250,220,196 | captions: stat labels, DIAGNOSTICS labels |
+| `C_DIS` | 222,160,122 | disabled — dissolves into the copper on purpose (inactive Save, the ring targets while dimmed) |
+| `C_SURF` / `C_SURF2` / `C_SURF3` | 150,70,30 / 164,78,34 / 196,104,54 | filled surfaces on copper (the DIAGNOSTICS Graph pill, the idle trace's dashed baseline) |
+| `C_LINE` | 226,150,108 | hairlines (the trace baseline, DIAGNOSTICS caption rules) |
+| `C_ACC` | 255,255,255 | the accent **is** white (values, rings, a changed status, DIAGNOSTICS captions) |
+| `C_ACCD` | 140,62,24 | text on a white fill: deep copper (OK when filled, Save) |
+| `C_OK` | 255,255,255 | confirmations (a white toast text without an icon) |
+| `C_ERR` | 255,214,74 | errors on copper: a hot yellow, always with the warning icon where text is short |
+| `C_WARN` | 255,226,120 | blocked / attention: pale yellow (with the warning icon where space allows) |
+| `C_RED` | 255,92,72 | the dark error layer's accent (the ring on HOME's error screen; phase colour of ERROR) |
+| `C_STOP_T` / `C_STOP_B` / `C_STOP_FG` | 255,255,255 / 255,247,240 / 140,52,18 | STOP: a solid white pill with deep copper text |
+| toast | 66,28,10 (α 242) with a 3 px shadow 30,10,2 | the toast pill (dark espresso) |
 
-Semantic phase colors (used consistently on the gauge fill, lit ticks, phase chip, sub-line, chart and active button):
+**Phase colours** (v6: ten hues) are monochrome in v7: `ph_hi()` is white for every phase except ERROR
+(`C_RED`) and OFFLINE / ASLEEP (240,200,176); `ph_lo()` is 236,176,140 (ERROR 150,40,30). They colour the trace.
 
-| Phase | Color | | Phase | Color |
+### 2.2 Background
+
+`bg_build()` renders two full-screen layers once at start (nothing is computed per frame):
+
+* **copper**: a burnt-orange disc, base 182,90,40, a little lighter towards the upper left (`lift`, up to
+  +10/+6/+3) and darker towards the rim (−50/−30/−16 at r = 234, growing as ≈ (r/234)^2.25). Measured in the
+  render: 189,94,42 at the centre, ~167,81,36 at r = 150, ~141,66,27 at r = 220;
+* a fine **guilloche** on top: lines every 4.6 px of the distance in a blend of a rounded square
+  ((x^4 + y^4)^(1/4)) and a circle (0.62 : 0.38), so the lines form soft chevrons on the diagonals like
+  the stock screen's; anti-aliased, amplitude 3.5 % at the centre rising to 8.5 % towards the rim;
+* **dark** (the error screen and the power pages): espresso brown-black, 34,22,19 at the centre to ~12,7,6 at
+  the rim, with the same texture at half strength;
+* both with a 4 × 4 ordered dither against banding; pure black outside R = 234 (`RSAFE`, the bezel). Every
+  primitive clips to that circle.
+
+### 2.3 Typography
+
+All text is **Montserrat** (SIL OFL 1.1, [third_party/montserrat/](../../third_party/montserrat/README.md)) in
+four weights, baked into `src/mp/font_data.c` by `tools/gen_font.py` as TrueType outlines, advances and GPOS
+pair kerning (122 glyphs per weight; `--check` keeps the file in sync). A glyph is rasterized the first time
+a style needs it — exact-area coverage (every outline edge adds its covered area to the cells it crosses, a
+prefix sum per row gives the coverage) — and cached as 8-bit alpha in 4 sub-pixel phases, so text keeps its
+true spacing at small sizes. Text is drawn exactly as written: v7 uses normal capitalisation (the string
+table was rewritten from upper case for v7). Digits are tabular where the style says so, so values do not
+jump.
+
+| Style | Face | Size (em px) | Cap height (px) | Tracking | Tabular | Use |
+|---|---|---|---|---|---|---|
+| `F_TINY` | SemiBold | 13 | 9.1 | 0.3 | yes | micro captions (stat labels, DIAGNOSTICS / system-action footer) |
+| `F_XS` | Medium | 15.5 | 10.9 | 0.1 | yes | captions, toasts, hints, live lines, range and note lines |
+| `F_S` | Medium | 18 | 12.6 | 0 | yes | body text, the live view's phase and target line, ring targets, pill text (two STOPs) |
+| `F_M` | SemiBold | 21 | 14.7 | 0 | yes | row labels, buttons, one STOP, OK |
+| `F_MB` | Bold | 21 | 14.7 | 0 | yes | row values; the unit next to the roller value |
+| `F_L` | SemiBold | 28 | 19.6 | 0 | yes | page and editor titles (fit to 232 px, else `F_M`, else `F_S` + …), the unit next to the live number, the error code |
+| `F_LAB` | SemiBold | 22 | 15.4 | 0.4 | no | ring labels set along the arc (HOME) |
+| `F_CLK` | Bold | 20 | 14.0 | 0.2 | yes | the clock under the rings |
+| `F_NUM` | Light | 40 | 28.0 | 0 | yes | medium numbers (defined; no v7 page uses it) |
+| `F_STAT` | Light | 30 | 21.0 | 0 | yes | the three numbers in the live view |
+| `F_XL` | Light | 60 | 42.0 | 0 | yes | large words in the system action |
+| `F_ROLL` | Light | 64 | 44.8 | 0 | yes | the roller's selected value |
+| `F_ROLL2` | Medium | 30 | 21.0 | 0 | yes | the roller's neighbours |
+| `F_XXL` | Light | 112 | 78.4 | −1 | yes | the live view's number (weight, milk temperature) |
+| `F_H` | SemiBold | 36 | 25.2 | 0 | no | the word hero in the system action (Boot UI), the splash wordmark |
+| `F_IC` / `F_ICL` | Medium | 22 / 48 | — | 0 | — | inline icons / the icons in the HOME rings |
+
+Cap height = em × 700/1000 (Montserrat's cap height). **Labels along a ring** (`text_arc`) are rasterized per
+glyph with rotation, centred on an angle, with the text's vertical centre on the ring's radius: on the upper
+rings the tops point outward and the text runs clockwise, on the lower rings the tops point to the centre and
+it runs counter-clockwise, so both read upright-ish.
+
+**Icons** are line drawings from the stroke engine (`GD[]`: bean, cup, drop, steam, check, cross, moon,
+warning, bolt, clock), addressed by the control bytes `\x01..\x0b` inside a string and sized to the style's
+cap height (box = 1.3 × cap height, the style's stroke width). The **wordmark** is "Meraki" in the style's
+face plus a small raised "+" in a lighter style.
+
+### 2.4 Rings, buttons, rows
+
+* **HOME rings**: r = 72 at (160, 154), (320, 154), (160, 326), (320, 326); a 3 px white line (half-width
+  1.5). The label sits in a gap of the ring centred at 225° / 315° / 135° / 45° (facing the display's rim);
+  the gap is half the label's angular width + 7° on each side. Icon (`F_ICL`) 34 px above the centre, the
+  target (`F_S`, cream) 20 px below. **Heat-up**: a faint full track (half-width 1.2, α 95) and a white arc
+  (half-width 1.9) from the gap's end, proportional to (T − 20 °C) / (ready − 20 °C), capped at 98 % until the
+  heat stage or the temperature says ready. **Pressed**: a white disc α 30 inside. **Hold**: an arc at
+  r = 62 (half-width 2.2) sweeps from 12 o'clock over 650 ms. **Dimmed** (offline / asleep): labels and icons
+  α 120, the ring α 110, the target in `C_DIS`.
+* **Progress ring** (live view, splash): r = 229, half-width 1.6, the full circle from 12 o'clock clockwise;
+  track 204,122,80, fill white, eased.
+* **Ring buttons** (OK r = 36, − / + r = 29, Hold to Start r = 33): an outline ring (2.5 px, α 240; α 110 when
+  disabled); pressed = white disc α 36; a hold arc at r + 7. OK fills white with copper text once the value is
+  changed.
+* **Pills**: secondary = 1.2 px white outline; primary = solid white with deep copper text and a 3 px soft
+  shadow. STOP is a primary pill with `C_STOP_FG` text.
+* **Rows**: 50 px high, 50 px pitch (v6: 50 px chips on a 58 px pitch), first row top at y = 92. Label `F_M`
+  at x = 88 (SYSTEM section rows +14 px); value `F_MB` right-aligned at x = 378 (locked: 398) with the unit in
+  `F_XS` cream; a small chevron at x = 394. Hairline separators 84..396 (white α 46). Pressed: a rounded
+  rect 76..403, white α 34. An open SYSTEM section gets a 2 px bar (white α 120) at x = 88 next to its rows.
+  The scroll indicator is a short arc at r = 228 on the right (±22°). The list field fades into the
+  background over 14 px at its top and bottom.
+* **Header** (pages and editors): the close chevron at y = 16, the title at y = 32, one line at y = 64.
+
+### 2.5 Motion
+
+Page slide 260 ms (ease-in-out; open from the right, back to the right) · cross-fade 200 ms into / out of the
+editor and the system action · a 280 ms cross-fade when HOME changes mode (rings ↔ live view ↔ error) · splash
+1.5 s with the progress ring sweeping once around, then a 320 ms fade · progress ring eased (τ ≈ 110 ms) · the
+roller follows the finger and settles exponentially (τ ≈ 60 ms) after release, with a rubber band (¼ of the
+offset) at either end · hold arcs (650 ms) on the rings and Hold to Start · touch ripple 360 ms · pressed
+states on all buttons · toast: fade in 160 ms, slide 8 px over 200 ms, fade out 260 ms, 2.4 s in total. The
+static layer (background + labels + titles) is rebuilt only when what selects it changes (view, page, HOME
+mode, open editor, language).
+
+### 2.6 Errors and blocked starts
+
+* On copper, an **error** is `C_ERR` (hot yellow) and a **blocked / attention** state `C_WARN` (pale
+  yellow), with the warning icon wherever the text is short (HOME's top line, a page's live line, toasts,
+  out-of-spec values). Colour is never the only signal.
+* **HOME's error screen** switches to the dark layer: a red ring (r = 44–47 at y = 170) with a white
+  exclamation mark, the code in `F_L`, the meaning in `F_S` cream and *Code E2 · tap for details*; the whole
+  block is the tap target for DIAGNOSTICS.
+* **Offline / asleep** dims the rings instead of colouring them.
+* **Toasts** are a dark espresso pill with white text; warnings and errors carry the warning icon in yellow.
+* A **disabled** control is drawn at reduced alpha / in `C_DIS`; it never changes hue.
+
+### 2.7 Contrast policy
+
+Measured (WCAG 2.x contrast ratio) against the copper as rendered — the centre is the lightest spot:
+
+| Token | centre (189,94,42) | r = 150 (~167,81,36) | r = 220 (~141,66,27) | dark layer centre |
 |---|---|---|---|---|
-| OFFLINE | gray 124,130,144 | | GRINDING | lime 174,228,112 |
-| ASLEEP | indigo 136,144,222 | | PRE-INFUSION | blue 92,180,255 |
-| ERROR | red 255,96,96 | | EXTRACTION | copper 255,142,68 |
-| HEATING UP | amber 255,186,84 | | HOT WATER | cyan 70,216,230 |
-| READY / DONE | mint 98,222,168 | | STEAM | violet 198,152,255 |
+| `C_TXT` white | 4.4 | 5.5 | 7.3 | 17.6 |
+| `C_TXT2` cream | 3.8 | 4.8 | 6.3 | 15.3 |
+| `C_TXT3` caption | 3.4 | 4.2 | 5.6 | 13.5 |
+| `C_WARN` | 3.4 | 4.3 | 5.7 | 13.8 |
+| `C_ERR` | 3.1 | 3.9 | 5.2 | 12.6 |
+| `C_DIS` | 2.0 | 2.5 | 3.3 | 7.9 |
 
-**Typography:** a custom stroke font (stroke-drawn glyphs on a 10-unit grid, rasterized with a distance field → real anti-aliasing, cached per size). Deliberately **upper-case typography with letter spacing**; numbers are **tabular** (all digits the same width, so values do not jump). Full ÆØÅ. Scale (cap height px): XS 11 · S 14 · M 18 · L 26 · XL 44 · XXL 66 (hero number). Icons (bean, cup, drop, steam) are glyphs in the same engine.
-
-> Deviation from the task text: it mentioned a scaled bitmap font (1x–4x). A 5×7 font scaled ×8 gives staircase edges that cannot be called polished, so I wrote a stroke font instead. Still plain C without dependencies, and the font data is ~70 lines in the source.
-
-**Grid:** a centered column; everything lies inside the gauge's inner radius (~193). List rows: 336×50 px chips, 58 px pitch, corner radius 16. Pills: fully rounded, a 2 px soft shadow.
-
-**Gauge:** a 270° arc (135°→405°), center line r=214, thickness 14, round ends, a dark→light gradient along the fill, a white "head" dot, a soft glow ±5 px, 50 ticks (every 5th larger) r 225..232 that light up in the phase color up to the value, a white **target marker** across the ring. During a brew a thin white inner ring (r=198) = weight progress towards the auto-stop.
-
-**Motion:** exponentially eased gauge fill (τ≈110 ms) · a sweep from zero when the gauge changes scale (temperature ↔ weight ↔ pressure) · a 300 ms color crossfade on a phase change · touch ripple (360 ms) · a pressed state on all buttons · a hold ring around the activity button · a pulsing ring on the active activity · page slide 260 ms (ease-in-out) · crossfade 200 ms into/out of the detail · toast fade/slide · splash with an arc sweep (1.5 s).
+STOP text on its white pill: 8.0 : 1; copper text on a white fill (OK, Save): 7.5 : 1; white on the toast
+pill: 15 : 1, the warning icon on it 11.7 : 1. The policy that follows from the copper: anything that must be
+read is white or cream **and** at least `F_XS` Medium, with the important values large (`F_MB` and up) and in
+white; captions in `C_TXT3` are used only for labels under or next to a white value; disabled is
+deliberately weak (≈ 2 : 1 at the centre) because it is never the only way to learn something (a tap on a
+disabled start says why). The v6.11 self-test thresholds (`C_TXT3` ≥ 4.5 : 1, `C_TXT2` ≥ 7 : 1 against the
+background) were defined for the dark v6 background and are not met at the centre of the copper; they need
+new targets for v7.
 
 ---
 
 ## 3. Page map and touch
 
-**v6.17** replaced the five-page carousel (HOME · BREW · STEAM·WATER · SYSTEM · DIAGNOSTICS, changed by
-swiping) with one root and sheets — the reasoning is in [ux-audit-v617.md](../ux-audit-v617.md) and CHANGES-v6.17 below:
+**v6.17** replaced the five-page carousel with one root and sheets ([ux-audit-v617.md](../ux-audit-v617.md),
+CHANGES-v6.17). **v7.0** kept that structure and changed how it looks and how a few things are reached: the
+four HOME icons became the stock 2 × 2 ring grid, the gear at the bottom became the stock chevron at the top
+(tap or pull down), the stepper detail became a roller with − / + and OK, and HOME's idle gauge / hero / stats
+were dropped in favour of the rings (the live view keeps the number, the trace and the stats).
 
 ```
-HOME ─ icon, tap ─► GRIND / BREW / WATER / STEAM   (live line · that feature's settings · HOLD TO START)
-     ─ icon, hold ► starts the activity (650 ms)
-     ─ gear ──────► SYSTEM ─ DISPLAY · CLOCK · SCHEDULE · STOCK UI (sections, one open at a time)
-     │                     └ DIAGNOSTICS ─► DIAGNOSTICS
-     └ error / offline hint, tap ─► DIAGNOSTICS
+HOME ─ ring, tap ──► GRIND / BREW / WATER / STEAM   (live line · that feature's settings · Hold to Start)
+     ─ ring, hold ─► starts the activity (650 ms)
+     ─ chevron at the top, tap / pull down ─► SYSTEM ─ Display · Sound · Clock · Schedule · Stock UI
+     │                                                (sections, one open at a time)
+     │                                              └ Diagnostics ─► DIAGNOSTICS
+     └ error screen / offline line, tap ─► DIAGNOSTICS
+row ─► editor (roller)                  Stock UI › Boot UI / Switch to Original Now ─► system action
 ```
 
-**Open** by tapping the thing; **go back** with the chevron at the top of every page and editor (the
-whole header is the target), or swipe right. There are no page dots, no edge zones and no page swipes.
+**Open** by tapping the thing; **go back** with the chevron at the top of every page and editor (the whole
+header is the target), a pull down on the header, or a swipe right. There are no page dots, no edge zones and
+no page swipes.
 
 | Page | Opened by | Contents |
 |---|---|---|
-| **HOME** | — (root) | clock (or the wordmark while the clock is not set) · phase chip · gauge · hero number · sub-line · chart (40 s) / one hint line · 3 stats · the 4 activity icons **with their targets underneath** (grind dose, brew weight, water amount, milk temperature) — or the STOP button(s) while something runs · the gear |
-| **GRIND** | tap the bean icon | live line *ON THE SCALE 0.0 G* · GRIND DOSE, GRIND MODE · HOLD TO START |
-| **BREW** | tap the cup icon | live line *BOILER 92.4° · GROUP 70°* · BREW WEIGHT, BREW TEMP, PRE-INFUSION, PRE-INF. TIME, PRE-INF. PRESSURE, GROUP HEAD (4 in view, the list scrolls) · HOLD TO START |
-| **WATER** | tap the drop icon | live line *WATER 99.9°* (word 40 — the "water sensor") · HOT WATER, WATER MODE · HOLD TO START |
-| **STEAM** | tap the steam icon | live line *BOILER 130° · MILK 22.6°* · MILK TEMP, STEAM LEVEL · HOLD TO START |
-| **SYSTEM** | the gear | *MERAKI+ V6.19* · four section headers with a summary (**DISPLAY · SOUND** *ENGLISH* · **CLOCK** *16:35* · **SCHEDULE** *06:30 / OFF* · **STOCK UI**) + the **DIAGNOSTICS** row (*OK* / the error code / *DOWN*). Closed: 5 rows, no scrolling. A tap on a header opens it (and closes the other) |
-| **DIAGNOSTICS** | SYSTEM's last row, or a tap on HOME's error / offline hint | STATUS, BOOT · SLOT · SWITCHER, NET, GRAPH (smooth / raw), PRESSURE · ESTIMATE, RAW COUNTERS, POWER BUTTON, TIME · SCHEDULE, SOUND (v6.18), ABOUT — scrolls vertically. Its chevron returns to where it was opened from |
+| **HOME** (idle) | — (root) | chevron (y 16) · one status line (y 46; empty when nothing matters) · four rings with label, icon, target and heat-up arc · the clock (y 428; the wordmark while the clock is not set) |
+| **HOME** (live view) | an activity runs, or its *Done* (8 s) | phase (y 62) · the number + unit (`F_XXL`, y 98) · target line (y 196) · trace 260 × 60 (y 226) · three numbers (`F_STAT`, y 298, pitch 100) with labels · STOP pill(s) (y 364) · the progress ring at r = 229 |
+| **HOME** (error) | E1 / E2 / E3 | the dark layer · red ring with "!" · code · meaning · *Code E2 · tap for details* · chevron · clock |
+| **GRIND** | tap the Grinder ring | live line *On the scale 0.0 g* · Grind Dose, Grind Mode · Hold to Start |
+| **BREW** | tap the Brew ring | live line *Boiler 92.4° · group 70°* · Brew Weight, Brew Temp, Pre-Infusion, Pre-Inf. Time, Pre-Inf. Pressure, Group Head (5 in view, the list scrolls) · Hold to Start |
+| **WATER** | tap the Hot Water ring | live line *Water 99.9°* (word 40 — the "water sensor") · Hot Water, Water Mode · Hold to Start |
+| **STEAM** | tap the Steam ring | live line *Boiler 130° · milk 22.6°* · Milk Temp, Steam Level · Hold to Start |
+| **SYSTEM** | HOME's chevron (tap or pull down) | *Meraki+ V7.0* · four section headers with a summary (**Display · Sound** *English* · **Clock** *16:35* · **Schedule** *06:30 / Off* · **Stock UI**) + the **Diagnostics** row (*OK* / the error code / *Down*). Closed: 5 rows, no scrolling. A tap on a header opens it (and closes the other); it moves to the top of the field |
+| **DIAGNOSTICS** | SYSTEM's last row, or a tap on HOME's error screen / offline line | STATUS, Boot · Slot · Switcher, Net, Graph (smooth / raw), Pressure · Estimate, Raw Counters, Power Button, Time · Schedule, Sound, About — scrolls vertically. Its chevron returns to where it was opened from |
 
-A feature page's live line turns **amber and names the reason** when a start is not possible (*NO
-CONNECTION*, *ERROR ACTIVE · START BLOCKED*, *GRIND = TIME · USE STOCK UI*, *CONFIG OUT OF SPEC · FIX
-FIRST*, …); HOLD TO START is then dimmed. **While an activity runs, no feature page is shown**: started
-from the page, on the machine or by the wand, the UI is on HOME, where the STOP button is. SYSTEM,
-DIAGNOSTICS and an open editor stay.
+A feature page's live line turns **pale yellow with a warning icon and names the reason** when a start is not
+possible (*No connection*, *Error active · start blocked*, *Grind = time · use stock UI*, *Config out of spec ·
+fix first*, …); Hold to Start is then dimmed. **While an activity runs, no feature page is shown**: started
+from the page, on the machine or by the wand, the UI is on HOME, where STOP is. SYSTEM, DIAGNOSTICS and an
+open editor stay.
 
-Modal views: **splash** (boot), **stepper detail** (from a row) and — from v6.2 — the **system
-action** (BOOT UI, switch confirmation, exit reminder; same geometry and button zones as the stepper
-detail) as well as the last frame before a runtime switch. From v6.17 the stepper detail has no
-footer lines; its status line shows *CHANGED · WAS …*, *SAVING…*, the zone's place names, or — on an
-untouched editor with ≥ 20 steps — *HOLD - OR + TO GO FAST*.
+Modal views: **splash** (boot), the **editor** (from a row) and the **system action** (Boot UI, switch
+confirmation, exit reminder) as well as the last frame before a runtime switch, and the power pages
+(TURNING OFF / OFF / TURNING ON). The editor: title (y 32), range (y 66), roller centred at y 190 (neighbours
+±50 px, ±2 values, fading out 114 px above / 106 px below the centre), − / + rings at x 82 / 398, status line
+(y 300: *Changed · was …*, *Saving…*, *Out of spec · pick a new value*, the zone's place names, or — on an
+untouched editor with ≥ 20 steps — *Hold - or + to go fast*), note (y 322), OK ring (y 390). The system
+action keeps the header, puts its word hero at y 190, status / note at y 300 / 322, the two pills at
+y 350..399 and two footer lines at y 416 / 434.
 
-**HOME per phase** — the hero number and the gauge change meaning, so the most important value is
+**HOME's mode** (`home_mode_of()`): idle rings (READY, HEATING UP) · dimmed rings (OFFLINE, ASLEEP) · live
+view (any active phase, and DONE) · error screen (ERROR). A mode change rebuilds the static layer and
+cross-fades (280 ms) when HOME is on screen.
+
+**The live view per phase** — the number and the progress ring change meaning, so the most important value is
 always the largest:
 
-| Phase | Hero | Gauge | Stats |
-|---|---|---|---|
-| READY / HEATING UP / ASLEEP / ERROR | brew boiler temp (word 40), label *BREW BOILER*, sub-line *TARGET 87.0°* | 20–120 °C, marker = brew setpoint | group (42), steam (47), weight (39) |
-| GRINDING | dose weight (word 38) | weight / target, marker = target | time, current (58), grinder step (37) |
-| PRE-INFUSION / EXTRACTION | weight in the cup (word 39), label *IN THE CUP*, sub-line *STOPS AT 36.0 G* (v6.17: the target is stated once) | **raw pressure** (word 51, 0–1600) + inner ring = weight/target | time, ≈bar, flow (52) |
-| HOT WATER | weight (39) | weight / target | time, flow, boiler |
-| STEAM | milk temp (word 48) | 20–80 °C, marker = target | time, boiler (word 47), level |
-| DONE (8 s) | final value | as for the activity | "DONE IN x S" |
+| Phase | Number | Progress ring | Trace | Stats |
+|---|---|---|---|---|
+| GRINDING | dose weight (word 38, latched source), target line *Stops at 18.5 g* | weight / dose | weight + dashed target line | time, current (58), grinder step (37) |
+| PRE-INFUSION / EXTRACTION | weight in the cup (word 39), *Stops at 36.0 g* | weight / brew weight | pressure (area) + weight (line) | time, **≈bar**, flow (52) |
+| HOT WATER | weight (39), *Stops at 40.0 g* | weight / target | pressure + weight | time, flow, boiler (40) |
+| STEAM (auto) | milk temp (word 48), *Stops at 65.0°* | (milk − 20 °C) / (target − 20 °C) | milk temp + dashed target line | time, boiler (word 47), level |
+| STEAM (wand) | milk temp, *Release the wand to stop* | (milk − 20 °C) / 60 °C | milk temp, no target | time, boiler, level |
+| DONE (8 s) | final value, *Done in 4.2 s* (auto steam: + the expected rise) | as for the activity | as for the activity | as for the activity |
 
-**Pressure labelling (v6.10; v6.11: shorter texts; v6.17: `≈BAR`):** the gauge still shows the raw scale. The bar
-value is labelled `≈BAR` (v6.11–v6.16: `≈BAR EST.`; v6.10: `≈BAR · EST.`) and the chart `PRESSURE` (v6.10:
-`PRESS. ≈BAR · EST.`; the estimate is in the field right below). The conversion is a single linear
-anchor: the pre-infusion plateau in the recording (358 raw) = config `preInfusionPressure` (4 bar),
-i.e. k = 4/358 = 0.01117 bar per raw unit. Above 20 bar no number is shown (*PULSE*). Basis and
-caveats: [§16](#16-pressure-estimate-v610). (Up to and including v6.9:
-`≈BAR*` / `PRESSURE* UNCALIBRATED` with the hypothesis "1346 raw ≈ 9 bar".)
+With steam running alongside another activity the phase reads e.g. *Extraction · Steam·Auto* and the third
+number is the milk temperature. The idle HOME no longer shows the boiler temperature as a number: the heat-up
+arcs on the rings, *Heating to 87.0°* in the status line and the feature pages' live lines carry it.
 
-**Touch zones** (for testing; pixel coordinates):
+**Pressure labelling (v6.10; v6.11: shorter texts; v6.17: `≈BAR`; v7.0: `≈bar`):** the value is labelled
+`≈bar` and the trace `Pressure`. The conversion is a single linear anchor: the pre-infusion plateau in the
+recording (358 raw) = config `preInfusionPressure` (4 bar), i.e. k = 4/358 = 0.01117 bar per raw unit. Above
+20 bar no number is shown (*Pulse*). Basis and caveats: [§16](#16-pressure-estimate-v610). (Up to and including
+v6.9: `≈BAR*` / `PRESSURE* UNCALIBRATED` with the hypothesis "1346 raw ≈ 9 bar"; v6.10–v6.19 drew the raw
+pressure on the 270° gauge, which v7 no longer has.)
+
+**Touch zones** (for testing; pixel coordinates on the 480 × 480 frame, both ends inclusive, from
+`hit_test()` in `src/mp/ui_state.c` and `ui_touch()` in `src/mp/services.c`). Every button acts on
+release, and only if the finger is still on the same target; a press shows a 360 ms ripple. Nothing
+reacts during a page transition, the splash, the power-off pages or the last frame before a runtime switch.
 
 | Element | Zone | Gesture |
 |---|---|---|
-| GRIND / BREW / WATER / STEAM (HOME, idle) | circles r=30 around (150 / 210 / 270 / 330, 372); the target text is at y 405 | **tap** = open the feature's page · **hold ≥ 650 ms** = start (a ring fills around the icon) |
-| STOP (HOME, while something runs) | one button: 124..356 × 342..402 (232 × 60 px; pill 216 × 54) · two buttons (main activity + latched steam): 80..240 and 240..400 × 342..402 (pills 152 × 54) | tap |
-| Gear (HOME) | 208..271 × 426..471 (64 × 46 px) | tap = SYSTEM (no frame) |
-| Error / offline hint (HOME, only in those two states) | 88..392 × 236..294 | tap = DIAGNOSTICS |
-| The chart / the BAR field (v6.10) | the chart 118..362 × 240..294 when it shows pressure; the BAR field 193..287 × 298..338 during brewing | tap = toast with the basis (*PRE-INF. 4 BAR = RAW 358 · LINEAR*) — no frames |
-| **Page header** (every page but HOME) | 160..319 × 14..79 (160 × 66 px: chevron + title) | tap = back · pull down ≥ 70 px = back |
-| Swipe right (every page and editor but HOME) | anywhere, not started on −/+; ≥ 60 px, started horizontally (axis lock in the first 14 px), ≤ ~30° skew | back. A swipe left does nothing; HOME reacts to no swipe |
-| List row k | x 64..416, y center 121 + 58·k − scroll (feature pages: the list ends at y 342, SYSTEM at 394) | tap = the editor / open-close the section / the system action / DIAGNOSTICS; vertical drag scrolls |
-| HOLD TO START (feature pages) | 116..363 × 344..403 (248 × 60 px; pill 232 × 48) | **hold ≥ 650 ms** = start (the pill fills, the UI returns to HOME) · a short tap = toast *KEEP HOLDING TO START* or the reason it is blocked |
-| BOOT UI / SWITCH TO ORIGINAL NOW | the first two rows of SYSTEM › STOCK UI | tap opens the system action |
-| DIAGNOSTICS | the whole field y 86..394; the GRAPH pill 90..390 × 44 px high | vertical drag scrolls; tap on the pill = smooth / raw |
-| Close chevron (detail + system view) | 196..283 × 34..79 (88 × 46 px) | tap = CANCEL / BACK |
-| Swipe down (detail + system view) | anywhere, not started on −/+ | ≥ 70 px vertical, ≤ ~30° skew = CANCEL / BACK |
-| − / + | circles r=42 around (84,184) / (396,184) | tap = one step; hold = repeat (170 → 90 → 45 ms, ×5 steps after ~28 repeats) |
-| CANCEL / SAVE | 100..236 / 244..380 × 284..348 | tap |
-| BACK (locked row / sensor) | 170..310 × 284..348 | tap; −/+ do not exist |
+| **Rings** Grinder / Hot Water / Brew / Steam (HOME, while nothing runs) | circles r = 76 around (160, 154) / (320, 154) / (160, 326) / (320, 326); the drawn ring has r = 72 | **tap** = the feature's page · **hold ≥ 650 ms** = start (an inner arc, r = 62, sweeps once around from 12 o'clock) |
+| **Chevron** (HOME, top) | 180..299 × 0..57 | tap = SYSTEM |
+| **Pull down** (HOME) | starts above y = 96, ≥ 70 px down, at most ~30° from vertical (\|dy\| ≥ 1.7·\|dx\|); not in the live view | SYSTEM |
+| Status line (HOME, offline only) | 70..409 × 36..69 | tap = DIAGNOSTICS |
+| Error screen (HOME, error) | 60..419 × 96..345 (the red ring, the code and the two lines under it) | tap = DIAGNOSTICS (the chevron still opens SYSTEM) |
+| **STOP**, one button (live view) | 130..349 × 358..425 (220 × 68); pill 200 × 56 at 140..339 × 364..419 | tap |
+| **STOP**, two buttons (main activity + latched steam) | 76..239 and 240..403 × 358..425 (164 × 68 each, no gap); pills 148 × 56 at 86..233 and 246..393 | tap: left = the main activity, right = steam |
+| The trace / the ≈bar number (live view) | trace 118..361 × 240..293 while it shows pressure; ≈bar 190..289 × 298..337 during pre-infusion / extraction | tap = toast with the basis (*Pre-inf. 4 bar = raw 358 · linear*); no frames |
+| **Page header** (every page but HOME) | 160..319 × 4..77 (chevron + title) | tap = back · a drag that starts above y = 86 and goes ≥ 70 px down = back |
+| **Swipe right** (every page, editor and system action; not HOME) | anywhere, not started on − / +; ≥ 60 px, horizontal at the first 14 px of movement (axis lock), at most ~30° skew | back / cancel. A swipe left does nothing; HOME reacts to no horizontal swipe |
+| List row k | x 64..415, y 88 + 50·k − scroll .. 145 + 50·k − scroll (row 50 px, pitch 50, 4 px extra above and below; the first match wins), inside the list field y 86..343 (feature pages) / 86..403 (SYSTEM) | tap = editor / open-close the section / system action / DIAGNOSTICS · a vertical drag that starts at y ≥ 86 scrolls |
+| **Hold to Start** (feature pages) | 140..339 × 348..445; ring r = 33 at (240, 384), caption at y = 428 | **hold ≥ 650 ms** = start (an arc at r = 40 sweeps around; the UI goes to HOME) · a short tap = toast *Keep holding to start* or the reason it is blocked |
+| DIAGNOSTICS | the field y 86..403 scrolls; the GRAPH pill x 90..389, y 592 − scroll .. 635 − scroll | vertical drag scrolls; tap on the pill = smooth / raw |
+| Editor / system action: **chevron** | 180..299 × 4..57 | tap = cancel / back |
+| Editor / system action: **pull down** | anywhere, not started on −, + or the roller; ≥ 70 px down, ≤ ~30° skew | cancel / back |
+| Editor: **− / +** | circles r = 40 around (82, 190) / (398, 190); drawn ring r = 29 | press = one step · hold = repeat: first repeat at 420 ms, then every 170 ms (repeats 1–4), 90 ms (5–13), 45 ms; from the 29th repeat 5 steps at a time on a 5-step grid |
+| Editor: **roller** | 124..355 × 80..299 | vertical drag: one step per 50 px, the values follow the finger; drag down = smaller. At either end the roller gives a little and springs back |
+| Editor: **OK** | circle r = 44 around (240, 390); drawn ring r = 36 | tap = save (unchanged value: just close). Locked row / sensor: close |
+| System action: **− / +** (Boot UI) | the same two circles | − = Original, + = Meraki+ |
+| System action: **Cancel / Save** (or Switch / Exit) | 92..235 / 244..387 × 346..403; pills 136 × 50 at y = 350 | tap |
+| System action, locked: **Back** | 170..309 × 346..403 | tap |
 
 ---
 
@@ -2417,6 +2572,54 @@ timing, setting or string changed (only `TX_DV_VERSION*`); the helper `merakiplu
 5. **Files:** `src/merakiplus.c`, `tools/gen_audio.py`, `audio/*.wav`, `sim/scenarios/audio_{boot_hot_no_ready,cold_to_hot_ready}.json`
    (new), `sim/scenarios/audio_power_cycle.json`, `sim/CONTRACT.md`, `bin/` (`merakiplus`, `merakiplus_sim_arm`, host SIM
    builds), `bin/MD5SUMS`, `tools/merakiplus.py` (VERSION 6.19, `BIN_MD5`, `AUDIO_MD5`), docs, CHANGELOG, README badge.
+
+## CHANGES-v7.0
+
+**The redesign in the stock (OEM) look.** v6.19 → v7.0 changes **the display and the navigation only**. The
+reference renders are [docs/design/v7-key-screens.png](../design/v7-key-screens.png) and
+[docs/design/v7-before-after.png](../design/v7-before-after.png); the user-facing description is
+[docs/ui-guide.md §3](../ui-guide.md#3-screens-and-touch); the design system is §2 and the page map / touch zones
+§3 above.
+
+**What changed**
+
+1. **Look.** White on copper instead of near-black: new values for the `C_*` tokens (the names and the logic
+   that picks them are unchanged), phase colours reduced to white (ERROR red, OFFLINE / ASLEEP a dim cream), a
+   pre-rendered copper background with a fine guilloche and a dark espresso layer for the error screen and the
+   power pages (§2.1, §2.2).
+2. **Typography.** Montserrat in four weights (SIL OFL 1.1, `third_party/montserrat/`), baked into
+   `src/mp/font_data.c` by `tools/gen_font.py` (`--check` in `build.sh`), rasterized with exact-area coverage and
+   cached; labels along the ring arcs (`text_arc`); the stroke engine remains for the icons. The string table
+   uses normal capitalisation instead of upper case (§2.3).
+3. **HOME.** The stock 2 × 2 grid of ring buttons (Grinder, Hot Water / Brew, Steam) with the label along the
+   ring, a line icon and the target inside; a heat-up arc per ring; one status line under the chevron; the clock
+   at the bottom. The idle gauge, hero number, chart and stats are gone from the idle HOME.
+4. **Live view.** While something runs: the phase, the large number, the target line, a thin progress ring at
+   r = 229 (instead of the 270° gauge and its inner weight ring), a monochrome trace, three numbers and a solid
+   white STOP pill (instead of red).
+5. **Navigation.** SYSTEM is opened by the chevron at the top of HOME or by pulling down from the top (the gear
+   at the bottom is gone). Ring tap / hold, the page headers, swipe right = back and the swipe guard work as in
+   v6.17.
+6. **Editor.** A roller like the stock pickers (drag, one step per 50 px; neighbours fade), − / + rings with
+   the same hold-to-repeat, and an OK ring that fills when the value changed. The CANCEL / SAVE pills of the
+   stepper detail are gone from the editor: cancel = the chevron, a pull down, or a swipe right. The system
+   action keeps its two pills (Cancel outline, Save / Switch solid white).
+7. **Pages.** Rows are white text on copper with hairlines (50 px pitch, v6: 58), Hold to Start is a ring button
+   with a play icon and its caption, the error screen is dark with a red ring, the power pages and the splash
+   use the new layers and type, toasts are a dark espresso pill.
+
+**What did not change:** the model, the phase state machine, the activity control and its guards, the frame
+policy (§7a), the UART protocol, the write queue, the boot push and re-push, the save path and its order
+(§5), the settings table (labels aside: limits, steps, words, config fields), manual STOP and its frames
+(§18), the power button semantics (§19), the sounds and their rules, the clock / schedule / auto off, the boot
+slot integration and the runtime switch. No frame differs from v6.19.
+
+**Open points**
+
+* The v6.11 contrast thresholds in the self-test (`C_TXT3` ≥ 4.5 : 1, `C_TXT2` ≥ 7 : 1 against the background)
+  were defined for the dark v6 background; on copper they are not met at the centre (measured values in §2.7).
+* Appendix A below was generated from the v6.19 string table and still shows the upper-case strings;
+  regenerate it from `STR_TABLE`.
 
 ## Appendix A — string table (id / EN / DA)
 
