@@ -887,12 +887,12 @@ def cmd_install(dev, o, args):
         install_guard(dev, o)
     else:
         o.say("  --gesture not given: /customer/demo.sh is left untouched")
-    if args.persist:
-        if st["flag"]:
-            o.ok("boot flag already set: Meraki+ starts at every boot")
-        else:
-            dev.w(f"touch {dev.d(FLAG)} && sync")
-            o.ok("boot flag set: Meraki+ starts at every boot (undo: ./revert.sh, or BOOT-UI in Meraki+ settings)")
+    if args.persist and args.no_activate:
+        o.warn("--persist with --no-activate: the boot flag is set although Meraki+ is not started and "
+               "verified now. If it does not come up at the next boot, run ./revert.sh")
+        set_boot_flag(dev, o, st)
+    elif args.persist:
+        o.say("  --persist: the boot flag is set once Meraki+ has been verified running (step 7)")
     elif st["flag"]:
         o.warn("the boot flag was ALREADY set before this install, so the machine boots slot B = Meraki+")
     else:
@@ -908,6 +908,8 @@ def cmd_install(dev, o, args):
     o.step("7/7 Verifying")
     if pid and not dev.dry:
         verify_running(dev, o, pid, want)
+    if args.persist and not args.no_activate:
+        set_boot_flag(dev, o, st)
     if not dev.dry:
         if dev.md5(B_EXE) != want:
             raise Abort("slot B binary md5 changed unexpectedly")
@@ -918,6 +920,15 @@ def cmd_install(dev, o, args):
     o.say(f"Done. Meraki+ {VERSION} is {'installed (dry-run: nothing was changed)' if dev.dry else 'running'}.")
     o.say("  Check on the screen: the gear on HOME -> SYSTEM shows 'MERAKI+ V" + VERSION + "' under its title.")
     o.say(f"  Undo everything:     ./revert.sh --ip {args.ip}")
+
+
+def set_boot_flag(dev, o, st):
+    """--persist: boot slot B (Meraki+) at every power-on."""
+    if st["flag"]:
+        o.ok("boot flag already set: Meraki+ starts at every boot")
+    else:
+        dev.w(f"touch {dev.d(FLAG)} && sync")
+        o.ok("boot flag set: Meraki+ starts at every boot (undo: ./revert.sh, or BOOT-UI in Meraki+ settings)")
 
 
 def install_sound(dev, o, snd, sounds):

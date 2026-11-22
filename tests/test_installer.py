@@ -440,6 +440,21 @@ def ota_after_revert(srv, root):
     check("... and leaves Meraki+ in slot B instead of a damaged binary", md5f(root / "new_customer/demo_v9") == MERAKIPLUS)
 
 
+def persist_start_fails(srv, root):
+    """Review finding 5: --persist must not select slot B for the next boot when Meraki+ did not start."""
+    md.inject(root, "ui_start", "never")
+    rc, out = run(srv, root, "install", "--persist", quiet=True)
+    md.uninject(root, "ui_start")
+    check("install --persist with a UI that never starts exits 1", rc == 1 and "did not start" in out, out[-400:])
+    check("boot flag NOT set after the failed start", not (root / "customer/new").exists())
+    check("the previous UI was resumed", ui(root) == [("600", "/customer/demo_v9")] and not no_stopped(root), ui(root))
+    rc, out = run(srv, root, "install", "--persist", "--no-activate")
+    check("--persist --no-activate exits 0 with a warning", rc == 0 and "--persist with --no-activate" in out)
+    check("--persist --no-activate sets the flag (as before)", (root / "customer/new").exists())
+    rc, out = run(srv, root, "revert")
+    check("revert afterwards exits 0 and removes the flag", rc == 0 and not (root / "customer/new").exists())
+
+
 def not_a_display(srv, root):
     (root / "customer/test.sh").unlink()
     before = tree_digest(root)
@@ -456,6 +471,7 @@ if __name__ == "__main__":
     scenario("failing device read (gzip) during revert and legacy migration", "stock_a", read_fail)
     scenario("interrupted stop-first switch (Ctrl-C, connection drop)", "stock_a", switch_interrupted)
     scenario("revert on a vendor build in slot B, never installed", "vendor_b", vendor_b_no_install)
+    scenario("--persist when Meraki+ fails to start", "stock_a", persist_start_fails)
     scenario("vendor OTA into slot B after install", "stock_a", ota_after_install)
     scenario("vendor OTA into slot B after install + revert", "stock_a", ota_after_revert)
     scenario("stock UI left SIGSTOPped by an older run", "stock_a", stopped_ui)
