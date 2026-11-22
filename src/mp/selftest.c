@@ -465,7 +465,8 @@ static void st_wrap(void){
     /* ---- seconds since boot + /proc start time ---- */
     { char root[300], p[400]; snprintf(root,sizeof root,"/tmp/merakiplus_v6_selftest_%d/wrap",(int)getpid()); snprintf(p,sizeof p,"%s/proc/4711",root); mk_p(root,"/proc/4711");
       char ksr[sizeof sysroot]; strcpy(ksr,sysroot); snprintf(sysroot,sizeof sysroot,"%s",root);
-      mock_put(root,"/proc/4711/stat","4711 (demo_v9) T 1 4711 4711 0 -1 4194560 0 0 0 0 0 0 0 0 20 0 1 0 300000000000 1404928 91 4294967295\n",120,0644);
+      { static const char ST[]="4711 (demo_v9) T 1 4711 4711 0 -1 4194560 0 0 0 0 0 0 0 0 20 0 1 0 300000000000 1404928 91 4294967295\n";
+        mock_put(root,"/proc/4711/stat",ST,(int)sizeof ST-1,0644); }   /* v6.20: the real length (was 120: an ASan global-buffer-overflow READ) */
       char stt='?'; int64_t s=proc_stat(4711,&stt); strcpy(sysroot,ksr);
       int64_t kf=mono_fake; mono_fake=(int64_t)5000000000LL; int64_t m=mono_s(); mono_fake=kf;
       st_check("/proc start time and seconds since boot are 64 bit: 300 000 000 000 ticks = 3 000 000 000 s (32-bit atol: saturated at 2^31 after 248 days); mono_s 5 000 000 000",
@@ -653,6 +654,20 @@ static void st_net(const char*dir){
       unlink(cf); net_cfg_load(); ok&=net.cfg==NC_NOCFG;
       st_net_cfg(cf,1,"TestNet","abcdefgh12"); net_cfg_load(); ok&=net.cfg==NC_OK&&!strcmp(net.ssid,"TestNet");   /* presetStore's "ssid" (depth 2) is ignored */
       st_check("config guard: wifionoff 0 / empty ssid / password < 8 or with control characters / no config -> the guard is OFF; only the top-level keys are read",ok); }
+    { /* v6.20 R6 (review persist #2): a password that is PRESENT but unusable is a bad password — never an open network */
+      char pw90[100]; memset(pw90,'a',90); pw90[90]=0; int ok=1, sub[6];
+      st_net_cfg(cf,1,"TestNet",pw90); net_cfg_load(); sub[0]=net.cfg==NC_BADPSK;
+      st_net_cfg(cf,1,"TestNet","abcdefgh\\\\u12"); net_cfg_load(); sub[1]=net.cfg==NC_OK&&!strcmp(net.psk,"abcdefgh\\u12");   /* an escaped backslash is fine */
+      st_net_cfg(cf,1,"TestNet","abcdefgh\\\\"); net_cfg_load(); sub[1]&=net.cfg==NC_OK&&!strcmp(net.psk,"abcdefgh\\");
+      st_net_cfg(cf,1,"TestNet","abcdefgh\\uZZ12"); net_cfg_load(); sub[2]=net.cfg==NC_BADPSK;                            /* a malformed \u escape */
+      const char*NUL="{\n\t\"wifionoff\":\t1,\n\t\"ssid\":\t\"TestNet\",\n\t\"password\":\tnull\n}";
+      put_bytes(cf,NUL,(int)strlen(NUL)); net_cfg_load(); sub[3]=net.cfg==NC_BADPSK;
+      const char*NOPW="{\n\t\"wifionoff\":\t1,\n\t\"ssid\":\t\"TestNet\"\n}";
+      put_bytes(cf,NOPW,(int)strlen(NOPW)); net_cfg_load(); sub[4]=net.cfg==NC_OK&&net.psk[0]==0;           /* missing = open (as before) */
+      const char*NL="{\n\t\"wifionoff\":\t1,\n\t\"ssid\":\t\"TestNet\",\n\t\"password\":\n\t\"abcdefgh12\"\n}";
+      put_bytes(cf,NL,(int)strlen(NL)); net_cfg_load(); sub[5]=net.cfg==NC_OK&&!strcmp(net.psk,"abcdefgh12");  /* a line break after the colon is still the string */
+      for(int i=0;i<6;i++){ if(!sub[i]) printf("     R6 case %d failed (cfg=%d)\n",i,net.cfg); ok&=sub[i]; }
+      st_check("R6 net guard: a password that is present but unusable (90 bytes, a malformed \\u escape, null) is BAD PASSWORD — the network is left alone, never key_mgmt=NONE; a missing key is still an open network",ok); }
     /* --- 1. healthy stack at start (runtime B): left alone --- */
     unlink(conf); unlink(lg); nm_reset(0); t=T; net_start(t,1); st_net_run(&t,60000);
     diag_net_text(t1,sizeof t1,&col);
@@ -1273,6 +1288,122 @@ static void st_v619(void){
     st_check("... a long sleep that let both boilers cool (stage 30 / 60 at the wake): armed, and both tones play as they heat back up",cold&&st_sp(SE_READY_E)==1&&st_sp(SE_READY_S)==1&&st_sn(SE_JINGLE)==5);
     sim_reset();
 }
+/* ============================ v6.20: code review 2026-11 (docs/dev/REVIEW-2026-11.md) ============================ */
+static void st_r3(void);
+static void st_r5(const char*dir);
+static void st_v620(const char*dir){
+    printf("== selftest: v6.20 review fixes (stepper repeat after a failed save, ...) ==\n");
+    /* R1: a stepper press DURING SAVING, then the save fails (no ACK) while the finger stays down */
+    { sim_reset(); wq.sim_ack=0; page=PG_BREW; sim_run(300); detail_open(S_BREWW,sim_now); sim_run(600);
+      tap(396,184); sim_run(200); int v0=edit_val; const Setting*s=&SET[S_BREWW];
+      tap(310,316); sim_run(100); int saving=sav.active;
+      ui_touch(TE_DOWN,396,184,sim_now); ms_t t_dn=sim_now; int v_dn=edit_val;
+      int guard=0; while(sav.active&&guard++<200) sim_run(33);
+      sim_run(33); int reps=tch.rep_n, v1=edit_val; ms_t held=sim_now-t_dn;
+      ui_touch(TE_UP,396,184,sim_now); sim_run(100);
+      st_check("R1 stepper: + pressed during SAVING, the save fails (no ACK), finger still down: no catch-up burst (repeats bounded by the hold time), the value does not jump to its limit",
+               saving&&v_dn==v0&&!sav.active&&view==V_DETAIL&&reps<=1+(int)(held/170)&&v1!=s->hi&&abs(v1-v0)<=s->step*(1+(int)(held/170)));
+      /* belt and braces: a stale deadline (a frame gap of minutes) gives at most one step */
+      sim_reset(); page=PG_BREW; sim_run(300); detail_open(S_BREWW,sim_now); sim_run(600);
+      ui_touch(TE_DOWN,396,184,sim_now); sim_run(100); int va=edit_val; tch.rep_next=sim_now-600000; sim_run(33); int vb=edit_val, rn=tch.rep_n;
+      ui_touch(TE_UP,396,184,sim_now); sim_run(100);
+      st_check("R1 stepper: a stale repeat deadline (10 min in the past) gives at most one step in the next frame",rn<=1&&abs(vb-va)<=SET[S_BREWW].step);
+      sim_reset(); }
+    /* R2: SAVE of an MCU setting while a start is pending (ACKed, status bits not yet set) is refused like the reverse */
+    { char kc[sizeof cfg_path], cp[400]; snprintf(kc,sizeof kc,"%s",cfg_path); snprintf(cp,sizeof cp,"%s/_r2_config.json",dir); copy_file(kc,cp); snprintf(cfg_path,sizeof cfg_path,"%s",cp);   /* a copy: a regression must not save into the fixture */
+      sim_reset(); sim_run(1500); act_request(ACT_STEAM,sim_now); sim_run(300); int pend=act.pending==ACT_STEAM&&!wq_busy();
+      page=PG_STEAM; detail_open(S_STEAMT,sim_now); sim_run(600); tap(396,184); sim_run(200); int chg=edit_val!=SET[S_STEAMT].val;
+      int tx0=txq_len; long n0=wq.n_ok; tap(310,316); sim_run(100);
+      st_check("R2 SAVE during a pending steam start (bits not yet set): refused with ONE MOMENT…, nothing queued or sent, the editor stays open",
+               pend&&chg&&!sav.active&&wq.n==0&&txq_len==tx0&&wq.n_ok==n0&&view==V_DETAIL&&!strcmp(toast.msg,TR(TX_G_WAIT)));
+      snprintf(cfg_path,sizeof cfg_path,"%s",kc); sim_reset(); }
+    st_r3();
+    st_r5(dir);
+    /* R11 (review mem-ui-sim #4): INT_MAX / INT_MIN in config.json: rows are OUT OF SPEC, starts blocked, and every view renders
+     * (the formatting / drawing paths clamp; under UBSan this is the overflow regression test) */
+    { char kc[sizeof cfg_path], cp[400]; snprintf(kc,sizeof kc,"%s",cfg_path); snprintf(cp,sizeof cp,"%s/_r11_config.json",dir); copy_file(kc,cp); snprintf(cfg_path,sizeof cfg_path,"%s",cp);
+      int w=cfg_set_int("brewTemper",2147483647)&&cfg_set_int("autoGrindWeight",-2147483647-1); sim_reset();
+      int oor=set_oor(&SET[S_BREWT])&&set_oor(&SET[S_GRINDW])&&SET[S_BREWT].val==2147483647&&SET[S_GRINDW].val==-2147483647-1;
+      char b[64]; set_fmt(S_BREWT,SET[S_BREWT].val,b,sizeof b); int fm=strstr(b,"100000")!=NULL;
+      sim_run(1500); int blocked=act_guard(ACT_BREW,sim_now)!=NULL&&act_guard(ACT_GRIND,sim_now)!=NULL;
+      page=PG_BREW; sim_run(400); page=PG_GRIND; sim_run(400); detail_open(S_BREWT,sim_now); sim_run(500); tap(396,184); sim_run(200); tap(84,184); sim_run(200);
+      int ed=edit_val>=SET[S_BREWT].lo&&edit_val<=SET[S_BREWT].hi; detail_close(sim_now); sim_run(400);
+      sim_reset(); sim_t0=sim_now; sim_tick=tick_grind; sim_run(6000); sim_tick=NULL; home_model(sim_now);
+      st_check("R11 config with brewTemper = INT_MAX, autoGrindWeight = INT_MIN: both rows OUT OF SPEC, shown clamped (100000.0), starts blocked; HOME / pages / editor / grind chart render; the stepper lands in the spec interval",
+               w&&oor&&fm&&blocked&&ed);
+      snprintf(cfg_path,sizeof cfg_path,"%s",kc); sim_reset(); }
+    /* R10 (review mem-ui-sim): a string cut off inside a UTF-8 sequence never makes the renderer read past its NUL */
+    { static const unsigned char T1[]={'A',0xC3,0,'W','W','W','W',0}, T2[]={'A',0xE2,0,'W','W','W','W',0}, T3[]={'A',0xE2,0x80,0,'W','W','W','W',0},
+                                  T4[]={'A',0xC2,0,'W','W','W','W',0};
+      int ref=text_w("A?",F_M), ok=text_w((const char*)T1,F_M)==ref&&text_w((const char*)T2,F_M)==ref&&text_w((const char*)T3,F_M)==ref&&text_w((const char*)T4,F_M)==ref;
+      char*h=malloc(3); memcpy(h,"A\xC3",3); ok&=text_w(h,F_M)==ref; free(h); h=malloc(4); memcpy(h,"A\xE2\x80",4); ok&=text_w(h,F_M)==ref; free(h);   /* exact-size heap copies (ASan) */
+      ok&=text_w("A\xC3\x86",F_M)==text_w("A\xC3\xA6",F_M)&&text_w("\xE2\x89\x88",F_M)>0;   /* whole sequences unchanged */
+      st_check("R10 glyph_next: a cut-off UTF-8 lead byte (\\xC3 / \\xC2 / \\xE2 / \\xE2\\x80 before the NUL) renders as one '?' and stops at the NUL — nothing behind it is read",ok); }
+    /* R8 (review persist #6): config.json.orig via tmp + rename; an empty or cut-off .orig is re-created, a whole one is never touched */
+    { char kc[sizeof cfg_path], kb[sizeof cfg_bakdir], cp[400], bd[400], op[460], ot[470], m0[33], m1[33]; snprintf(kc,sizeof kc,"%s",cfg_path); snprintf(kb,sizeof kb,"%s",cfg_bakdir);
+      snprintf(cp,sizeof cp,"%s/_r8_config.json",dir); copy_file(kc,cp); snprintf(bd,sizeof bd,"%s/_r8_bak",dir); mkdir(bd,0755);
+      snprintf(cfg_path,sizeof cfg_path,"%s",cp); snprintf(cfg_bakdir,sizeof cfg_bakdir,"%s",bd); snprintf(op,sizeof op,"%s/config.json.orig",bd); snprintf(ot,sizeof ot,"%s.tmp",op);
+      int sz0=st_file_md5(cp,m0); int ok=1, r[4];
+      put_bytes(op,"",0); int w=cfg_set_int("volume",11); int sz=st_file_md5(op,m1); r[0]=w&&sz==sz0&&!strcmp(m1,m0)&&access(ot,F_OK)!=0;   /* empty -> re-created from the pre-write config */
+      st_file_md5(cp,m0); sz0=st_file_md5(cp,m0); put_bytes(op,"{\n\t\"Temperature\":\t1,\n\t\"vol",22); w=cfg_set_int("volume",12); sz=st_file_md5(op,m1); r[1]=w&&sz==sz0&&!strcmp(m1,m0);   /* cut off */
+      char mo[33]; st_file_md5(op,mo); w=cfg_set_int("volume",13); st_file_md5(op,m1); r[2]=w&&!strcmp(m1,mo);                 /* whole: never overwritten */
+      unlink(op); sz0=st_file_md5(cp,m0); w=cfg_set_int("volume",14); sz=st_file_md5(op,m1); r[3]=w&&sz==sz0&&!strcmp(m1,m0)&&access(ot,F_OK)!=0;   /* missing -> created */
+      for(int i=0;i<4;i++){ if(!r[i]) printf("     R8 case %d failed\n",i); ok&=r[i]; }
+      st_check("R8 config.json.orig: written via tmp + fsync + rename (no .tmp left); an EMPTY or CUT-OFF .orig is re-created from the config before the write; a whole one is never overwritten",ok);
+      snprintf(cfg_path,sizeof cfg_path,"%s",kc); snprintf(cfg_bakdir,sizeof cfg_bakdir,"%s",kb); settings_load(); }
+    /* R4: a STOP queued behind a frame that fails (no ACK twice) is still transmitted; the failed frame's own group and starts are not */
+    { sim_reset(); wq.sim_ack=0; ms_t t=sim_now; uint16_t v=(uint16_t)sv(S_BREWW); long f0=wq.n_fail;
+      int q=wq_push(23,&v,1)&&act_push_stop(ACT_GRIND)&&wq.n==2; int stop_tx=0, acked=0;
+      for(int i=0;i<100&&wq.n;i++){ t+=10; wq_step(t); if(last_tx_len==9&&last_tx[3]==6&&last_tx[4]==1){ stop_tx++; if(!acked){ acked=1; st_ack_last(t+5); } } }
+      st_check("R4 STOP (sub6) queued behind a write that gets no ACK twice: the failed write is dropped (FAIL counted), the STOP is still sent and ACKed",
+               q&&wq.n_fail==f0+1&&stop_tx==1&&acked&&wq.n==0&&wq.result==WR_OK&&reg[6]==0);
+      /* the failed frame's own group (a two-frame water stop whose first frame fails) and non-stop frames behind it are dropped */
+      sim_reset(); wq.sim_ack=0; t=sim_now; reg_seen[19]=1; reg[19]=1; f0=wq.n_fail;
+      int q2=act_push_stop(ACT_WATER)&&wq.n==2&&wq_push(23,&v,1)&&wq.n==3&&act_push_stop(ACT_BREW)&&wq.n==4; int subs[8], ns=0;
+      for(int i=0;i<200&&wq.n;i++){ t+=10; int before=wq.state; wq_step(t); if(wq.state==WQ_WAIT&&before==WQ_IDLE&&ns<8) subs[ns++]=last_tx[3]; if(wq.n&&wq.q[0].sub==22&&wq.state==WQ_WAIT) st_ack_last(t+5); }
+      st_check("R4 ... a failing water stop (16 + 19) drops its own second frame and the plain write behind it, but the brew STOP queued after them is still sent",
+               q2&&ns==2&&subs[0]==16&&subs[1]==22&&wq.n_fail==f0+1&&wq.n==0);
+      /* a start queued behind a failing frame is still dropped (never sent late) */
+      sim_reset(); wq.sim_ack=0; t=sim_now; f0=wq.n_fail; int q3=wq_push(23,&v,1)&&act_push(ACT_GRIND)&&wq.n==2; int st_tx=0;
+      for(int i=0;i<100&&wq.n;i++){ t+=10; wq_step(t); if(last_tx[3]==3) st_tx++; }
+      st_check("R4 ... a START queued behind a failing frame is still dropped (only STOP frames survive a failure)",q3&&st_tx==0&&wq.n==0&&wq.n_fail==f0+1);
+      sim_reset(); }
+}
+/* R3 helper: a NORMAL run whose MCU clears the start word 0.4 s after the bits (mcu_sim / BREW §5.1: word 6 is consumed last) */
+static int r3_kind=0; static ms_t r3_t=0;
+static void tick_r3(ms_t t){
+    static const uint16_t WS[4]={0x0141,0x1307,0x010B,0x4121}; static const uint8_t SW[4]={6,22,16,24};
+    if(t<r3_t) reg[33]=WS[r3_kind]; else { reg[33]=0x0101; if(t>=r3_t+400) reg[SW[r3_kind]]=0; }
+}
+static void st_r3(void){
+    static const char*const NM[4]={"GRIND (word 6)","BREW (word 22)","WATER (word 16)","STEAM (word 24)"}; static const uint8_t SW[4]={6,22,16,24};
+    static const uint8_t SUB[4]={6,22,16,24};
+    for(int k=0;k<4;k++){
+        sim_reset(); sim_run(1500); act_request(k,sim_now); sim_run(400);
+        int acked=act.pending==k&&!wq_busy()&&reg[SW[k]]==1, sk[2], sn0=stop_btns(sim_now,sk);
+        sim_run(k==ACT_STEAM?15200:3700);
+        int nostart=act.pending==ACT_NONE&&!strcmp(toast.msg,TR(TX_T_NOSTART));
+        int sn=stop_btns(sim_now,sk), busy=pw_busy();
+        int tgt=hit_test(stop_hit(sn,0).x0+10,stop_hit(sn,0).y0+10,sim_now);
+        st_check(k==ACT_STEAM?"R3 latched start word, STEAM (word 24): ACKed, bits never come -> NO START, and HOME offers ITS STOP (the only button) — not during the pending start":
+                 "R3 latched start word: ACKed, bits never come -> NO START, and HOME offers that activity's STOP — not during the pending start",
+                 acked&&sn0==0&&nostart&&sn==1&&sk[0]==k&&tgt==T_STOP&&busy==(k!=ACT_WATER));   /* pw_busy = stock's words 6/22/24 (not 16) */
+        int tx0=txq_len; tap(stop_hit(1,0).x0+20,stop_hit(1,0).y0+20); int q=wq.n>=1&&wq.q[0].sub==SUB[k];
+        sim_run(600); sn=stop_btns(sim_now,sk); (void)tx0;
+        char nm[200]; snprintf(nm,sizeof nm,"R3 %s: the tap sends the existing stop frame (sub%d, all zeros), the ACK clears the word: STOPPED toast, no STOP button, power button / auto off free again",NM[k],SUB[k]);
+        st_check(nm,q&&reg[SW[k]]==0&&sn==0&&!pw_busy()&&!strcmp(toast.msg,TR(STOP_DONE[k]))&&stp.n_ok==1);
+    }
+    /* no false STOP after a NORMAL run: the bits clear, the MCU clears the word 0.4 s later */
+    { int ok=1; for(int k=0;k<4;k++){ sim_reset(); sim_run(1500); act_request(k,sim_now); sim_run(300); r3_kind=k; r3_t=2500; sim_t0=sim_now; sim_tick=tick_r3;
+        int seen=0, sk[2]; for(int i=0;i<200;i++){ sim_run(33); if(!stop_running(k)&&stop_btns(sim_now,sk)) seen=1; }
+        ok&=!seen&&reg[SW[k]]==0; sim_tick=NULL; }
+      st_check("R3 no false STOP: after a normal run of each activity (bits clear, the MCU clears its start word 0.4 s later) no STOP button is offered",ok); }
+    /* asleep or offline: never offered */
+    { sim_reset(); sim_run(1500); reg_seen[6]=1; reg[6]=1; sim_run(3500); int sk[2]; int awake=stop_btns(sim_now,sk)==1;
+      reg[1]=1; reg[33]=0x0001; sim_run(200); int sl=stop_btns(sim_now,sk)==0; reg[1]=0; reg[33]=0x0101; sim_link=0; sim_run(2000); int off=stop_btns(sim_now,sk)==0;
+      st_check("R3 a latched word 6 found at startup (no start of ours) is offered too; never while the controller sleeps or the link is down",awake&&sl&&off);
+      sim_reset(); }
+}
 static void st_v617(void){
     printf("== selftest: v6.17 IA consolidation (HOME = live root; one page per feature w. its settings + HOLD TO START; SYSTEM in sections; DIAGNOSTICS behind SYSTEM; one way back) ==\n");
     int ok,w,h; char a[96],b[96];
@@ -1426,13 +1557,17 @@ static ms_t st_pw_home(void){ ms_t t=st_home(); ka_next=t+30000; return t; }   /
 /* ================= v6.16: TIME & SCHEDULING selftest ================= */
 #define TM_V_ARM "aa 55 08 ea 07 0b 12 10 23 1c 13 06 1e be b2"   /* 2026-11-18 16:35:28 local, alarm day 19 06:30 (CRC computed independently) */
 #define TM_V_OFF0 PW_V_CMD8                                       /* the same time, alarm 0/0/0 */
+static int st_echo8=1;                     /* v6.20: the controller echoes every pre-arm cmd8 with 0x88 (0 = the echo is lost) */
+static void st_echo_arm(ms_t t){ uint8_t a[15]; memcpy(a,arm.f8,15); a[2]=0x88; uint16_t c=crc16(a,13); a[13]=c&0xFF; a[14]=c>>8; rx_feed(a,15,t); }
 static ms_t st_tm_loop(ms_t t,ms_t dur,int link){
     ms_t end=t+dur;
     for(;t<end;t+=10){
         if(link) last_rx_ms=t;
         wq_step(t);
         if(wq.n&&wq.state==WQ_WAIT&&t-wq.sent_ms>=20) st_ack_last(t);
+        long ns=arm.n_sent;
         pw_step(t); sched_step(t); proto_keepawake(t,0);
+        if(st_echo8&&link&&arm.n_sent!=ns) st_echo_arm(t+5);
     }
     ui_frame(t); return t;
 }
@@ -1511,7 +1646,6 @@ static void st_time(const char*dir){
     st_check("no schedule: nothing is sent while on (v6.15 traffic unchanged)",n==0&&arm.n_sent==0);
     st_own_save(S_PHREP,1,t); st_own_save(S_PREHEAT,1,t); txq_len=0; t=st_tm_loop(t,200,1); n=st_cmd8_frames(NULL,16,fr);
     st_check("schedule ON (every day 06:30): ONE cmd8 pre-arm = " TM_V_ARM,n==1&&!strcmp(fr[0],TM_V_ARM)&&arm.sent&&arm.ad==19&&arm.ah==6&&arm.am==30);
-    { uint8_t a[15]; memcpy(a,arm.f8,15); a[2]=0x88; uint16_t c=crc16(a,13); a[13]=c&0xFF; a[14]=c>>8; rx_feed(a,15,t); }
     t=st_tm_loop(t,20000,1); n=st_cmd8_frames(NULL,16,fr);
     st_check("... no repeat while the alarm is unchanged (20 s); the 0x88 echo is counted",n==1&&arm.n_ack==1);
     rps.n_ver++; t=st_tm_loop(t,6000,1); n=st_cmd8_frames(NULL,16,fr);
@@ -1776,6 +1910,41 @@ static void st_stop(void){
     t=st_home(); st_s0(0x030B,0,0x000C,0,300,t+=100); ui_frame(t); ro_mode=1; t=st_tap(240,372,t); ro_mode=0;
     st_check("MERAKIPLUS_READONLY=1: STOP sends nothing, the toast says why (read-only)",wq.n==0&&stp.n_req==0&&!strcmp(toast.msg,TR(TX_G_RO)));
     sim_reset();
+}
+/* v6.20 R5: a pre-arm / disarm cmd8 whose 0x88 echo is lost is sent again (at most 2 more copies, ARM_GAP_MS apart); with the echo nothing changes */
+static int st_alarm_of(const char*f,int*d,int*h,int*m){ unsigned v[15]; if(sscanf(f,"%x %x %x %x %x %x %x %x %x %x %x %x %x",&v[0],&v[1],&v[2],&v[3],&v[4],&v[5],&v[6],&v[7],&v[8],&v[9],&v[10],&v[11],&v[12])!=13) return 0; *d=(int)v[10]; *h=(int)v[11]; *m=(int)v[12]; return 1; }
+static void st_r5(const char*dir){
+    char keep_sp[256]; snprintf(keep_sp,sizeof keep_sp,"%s",sched_path); snprintf(sched_path,sizeof sched_path,"%s/schedule_r5",dir); unlink(sched_path);
+    int keep_tz=SET[S_TZ].val, keep_dst=SET[S_DST].val; SET[S_TZ].val=48; SET[S_DST].val=0;
+    char fr[16][96]; int n, d,h,m, ok; ms_t t;
+    /* (a) first arm, echo lost: 3 copies of the same alarm, then quiet */
+    sim_reset(); t=st_pw_home(); st_echo8=0; st_own_save(S_PHREP,1,t); st_own_save(S_PREHEAT,1,t); txq_len=0; t=st_tm_loop(t,30000,1); n=st_cmd8_frames(NULL,16,fr);
+    ok=n==3; for(int i=0;i<n;i++){ ok&=st_alarm_of(fr[i],&d,&h,&m)&&d==19&&h==6&&m==30; }
+    st_check("R5 pre-arm (daily 06:30) with the 0x88 echo LOST: the same alarm 19 06:30 is sent 3 times in total (2 retries, >= 5 s apart), then nothing in 30 s",ok&&arm.n_retry==2&&arm.n_ack==0);
+    /* (b) disarm, echo lost: 3 x 0/0/0 */
+    st_echo8=1; sim_reset(); t=st_pw_home(); st_own_save(S_PHREP,1,t); st_own_save(S_PREHEAT,1,t); t=st_tm_loop(t,300,1); int armed=arm.n_ack==1;
+    st_echo8=0; txq_len=0; st_own_save(S_PREHEAT,0,t); t=st_tm_loop(t,30000,1); n=st_cmd8_frames(NULL,16,fr);
+    ok=n==3; for(int i=0;i<n;i++){ ok&=st_alarm_of(fr[i],&d,&h,&m)&&d==0&&h==0&&m==0; }
+    st_check("R5 disarm (PRE-HEAT OFF) with the echo LOST: alarm 0/0/0 is sent 3 times in total — the MCU must not keep the old 06:30 alarm",armed&&ok);
+    /* (c) re-arm 06:30 -> 08:00, the first echo lost, the second arrives: exactly 2 frames */
+    st_echo8=1; sim_reset(); t=st_pw_home(); st_own_save(S_PHREP,1,t); st_own_save(S_PREHEAT,1,t); t=st_tm_loop(t,300,1);
+    st_echo8=0; txq_len=0; st_own_save(S_PHAT,480,t); t=st_tm_loop(t,7000,1); int first=arm.n_ack==1&&!arm.acked; st_echo8=1; t=st_tm_loop(t,30000,1); n=st_cmd8_frames(NULL,16,fr);
+    ok=n==2; for(int i=0;i<n;i++){ ok&=st_alarm_of(fr[i],&d,&h,&m)&&d==19&&h==8&&m==0; }
+    st_check("R5 re-arm 06:30 -> 08:00: first echo lost, the retry is echoed -> exactly 2 frames (alarm 19 08:00), then quiet",first&&ok&&arm.acked);
+    /* (d) with the echo: unchanged traffic (one frame) */
+    sim_reset(); t=st_pw_home(); txq_len=0; st_own_save(S_PHREP,1,t); st_own_save(S_PREHEAT,1,t); t=st_tm_loop(t,30000,1); n=st_cmd8_frames(NULL,16,fr);
+    st_check("R5 with the echo: ONE pre-arm frame, no retry (the v6.16-v6.19 traffic)",n==1&&arm.n_retry==0&&arm.n_ack==1);
+    st_own_save(S_PREHEAT,0,t); t=st_tm_loop(t,300,1);
+    /* R7 (review persist #4): a ONE-SHOT saved while the SoC clock is unset is armed once the clock becomes valid, and used up as usual */
+    { sim_reset(); t=st_pw_home(); clk_fake=10000; st_own_save(S_PHAT,390,t); st_own_save(S_PHREP,0,t); st_own_save(S_PREHEAT,1,t);
+      int saved=sch.on&&sch.once_at==0&&!strcmp(toast.msg,TR(TX_T_NOCLOCK)); txq_len=0; t=st_tm_loop(t,6000,1); int quiet=st_cmd8_frames(NULL,16,fr)==0;
+      clk_fake=PV_CLK; t=st_tm_loop(t,6000,1); n=st_cmd8_frames(NULL,16,fr); int64_t want=st_utc(2026,11,19,5,30,0);
+      char rb[256]; int fd=open(sched_path,O_RDONLY); int rn=fd>=0?(int)read(fd,rb,sizeof rb-1):-1; if(fd>=0) close(fd); if(rn<0) rn=0; rb[rn]=0; char ws[64]; snprintf(ws,sizeof ws,"once_at=%lld",(long long)want);
+      int armed=sch.once_at==want&&n==1&&st_alarm_of(fr[0],&d,&h,&m)&&d==19&&h==6&&m==30&&strstr(rb,ws);
+      clk_fake=want+61; t=st_tm_loop(t,200,1); int used=!sch.on&&!strcmp(toast.msg,TR(TX_T_ONCE_USED)); clk_fake=PV_CLK;
+      st_check("R7 ONCE 06:30 saved with the clock unset (NO CLOCK toast, nothing sent): when the clock becomes valid it is armed for the next 06:30 (once_at saved, cmd8 alarm 19 06:30) and used up a minute after it",
+               saved&&quiet&&armed&&used); }
+    st_echo8=1; unlink(sched_path); snprintf(sched_path,sizeof sched_path,"%s",keep_sp); SET[S_TZ].val=keep_tz; SET[S_DST].val=keep_dst; settings_load(); sim_reset();
 }
 static int selftest(const char*cfgsrc){
     int base_lang=ui_lang;
@@ -2469,6 +2638,7 @@ static int selftest(const char*cfgsrc){
     st_v617();
     st_v618(dir);                      /* v6.18 */
     st_v619();                         /* v6.19 */
+    st_v620(dir);                      /* v6.20: review fixes */
     /* ============================ v6.15 ============================ */
     st_graph();
     printf("== selftest [%s]: %s (%d checks, %d failed) — work dir %s ==\n",LANG_CODE[base_lang],st_fail?"FAILED":"ALL OK",st_n,st_fail,dir);

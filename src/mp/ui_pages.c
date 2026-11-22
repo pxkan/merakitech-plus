@@ -161,8 +161,8 @@ static void arc_targets(ms_t now){
     } else if(view==V_DETAIL){
         const Setting*s=&SET[sel]; float span=(float)(s->hi-s->lo);
         garc.vis=1; garc.c_hi=C_ACC; garc.c_lo=rgb(120,80,36); parc.vis=0;
-        garc.f_t=span>0? clampf((edit_val-s->lo)/span,0,1) : 0;
-        garc.mark=(span>0&&!(s->flags&SF_SENSOR))? clampf((edit_orig-s->lo)/span,0,1) : -1;
+        garc.f_t=span>0? clampf(((float)edit_val-(float)s->lo)/span,0,1) : 0;                       /* v6.20: float math (no int overflow) */
+        garc.mark=(span>0&&!(s->flags&SF_SENSOR))? clampf(((float)edit_orig-(float)s->lo)/span,0,1) : -1;
     } else if(view==V_SYS){
         parc.vis=0; garc.vis=1; garc.mark=-1;
         if(xsel==X_EXIT){ garc.c_hi=C_WARN; garc.c_lo=rgb(128,80,24); garc.f_t=1; }            /* full warning ring */
@@ -200,6 +200,7 @@ static void ui_update(ms_t now){
         if(wq.seq!=act.seq&&wq.result==WR_FAIL&&!wq_busy()){ act.pending=ACT_NONE; toast_show(TR(TX_T_NOACK),C_ERR,now); }
         else if(now-act.t_req>(act.pending==ACT_STEAM?15000:3500)){ act.pending=ACT_NONE; toast_show(TR(TX_T_NOSTART),C_WARN,now); }
     }
+    start_latch_track(now,act.pending);                              /* v6.20: a start word left set without the activity (STOP stays offered) */
     stop_step(now);                                                  /* v6.13: manual STOP — confirmation / failure */
     save_step(now);
     /* v6.17: a feature page is the setup for something that is NOT running. As soon as an activity runs (started here, on the machine or
@@ -236,6 +237,7 @@ static void ui_update(ms_t now){
             if(!tch.fired&&now-tch.t0>=HOLD_MS){ int k=page-PG_GRIND; tch.fired=1; act_request(k,now); if(act.pending==k) go_page(PG_HOME,-1,now); }
         }
         if((tch.target==T_MINUS||tch.target==T_PLUS)&&view==V_DETAIL&&!sav.active){
+            if(tch.rep_next<now-500) tch.rep_next=now;                 /* v6.20: never catch up on a stale deadline (at most one step after a long gap) */
             while(now>=tch.rep_next){
                 tch.rep_n++; int mult=tch.rep_n>28?5:1;
                 edit_step(tch.target==T_PLUS?1:-1,mult);
@@ -350,8 +352,8 @@ static void draw_chart(Rect r,ms_t now,const HomeM*m){
         return;
     }
     hspan(yb,x0,x0+w,C_LINE,255);
-    int stgt=steam_target(), tline=(mode==1)||(mode==2&&m->sk!=SK_WAND);   /* wand/flush has no target: no target line */
-    int floor1= mode==0? 400 : (mode==1? sv(S_GRINDW) : stgt-200);
+    int stgt=dclamp(steam_target()), tline=(mode==1)||(mode==2&&m->sk!=SK_WAND);   /* wand/flush has no target: no target line */
+    int floor1= mode==0? 400 : (mode==1? dclamp(sv(S_GRINDW)) : stgt-200);   /* v6.20: dclamp — a corrupt config value never overflows the scaling */
     int full1=floor1; float top;
     if(raw||cd.scale==CS_MAX){ if(m1>full1) full1=m1; if(full1<1) full1=1; top=full1*1.08f; }   /* v6.8 */
     else {
@@ -366,7 +368,7 @@ static void draw_chart(Rect r,ms_t now,const HomeM*m){
     float s1=h/top, s2=h/((m2<100?100:m2)*1.08f);
     uint32_t pc=m->hi;
     if(tline){  /* target line (auto-stop level) */
-        int ty=yb-(int)((mode==1?sv(S_GRINDW):stgt-200)*s1);
+        int ty=yb-(int)clampf((mode==1?dclamp(sv(S_GRINDW)):stgt-200)*s1,-100000,100000);
         for(int x=x0;x<x0+w;x+=7) hspan(ty,x,x+3,C_TXT2,200);
     }
     int last=-1; float ly=0, ytop=(float)(yb-h);
@@ -445,7 +447,7 @@ static void draw_home(ms_t now){
     int st_on=stm.kind!=SK_NONE, sk[2], sn=stop_btns(now,sk);   /* v6.6: steam STOP only for latched steam; v6.13: + STOP for grind/brew/water */
     float hp=0; int hk=-1;
     if(tch.down&&!tch.moved&&tch.target>=T_ACT0&&tch.target<=T_ACT3){ hk=tch.target-T_ACT0; hp=clampf((now-tch.t0)/(float)HOLD_MS,0,1); }
-    h=hi(hi(hi(hi(H0,m->ph),hk),(int)(hp*40)),act.pending); h=hi(h,pressed(T_STOP)); h=hi(h,pressed(T_STOPS)); h=hi(h,sn*25+(sk[0]+1)*5+sk[1]+1); h=hi(h,stm.kind); if(running) h=hi(h,(int)((now/66)&0x7FFFFFFF)); h=hi(h,sv(S_GRINDMODE)*4+sv(S_HOTMODE)); for(int i=0;i<NSET;i++) h=hi(h,set_oor(&SET[i]));
+    h=hi(hi(hi(hi(H0,m->ph),hk),(int)(hp*40)),act.pending); h=hi(h,pressed(T_STOP)); h=hi(h,pressed(T_STOPS)); h=hi(h,sn*25+(sk[0]+1)*5+sk[1]+1); h=hi(h,stm.kind); if(running) h=hi(h,(int)((now/66)&0x7FFFFFFF)); h=hi(h,dclamp(sv(S_GRINDMODE))*4+dclamp(sv(S_HOTMODE))); for(int i=0;i<NSET;i++) h=hi(h,set_oor(&SET[i]));
     for(int i=0;i<4;i++) h=hs(h,m->alab[i]);
     if(W_begin(W_ACT,R(72,338,336,82),h)){                        /* v6.17: 336 x 82 (STOP 216 / 2 x 152, + the icons' targets); v6.13: 296 x 64 */
         if(sn){

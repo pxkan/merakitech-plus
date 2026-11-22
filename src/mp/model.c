@@ -560,7 +560,7 @@ static int act_push_steam_stop(void){
  * anything. Same write queue as everything else: CRC + ACK wait + one retransmit. AUTO-STOP is unchanged: merakiplus sends nothing when the MCU
  * stops by itself. Confirmation (stop_step): the activity's work_sta bits are cleared — grind bit 6; brew bits 1+2 (bits 2 + 12 are cleared
  * in the first cycle after stop, 0x20C4); water bits 1+3 (bit 3 is always cleared, 0x1C9A; bits 1+9 are shared with boiler refill). */
-static int act_push_stop(int kind){
+static int act_push_stop_q(int kind){
     uint16_t z=0; int n0=wq.n;
     switch(kind){
     case ACT_GRIND: return wq_push(6,&z,1);
@@ -573,8 +573,15 @@ static int act_push_stop(int kind){
     }
     return 0;
 }
+static int act_push_stop(int kind){   /* v6.20: the stop's frames get a group id, so a failing frame AHEAD of them does not drop them (wq_pop) */
+    static uint8_t grp=0; int n0=wq.n;
+    if(!act_push_stop_q(kind)) return 0;
+    if(++grp==0) grp=1;
+    for(int i=n0;i<wq.n;i++) wq.q[i].keep=grp;
+    return 1;
+}
 #define STOP_CONFIRM_MS 5000   /* how long to wait for the bits to clear (measured: ACK ~20-280 ms + MCU cycle 10 ms + poll <= 0.5 s) */
-static struct { int kind, active; ms_t t_req; long seq, n_req, n_ok, n_fail; } stp={ACT_NONE,0,0,0,0,0,0};
+static struct { int kind, active; ms_t t_req; long seq, n_req, n_ok, n_fail; int latched; } stp={ACT_NONE,0,0,0,0,0,0,0};   /* v6.20: latched = a STOP for a latched start word (confirmed when the word reads 0) */
 
 /* ================= phases (work_sta word 33; SESSION.md §6) ================= */
 enum { PH_OFFLINE=0, PH_SLEEP, PH_ERROR, PH_HEAT, PH_READY, PH_GRIND, PH_PRE, PH_EXT, PH_WATER, PH_STEAM, PH_DONE, NPHASE };
@@ -639,17 +646,37 @@ static const char* steam_label(int k){ return TR(k==SK_AUTO?TX_PH_STEAM_AUTO:(k=
 static int stop_main_kind(ms_t now){
     switch(phase_main(now)){ case PH_GRIND: return ACT_GRIND; case PH_PRE: case PH_EXT: return ACT_BREW; case PH_WATER: return ACT_WATER; default: return ACT_NONE; }
 }
-static int stop_btns(ms_t now,int k[2]){
-    int n=0, m=stop_main_kind(now); k[0]=k[1]=ACT_NONE;
-    if(m!=ACT_NONE) k[n++]=m;
-    if(steam_stop_visible()) k[n++]=ACT_STEAM;
-    return n;
-}
 /* are the activity's work_sta bits still set? (same masks as phase_raw/phase_main) */
 static int stop_running(int kind){
     uint16_t ws=reg[33];
     switch(kind){ case ACT_GRIND: return (ws&0x0040)!=0; case ACT_BREW: return (ws&0x0006)==0x0006; case ACT_WATER: return (ws&0x000A)==0x000A; case ACT_STEAM: return steam_bits(); }
     return 0;
+}
+/* v6.20 (review 2026-11, protocol #2): a LATCHED START WORD. A start the MCU ACKed but never ran (NO START · CHECK THE MACHINE)
+ * leaves its start word set — grind 6, brew 22, water 16, steam 24 (the ACK echo and the MCU's own words 0..55 say so) — with the
+ * status bits clear. v6.13-v6.19 keyed the STOP buttons on the bits only, so there was no way to clear the word from the UI, and
+ * stock's isExtractionOrSteamSwitchOn (pw_busy: words 6/22/24) kept the power button and auto off blocked. Whether the MCU later
+ * starts by itself from such a word is unknown (UI_v6.md "Word 24 = 1 without the steam starting"; mcu_sim does re-trigger).
+ * Now HOME keeps offering that activity's EXISTING STOP (the same all-zero stop frame, through the frame policy) while the word has
+ * been set with the bits clear for LATCH_MS, the controller is awake and no start of ours is pending. Nothing is sent by itself;
+ * the user's STOP writes the word to 0 (ACK echo), which ends the latch, the busy state and the button. pw_busy and auto off are
+ * unchanged (stock parity). After a normal stop the MCU clears the word within ~0.4 s (word 6 is consumed last), far below LATCH_MS. */
+#define LATCH_MS 3000
+static const uint8_t START_WORD[4]={6,22,16,24};
+static struct { int on[4], pend; ms_t t0[4]; } lat={{0,0,0,0},-1,{0,0,0,0}};
+static int start_word_set(int k){ int w=START_WORD[k]; return reg_seen[w]&&reg[w]!=0; }
+static int latch_cond(int k,ms_t now){ int p=phase_raw(now); return p!=PH_OFFLINE&&p!=PH_SLEEP&&start_word_set(k)&&!stop_running(k); }
+static void start_latch_track(ms_t now,int pending){   /* the clock also runs while our start is pending: STOP appears together with NO START */
+    lat.pend=pending;
+    for(int k=0;k<4;k++){ if(!latch_cond(k,now)) lat.on[k]=0; else if(!lat.on[k]){ lat.on[k]=1; lat.t0[k]=now; } }
+}
+static int start_latched(int k,ms_t now){ return k>=0&&k<4&&lat.pend!=k&&lat.on[k]&&now-lat.t0[k]>=LATCH_MS&&latch_cond(k,now); }
+static int stop_btns(ms_t now,int k[2]){
+    int n=0, m=stop_main_kind(now); k[0]=k[1]=ACT_NONE;
+    if(m!=ACT_NONE) k[n++]=m;
+    if(steam_stop_visible()) k[n++]=ACT_STEAM;
+    for(int j=0;j<4&&n<2;j++) if(start_latched(j,now)&&!(n==1&&k[0]==j)) k[n++]=j;   /* v6.20: + a latched start word (its own STOP) */
+    return n;
 }
 static const char* err_text(void){
     uint16_t e1=reg[34],e2=reg[35],e3=reg[36];

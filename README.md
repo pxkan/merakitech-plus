@@ -1,7 +1,7 @@
 # Meraki+ — a community UI for the round display of MerakiTech espresso machines
 
 [![CI](https://github.com/thomasgrastein/merakitech-plus/actions/workflows/ci.yml/badge.svg)](https://github.com/thomasgrastein/merakitech-plus/actions/workflows/ci.yml)
-![version](https://img.shields.io/badge/Meraki%2B-v6.19-c9955c)
+![version](https://img.shields.io/badge/Meraki%2B-v6.20-c9955c)
 ![license](https://img.shields.io/badge/license-MIT-blue)
 ![status](https://img.shields.io/badge/status-unofficial%20%C2%B7%20experimental-red)
 
@@ -199,7 +199,7 @@ steaming, grinding or hot water — while you install. The installer asks before
 
 The installer is **idempotent**: run it again to update to a new version, or to start Meraki+ again
 after a reboot (without `--persist` the machine starts the original UI at boot). A log is saved in
-`logs/`. Status without changing anything: `python3 tools/merakiplus.py status --ip ADDR`.
+`logs/` (in the standalone `curl` mode: `~/merakiplus-logs/`). Status without changing anything: `python3 tools/merakiplus.py status --ip ADDR`.
 
 **Installed with a release from before 2026-11-19 (v6.16 or earlier)?** Those releases used an older
 install directory under `/new_customer/`. Running `./install.sh` (or `./revert.sh`) again migrates it
@@ -321,7 +321,9 @@ Without `--persist` the machine starts the original UI. With `--persist`: see th
   **overwrite Meraki+ in slot B**, **remove the gesture line** in `demo.sh` or **switch the boot
   slot**. If you want to keep Meraki+ permanently, block `oss.sanbontft.com` in your router/DNS (and
   optionally `pro.ip-api.com`, which the stock UI contacts). After an OTA: run `./install.sh` again
-  (optionally `./revert.sh` first).
+  (optionally `./revert.sh` first). If the OTA put a new vendor build into slot B, install backs it
+  up (`demo_v9.vendor.<md5>`) before replacing it and revert restores that newer build; revert
+  leaves a vendor build that is in slot B now, and its boot flag, alone.
 - **Meraki+ itself** opens no new network ports and contacts no servers. Its only network function
   is bringing up the display's Wi-Fi at boot from slot B (the same configuration the stock UI uses;
   the password is never logged).
@@ -380,7 +382,7 @@ Please share the result in an issue.
 ```
  /customer/          slot A — original UI (demo_v9), NEVER touched by Meraki+
  /new_customer/      slot B — Meraki+ is installed here as demo_v9
-   merakiplus/boot/  backups (demo_v9.vendor, demo.sh.bak), state, gesture switcher
+   merakiplus/boot/  backups (demo_v9.vendor[.<md5>], demo.sh.bak), state, gesture switcher
    merakiplus/       merakiplus_snd + audio/ (sounds), own settings (lang, schedule, sound)
  /customer/new       boot flag: if present, slot B starts at boot (only with --persist)
  /customer/test.sh   the manufacturer's watchdog: restarts "demo_v9" if it disappears

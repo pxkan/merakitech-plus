@@ -72,7 +72,9 @@ static struct {
 static ms_t net_now=0; static int net_echo=0;
 static const char*const NC_TXT[]={"ok","config.json cannot be read","wifionoff = 0","no (or too long) ssid in config.json","password: invalid length/characters (0 or 8..63 ASCII, like stock)"};
 
-/* top-level STRING value (depth 1) w. JSON escapes -> out; returns the length, -1 if the key is missing / not a string */
+/* top-level STRING value (depth 1) w. JSON escapes -> out; returns the length, -1 if the key is missing, -2 if the key is PRESENT
+ * but its value is not a string, does not fit `on` or has a malformed escape (v6.20, review 2026-11 persist #2: before, all of these
+ * returned -1 = "missing", and a 90-byte password became an OPEN network: key_mgmt=NONE for the user's SSID). */
 static int cfg_find_str(const char*buf,int len,const char*key,char*out,int on){
     int depth=0,i=0,kl=(int)strlen(key);
     while(i<len){
@@ -81,11 +83,13 @@ static int cfg_find_str(const char*buf,int len,const char*key,char*out,int on){
             int s=i+1; i++;
             while(i<len&&buf[i]!='"'){ if(buf[i]=='\\') i++; i++; }
             int e=i; i++;
+            if(e>len) break;                                                  /* a key cut off after a trailing backslash: never read past len */
             if(depth==1&&e-s==kl&&!memcmp(buf+s,key,(size_t)kl)){
                 int j=i; while(j<len&&(buf[j]==' '||buf[j]=='\t'||buf[j]=='\r'||buf[j]=='\n')) j++;
                 if(j<len&&buf[j]==':'){
-                    j++; while(j<len&&(buf[j]==' '||buf[j]=='\t')) j++;
-                    if(j<len&&buf[j]=='"'){
+                    j++; while(j<len&&(buf[j]==' '||buf[j]=='\t'||buf[j]=='\r'||buf[j]=='\n')) j++;
+                    if(!(j<len&&buf[j]=='"')) return -2;                        /* v6.20: present, but not a string */
+                    {
                         int n=0; j++;
                         while(j<len&&buf[j]!='"'){
                             unsigned ch=(unsigned char)buf[j++];
@@ -95,16 +99,16 @@ static int cfg_find_str(const char*buf,int len,const char*key,char*out,int on){
                                 else if(q=='u'){
                                     unsigned u=0; int k=0;
                                     for(;k<4&&j<len&&isxdigit((unsigned char)buf[j]);k++,j++){ char h=buf[j]; u=u*16+(unsigned)(h<='9'?h-'0':(h|32)-'a'+10); }
-                                    if(k<4) return -1;
+                                    if(k<4) return -2;
                                     if(u<0x80) ch=u;
-                                    else if(u<0x800){ if(n+2>=on) return -1; out[n++]=(char)(0xC0|(u>>6)); ch=0x80|(u&0x3F); }
-                                    else { if(n+3>=on) return -1; out[n++]=(char)(0xE0|(u>>12)); out[n++]=(char)(0x80|((u>>6)&0x3F)); ch=0x80|(u&0x3F); }
+                                    else if(u<0x800){ if(n+2>=on) return -2; out[n++]=(char)(0xC0|(u>>6)); ch=0x80|(u&0x3F); }
+                                    else { if(n+3>=on) return -2; out[n++]=(char)(0xE0|(u>>12)); out[n++]=(char)(0x80|((u>>6)&0x3F)); ch=0x80|(u&0x3F); }
                                 } else ch=(unsigned char)q;
                             }
-                            if(n+1>=on) return -1;
+                            if(n+1>=on) return -2;
                             out[n++]=(char)ch;
                         }
-                        if(j>=len) return -1;
+                        if(j>=len) return -2;
                         out[n]=0; return n;
                     }
                 }
@@ -126,6 +130,7 @@ static void net_cfg_load(void){
     b[n]=0;
     if(cfg_find(b,n,"wifionoff",&a,&e)) on=atoi(b+a);
     int sn=cfg_find_str(b,n,"ssid",net.ssid,(int)sizeof net.ssid), pn=cfg_find_str(b,n,"password",net.psk,(int)sizeof net.psk);
+    if(pn==-2){ net.psk[0]=0; if(sn<0) sn=0; net.ssid_n=sn; net.cfg=on?NC_BADPSK:NC_WIFIOFF; return; }   /* v6.20: present but unusable -> leave the network alone (never "open") */
     if(pn<0){ pn=0; net.psk[0]=0; }
     if(sn<0){ sn=0; net.ssid[0]=0; }
     net.ssid_n=sn;
