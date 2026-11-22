@@ -321,7 +321,9 @@ Without `--persist` the machine starts the original UI. With `--persist`: see th
   **overwrite Meraki+ in slot B**, **remove the gesture line** in `demo.sh` or **switch the boot
   slot**. If you want to keep Meraki+ permanently, block `oss.sanbontft.com` in your router/DNS (and
   optionally `pro.ip-api.com`, which the stock UI contacts). After an OTA: run `./install.sh` again
-  (optionally `./revert.sh` first).
+  (optionally `./revert.sh` first). If the OTA put a new vendor build into slot B, install backs it
+  up (`demo_v9.vendor.<md5>`) before replacing it and revert restores that newer build; revert
+  leaves a vendor build that is in slot B now, and its boot flag, alone.
 - **Meraki+ itself** opens no new network ports and contacts no servers. Its only network function
   is bringing up the display's Wi-Fi at boot from slot B (the same configuration the stock UI uses;
   the password is never logged).
@@ -380,7 +382,7 @@ Please share the result in an issue.
 ```
  /customer/          slot A — original UI (demo_v9), NEVER touched by Meraki+
  /new_customer/      slot B — Meraki+ is installed here as demo_v9
-   merakiplus/boot/  backups (demo_v9.vendor, demo.sh.bak), state, gesture switcher
+   merakiplus/boot/  backups (demo_v9.vendor[.<md5>], demo.sh.bak), state, gesture switcher
    merakiplus/       merakiplus_snd + audio/ (sounds), own settings (lang, schedule, sound)
  /customer/new       boot flag: if present, slot B starts at boot (only with --persist)
  /customer/test.sh   the manufacturer's watchdog: restarts "demo_v9" if it disappears

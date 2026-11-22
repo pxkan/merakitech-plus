@@ -171,6 +171,30 @@ def make_root(root, scenario="stock_a"):
     return root
 
 
+def ota_into_b(root, build=b"v2 (OTA)"):
+    """A vendor OTA while no boot flag is set (docs/boot.md section 7): the OTA unpacks a NEW vendor
+    build into /new_customer (overwriting whatever slot B held, Meraki+ included), sets the flag,
+    and after the next boot the vendor UI runs from slot B under `test.sh new_customer`.
+    Returns the new build's bytes."""
+    root = pathlib.Path(root)
+    newv = b"\x7fELF MOCK VENDOR UI " + build + b"\n" * 60
+    (root / "new_customer/demo_v9").write_bytes(newv)
+    (root / "customer/new").touch()
+    for d in list((root / "proc").iterdir()):            # "reboot": every old process is gone
+        if (d / "exe_path").exists():
+            shutil.rmtree(d)
+    p = root / "proc/800"
+    p.mkdir()
+    (p / "image").write_bytes(newv)
+    (p / "exe_path").write_text(str(root / "new_customer/demo_v9"))
+    os.symlink(p / "image", p / "exe")
+    (p / "cmdline").write_bytes(b"./demo_v9\0")
+    set_stopped(root, 800, False)
+    (root / "proc/650/cmdline").write_bytes(b"/bin/sh\0/customer/test.sh\0new_customer\0")
+    (root / "watchdog_slot").write_text("B\n")
+    return newv
+
+
 def set_stopped(root, pid, stopped=True):
     """Put a fake process into the state `kill -STOP` (True) / `kill -CONT` (False) leaves it in."""
     d = pathlib.Path(root) / "proc" / str(pid)

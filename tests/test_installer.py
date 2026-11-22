@@ -371,6 +371,75 @@ def stopped_ui(srv, root):
           rc == 0 and ui(root) == [(ui(root)[0][0], "/customer/demo_v9")] and not no_stopped(root), ui(root))
 
 
+def vendor_b_no_install(srv, root):
+    """Review finding 4: revert on a display WITHOUT Meraki+ that runs a vendor build from slot B
+    (after a vendor OTA) must not touch the vendor's boot flag or slot B."""
+    orig_b = md5f(root / "new_customer/demo_v9")
+    before = tree_digest(root)
+    rc, out = run(srv, root, "revert")
+    check("revert without an install: nothing to revert", rc == 0 and "nothing to revert" in out, out[-300:])
+    check("revert without an install: device unchanged", tree_digest(root) == before)
+    rc, out = run(srv, root, "revert", "--purge")
+    check("revert --purge without an install exits 0", rc == 0, out[-300:])
+    check("revert --purge without an install: vendor boot flag kept", (root / "customer/new").exists())
+    check("revert --purge without an install: vendor slot B kept", md5f(root / "new_customer/demo_v9") == orig_b)
+    check("revert --purge without an install: vendor UI from slot B still runs",
+          [e for _, e in ui(root)] == ["/new_customer/demo_v9"], ui(root))
+
+
+def ota_after_install(srv, root):
+    """Review finding 3, path 1: install, a vendor OTA overwrites slot B, revert, install, revert."""
+    orig_b = md5f(root / "new_customer/demo_v9")
+    rc, _ = run(srv, root, "install")
+    check("setup: install", rc == 0)
+    ota = hashlib.md5(md.ota_into_b(root)).hexdigest()
+    rc, out = run(srv, root, "revert")
+    check("revert after an OTA exits 0", rc == 0, out[-400:])
+    check("revert after an OTA keeps the OTA build in slot B", md5f(root / "new_customer/demo_v9") == ota)
+    check("revert after an OTA keeps the OTA's boot flag", (root / "customer/new").exists())
+    check("revert after an OTA: the old vendor backup is still kept",
+          md5f(root / "new_customer/merakiplus/boot/demo_v9.vendor") == orig_b)
+
+    rc, out = run(srv, root, "install")
+    check("install over the OTA build exits 0", rc == 0)
+    bak = root / ("new_customer/merakiplus/boot/demo_v9.vendor." + ota)
+    check("the OTA build was backed up under its md5 before being overwritten", bak.is_file() and md5f(bak) == ota)
+    check("state points at the new backup", f"bak_b={mp.BAK_B}.{ota}" in
+          (root / "new_customer/merakiplus/boot/merakiplus.state").read_text())
+    check("slot B holds Meraki+", md5f(root / "new_customer/demo_v9") == MERAKIPLUS)
+    rc, out = run(srv, root, "revert")
+    check("second revert exits 0", rc == 0)
+    check("second revert restores the OTA build (not the stale backup)", md5f(root / "new_customer/demo_v9") == ota)
+    check("second revert keeps the OTA's boot flag", (root / "customer/new").exists())
+
+
+def ota_after_revert(srv, root):
+    """Review finding 3, path 2: install, revert, a vendor OTA lands in slot B, install, revert."""
+    orig_b = md5f(root / "new_customer/demo_v9")
+    rc1, _ = run(srv, root, "install")
+    rc2, _ = run(srv, root, "revert")
+    check("setup: install + revert", rc1 == 0 and rc2 == 0)
+    ota = hashlib.md5(md.ota_into_b(root)).hexdigest()
+    rc, out = run(srv, root, "install")
+    check("install after the OTA exits 0", rc == 0)
+    check("install warns that slot B held a different vendor build", "different vendor build" in out, out[-1500:])
+    bak = root / ("new_customer/merakiplus/boot/demo_v9.vendor." + ota)
+    check("the OTA build survives on the device (md5-named backup)", bak.is_file() and md5f(bak) == ota)
+    check("the first vendor backup is not overwritten",
+          md5f(root / "new_customer/merakiplus/boot/demo_v9.vendor") == orig_b)
+    rc, out = run(srv, root, "revert")
+    check("revert exits 0", rc == 0)
+    check("revert restores the OTA build, not the stale backup", md5f(root / "new_customer/demo_v9") == ota)
+    check("revert keeps the boot flag the OTA set", (root / "customer/new").exists())
+
+    # a damaged backup is never restored
+    rc, _ = run(srv, root, "install")
+    bak.write_bytes(b"\x7fELF damaged\n")
+    rc, out = run(srv, root, "revert", quiet=True)
+    check("revert with a damaged vendor backup stops (exit 1)", rc == 1 and "damaged" in out, out[-400:])
+    check("... and leaves Meraki+ in slot B instead of a damaged binary", md5f(root / "new_customer/demo_v9") == MERAKIPLUS)
+
+
 def not_a_display(srv, root):
     (root / "customer/test.sh").unlink()
     before = tree_digest(root)
@@ -386,6 +455,9 @@ if __name__ == "__main__":
     scenario("not a MerakiTech display", "stock_a", not_a_display)
     scenario("failing device read (gzip) during revert and legacy migration", "stock_a", read_fail)
     scenario("interrupted stop-first switch (Ctrl-C, connection drop)", "stock_a", switch_interrupted)
+    scenario("revert on a vendor build in slot B, never installed", "vendor_b", vendor_b_no_install)
+    scenario("vendor OTA into slot B after install", "stock_a", ota_after_install)
+    scenario("vendor OTA into slot B after install + revert", "stock_a", ota_after_revert)
     scenario("stock UI left SIGSTOPped by an older run", "stock_a", stopped_ui)
     scenario("upgrade of a pre-rename install (legacy migration)", "stock_a", legacy_upgrade)
     scenario("revert of a pre-rename install (legacy migration)", "stock_a", legacy_revert)

@@ -69,6 +69,10 @@ OURDIR = "/new_customer/merakiplus"
 BOOTDIR = OURDIR + "/boot"
 STAGE = OURDIR + "/merakiplus"                          # staged copy (same fs as slot B)
 BAK_B = BOOTDIR + "/demo_v9.vendor"                     # slot B's original binary
+# A newer vendor build found in slot B later (vendor OTA) is backed up as BAK_B.<md5>; STATE names
+# the backup revert restores (bak_b=, bak_b_md5=).
+BAK_B_RE = re.compile("^" + re.escape(BAK_B) + "(?:\\.[0-9a-f]{32})?$")
+STATE_KEYS = ("orig_flag", "orig_b", "first_install", "bak_b", "bak_b_md5")
 BAK_B_ABSENT = BOOTDIR + "/demo_v9.vendor.absent"       # marker: slot B had no binary
 BAK_SH = BOOTDIR + "/demo.sh.bak"                       # original /customer/demo.sh
 STATE = BOOTDIR + "/merakiplus.state"
@@ -611,10 +615,44 @@ def print_status(o, st):
     o.say(f"  slot B binary      : {b}")
     o.say(f"  slot A binary      : md5 {st['a_md5']} (never modified)")
     o.say(f"  demo.sh guard line : {st['guard_lines']}   switcher running: {bool(st['switcher_pids'])}")
-    o.say(f"  backups            : slot-B {'yes' if st['bak_b'] else ('was-empty' if st['bak_b_absent'] else 'no')}"
+    o.say(f"  backups            : slot-B {'yes' if st['bak_b'] or st['state'].get('bak_b') else ('was-empty' if st['bak_b_absent'] else 'no')}"
           f", demo.sh {'yes' if st['bak_sh'] else 'no'}")
     if st["legacy"]["dir"] or st["legacy"]["guard"]:
         o.say("  older install      : found in the pre-rename layout — migrated by install / revert")
+
+
+def vendor_backup(dev, st):
+    """(device path, md5) of the slot-B vendor backup that revert restores, or (None, None).
+    STATE names it (bak_b / bak_b_md5); installs that predate that only have BAK_B."""
+    sp = st["state"].get("bak_b", "")
+    if BAK_B_RE.match(sp) and dev.exists(sp):
+        want = st["state"].get("bak_b_md5", "")
+        return sp, (want if re.fullmatch(r"[0-9a-f]{32}", want) else dev.md5(sp))
+    if st["bak_b"]:
+        path = BAK_B if dev.exists(BAK_B) or not st["legacy"]["dir"] else legacy_path(BAK_B)
+        return path, dev.md5(path)
+    return None, None
+
+
+def plan_vendor_backup(dev, st):
+    """Where slot B's current binary must be backed up before install overwrites it, or None
+    (slot B empty, already Meraki+, or that exact vendor binary is already backed up). A vendor
+    build that differs from the existing backup (a vendor OTA since then) gets its own
+    md5-named backup: no vendor binary is ever destroyed without a copy."""
+    if not st["b_exists"] or st["b_ours"]:
+        return None
+    bak_path, bak_md5 = vendor_backup(dev, st)
+    if bak_md5 == st["b_md5"]:
+        return None
+    if not (bak_path or st["bak_b"] or st["bak_b_absent"]):
+        return BAK_B
+    return BAK_B + "." + st["b_md5"]
+
+
+def write_state(dev, state):
+    lines = "".join(f"{k}={state[k]}\\n" for k in STATE_KEYS
+                    if k in state and re.fullmatch(r"[A-Za-z0-9_.:/+-]*", str(state[k])))
+    dev.w(f"printf '{lines}' > {dev.d(STATE)}.tmp && mv -f {dev.d(STATE)}.tmp {dev.d(STATE)} && sync")
 
 
 def require_device(st):
@@ -786,17 +824,28 @@ def cmd_install(dev, o, args):
         st = inspect(dev)
     o.step("3/7 Backups (only taken once; never overwritten)")
     dev.w(f"mkdir -p {dev.d(BOOTDIR)}")
-    if st["bak_b"] or st["bak_b_absent"]:
+    bak_dest = plan_vendor_backup(dev, st)
+    had_backup = bool(vendor_backup(dev, st)[0] or st["bak_b_absent"])
+    new_state = {}
+    if bak_dest:
+        if bak_dest != BAK_B and dev.md5(bak_dest) == st["b_md5"]:
+            o.ok(f"slot-B vendor binary already backed up as {bak_dest}")
+        else:
+            dev.atomic_copy(B_EXE, bak_dest, st["b_md5"])
+            o.ok(f"slot-B vendor binary -> {bak_dest} (md5 {st['b_md5']})")
+        if had_backup:
+            o.warn("slot B held a different vendor build than the existing backup (a vendor update?) — "
+                   "backed it up too; revert restores this newer build and its boot flag")
+        new_state = {"orig_flag": 1 if st["flag"] else 0, "orig_b": "vendor",
+                     "bak_b": bak_dest, "bak_b_md5": st["b_md5"]}
+    elif had_backup:
         o.ok("slot-B backup already exists — kept as is")
     elif not st["b_exists"]:
         dev.w(f"touch {dev.d(BAK_B_ABSENT)} && sync")
         o.ok("slot B was empty — recorded (revert will leave it empty again)")
-    elif st["b_ours"]:
+    else:
         o.warn("slot B already holds a Meraki+ build and there is no vendor backup "
                "(older manual install). Revert will then leave slot B empty and boot stock A.")
-    else:
-        dev.atomic_copy(B_EXE, BAK_B, st["b_md5"])
-        o.ok(f"slot-B vendor binary -> {BAK_B} (md5 {st['b_md5']})")
     if st["bak_sh"]:
         o.ok("demo.sh backup already exists — kept as is")
     elif st["guard_lines"]:
@@ -804,11 +853,14 @@ def cmd_install(dev, o, args):
     else:
         dev.atomic_copy(DEMO_SH, BAK_SH, dev.md5(DEMO_SH), mode="644")
         o.ok(f"/customer/demo.sh -> {BAK_SH}")
-    if not st["state"]:
-        orig_b = "absent" if not st["b_exists"] else ("ours" if st["b_ours"] else "vendor")
-        lines = (f"orig_flag={1 if st['flag'] else 0}\\norig_b={orig_b}\\n"
-                 f"first_install={datetime.datetime.now(datetime.timezone.utc).strftime('%Y-%m-%dT%H:%M:%SZ')}\\n")
-        dev.w(f"printf '{lines}' > {dev.d(STATE)}.tmp && mv -f {dev.d(STATE)}.tmp {dev.d(STATE)} && sync")
+    state = dict(st["state"])
+    if not state:
+        state = {"orig_flag": 1 if st["flag"] else 0,
+                 "orig_b": "absent" if not st["b_exists"] else ("ours" if st["b_ours"] else "vendor"),
+                 "first_install": datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")}
+    state.update(new_state)
+    if state != st["state"]:
+        write_state(dev, state)
         o.ok("original boot state recorded (used by revert)")
 
     o.step(f"4/7 Installing Meraki+ {VERSION} into slot B")
@@ -921,8 +973,9 @@ def cmd_revert(dev, o, args):
     print_status(o, st)
     require_device(st)
     st = resume_stopped(dev, o, st)
-    nothing = (not st["b_ours"] and not st["guard_lines"] and not st["switcher_pids"]
-               and not any(e == B_EXE for _, e in st["procs"]) and not st["state"])
+    # a UI running from slot B is only Meraki+ when slot B holds Meraki+ (b_ours): after a vendor
+    # OTA the stock UI itself runs from B with the boot flag set, and that must be left alone
+    nothing = not st["b_ours"] and not st["guard_lines"] and not st["switcher_pids"] and not st["state"]
     if nothing and not args.purge:
         o.say("\nMeraki+ is not installed here — nothing to revert.")
         return
@@ -970,19 +1023,29 @@ def cmd_revert(dev, o, args):
 
     o.step("5/6 Restoring slot B and the boot flag")
     restored_vendor = False
-    if st["bak_b"]:
-        bmd5 = dev.md5(at(BAK_B))
-        if st["b_md5"] == bmd5:
-            o.ok("slot B already holds the vendor binary")
-        else:
-            dev.atomic_copy(BAK_B, B_EXE, bmd5)
-            o.ok(f"slot B vendor binary restored (md5 {bmd5})")
+    bak_path, bak_md5 = vendor_backup(dev, st)
+    foreign_b = st["b_exists"] and not st["b_ours"] and st["b_md5"] != bak_md5
+    if st["b_ours"] and bak_path:
+        have = dev.md5(bak_path)
+        if have != bak_md5:
+            raise Abort(f"The slot-B vendor backup {bak_path} has md5 {have}, expected {bak_md5} (damaged?). "
+                        f"Slot B was left as Meraki+; the stock UI in slot A is unaffected.")
+        dev.atomic_copy(bak_path, B_EXE, bak_md5)
+        o.ok(f"slot B vendor binary restored from {bak_path} (md5 {bak_md5})")
         restored_vendor = True
     elif st["b_ours"]:
         dev.w(f"rm -f {dev.d(B_EXE)} && sync")
         o.ok("Meraki+ removed from slot B (slot B was empty / had no vendor backup)")
+    elif foreign_b:
+        o.ok("slot B holds a vendor build that is not Meraki+ (e.g. from a vendor update) — left as it is")
+    elif st["b_exists"]:
+        o.ok("slot B already holds the vendor binary")
+        restored_vendor = True
     orig_flag = st["state"].get("orig_flag") == "1"
-    if orig_flag and restored_vendor:
+    if foreign_b or not (st["state"] or st["b_ours"]):
+        # the flag belongs to the vendor build in slot B, or Meraki+ never recorded it: not ours to change
+        o.ok("boot flag left as it is (" + ("set" if st["flag"] else "not set") + ")")
+    elif orig_flag and restored_vendor:
         if not st["flag"]:
             dev.w(f"touch {dev.d(FLAG)} && sync")
         o.ok("boot flag kept as it was before Meraki+ (vendor slot B)")
