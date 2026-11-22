@@ -103,9 +103,9 @@ static void (*dev_release)(void)=NULL;
 static void (*dev_reacquire)(void)=NULL;
 static int sw_child=0, sw_seq=0, sw_seq_frame=0, sw_seq_release=0, sw_seq_launch=0;
 
-#define TOAST_TW 312       /* text width that fits in the toast pill (356 - 44); longer text is truncated w. … */
+#define TOAST_TW 216       /* v7.1: the text room of the NARROWEST toast slot (HOME's status line: a 249 px pill - 2 x 16); longer text is cut w. … */
 static void toast_show(const char*m,uint32_t col,ms_t now){
-    snprintf(toast.msg,sizeof toast.msg-4,"%s",m); utf8_trim(toast.msg); fit_text(toast.msg,F_XS,TOAST_TW);
+    snprintf(toast.msg,sizeof toast.msg-4,"%s",m); utf8_trim(toast.msg);   /* v7.1: fitted to its slot when drawn (overlays_draw); the string table keeps every toast within TOAST_TW */
     toast.t0=now; toast.dur=2400; toast.col=col;
     SIM_TOAST(m,col)
 }
@@ -458,8 +458,8 @@ static int home_mode_of(int ph,ms_t now){
     if(ph==PH_OFFLINE||ph==PH_SLEEP) return HM_DIM;
     return HM_IDLE;
 }
-#define HOME_CHEV_Y 16
-#define HOME_STAT_Y 46
+#define HOME_CHEV_Y 19      /* v7.1: the top chevron (14 x 6, apex at y 25) sits in the edge-furniture ring */
+#define HOME_STAT_Y 57      /* v7.1: the status line's cap top (cap centre y 62; = HOME's toast slot), fitted to the chord at r <= RCONT */
 #define HOME_CLOCK_Y 428
 #define STAT_PITCH 100
 #define HINT_W 304         /* v6.11: the chart area's hint lines (the chart itself is 244 wide; the hint text may use 304) */
@@ -468,9 +468,9 @@ static int home_mode_of(int ph,ms_t now){
 #define BACK_W 120
 #define BACK_H 54
 /* v7.0: the editor (a roller like the stock pickers + −/+ rings + an OK ring) and the system action (two pills) */
-#define ED_TITLE_Y 32
-#define TITLE_W 214        /* v7.0: a title near the top must fit the circle's chord there (2 x chord at the cap top, y 32) — F_L, else F_M, else F_S (+ … ); 232 let the ends of long F_L titles reach under the bezel */
-#define ED_RANGE_Y 66
+#define ED_TITLE_Y 48
+#define TITLE_W 188        /* v7.1: the title (cap top PG_TITLE_Y 48) fits the chord at r <= RTOP: 2·√(214² − 192²) ≈ 189 — Title 26, else Value 20; longer copy is shortened, not cut */
+#define ED_RANGE_Y 80
 #define ED_CY 190          /* the roller's centre line */
 #define ED_MX 82
 #define ED_PX 398
@@ -492,9 +492,9 @@ static int home_mode_of(int ph,ms_t now){
 #define PBACK_Y0 4
 #define PBACK_W 160
 #define PBACK_H 74
-#define PG_CHEV_Y 16
-#define PG_TITLE_Y 32
-#define PG_LIVE_Y 64
+#define PG_CHEV_Y 19
+#define PG_TITLE_Y 48       /* v7.1: title cap top (Title 26, fit to the chord at r <= RTOP) */
+#define PG_LIVE_Y 80        /* v7.1: the sub-line (= the page's toast slot) */
 /* v6.17: HOLD TO START on a feature page — same hold (HOLD_MS) and same guard as the HOME icon */
 #define START_R 33         /* v7.0: HOLD TO START is a ring button (play icon) with its caption under it, like the stock screens */
 #define START_CY 384

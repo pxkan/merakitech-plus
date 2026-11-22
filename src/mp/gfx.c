@@ -29,6 +29,9 @@ static inline uint32_t mix(uint32_t d,uint32_t s,int a){
 }
 static inline uint32_t lerpc(uint32_t a,uint32_t b,float t){ if(t<=0) return a; if(t>=1) return b; return mix(a,b,(int)(t*255)); }
 static inline float clampf(float v,float lo,float hi){ return v<lo?lo:(v>hi?hi:v); }
+/* v7.1: the width a centred line may use between rows y0..y1 so it stays inside radius r (the chord at the farther row) */
+static int chord_wr(int y0,int y1,int r){ int d0=abs(y0-CY), d1=abs(y1-CY), d=d0>d1?d0:d1; if(d>=r) return 0; return (int)(2*sqrtf((float)(r*r-d*d))); }
+static int chord_w(int y0,int y1){ return chord_wr(y0,y1,RCONT); }
 static void set_clip(Rect r){ clipr=r; if(clipr.x0<0)clipr.x0=0; if(clipr.y0<0)clipr.y0=0; if(clipr.x1>W)clipr.x1=W; if(clipr.y1>H)clipr.y1=H; }
 static Rect R(int x,int y,int w,int h){ Rect r={(short)x,(short)y,(short)(x+w),(short)(y+h)}; return r; }
 
@@ -172,12 +175,15 @@ static void bg_build(void){
         float dx=x+0.5f-CX, dy=y+0.5f-CY; float rr=sqrtf(dx*dx+dy*dy), d=rr/RSAFE;
         float t=d*d*sqrtf(sqrtf(d));                                      /* ≈ d^2.25 (no powf: this runs for every pixel at start) */
         float lift=clampf(0.55f-(dx+dy)/700.f,0,1);                       /* soft light from the upper left */
-        float r=BG_C0R-50*t+10*lift*(1-t), g=BG_C0G-30*t+6*lift*(1-t), b=BG_C0B-16*t+3*lift*(1-t);
-        /* guilloche: distance in a blend of a rounded square and a circle, lines every 4.6 px, AA'd, fading out at the centre */
-        float ax=dx*dx, ay=dy*dy, sq=sqrtf(sqrtf(ax*ax+ay*ay)), dd=0.62f*sq+0.38f*rr;   /* rounded square (p = 4) blended w. the circle */
-        float ph=dd/4.6f; ph-=floorf(ph); float ln=1-fabsf(ph-0.5f)*2; ln=clampf((ln-0.62f)/0.38f,0,1);
-        float amp=(0.035f+0.05f*clampf((d-0.12f)/0.5f,0,1));
-        r+=ln*amp*255*0.42f; g+=ln*amp*255*0.30f; b+=ln*amp*255*0.20f;
+        /* v7.1: a much gentler vignette (v7.0: -50/-30/-16 read brown and muddy at the rim); copper stays copper to the edge */
+        float r=BG_C0R-22*t+10*lift*(1-t), g=BG_C0G-13*t+6*lift*(1-t), b=BG_C0B-7*t+3*lift*(1-t);
+        /* v7.1 guilloche: distance in a blend of a SHARP square (Chebyshev: creases on the diagonals, like the stock screen's seams)
+         * and the circle, a 5.0 px pitch, a soft cosine line profile and a FLAT amplitude (v7.0: 3.5 % at the centre rising to 8.5 % at
+         * the rim, round contours that beat into moiré) — the texture is felt, not seen */
+        float sq=fmaxf(fabsf(dx),fabsf(dy)), dd=0.55f*sq+0.45f*rr;
+        float ph=dd/5.0f; ph-=floorf(ph); float cl=0.5f+0.5f*cosf(ph*6.2831853f); float ln=cl*cl*cl;
+        float amp=0.036f*clampf((rr-6)/40.f,0,1);
+        r+=ln*amp*255*0.40f; g+=ln*amp*255*0.28f; b+=ln*amp*255*0.18f;
         float th=(B4[(y&3)*4+(x&3)]+0.5f)/16.f-0.5f;
         int ri=(int)floorf(r+th+0.5f), gi=(int)floorf(g+th+0.5f), bi=(int)floorf(b+th+0.5f);
         *p=rgb(clampi(ri,0,255),clampi(gi,0,255),clampi(bi,0,255));
@@ -311,25 +317,30 @@ static const GDef GD[NG]={
  * above (GD[]), sized to the style's cap height. A style: face (weight), em size, tracking, tabular digits. */
 enum { FACE_LIGHT=0, FACE_MED, FACE_SEMI, FACE_BOLD };
 typedef struct { signed char face; float em, track; char tnum; float cap, stroke; } FStyle;   /* cap = em·capHeight/UPM (set at init) */
-enum { F_XS=0, F_S, F_M, F_MB, F_L, F_XL, F_XXL, F_IC, F_ICL, F_H, F_CLK, F_LAB, F_NUM, F_TINY, F_ROLL, F_ROLL2, F_STAT, NFONT };
+enum { F_XS=0, F_S, F_M, F_MB, F_L, F_XL, F_XXL, F_IC, F_ICL, F_H, F_CLK, F_LAB, F_NUM, F_TINY, F_ROLL, F_ROLL2, F_STAT, F_ROW, NFONT };
+/* v7.1 TYPE SCALE (docs/design/v7.1-spec.md §2): 10 roles, 3 weights (Light, Medium, SemiBold; Bold is retired). The v7.0 names
+ * stay as aliases of a role so call sites read naturally: Caption = F_XS (= F_TINY), Body = F_S, Label = F_LAB / F_CLK,
+ * Row = F_ROW, Value = F_M (= F_MB), Title = F_L, Numeral = F_STAT (= F_NUM), Hero = F_H (= F_XL), Roller = F_ROLL
+ * (neighbours / unit F_ROLL2), Display = F_XXL. */
 static FStyle FS[NFONT]={
- [F_TINY]={FACE_SEMI, 13.0f,0.3f,1,0,1.4f},    /* micro captions (DIAGNOSTICS cell labels) */
- [F_XS] ={FACE_MED,  15.5f,0.1f,1,0,1.6f},     /* captions, toasts, hints */
- [F_S]  ={FACE_MED,  18.0f,0,   1,0,1.9f},     /* body text, live lines */
- [F_M]  ={FACE_SEMI, 21.0f,0,   1,0,2.2f},     /* row labels, buttons */
- [F_MB] ={FACE_BOLD, 21.0f,0,   1,0,2.4f},     /* row values */
- [F_L]  ={FACE_SEMI, 28.0f,0,   1,0,2.6f},     /* page titles */
- [F_LAB]={FACE_SEMI, 22.0f,0.4f,0,0,2.4f},     /* ring labels set along the arc (HOME) */
- [F_CLK]={FACE_BOLD, 20.0f,0.2f,1,0,2.2f},     /* the clock under the rings */
- [F_NUM]={FACE_LIGHT,40.0f,0,   1,0,2.4f},     /* medium numbers (stats while brewing) */
- [F_XL] ={FACE_LIGHT,60.0f,0,   1,0,3.0f},     /* editor value */
- [F_XXL]={FACE_LIGHT,112.0f,-1, 1,0,4.0f},     /* the hero number (weight in the cup, milk temperature) */
- [F_H]  ={FACE_SEMI, 36.0f,0,   0,0,3.0f},     /* word hero in the system action */
- [F_ROLL]={FACE_LIGHT,64.0f,0,  1,0,3.0f},     /* roller: the selected value */
- [F_ROLL2]={FACE_MED,30.0f,0,   1,0,2.2f},     /* roller: neighbours */
+ [F_XS] ={FACE_MED,  15.0f,0.1f,1,0,1.6f},     /* Caption: sub-lines, range/status/note, toasts, stat labels, DIAGNOSTICS labels */
+ [F_TINY]={FACE_MED, 15.0f,0.1f,1,0,1.6f},     /* (alias of Caption: the 13 px micro style is retired) */
+ [F_S]  ={FACE_MED,  17.0f,0,   1,0,1.8f},     /* Body: live phase/sub line, ring targets, DIAGNOSTICS values */
+ [F_LAB]={FACE_SEMI, 18.0f,0.6f,0,0,2.0f},     /* Label: ring names along the arc (HOME) */
+ [F_CLK]={FACE_SEMI, 18.0f,0.3f,1,0,2.0f},     /* Label (tabular): the HOME clock */
+ [F_ROW]={FACE_MED,  20.0f,0,   1,0,2.1f},     /* Row: list row labels, enum neighbours on the roller */
+ [F_M]  ={FACE_SEMI, 20.0f,0,   1,0,2.1f},     /* Value: row values, buttons (STOP, OK, pills), section captions */
+ [F_MB] ={FACE_SEMI, 20.0f,0,   1,0,2.1f},     /* (alias of Value: Bold is retired) */
+ [F_L]  ={FACE_SEMI, 26.0f,0,   1,0,2.4f},     /* Title: page / editor / action titles, error meaning, selected enum word */
+ [F_STAT]={FACE_MED, 26.0f,0,   1,0,2.2f},     /* Numeral: the live stats, the live hero's unit */
+ [F_NUM]={FACE_MED,  26.0f,0,   1,0,2.2f},     /* (alias of Numeral) */
+ [F_H]  ={FACE_SEMI, 36.0f,0,   0,0,3.0f},     /* Hero: the one word of a system action, the splash wordmark */
+ [F_XL] ={FACE_SEMI, 36.0f,0,   0,0,3.0f},     /* (alias of Hero) */
+ [F_ROLL]={FACE_LIGHT,60.0f,0,  1,0,3.0f},     /* Roller: the selected number */
+ [F_ROLL2]={FACE_LIGHT,26.0f,0, 1,0,2.0f},     /* Roller neighbours (numbers) and the roller unit */
+ [F_XXL]={FACE_MED,  88.0f,-1,  1,0,3.6f},     /* Display: the live view's big number */
  [F_IC] ={FACE_MED,  22.0f,0,   0,0,2.3f},     /* inline icons */
  [F_ICL]={FACE_MED,  48.0f,0,   0,0,2.6f},     /* large icons (in the HOME rings) */
- [F_STAT]={FACE_LIGHT,30.0f,0,  1,0,2.2f},     /* the three numbers while something runs */
 };
 #define G_ICON 0x1000                       /* glyph ids >= G_ICON are stroke icons: G_ICON + GD index */
 #define GSEG_MAX 160

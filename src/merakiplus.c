@@ -312,6 +312,9 @@ static int  sim_net_on=1;
 #define CX 240
 #define CY 240
 #define RSAFE 234          /* safety radius (bezel) — all content clips to this */
+#define RCONT 206          /* v7.1 safe area (docs/design/v7.1-spec.md §1): text, icons, pills, rows, rings stay inside r <= 206 */
+#define RTOP  214          /* v7.1: the topmost header line (titles) may use r <= 214 (>= 20 px from the bezel) */
+#define REDGE 220          /* v7.1: edge furniture (chevron, progress ring, scroll indicator, splash ring): 212..222, never text */
 #define REGN 129
 #define UART "/dev/ttyS1"
 #define FB   "/dev/fb0"

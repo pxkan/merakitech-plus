@@ -276,15 +276,28 @@ static void draw_play(float cx,float cy,float s,uint32_t c,int a){
     capsule(x0,cy-s*0.6f,x0,cy+s*0.6f,1.4f,c,a); capsule(x0,cy-s*0.6f,x1,cy,1.4f,c,a); capsule(x0,cy+s*0.6f,x1,cy,1.4f,c,a);
 }
 #define AV_CHART_Y 226
-static int toast_y(void){ return (view==V_MAIN&&page==PG_HOME&&hm_mode==HM_ACTIVE)?AV_CHART_Y+10:90; }   /* the live view: over the trace, not the number */
-static Rect toast_rect(ms_t now){ Rect z={0,0,0,0}; if(!toast.dur||now-toast.t0>=toast.dur) return z; return R(52,toast_y()-8,376,52); }
+/* v7.1 TOAST SLOT (spec §6.9): a toast takes the place of the screen's sub-line and never covers a title, a row, a ring, the chart or
+ * the stats — HOME: the status line under the chevron; the live view: the sub line under the number; pages, editors, system
+ * actions and DIAGNOSTICS: the line under the title. The line underneath is not drawn while the toast shows (toast_live). */
+#define TOAST_H 30
+#define HOME_STATUS_CY 62
+#define PAGE_SUB_CY 85
+#define LIVE_SUB_CY 178
+static int toast_y(void){
+    if(view==V_MAIN&&page==PG_HOME) return hm_mode==HM_ACTIVE?LIVE_SUB_CY:HOME_STATUS_CY;
+    return PAGE_SUB_CY;
+}
+static int toast_live(ms_t now){ return toast.dur&&now-toast.t0<toast.dur; }
+/* the widest pill whose rounded ends keep >= 10 px from the bezel at this centre line (HOME's slot: 249 px) */
+static int toast_maxw(int yc){ float d=(float)(yc-CY), e=(RSAFE-10-TOAST_H/2)*(float)(RSAFE-10-TOAST_H/2)-d*d; return e<=0?0:(int)(2*(sqrtf(e)+TOAST_H/2)); }
+static Rect toast_rect(ms_t now){ Rect z={0,0,0,0}; if(!toast_live(now)) return z; int yc=toast_y(), w=toast_maxw(yc); return R(CX-w/2-2,yc-TOAST_H/2-10,w+4,TOAST_H+16); }
 static Rect rip_rect(void){ Rect z={0,0,0,0}; if(!rip.on) return z; return R((int)rip.x-52,(int)rip.y-52,104,104); }
 static void overlays_damage(ms_t now){
     Rect c0=toast_rect(now), c1=rip_rect();
     if(!r_empty(ov_prev[0])) rl_add(&dmg,ov_prev[0]); if(!r_empty(c0)) rl_add(&dmg,c0); ov_prev[0]=c0;
     if(!r_empty(ov_prev[1])) rl_add(&dmg,ov_prev[1]); if(!r_empty(c1)) rl_add(&dmg,c1); ov_prev[1]=c1;
 }
-/* toast: a deep espresso pill with white text; a warning/error carries the warning icon in yellow */
+/* toast: a deep espresso pill with white Caption text in the sub-line slot; a warning/error carries the warning icon in yellow */
 static void overlays_draw(ms_t now){
     cv=canvas;
     Rect c1=rip_rect();
@@ -296,14 +309,16 @@ static void overlays_draw(ms_t now){
     Rect c0=toast_rect(now);
     if(!r_empty(c0)){
         set_clip(c0); float t=(float)(now-toast.t0); float a=clampf(t/160.f,0,1)*clampf((toast.dur-t)/260.f,0,1);
-        int warn=toast.col==C_WARN||toast.col==C_ERR;
-        float iw=warn?text_wf(IC_WARN,F_XS)+8:0;
-        int w=(int)(text_w(toast.msg,F_XS)+iw)+40; if(w>370)w=370; int x=CX-w/2, y=toast_y()-(int)((1-ease_out(clampf(t/200.f,0,1)))*8);
-        rrect(x,y+3,w,36,18,rgb(30,10,2),(int)(80*a));
-        rrect(x,y,w,36,18,rgb(66,28,10),(int)(242*a));
-        float tx=x+20;
-        if(warn){ text_at(tx,y+11,IC_WARN,F_XS,toast.col,(int)(255*a)); tx+=iw; }
-        text_at(tx,y+11,toast.msg,F_XS,C_TXT,(int)(255*a));
+        int warn=toast.col==C_WARN||toast.col==C_ERR, yc=toast_y(), mw=toast_maxw(yc);
+        float iw=warn?text_wf(IC_WARN,F_XS)+7:0;
+        char m[sizeof toast.msg]; snprintf(m,sizeof m,"%s",toast.msg); fit_text(m,F_XS,mw-32-(int)iw);
+        int w=(int)(text_w(m,F_XS)+iw)+32; if(w>mw) w=mw;
+        int x=CX-w/2, y=yc-TOAST_H/2+(int)((1-ease_out(clampf(t/200.f,0,1)))*-4);
+        rrect(x,y+2,w,TOAST_H,TOAST_H/2.f,rgb(30,10,2),(int)(70*a));
+        rrect(x,y,w,TOAST_H,TOAST_H/2.f,rgb(66,28,10),(int)(250*a));
+        float tx=x+16, ty=y+(TOAST_H-(int)FS[F_XS].cap)/2;
+        if(warn){ text_at(tx,(int)ty,IC_WARN,F_XS,toast.col,(int)(255*a)); tx+=iw; }
+        text_at(tx,(int)ty,m,F_XS,C_TXT,(int)(255*a));
         rl_add(&pres,c0);
     }
     set_clip(FULL);
@@ -419,6 +434,12 @@ static float ring_heat(int i){
     return clampf((t-200)/(float)(r-200),0,0.98f);                /* the way from 20 °C to the ready point */
 }
 static void draw_chev(int cx,int y,uint32_t c,int a,float hw){ capsule(cx-10,y,cx,y+8,hw,c,a); capsule(cx,y+8,cx+10,y,hw,c,a); }
+/* v7.1: THE top chevron (HOME -> SYSTEM, every page / editor -> close): 14 x 6 px, hair weight, quieter than the content; pressed = a soft disc */
+#define CHEV_W(y) R(CX-24,(y)-14,48,40)
+static void draw_chev_top(int y,int pr){
+    if(pr) disc(CX,y+3,18,C_TXT,28);
+    int a=pr?255:170; capsule(CX-7,y,CX,y+6,1.0f,C_TXT,a); capsule(CX,y+6,CX+7,y,1.0f,C_TXT,a);
+}
 static void draw_chev_r(int x,int cy,uint32_t c){ capsule(x-3,cy-6,x+3,cy,1.3f,c,255); capsule(x+3,cy,x-3,cy+6,1.3f,c,255); }
 static void static_home(void){
     if(hm_mode==HM_ERROR){ memcpy(bgbase,bgdark,(size_t)W*H*4); return; }
@@ -446,8 +467,9 @@ static void draw_ring(int i,float heat,int en,int pr,float hp,const char*val,int
 }
 static void draw_status_line(const char*t,uint32_t c,int warn){
     if(!t[0]) return;
-    if(warn){ char b[96]; snprintf(b,sizeof b,IC_WARN " %s",t); fit_text(b,F_XS,270); text_c(CX,HOME_STAT_Y,b,F_XS,c,255); }
-    else text_c(CX,HOME_STAT_Y,t,F_XS,c,255);
+    char b[96]; int cw=chord_wr(HOME_STAT_Y,HOME_STAT_Y+(int)FS[F_XS].cap,RTOP);   /* v7.1: always inside the circle (the top line: r <= RTOP) */
+    if(warn) snprintf(b,sizeof b,IC_WARN " %s",t); else snprintf(b,sizeof b,"%s",t);
+    fit_text(b,F_XS,cw); text_c(CX,HOME_STAT_Y,b,F_XS,c,255);
 }
 /* HOME's status line (shared w/ the selftest): what matters now, or nothing */
 static uint32_t home_status_text(const HomeM*m,char*o,size_t n,int*warn,ms_t now){
@@ -491,8 +513,9 @@ static void draw_home_active(ms_t now){
         text_at(x+nw+8,AV_HERO_Y+(int)FS[F_XXL].cap-(int)FS[F_L].cap,m->unit,F_L,C_TXT,255);
         W_end();
     }
-    if(W_begin(W_SUB,R(SUB_X0,AV_SUB_Y-4,SUB_W,26),hi(hs(H0,m->sub),m->ph))){
-        int sf=text_wf(m->sub,F_S)<=SUB_W-8?F_S:F_XS; text_c(CX,AV_SUB_Y,m->sub,sf,C_TXT2,255); W_end();
+    int tl=toast_live(now);                                   /* v7.1: a toast takes the sub line's slot */
+    if(W_begin(W_SUB,R(SUB_X0,AV_SUB_Y-4,SUB_W,26),hi(hi(hs(H0,m->sub),m->ph),tl))){
+        int sf=text_wf(m->sub,F_S)<=SUB_W-8?F_S:F_XS; if(!tl) text_c(CX,AV_SUB_Y,m->sub,sf,C_TXT2,255); W_end();
     }
     if(W_begin(W_CHART,R(CX-HINT_W/2,AV_CHART_Y,HINT_W,60),hs(hs(hi(hi(hi(hi(hi(H0,g_head),g_n),(int)m->hi),m->sk*8+(m->eff==PH_STEAM)),cd.raw*16+cd.scale),m->hint1),m->hint2?m->hint2:""))){ draw_chart(R(CX-130,AV_CHART_Y,260,60),now,m); W_end(); }
     h=H0; for(int i=0;i<3;i++){ h=hs(h,m->sl[i]); h=hs(h,m->svv[i]); }
@@ -521,8 +544,8 @@ static void draw_home_error(ms_t now){
 static void draw_home(ms_t now){
     const HomeM*m=&hm; uint32_t h;
     /* the chevron (SYSTEM) at the top */
-    if(W_begin(W_GEAR,R(CX-30,HOME_CHEV_Y-6,60,20),hi(hi(H0,pressed(T_GEAR)),hm_mode))){
-        draw_chev(CX,HOME_CHEV_Y,C_TXT,pressed(T_GEAR)?255:200,1.4f); W_end(); }
+    if(W_begin(W_GEAR,CHEV_W(HOME_CHEV_Y),hi(hi(H0,pressed(T_GEAR)),hm_mode))){
+        draw_chev_top(HOME_CHEV_Y,pressed(T_GEAR)); W_end(); }
     /* the clock at the bottom (the wordmark while the clock is not set) */
     if(hm_mode!=HM_ACTIVE){ char c[24]; int ok=home_clock_text(c,sizeof c);
       if(W_begin(W_CLOCK,R(CX-70,HOME_CLOCK_Y-4,140,26),hs(hi(hi(H0,ok),hm_mode),ok?c:""))){
@@ -531,7 +554,8 @@ static void draw_home(ms_t now){
     if(hm_mode==HM_ACTIVE){ draw_home_active(now); return; }
     if(hm_mode==HM_ERROR){ draw_home_error(now); return; }
     { char st[96]; int warn; uint32_t c=home_status_text(m,st,sizeof st-8,&warn,now);
-      if(W_begin(W_CHIP,R(70,HOME_STAT_Y-4,340,22),hi(hi(hs(H0,st),(int)c),warn))){ draw_status_line(st,c,warn); W_end(); } }
+      int tl=toast_live(now); if(tl) st[0]=0;                     /* v7.1: a toast takes this slot */
+      if(W_begin(W_CHIP,R(70,HOME_STAT_Y-4,340,22),hi(hi(hi(hs(H0,st),(int)c),warn),tl))){ draw_status_line(st,c,warn); W_end(); } }
     float hp=0; int hk=-1;
     if(tch.down&&!tch.moved&&tch.target>=T_ACT0&&tch.target<=T_ACT3){ hk=tch.target-T_ACT0; hp=clampf((now-tch.t0)/(float)HOLD_MS,0,1); }
     int dim=hm_mode==HM_DIM;
@@ -570,11 +594,11 @@ static void edge_fade(Rect vr,int top,int bottom){
 /* scroll indicator: short arc at the right edge */
 static void draw_scroll_ind(float content_h){
     float mx=scroll_max(page); int sc=(int)lroundf(scroll[page]);
-    if(W_begin(W_SCROLL,R(444,140,30,200),hi(hi(hi(H0,sc),(int)mx),page))){
+    if(W_begin(W_SCROLL,R(440,170,20,140),hi(hi(hi(H0,sc),(int)mx),page))){
         if(mx>0){
-            arc_aa(CX,CY,228,1.2f,-22,22,C_TXT,70);
-            float vis=(list_vy1(page)-LIST_VY0)/content_h, span=44*vis, a0=-22+(44-span)*(scroll[page]/mx);
-            arc_aa(CX,CY,228,1.6f,a0,a0+span,C_TXT,230);
+            arc_aa(CX,CY,216,0.8f,-16,16,C_TXT,28);                 /* v7.1: r 216 (edge furniture), quiet track + thumb */
+            float vis=(list_vy1(page)-LIST_VY0)/content_h, span=32*vis, a0=-16+(32-span)*(scroll[page]/mx);
+            arc_aa(CX,CY,216,1.1f,a0,a0+span,C_TXT,140);
         }
         W_end();
     }
@@ -612,9 +636,8 @@ static int row_val_font(const char*label,const char*val,int xr,int*room){
  * the tap area is the whole header (PBACK_*). */
 static void draw_pback(void){
     int pr=pressed(T_BACK);
-    if(W_begin(W_BACKCH,R(CX-30,PG_CHEV_Y-8,60,24),hi(hi(H0,pr),page))){
-        if(pr) rrect(CX-24,PG_CHEV_Y-7,48,22,11,C_TXT,40);
-        draw_chev(CX,PG_CHEV_Y,C_TXT,pr?255:200,1.4f);
+    if(W_begin(W_BACKCH,CHEV_W(PG_CHEV_Y),hi(hi(H0,pr),page))){
+        draw_chev_top(PG_CHEV_Y,pr);
         W_end();
     }
 }
@@ -666,7 +689,8 @@ static void draw_list(ms_t now){
     draw_pback();
     { char lv[96]; uint32_t lc=page_live_text(page,lv,sizeof lv-8,now); int warn=lc==C_WARN; char b2[104];
       if(warn){ snprintf(b2,sizeof b2,IC_WARN " %s",lv); } else snprintf(b2,sizeof b2,"%s",lv); fit_text(b2,F_XS,LIVE_W);
-      if(W_begin(W_LIVE,R(CX-LIVE_W/2-2,PG_LIVE_Y-3,LIVE_W+4,19),hi(hi(hs(H0,b2),(int)lc),page))){ text_c(CX,PG_LIVE_Y,b2,F_XS,lc,255); W_end(); } }
+      int tl=toast_live(now); if(tl) b2[0]=0;                     /* v7.1: a toast takes the sub-line's slot */
+      if(W_begin(W_LIVE,R(CX-LIVE_W/2-2,PG_LIVE_Y-3,LIVE_W+4,19),hi(hi(hi(hs(H0,b2),(int)lc),page),tl))){ if(b2[0]) text_c(CX,PG_LIVE_Y,b2,F_XS,lc,255); W_end(); } }
     if(tch.down&&!tch.moved&&tch.target>=T_ROW0) prow=tch.target-T_ROW0;
     char dgs[16]; uint32_t dgc=diag_row_text(dgs,sizeof dgs,now);
     uint32_t h=hi(hi(hi(hi(H0,sc),prow),page),sec_open*8+ui_lang);
@@ -757,9 +781,8 @@ static uint32_t detail_status(char*l,size_t n){
 }
 static void draw_backch(void){
     int pr=pressed(T_BACK);
-    if(W_begin(W_BACKCH,R(CX-30,PG_CHEV_Y-8,60,24),hi(H0,pr))){
-        if(pr) rrect(CX-24,PG_CHEV_Y-7,48,22,11,C_TXT,40);
-        draw_chev(CX,PG_CHEV_Y,C_TXT,pr?255:200,1.4f);
+    if(W_begin(W_BACKCH,CHEV_W(PG_CHEV_Y),hi(H0,pr))){
+        draw_chev_top(PG_CHEV_Y,pr);
         W_end();
     }
 }
