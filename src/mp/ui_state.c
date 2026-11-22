@@ -206,18 +206,23 @@ static float scroll_max(int pg){
 
 /* ---- formatting ---- */
 static int use_c(void){ return sv(S_TUNIT)!=0; }
+/* v6.20 (review 2026-11 mem-ui-sim #4): a hand-edited config.json can hold any int (INT_MIN/INT_MAX); the formatting and drawing
+ * paths clamp it first (abs(INT_MIN), v*10, v*9/5 overflowed). Display only — the frame policy still sees the real value. */
+#define DV_LIM 1000000
+static int dclamp(int v){ return v<-DV_LIM?-DV_LIM:(v>DV_LIM?DV_LIM:v); }
 static void fmt_fix(char*b,size_t n,int v,int dec){
+    v=dclamp(v);
     if(dec==1) snprintf(b,n,"%s%d.%d",v<0?"-":"",abs(v)/10,abs(v)%10);
     else if(dec==-1) snprintf(b,n,"%d",(v+(v<0?-5:5))/10);
     else snprintf(b,n,"%d",v);
 }
 static void fmt_t10(char*b,size_t n,int v10,int dec){   /* temperature in 0.1 °C -> text in the selected unit */
-    if(!use_c()) v10=v10*9/5+320;
+    v10=dclamp(v10); if(!use_c()) v10=v10*9/5+320;
     fmt_fix(b,n,v10,dec?1:-1);
 }
 static const char* t_unit(void){ return TR(use_c()?TX_U_C:TX_U_F); }
 static void set_fmt(int i,int v,char*b,size_t n){
-    const Setting*s=&SET[i];
+    const Setting*s=&SET[i]; v=dclamp(v);
     if((s->flags&SF_SENSOR)&&!s->loaded){ snprintf(b,n,"--"); return; }
     if(s->kind==K_ENUM){ if(v>=s->min&&v<=s->max) snprintf(b,n,"%s",TR(s->opts[v-s->min])); else snprintf(b,n,"(%d)",v); return; }
     if(s->flags&SF_HHMM){ fmt_hm(b,n,v/60,v%60,1); return; }                               /* v6.16 */
@@ -294,7 +299,7 @@ static void save_begin(ms_t now){
         if(ro_mode){ toast_show(TR(TX_G_RO),C_WARN,now); return; }
         if(!link_up(now)){ toast_show(TR(TX_T_NOLINK_SAVE),C_ERR,now); return; }
         if(phase_active(phase_raw(now))){ toast_show(TR(TX_T_WAIT_ACT),C_WARN,now); return; }
-        if(wq_busy()){ toast_show(TR(TX_G_WAIT),C_WARN,now); return; }
+        if(wq_busy()||act.pending!=ACT_NONE){ toast_show(TR(TX_G_WAIT),C_WARN,now); return; }   /* v6.20: also while a start waits for its status bits (act_guard refuses the reverse) */
         sav.seq=wq.seq;
         if(setting_mcu_push(sel,edit_val)<0){ toast_show(TR(TX_T_WRITE_REJ),C_ERR,now); return; }
         sav.active=1; sav.stage=1;
@@ -439,7 +444,7 @@ static void sys_confirm(ms_t now){
  * stock UI. In addition there is the switcher gesture and run.sh's trap. */
 static void edit_step(int dir,int mult){
     Setting*s=&SET[sel]; if(s->flags&SF_LOCK) return;
-    int v=edit_val+dir*s->step*mult;
+    int v=dclamp(edit_val)+dir*s->step*mult;
     if(mult>1) v=(v/(s->step*mult))*(s->step*mult);   /* snap to coarse grid during acceleration */
     v=clampi(v,s->lo,s->hi);
     v=s->lo+((v-s->lo)/s->step)*s->step;              /* always on the stock picker's step grid */
@@ -541,13 +546,14 @@ static void stop_request(int kind,ms_t now){
     if(stp.active&&stp.kind==kind&&wq_busy()){ toast_show(TR(STOP_SENT[kind]),C_TXT,now); return; }   /* the stop frame is already in the queue */
     if(!act_push_stop(kind)){ stp.n_fail++; toast_show(TR(TX_T_STOP_FAIL),C_ERR,now); return; }
     stp.n_req++; stp.kind=kind; stp.t_req=now; stp.seq=wq.seq;
-    stp.active=link_up(now)&&stop_running(kind);            /* only a running activity can be confirmed (the ctrl hook can send without one) */
+    stp.latched=!stop_running(kind)&&start_latched(kind,now);                      /* v6.20: a STOP for a latched start word */
+    stp.active=link_up(now)&&(stop_running(kind)||stp.latched);   /* only a running (or latched) activity can be confirmed (the ctrl hook can send without one) */
     toast_show(TR(STOP_SENT[kind]),C_TXT,now);
 }
 static void stop_step(ms_t now){
     if(!stp.active) return;
     if(!link_up(now)){ stp.active=0; return; }                                                       /* the OFFLINE view takes over */
-    if(!stop_running(stp.kind)){ stp.active=0; stp.n_ok++; toast_show(TR(STOP_DONE[stp.kind]),C_OK,now); return; }
+    if(!stop_running(stp.kind)&&!(stp.latched&&start_word_set(stp.kind))){ stp.active=0; stp.n_ok++; toast_show(TR(STOP_DONE[stp.kind]),C_OK,now); return; }
     if(wq.seq!=stp.seq&&wq.result==WR_FAIL&&!wq_busy()){ stp.active=0; stp.n_fail++; toast_show(TR(TX_T_STOP_NOACK),C_ERR,now); return; }
     if(now-stp.t_req>=STOP_CONFIRM_MS){ stp.active=0; stp.n_fail++; toast_show(TR(TX_T_STOP_UNCONF),C_WARN,now); }
 }

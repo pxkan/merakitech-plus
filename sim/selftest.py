@@ -208,6 +208,11 @@ def t3_write_policy():
     check("band: sub112 len3 ok (112..114)", sim.handle_write(112, [0x0104, 0x0605, 70]))
     check("band: sub113 len1 ok", sim.handle_write(113, [0x0605]))
     check("band: sub114 len1 ok", sim.handle_write(114, [70]))
+    # v6.20: writes that END at 113..115 but start below 112 are outside the documented bands
+    check("band: sub100 len13 (words 100..112) rejected", not sim.handle_write(100, [0] * 13))
+    check("band: sub33 len80 (words 33..112) rejected", not sim.handle_write(33, [0] * 80))
+    ok_b, why_b = sim._check_write(111, [0, 0])
+    check("band: sub111 len2 (words 111..112) -> reason 'band:'", not ok_b and any(r.startswith("band:") for r in why_b))
     check("trigger: steam block w/ word30=1 rejected",
           not sim.handle_write(24, [1, 650, 0, 0, 0, 0, 1, 0]))
     check("trigger: word26=100 rejected", not sim.handle_write(26, [100]))

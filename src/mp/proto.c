@@ -69,12 +69,15 @@ static void frame_version(void){
 
 /* ---- write queue: sequential cmd6 writes, each w. CRC + ACK wait + ONE retransmit ----
  * ACK = 0x86 w. the same sub/len and echo == payload. Timeout 150 ms -> retransmit,
- * then 300 ms -> FAIL (the rest of the queue is dropped; the UI shows the error). */
+ * then 300 ms -> FAIL (the rest of the queue is dropped; the UI shows the error).
+ * v6.20 (review 2026-11, protocol #3): STOP frames queued BEHIND the failed frame are kept and sent (keep = the stop's group id,
+ * set by act_push_stop); the failed frame's own group and every other frame are still dropped, so starts, sync blocks and boot push
+ * blocks are never sent half. Before, a STOP tapped while e.g. a keep-awake was in flight was discarded without ever being sent. */
 #define WQ_MAX 8
 #define WQ_WMAX 30         /* the boot push block sub1 len30 (v6.5: all build types; the v6.4 device had 24) */
 #define WQ_ACK1_MS 150
 #define WQ_ACK2_MS 300
-typedef struct { uint8_t sub,len; uint16_t w[WQ_WMAX]; } WFrame;
+typedef struct { uint8_t sub,len,keep; uint16_t w[WQ_WMAX]; } WFrame;   /* keep: v6.20 stop group (0 = dropped on a failure) */
 enum { WQ_IDLE=0, WQ_WAIT };
 enum { WR_NONE=0, WR_OK, WR_FAIL };
 static struct { WFrame q[WQ_MAX]; int n; int state; ms_t sent_ms; int tries; int result; long seq; int sim_ack; long n_ok,n_fail,n_retx,n_block; } wq;
@@ -118,7 +121,7 @@ static int wq_push_t(uint8_t sub,const uint16_t*w,int len,uint32_t intent){
     if(!(end<33 || (sub>=112 && end>=113 && end<=115))){ wq_rej=WJ_BAND; wq.n_block++; return 0; }
     int pj=frame_policy(sub,w,len,intent);
     if(pj){ wq_rej=pj; wq.n_block++; return 0; }
-    WFrame*f=&wq.q[wq.n++]; f->sub=sub; f->len=(uint8_t)len; memcpy(f->w,w,len*2);
+    WFrame*f=&wq.q[wq.n++]; f->sub=sub; f->len=(uint8_t)len; f->keep=0; memcpy(f->w,w,len*2);
     if(wq.n==1){ wq.state=WQ_IDLE; wq.result=WR_NONE; }
     return 1;
 }
@@ -129,7 +132,9 @@ static void wq_tx(ms_t now){
 }
 static void wq_pop(int ok){
     if(ok){ wq.n_ok++; memmove(&wq.q[0],&wq.q[1],sizeof(WFrame)*(wq.n-1)); wq.n--; if(wq.n==0){ wq.result=WR_OK; wq.seq++; } }
-    else { wq.n_fail++; wq.n=0; wq.result=WR_FAIL; wq.seq++; }
+    else { wq.n_fail++; uint8_t g=wq.q[0].keep; int m=0;
+           for(int i=1;i<wq.n;i++) if(wq.q[i].keep&&wq.q[i].keep!=g) wq.q[m++]=wq.q[i];   /* v6.20: queued STOPs survive (not the failed one's group) */
+           wq.n=m; wq.result=WR_FAIL; wq.seq++; }
     wq.state=WQ_IDLE;
 }
 static void wq_step(ms_t now){

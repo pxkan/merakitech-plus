@@ -23,6 +23,8 @@ jobs:
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
@@ -31,6 +33,21 @@ jobs:
           version: 0.17.1
       - name: Repository hygiene (checksums, no vendor files, no personal data)
         run: python3 tests/hygiene.py
+      - name: Version consistency (tools/merakiplus.py VERSION == src/merakiplus.c == README badge, CHANGELOG has the section)
+        # the same checks release.yml runs after merge, so a PR that bumps one but not the others fails here
+        run: |
+          python3 - <<'PY'
+          import re, sys
+          v = re.search(r'^VERSION\s*=\s*"([^"]+)"', open("tools/merakiplus.py", encoding="utf-8").read(), re.M).group(1)
+          c = re.search(r'#define\s+MERAKIPLUS_VERSION\s+"V([^"]+)"', open("src/merakiplus.c", encoding="utf-8").read()).group(1)
+          b = re.search(r'img\.shields\.io/badge/Meraki%2B-v([0-9.]+)-', open("README.md", encoding="utf-8").read())
+          if v != c or (b and b.group(1) != v):
+              sys.exit(f"version mismatch: tools/merakiplus.py {v}, src/merakiplus.c V{c}, README badge {b.group(1) if b else '-'}")
+          print(f"version {v}: consistent")
+          with open(__import__("os").environ["GITHUB_ENV"], "a") as f:
+              f.write(f"MP_VERSION={v}\n")
+          PY
+          python3 tools/release_notes.py "$MP_VERSION" > /dev/null
       - name: Build (host SIM, switcher, self-tests)
         run: ./build.sh host
       - name: Cross-build device binaries (ARMv7, 0 errors)
@@ -39,11 +56,13 @@ jobs:
         run: zig cc -target x86_64-linux-musl -DMERAKIPLUS_SIM -O2 -static -s src/merakiplus.c -lm -o build/merakiplus_sim-linux-x86_64
       - name: bin/ drift check (committed binaries == fresh builds)
         run: python3 tests/check_bins.py
-      - name: UI self-test (preview build, 440+ checks)
+      - name: UI self-test (preview build, 570+ checks) — English and Danish
         run: |
           zig cc -DMERAKIPLUS_PREVIEW -O2 -o build/merakiplus_preview src/merakiplus.c -lm
           ./build/merakiplus_preview --selftest sim/fixtures/config.json > build/ui_selftest.txt 2>&1 || { tail -50 build/ui_selftest.txt; exit 1; }
           tail -n 1 build/ui_selftest.txt
+          ./build/merakiplus_preview --lang da --selftest sim/fixtures/config.json > build/ui_selftest_da.txt 2>&1 || { tail -50 build/ui_selftest_da.txt; exit 1; }
+          tail -n 1 build/ui_selftest_da.txt
       - name: Simulator self-test
         run: python3 sim/selftest.py
       - name: E2E quick (5 core scenarios against the real UI SIM build)
@@ -60,6 +79,55 @@ jobs:
           path: |
             sim/reports/
             build/ui_selftest.txt
+            build/ui_selftest_da.txt
+          if-no-files-found: ignore
+
+  py38:
+    name: Python 3.8 compatibility (tools/, tests/, installer tests)
+    # the project promises Python >= 3.8 for the installer and the tests; setup-python still serves 3.8 on ubuntu-22.04
+    runs-on: ubuntu-22.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.8"
+      - name: Byte-compile tools/ and tests/ with 3.8
+        run: python3 -m py_compile tools/*.py tests/*.py
+      - name: Installer / revert against the mock display (Python 3.8)
+        run: python3 tests/test_installer.py
+
+  sanitizers:
+    name: sanitizers (preview self-test under UBSan + ASan, EN + DA)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: mlugg/setup-zig@v2
+        with:
+          version: 0.17.1
+      - name: UBSan (zig 0.17.1, trap on the first report)
+        run: |
+          mkdir -p build
+          zig cc -DMERAKIPLUS_PREVIEW -O1 -g -fsanitize=undefined -fno-sanitize-recover=undefined -o build/merakiplus_preview_ubsan src/merakiplus.c -lm
+          for l in en da; do ./build/merakiplus_preview_ubsan --lang $l --selftest sim/fixtures/config.json > build/ubsan_$l.txt 2>&1 || { tail -60 build/ubsan_$l.txt; exit 1; }; tail -n 1 build/ubsan_$l.txt; done
+      - name: ASan + UBSan (clang; zig ships no ASan runtime)
+        env:
+          ASAN_OPTIONS: detect_leaks=0:abort_on_error=1
+          UBSAN_OPTIONS: print_stacktrace=1:halt_on_error=1
+        run: |
+          clang -DMERAKIPLUS_PREVIEW -O1 -g -fno-omit-frame-pointer -fsanitize=address,undefined -fno-sanitize-recover=undefined -w -o build/merakiplus_preview_asan src/merakiplus.c -lm
+          for l in en da; do ./build/merakiplus_preview_asan --lang $l --selftest sim/fixtures/config.json > build/asan_$l.txt 2>&1 || { tail -80 build/asan_$l.txt; exit 1; }; tail -n 1 build/asan_$l.txt; done
+      - name: Upload sanitizer logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: sanitizer-logs
+          path: build/*san_*.txt
           if-no-files-found: ignore
 
   full-e2e:
@@ -69,6 +137,8 @@ jobs:
     timeout-minutes: 120
     steps:
       - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"

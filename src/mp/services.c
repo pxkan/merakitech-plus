@@ -60,8 +60,8 @@ static int pw_cmd8(uint8_t b[15],const struct tm*tm,int ad,int ah,int am){
  * PREVIEW/selftest: clk_fake (default 2026-11-18 15:35:28 UTC = 16:35:28 in zone #48 without DST). */
 static void pw_now_tm(struct tm*tm){ clk_now(tm); }
 /* v6.16: pre-arm state (the cmd8 alarm while on) — see sched_step() */
-static struct { int sent,ad,ah,am,f8_ok,src; long n_sent,n_ack,mcu_rs; ms_t t_sent; uint8_t f8[15]; } arm;
-static void pw_ack8(const uint8_t*p){ if(pw.f8_ok&&!memcmp(p,pw.f8+3,10)) pw.n_ack8++; if(arm.f8_ok&&!memcmp(p,arm.f8+3,10)) arm.n_ack++; }
+static struct { int sent,ad,ah,am,f8_ok,src,tries,acked; long n_sent,n_ack,mcu_rs,n_retry; ms_t t_sent; uint8_t f8[15]; } arm;   /* v6.20: tries/acked/n_retry (the 0x88 echo confirms) */
+static void pw_ack8(const uint8_t*p){ if(pw.f8_ok&&!memcmp(p,pw.f8+3,10)) pw.n_ack8++; if(arm.f8_ok&&!memcmp(p,arm.f8+3,10)){ arm.n_ack++; arm.acked=1; } }
 /* for the OFF view: an open detail is reverted (light/language preview back), no transition, no ripple, no held start */
 static void pw_view(int v){
     if(view==V_DETAIL&&sel>=0){ if(SET[sel].flags&SF_BL) bl_set(SET[sel].val); if(SET[sel].flags&SF_LOCAL) lang_set(SET[sel].val); }
@@ -147,11 +147,16 @@ static void pw_step(ms_t now){
  * after an MCU restart/wake (its RAM alarm is gone), after a schedule change, and once a day when the occurrence moves on.
  * Never while turning off/off (the power-off frame carries the alarm itself). No schedule and nothing armed -> nothing is sent
  * (v6.15 traffic unchanged); disarming sends alarm 0/0/0 once. At most one cmd8 per ARM_GAP_MS.
+ * v6.20 (review 2026-11, protocol #1): a pre-arm/disarm counts as delivered only when the MCU's 0x88 echo of exactly that frame
+ * arrives (pw_ack8). Without it the same cmd8 (same alarm, the current time — what stock's powerOffSend builds) is sent again, at
+ * most ARM_RETRY more times, ARM_GAP_MS apart. Before, one lost frame left a stale alarm in the MCU (a disarm was never repeated:
+ * the machine woke at the old time after a physical-button power-off). With the echo present the traffic is unchanged.
  * ONE-SHOT: once its occurrence (once_at) is a minute in the past it is switched off and saved (stock: deal_preheat_data at start).
  * AUTO OFF: no touch, no button and no activity (any active phase, not only brew/steam/grind) for N minutes -> the same power-off as
  * the button (pw_off_begin: cmd8 w. the alarm, 80 ms, cmd6 sub0 len2 [0,0]); a toast warns 30 s before. Only when the power-off
  * itself would be allowed (link, word 0 = 1, not read-only, no SAVE in flight). Stock: fixed 30 min (SleepRefresh 0x149268). */
 #define ARM_GAP_MS   5000
+#define ARM_RETRY       2   /* v6.20: extra copies of a cmd8 pre-arm/disarm whose 0x88 echo is missing */
 #define AO_WARN_MS  30000
 static ms_t idle_t0=0; static int ao_warned=0; static long ao_n=0;
 static void idle_kick(ms_t now){ idle_t0=now; if(ao_warned){ ao_warned=0; toast.dur=0; } }   /* a touch also dismisses the 30 s warning */
@@ -161,14 +166,19 @@ static int sched_ok_to_send(ms_t now){
 static void sched_step(ms_t now){
     int64_t u=clk_utc();
     if(!idle_t0) idle_kick(now);                                                   /* first call: the idle timer starts now */
+    if(sch.on&&!REP_MASK[sch.rep]&&sch.once_at==0&&clk_valid(u)){                  /* v6.20: a one-shot saved while the clock was unset is for the */
+        sch.once_at=sched_once_target(u); sched_save(); ui_kick=1;                   /* next hh:mm once the clock is valid (it stayed ON, never armed) */
+    }
     if(sch.on&&!REP_MASK[sch.rep]&&sch.once_at>0&&clk_valid(u)&&u>=sch.once_at+60){   /* one-shot used */
         sch.on=0; sch.once_at=0; SET[S_PREHEAT].val=0; sched_save(); toast_show(TR(TX_T_ONCE_USED),C_OK,now); ui_kick=1;
     }
-    if(arm.mcu_rs!=repush_count()){ arm.mcu_rs=repush_count(); arm.sent=0; }        /* MCU restart: the alarm in its RAM is gone */
+    if(arm.mcu_rs!=repush_count()){ arm.mcu_rs=repush_count(); arm.sent=0; arm.acked=1; }   /* MCU restart: the alarm in its RAM is gone (nothing left to confirm) */
     int ad,ah,am; int want=sched_alarm(u,&ad,&ah,&am,NULL);
     int need=arm.sent?(ad!=arm.ad||ah!=arm.ah||am!=arm.am):want;
-    if(need&&sched_ok_to_send(now)&&(!arm.n_sent||now-arm.t_sent>=ARM_GAP_MS)){
-        struct tm tm; pw_now_tm(&tm); pw_cmd8(arm.f8,&tm,ad,ah,am); arm.f8_ok=1; uart_send(arm.f8,15);
+    int retry=!need&&arm.n_sent&&!arm.acked&&arm.tries<=ARM_RETRY;                 /* v6.20: the last cmd8's echo is missing */
+    if((need||retry)&&sched_ok_to_send(now)&&(!arm.n_sent||now-arm.t_sent>=ARM_GAP_MS)){
+        if(retry){ ad=arm.ad; ah=arm.ah; am=arm.am; want=arm.sent; arm.tries++; arm.n_retry++; } else arm.tries=1;
+        struct tm tm; pw_now_tm(&tm); pw_cmd8(arm.f8,&tm,ad,ah,am); arm.f8_ok=1; arm.acked=0; uart_send(arm.f8,15);
         arm.sent=want; arm.ad=ad; arm.ah=ah; arm.am=am; arm.t_sent=now; arm.n_sent++;
     }
     /* auto off */
@@ -384,9 +394,12 @@ static void ui_touch(int ev,int x,int y,ms_t now){
         memset(&tch,0,sizeof tch); tch.down=1; tch.x0=tch.x=x; tch.y0=tch.y=y; tch.t0=now;
         tch.target=hit_test(x,y,now); tch.scroll0=scroll[page];
         if(tch.target){ rip.x=x; rip.y=y; rip.t0=now; rip.on=1; }
-        if((tch.target==T_MINUS||tch.target==T_PLUS)&&!sav.active){
-            if(view==V_SYS) x_edit=(tch.target==T_PLUS);               /* BOOT UI: − = ORIGINAL, + = MERAKIPLUS */
-            else { edit_step(tch.target==T_PLUS?1:-1,1); tch.rep_next=now+420; }
+        if(tch.target==T_MINUS||tch.target==T_PLUS){
+            tch.rep_next=now+420;                                      /* v6.20: armed on EVERY stepper press — a press during SAVING left it at 0, and the repeat loop ran from 0 to now after a failed save */
+            if(!sav.active){
+                if(view==V_SYS) x_edit=(tch.target==T_PLUS);           /* BOOT UI: − = ORIGINAL, + = MERAKIPLUS */
+                else edit_step(tch.target==T_PLUS?1:-1,1);
+            }
         }
     } else if(ev==TE_MOVE&&tch.down){
         tch.x=x; tch.y=y; int dx=x-tch.x0, dy=y-tch.y0;

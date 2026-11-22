@@ -141,7 +141,9 @@ next start once that time has passed.
   on. Reason: on this hardware the power button's ≥ 0.8 s hold cuts the display before Meraki+ can send anything,
   so only a pre-armed alarm can survive that path (if the controller goes to sleep). No schedule and nothing
   armed → nothing is sent (the v6.15 UART traffic is unchanged); switching off sends 0/0/0 once. Never while
-  turning off / off.
+  turning off / off. *v6.20:* a pre-arm or disarm counts only once the MCU's 0x88 echo of that frame arrives;
+  without it the same cmd8 (same alarm, current time) is sent again at most twice, 5 s apart, so one lost frame
+  can no longer leave a stale alarm in the MCU (docs/dev/REVIEW-2026-11.md, protocol #1).
 * **One-shot**: saved for the next hh:mm after SAVE (`once_at`); a minute after that time it switches itself off
   and is saved (toast ONE-TIME PRE-HEAT USED).
 * **After a wake**: Meraki+ cold-boots (or, if it stayed on, sees word 0 = 1 again and powers on), runs the boot
