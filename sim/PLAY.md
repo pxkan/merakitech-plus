@@ -1,5 +1,9 @@
 # PLAY.md — interactive play mode for the SIM environment (Meraki+ / merakiplus)
 
+> **See also: Sim Studio** (`sim/studio.sh`, [sim/README.md](README.md#sim-studio--the-real-ui-in-the-browser)): the real UI compiled to
+> WebAssembly, ≥ 30 fps in the browser, a richer simulated machine, phone layout and a side-by-side compare. `play.py`
+> stays as it is (native SIM binary over a pty, the same mechanics as `run_e2e.py`).
+
 **Date:** 2026-11-17 · **Owner:** the test work stream · **Files:** `sim/play.py` + `sim/play_viewer.html`
 **Policy:** local development only — **no contact with the physical device**. Python standard library
 only. The UI files were not touched. Backward compatible with `run_e2e.py` (same sandbox layout, same

@@ -1,0 +1,138 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="dark">
+<meta name="theme-color" content="#111214">
+<title>Sim Studio · Meraki+</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Ccircle cx='16' cy='16' r='15' fill='%2333363b'/%3E%3Ccircle cx='16' cy='16' r='11' fill='%23050506'/%3E%3Ccircle cx='16' cy='16' r='4' fill='%23c8834f'/%3E%3C/svg%3E">
+<link rel="stylesheet" href="studio.css">
+</head>
+<body>
+<header class="topbar">
+  <div class="brand"><span class="dot"></span><b>Sim Studio</b><span class="sub">Meraki+</span></div>
+  <div class="builds" id="buildinfo">loading…</div>
+  <div class="spacer"></div>
+  <label class="toggle" title="Run the classic build next to the current one; machine controls and scenarios apply to both">
+    <input type="checkbox" id="compare"><span class="sw"></span><span>Compare</span>
+  </label>
+  <div class="seg" id="speed" role="group" aria-label="Simulation speed">
+    <button data-speed="0" title="Pause (space)">❚❚</button>
+    <button data-speed="1" class="on" title="Real time (1)">1×</button>
+    <button data-speed="4" title="4× (2)">4×</button>
+    <button data-speed="20" title="20× — for heat-up (3)">20×</button>
+  </div>
+  <div class="clock" id="simclock" title="Simulated time since start · UI frame rate">0:00</div>
+</header>
+
+<main class="stage" id="stage">
+  <div class="loading" id="loading">Loading the UI…</div>
+</main>
+
+<aside class="drawer" id="drawer">
+  <div class="handle" id="handle" aria-label="Drag to resize the controls"><span></span></div>
+  <div class="drawer-scroll">
+
+  <section class="panel" data-open="1">
+    <h2>Scenarios</h2>
+    <div class="body">
+      <div class="scen" id="scenarios">
+        <button data-scen="cold"><b>Cold morning</b><span>boilers at room temp, heat up</span></button>
+        <button data-scen="ready"><b>Ready</b><span>hot, idle</span></button>
+        <button data-scen="shot"><b>Pull a shot</b><span>hold BREW</span></button>
+        <button data-scen="steam"><b>Steam milk</b><span>auto to target</span></button>
+        <button data-scen="water"><b>Hot water</b><span>auto dose</span></button>
+        <button data-scen="fault"><b>Fault</b><span>E1 on the controller</span></button>
+        <button data-scen="offline"><b>Offline</b><span>UART silent</span></button>
+        <button data-scen="sleep"><b>Sleep</b><span>machine sleep (word 1)</span></button>
+      </div>
+    </div>
+  </section>
+
+  <section class="panel" data-open="1">
+    <h2>Live <span class="tabs" id="livetabs"></span></h2>
+    <div class="body">
+      <div class="live-top">
+        <div class="phase" id="phase">—</div>
+        <div class="kv" id="livekv"></div>
+      </div>
+      <div class="regs" id="regs"></div>
+    </div>
+  </section>
+
+  <section class="panel" data-open="1">
+    <h2>Machine</h2>
+    <div class="body">
+      <div class="gauge-row">
+        <div class="gauge"><label>Brew boiler</label><output id="g_brew">—</output></div>
+        <div class="gauge"><label>Steam boiler</label><output id="g_steam">—</output></div>
+        <div class="gauge"><label>Group</label><output id="g_group">—</output></div>
+        <div class="gauge"><label>Milk</label><output id="g_milk">—</output></div>
+      </div>
+      <div class="row"><label for="set_brew">Brew boiler</label><input type="range" id="set_brew" min="15" max="105" step="1" value="20"><output data-for="set_brew"></output><button class="mini" data-set="brew">Set</button></div>
+      <div class="row"><label for="set_steam">Steam boiler</label><input type="range" id="set_steam" min="15" max="140" step="1" value="20"><output data-for="set_steam"></output><button class="mini" data-set="steam">Set</button></div>
+      <div id="params"></div>
+    </div>
+  </section>
+
+  <section class="panel" data-open="1">
+    <h2>Inputs</h2>
+    <div class="body">
+      <div class="row"><label>Cup on the scale</label><label class="toggle"><input type="checkbox" id="cup" checked><span class="sw"></span></label></div>
+      <div class="row"><label for="scale">Brew scale</label><input type="range" id="scale" min="0" max="60" step="0.5" value="0"><output data-for="scale" data-unit=" g"></output><button class="mini" id="scale_set">Put</button></div>
+      <div class="row"><label>Tare</label><div class="btns"><button class="mini" data-tare="brew">Brew scale</button><button class="mini" data-tare="grind">Grind scale</button></div></div>
+      <div class="row"><label>Steam wand</label><label class="toggle"><input type="checkbox" id="wand"><span class="sw"></span></label><span class="hint">open = flush / manual steam</span></div>
+      <div class="row"><label for="grindrate">Grinder</label><input type="range" id="grindrate" min="0.5" max="4" step="0.05" value="1.94"><output data-for="grindrate" data-unit=" g/s"></output></div>
+      <div class="row"><label>Power button</label><button class="hold" id="powerkey">Hold</button><span class="hint">≥ 0.8 s wakes from off</span></div>
+    </div>
+  </section>
+
+  <section class="panel">
+    <h2>Faults &amp; link</h2>
+    <div class="body">
+      <div class="chips">
+        <label class="chip"><input type="checkbox" data-fault="e1"><span>E1</span></label>
+        <label class="chip"><input type="checkbox" data-fault="e2"><span>E2</span></label>
+        <label class="chip"><input type="checkbox" data-fault="e3"><span>E3</span></label>
+        <label class="chip"><input type="checkbox" id="offline"><span>Offline</span></label>
+        <label class="chip"><input type="checkbox" id="msleep"><span>Machine sleep</span></label>
+      </div>
+      <div class="row"><label>Controller</label><div class="btns"><button class="mini" id="reboot">Restart MCU</button><button class="mini" id="poweroff">Power off</button><button class="mini" id="poweron">Power on</button></div></div>
+    </div>
+  </section>
+
+  <section class="panel">
+    <h2>Time</h2>
+    <div class="body">
+      <div class="row"><label for="tod">Time of day</label><input type="time" id="tod" step="60"><button class="mini" id="tod_set">Set</button></div>
+      <div class="row"><label>UI</label><div class="btns"><button class="mini" id="ui_restart">Restart UI</button><button class="mini" data-page="home">Home</button><button class="mini" data-page="diag">Diagnostics</button></div></div>
+    </div>
+  </section>
+
+  <section class="panel">
+    <h2>UART <span class="count" id="uartcount"></span></h2>
+    <div class="body">
+      <div class="row uartbar">
+        <input type="search" id="uartfilter" placeholder="filter: cmd6, sub24, ACK…" spellcheck="false">
+        <label class="chip sm"><input type="checkbox" id="uartpolls"><span>polls</span></label>
+        <label class="chip sm"><input type="checkbox" id="uartpause"><span>pause</span></label>
+      </div>
+      <div class="uart" id="uart"></div>
+    </div>
+  </section>
+
+  <section class="panel">
+    <h2>Export</h2>
+    <div class="body">
+      <div class="btns" id="exports"></div>
+      <p class="note">PNG of the display (480×480) or of the display in the bezel (1200×1200).</p>
+    </div>
+  </section>
+
+  <footer class="foot">The real Meraki+ UI compiled to WebAssembly, talking to a simulated controller. Nothing here touches a machine.</footer>
+  </div>
+</aside>
+<script type="module" src="studio.js"></script>
+</body>
+</html>

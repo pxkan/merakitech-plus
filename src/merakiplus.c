@@ -190,6 +190,9 @@
  *                  MERAKIPLUS_ROOT=<dir> (prefix for the boot paths /customer /new_customer /proc /tmp; test only)
  */
 #define _GNU_SOURCE
+#ifdef MERAKIPLUS_WASM
+#include "mp/wasm_compat.h"         /* v6.20: the browser build (Sim Studio) = the SIM build on wasm32-wasi */
+#endif
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -378,6 +381,9 @@ static ms_t now_ms(void){ struct timespec ts; clock_gettime(CLOCK_MONOTONIC,&ts)
 #include "mp/input.c"
 #include "mp/sim_hal.c"
 #include "mp/main.c"
+#ifdef MERAKIPLUS_WASM
+#include "mp/wasm_hal.c"           /* v6.20: exports mp_init/mp_step/mp_touch/mp_fb/mp_ctrl/mp_state instead of main() */
+#endif
 #else
 #include "mp/preview.c"
 #include "mp/selftest.c"

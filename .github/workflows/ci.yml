@@ -48,6 +48,14 @@ jobs:
         run: python3 sim/selftest.py
       - name: E2E quick (5 core scenarios against the real UI SIM build)
         run: python3 sim/run_e2e.py --all --quick --parallel 4
+      - name: Sim Studio (WASM builds current + classic, machine model tests, headless smoke)
+        run: |
+          # the classic build is the v6.19 release commit (build.py backports it in a temp dir)
+          git fetch --no-tags --depth=1 origin c9a8524730be8a1b1eba8f89cd4f0e03db8e3f19
+          python3 sim/studio/build.py
+          node sim/studio/test_machine.mjs
+          node sim/studio/smoke.mjs
+          node sim/studio/smoke.mjs --wasm build/studio/wasm/classic.wasm
       - name: Gesture switcher end-to-end (file mode)
         run: python3 boot/test_switcher.py
       - name: Installer / revert against the mock display
