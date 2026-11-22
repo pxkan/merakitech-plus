@@ -827,8 +827,8 @@ class ScenarioRun:
             self.add(f"save.{ex['state']}({ex.get('param', '')})@{ex['t']}", ok)
         elif kind == "save_rejected":
             sts = self.states_in(ex["t"] - win, ex["t"] + win)
-            ok = any(("AFVIST" in (s.get("toast") or {}).get("text", "") or
-                      "LÅST" in (s.get("toast") or {}).get("text", "")) for s in sts)
+            ok = any(("AFVIST" in (s.get("toast") or {}).get("text", "").upper() or
+                      "LÅST" in (s.get("toast") or {}).get("text", "").upper()) for s in sts)
             self.add(f"save rejected ({ex.get('param', '')})@{ex['t']}", ok)
         elif kind == "exit_code":
             self.add(f"exit_code={ex['value']}", self.ui_exit == ex["value"],

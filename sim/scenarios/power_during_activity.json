@@ -70,7 +70,7 @@
       "kind": "toast",
       "t": 7,
       "window": 1.5,
-      "contains": "AKTIVITETEN"
+      "contains": "aktiviteten"
     },
     {
       "kind": "power_counter",

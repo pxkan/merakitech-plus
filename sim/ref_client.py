@@ -238,26 +238,26 @@ class RefClient:
         end = sub + n
         if not (end < 33 or end in (113, 114, 115)):
             self.c6_block += 1
-            self.toast_set(f"BLOKERET · BÅND sub{sub}", "err")
+            self.toast_set(f"Blokeret · bånd sub{sub}", "err")
             return False
         for i, w in enumerate(words):
             word = sub + i
             if word in (26, 27, 30) and w != 0:
                 self.c6_block += 1
-                self.toast_set(f"BLOKERET · TRIGGER ord{word}", "err")
+                self.toast_set(f"Blokeret · trigger ord{word}", "err")
                 return False
             if word in (3, 6, 9, 16, 19, 22, 24) and w != 0 and word not in intent:
                 self.c6_block += 1
-                self.toast_set(f"BLOKERET · START ord{word} uden intent", "err")
+                self.toast_set(f"Blokeret · start ord{word} uden intent", "err")
                 return False
             if word in self.bounds:
                 lo, hi, _ = self.bounds[word]
                 if not (lo <= w <= hi):
                     self.c6_block += 1
-                    self.toast_set(f"BLOKERET · RANGE ord{word}={w}", "err")
+                    self.toast_set(f"Blokeret · range ord{word}={w}", "err")
                     return False
         if self.wq is not None:
-            self.toast_set("VENT · SKRIVNING I GANG", "warn")
+            self.toast_set("Vent · skrivning i gang", "warn")
             return False
         raw = build_frame(0x06, sub, words)
         self.wq = {"sub": sub, "words": list(words), "sent": self.now,
@@ -285,9 +285,9 @@ class RefClient:
                     self.stop_fail += 1
                     self.stop_pending = None
                     self._stop_sw_followup = False
-                    self.toast_set("STOP: NO ACK · TRY AGAIN", "err")
+                    self.toast_set("Stop: no ACK · try again", "err")
                 else:
-                    self.toast_set("GEM FEJLET · INGEN ACK · INTET GEMT", "err")
+                    self.toast_set("Gem fejlet · ingen ACK · intet gemt", "err")
                 self.log(f"write FAIL (no ACK): sub{self.wq['sub']}")
                 self.wq = None
 
@@ -311,7 +311,7 @@ class RefClient:
                 if prm and prm.get("config_field"):
                     self.config_set(prm["config_field"], v)
                 self.save_state = {"state": "ok", "param": p, "value": v}
-                self.toast_set("GEMT · CONTROLLER + CONFIG", "ok")
+                self.toast_set("Gemt · controller + config", "ok")
             self.log(f"ACK ok: sub{sub} len{len(words)}")
 
     def rx_feed(self, data):
@@ -370,7 +370,7 @@ class RefClient:
             ok = self.wq_push(24, [0, mt, 0, 0, 0, 0, 0, 0])
             if ok:
                 self.activity_pending = "steam_stop"
-                self.toast_set("STOP: DAMP", "ok")
+                self.toast_set("Stop: damp", "ok")
             return ok
         if kind in ("grind_stop", "brew_stop", "water_stop"):
             # v6.13 (UI_v6 §18): stop frames = zeros only, no intent,
@@ -389,20 +389,20 @@ class RefClient:
                 self.stop_pending = kind if self._stop_running(kind) else None
                 self.stop_last = kind
                 self.stop_t0 = self.now
-                self.toast_set(f"STOP: {kind[:-5].upper()}", "ok")
+                self.toast_set(f"Stop: {kind[:-5]}", "ok")
             return ok
         if self.config_missing:
-            self.toast_set("CONFIG MANGLER · START SPÆRRET", "err")
+            self.toast_set("Config mangler · start spærret", "err")
             return False
         if self.config_oor:
-            self.toast_set("CONFIG UDEN FOR SPEC · RET FØRST", "err")
+            self.toast_set("Config uden for spec · ret først", "err")
             return False
         ph = phase_of(self.regs, self.link_up())
         if ph in ("GRIND", "PRE", "EXT", "WATER", "STEAM"):
-            self.toast_set("VENT TIL AKTIVITET ER SLUT", "warn")
+            self.toast_set("Vent til aktivitet er slut", "warn")
             return False
         if ph == "OFFLINE":
-            self.toast_set("OFFLINE · INGEN START", "err")
+            self.toast_set("Offline · ingen start", "err")
             return False
         g = lambda k, d: int(self.cfg.get(k, d))
         if kind == "grind":
@@ -435,7 +435,7 @@ class RefClient:
             return False
         if ok:
             self.activity_pending = kind
-            self.toast_set(f"START: {kind.upper()}", "ok")
+            self.toast_set(f"Start: {kind}", "ok")
         return ok
 
     def _stop_running(self, kind):
@@ -500,14 +500,14 @@ class RefClient:
         self.uart_send(build_frame(0x06, 0, [1]))   # PowerOn (as app_init)
         self.uart_send(build_frame(0x06, 1, [0]))   # awake
         self.next_awake = self.now + KEEPALIVE_INTERVAL
-        self.toast_set("MASKINEN ER TÆNDT", "ok")
+        self.toast_set("Maskinen er tændt", "ok")
 
     def pw_fail(self):
         self.pw_state = "on"
         self.pw_t_state = self.now
         self.pw_n["fails"] += 1
         self.page = "home"
-        self.toast_set("SLUK: INTET SVAR · PRØV IGEN", "err")
+        self.toast_set("Sluk: intet svar · prøv igen", "err")
 
     def pw_off_begin(self):
         lt = time.localtime()
@@ -535,7 +535,7 @@ class RefClient:
                 self.pw_fired = True
                 if not self.link_up() or not self.reg_seen[0] or self.regs[0] == 0:
                     self.pw_n["fails"] += 1
-                    self.toast_set("INGEN FORBINDELSE · SLUKKER IKKE", "warn")
+                    self.toast_set("Ingen forbindelse · slukker ikke", "warn")
                 else:
                     self.pw_off_begin()
         if self.pw_state == "turning_off":
@@ -565,13 +565,13 @@ class RefClient:
             return False
         if prm.get("persist") in ("readonly", "config-readonly", "config-unused",
                                   "config-excluded"):
-            self.toast_set("LÅST · INGEN EDITOR", "warn")
+            self.toast_set("Låst · ingen editor", "warn")
             return False
         value = int(value)
         if prm.get("min") is not None and prm.get("max") is not None:
             if not (prm["min"] <= value <= prm["max"]):
                 self.c6_block += 1
-                self.toast_set(f"AFVIST · {pid}={value} UDEN FOR SPEC", "err")
+                self.toast_set(f"Afvist · {pid}={value} uden for spec", "err")
                 return False
         self.save_state = {"state": "pending", "param": pid, "value": value}
         wr = prm.get("write") or {}
@@ -583,7 +583,7 @@ class RefClient:
             # config-only (tier 2): no MCU write
             self.config_set(prm["config_field"], value)
             self.save_state = {"state": "ok", "param": pid, "value": value}
-            self.toast_set("GEMT · STOCK-UI: EFTER GENSTART", "ok")
+            self.toast_set("Gemt · stock-UI: efter genstart", "ok")
             return True
         if prm.get("packing"):
             # byte-packed word112/113: keep the other bytes from config
