@@ -12,6 +12,12 @@ sandbox cannot do for real are emulated with shell functions:
   * nohup ./demo_v9 spawns a fake UI process; nc -l -p PORT is a tiny Python listener.
   * uname -m says armv7l.
 
+Failure injection (for the installer's error paths): create <root>/inject/<name> with
+inject(root, name[, value]) and remove it with uninject(root, name). The shell functions
+check for the file on every call, so a test can switch a failure on and off between runs:
+
+  * gzip_fail        gzip exits 1 without output (busybox gzip OOM); base64 still exits 0.
+
 Everything here is synthetic — no vendor files are used. demo.sh below only reproduces the
 lines the installer anchors on.
 """
@@ -60,6 +66,8 @@ fi
 FUNCS = r'''
 R="$MOCK_ROOT"
 uname() { [ "$1" = "-m" ] && echo armv7l || command uname "$@"; }
+mock_inject() { [ -f "$R/inject/$1" ]; }
+gzip() { if mock_inject gzip_fail; then echo "gzip: out of memory" >&2; return 1; fi; command gzip "$@"; }
 command -v md5sum >/dev/null 2>&1 || md5sum() {
   rc=0; for f in "$@"; do if [ -e "$f" ]; then echo "$(md5 -q "$f")  $f"; else echo "md5sum: $f: No such file" >&2; rc=1; fi; done; return $rc; }
 mock_next_pid() { n=$(cat "$R/pidcounter"); n=$((n+1)); echo $n > "$R/pidcounter"; echo $n; }
@@ -146,6 +154,19 @@ def make_root(root, scenario="stock_a"):
     os.symlink(p / "image", p / "exe")
     (p / "cmdline").write_bytes(b"./demo_v9\0")
     return root
+
+
+def inject(root, name, value=""):
+    """Switch on a failure injection (see the module docstring)."""
+    d = pathlib.Path(root) / "inject"
+    d.mkdir(exist_ok=True)
+    (d / name).write_text(value)
+
+
+def uninject(root, name):
+    f = pathlib.Path(root) / "inject" / name
+    if f.exists():
+        f.unlink()
 
 
 class MockServer:

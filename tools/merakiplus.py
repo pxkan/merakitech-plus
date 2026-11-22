@@ -150,7 +150,8 @@ def legacy_migrate(dev, o, st, rewrite_guard):
                 dev.push(new_b, OURDIR + "/run.sh", mode="755")
                 o.ok("run.sh rewritten to the new directory, binary name and environment variables")
     if lg["guard"] and rewrite_guard:
-        lines = dev.read(DEMO_SH).decode("utf-8", "surrogateescape").splitlines(keepends=True)
+        cur_sh = dev.read(DEMO_SH)
+        lines = cur_sh.decode("utf-8", "surrogateescape").splitlines(keepends=True)
         out, placed = [], any(GUARD_KEY in l for l in lines)
         for l in lines:
             if LEGACY_GUARD_KEY in l:
@@ -160,6 +161,7 @@ def legacy_migrate(dev, o, st, rewrite_guard):
                 continue
             out.append(l)
         new_sh = "".join(out).encode("utf-8", "surrogateescape")
+        check_demo_sh_edit(cur_sh, new_sh)
         dev.push(new_sh, DEMO_SH, mode="755")
         if not dev.dry and dev.read(DEMO_SH) != new_sh:
             raise Abort("demo.sh read-back differs from what was written — run ./revert.sh now")
@@ -176,6 +178,22 @@ class Abort(Exception):
 
 def md5b(b):
     return hashlib.md5(b).hexdigest()
+
+
+def strip_guard(data):
+    """demo.sh bytes without any Meraki+ guard line (current or pre-rename)."""
+    return b"".join(l for l in data.splitlines(keepends=True)
+                    if GUARD_KEY.encode() not in l and LEGACY_GUARD_KEY.encode() not in l)
+
+
+def check_demo_sh_edit(cur, new):
+    """Refuse to write a demo.sh that differs from the current one in anything but guard lines
+    (or is empty): the vendor boot script mounts slot B, loads the drivers and starts the UI."""
+    if not cur.strip() or not new.strip() or not strip_guard(new).strip():
+        raise Abort("Refusing to write an empty /customer/demo.sh — demo.sh was NOT changed.")
+    if strip_guard(new) != strip_guard(cur) or sum(GUARD_KEY.encode() in l for l in new.splitlines()) > 1:
+        raise Abort("Refusing to write /customer/demo.sh: the new content differs from the current one in "
+                    "more than the Meraki+ guard line — demo.sh was NOT changed.")
 
 
 # ============================================================ console helpers
@@ -352,10 +370,22 @@ class Device:
                        check=False)[1].strip().endswith("Y")
 
     def read(self, path):
-        """Byte-exact download (cat through the pty would mangle tabs/newlines)."""
+        """Byte-exact download (cat through the pty would mangle tabs/newlines), verified against
+        the display's own md5 of the file. The pipeline's rc is base64's, so a failing gzip (out of
+        memory, missing applet) would otherwise look like a successful read of an empty file."""
+        want = self.md5(path)
+        if want is None:
+            raise Abort(f"Cannot read {path} on the display (missing or unreadable).")
         _, out = self.sh(f"gzip -c {self.d(path)} | base64", timeout=60)
         b64 = "".join(l.strip() for l in out.splitlines() if re.fullmatch(r"[A-Za-z0-9+/=]+", l.strip()))
-        return gzip.decompress(base64.b64decode(b64))
+        try:
+            data = gzip.decompress(base64.b64decode(b64))
+        except (OSError, EOFError, ValueError) as e:
+            raise Abort(f"Reading {path} from the display failed ({e}); nothing was written for this step.")
+        if md5b(data) != want:
+            raise Abort(f"Reading {path} from the display failed verification (got {len(data)} bytes, md5 "
+                        f"{md5b(data)}; the display reports md5 {want}). Nothing was written for this step.")
+        return data
 
     def ui_procs(self):
         """[(pid, exe)] for every running process whose exe is a demo_v9.
@@ -800,7 +830,8 @@ def install_sound(dev, o, snd, sounds):
 
 
 def install_guard(dev, o):
-    content = dev.read(DEMO_SH).decode("utf-8", "surrogateescape")
+    raw = dev.read(DEMO_SH)
+    content = raw.decode("utf-8", "surrogateescape")
     lines = content.splitlines(keepends=True)
     ours = [l for l in lines if GUARD_KEY in l or LEGACY_GUARD_KEY in l]
     if len(ours) == 1 and ours[0].rstrip("\n") == GUARD_LINE:
@@ -816,6 +847,7 @@ def install_guard(dev, o):
                     "is safe; demo.sh was NOT changed.")
     base.insert(anchors[-1], GUARD_LINE + "\n")
     new = "".join(base).encode("utf-8", "surrogateescape")
+    check_demo_sh_edit(raw, new)
     dev.push(new, DEMO_SH, mode="755")
     if not dev.dry:
         back = dev.read(DEMO_SH)
@@ -859,8 +891,8 @@ def cmd_revert(dev, o, args):
     o.step("3/6 Restoring /customer/demo.sh")
     if st["guard_lines"]:
         cur = dev.read(DEMO_SH)
-        stripped = b"".join(l for l in cur.splitlines(keepends=True)
-                            if GUARD_KEY.encode() not in l and LEGACY_GUARD_KEY.encode() not in l)
+        stripped = strip_guard(cur)
+        check_demo_sh_edit(cur, stripped)
         bak_md5 = dev.md5(at(BAK_SH)) if st["bak_sh"] else None
         if bak_md5 and bak_md5 == md5b(stripped):
             dev.atomic_copy(BAK_SH, DEMO_SH, bak_md5)

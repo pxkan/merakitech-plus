@@ -40,14 +40,14 @@ def tree_digest(root):
     return h.hexdigest()
 
 
-def run(srv, root, *args):
+def run(srv, root, *args, quiet=False):
     buf = io.StringIO()
     with contextlib.redirect_stdout(buf):
         rc = mp.main([args[0], "--ip", "127.0.0.1", "--port", str(srv.port), "--test-prefix", str(root),
                       "--yes", "--log", str(root.parent / "test.log")] +
                      (["--bin-dir", str(ROOT / "bin")] if args[0] == "install" else []) + list(args[1:]))
     out = buf.getvalue()
-    if rc != 0:
+    if rc != 0 and not quiet:
         print(out)
     return rc, out
 
@@ -280,6 +280,46 @@ def legacy_purge(srv, root):
     check("stock UI running", [e for _, e in ui(root)] == ["/customer/demo_v9"])
 
 
+def read_fail(srv, root):
+    """Review finding 1: a device read whose gzip fails must not turn into an empty demo.sh."""
+    orig_sh = md5f(root / "customer/demo.sh")
+    rc, _ = run(srv, root, "install", "--gesture")
+    check("setup: install --gesture", rc == 0)
+    with_guard = md5f(root / "customer/demo.sh")
+    md.inject(root, "gzip_fail")
+    rc, out = run(srv, root, "revert", quiet=True)
+    check("revert with a failing device read exits 1", rc == 1 and "failed verification" in out, out[-500:])
+    check("demo.sh left unchanged (not emptied)", md5f(root / "customer/demo.sh") == with_guard
+          and (root / "customer/demo.sh").stat().st_size > 0)
+    md.uninject(root, "gzip_fail")
+    rc, out = run(srv, root, "revert")
+    check("revert once reads work again exits 0", rc == 0)
+    check("demo.sh byte-identical to the original", md5f(root / "customer/demo.sh") == orig_sh)
+
+    rc, _ = run(srv, root, "install", "--gesture")
+    check("setup: install --gesture again", rc == 0)
+    make_legacy(root)
+    legacy_sh = md5f(root / "customer/demo.sh")
+    md.inject(root, "gzip_fail")
+    rc, out = run(srv, root, "install", quiet=True)
+    check("legacy migration with a failing device read exits 1", rc == 1 and "failed verification" in out, out[-500:])
+    check("legacy migration: demo.sh left unchanged", md5f(root / "customer/demo.sh") == legacy_sh)
+    md.uninject(root, "gzip_fail")
+
+    def refused(cur, new):
+        try:
+            mp.check_demo_sh_edit(cur, new)
+        except mp.Abort:
+            return True
+        return False
+    sh = md.DEMO_SH.encode()
+    guarded = sh.replace(mp.ANCHOR.encode(), (mp.GUARD_LINE + "\n" + mp.ANCHOR).encode(), 1)
+    check("demo.sh guard: adding/removing the guard line is allowed",
+          not refused(sh, guarded) and not refused(guarded, sh))
+    check("demo.sh guard: an empty result is refused", refused(guarded, b"") and refused(b"", b""))
+    check("demo.sh guard: any other change is refused", refused(guarded, sh.replace(b"insmod", b"#insmod")))
+
+
 def not_a_display(srv, root):
     (root / "customer/test.sh").unlink()
     before = tree_digest(root)
@@ -293,6 +333,7 @@ if __name__ == "__main__":
     scenario("machine running a vendor update from slot B", "vendor_b", vendor_b)
     scenario("slot B empty", "empty_b", empty_b)
     scenario("not a MerakiTech display", "stock_a", not_a_display)
+    scenario("failing device read (gzip) during revert and legacy migration", "stock_a", read_fail)
     scenario("upgrade of a pre-rename install (legacy migration)", "stock_a", legacy_upgrade)
     scenario("revert of a pre-rename install (legacy migration)", "stock_a", legacy_revert)
     scenario("revert --purge with both layouts present", "stock_a", legacy_purge)
