@@ -294,7 +294,7 @@ static void save_begin(ms_t now){
         if(ro_mode){ toast_show(TR(TX_G_RO),C_WARN,now); return; }
         if(!link_up(now)){ toast_show(TR(TX_T_NOLINK_SAVE),C_ERR,now); return; }
         if(phase_active(phase_raw(now))){ toast_show(TR(TX_T_WAIT_ACT),C_WARN,now); return; }
-        if(wq_busy()){ toast_show(TR(TX_G_WAIT),C_WARN,now); return; }
+        if(wq_busy()||act.pending!=ACT_NONE){ toast_show(TR(TX_G_WAIT),C_WARN,now); return; }   /* v6.20: also while a start waits for its status bits (act_guard refuses the reverse) */
         sav.seq=wq.seq;
         if(setting_mcu_push(sel,edit_val)<0){ toast_show(TR(TX_T_WRITE_REJ),C_ERR,now); return; }
         sav.active=1; sav.stage=1;

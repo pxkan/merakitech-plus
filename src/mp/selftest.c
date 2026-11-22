@@ -1275,7 +1275,6 @@ static void st_v619(void){
 }
 /* ============================ v6.20: code review 2026-11 (docs/dev/REVIEW-2026-11.md) ============================ */
 static void st_v620(const char*dir){
-    (void)dir;
     printf("== selftest: v6.20 review fixes (stepper repeat after a failed save, ...) ==\n");
     /* R1: a stepper press DURING SAVING, then the save fails (no ACK) while the finger stays down */
     { sim_reset(); wq.sim_ack=0; page=PG_BREW; sim_run(300); detail_open(S_BREWW,sim_now); sim_run(600);
@@ -1293,6 +1292,14 @@ static void st_v620(const char*dir){
       ui_touch(TE_UP,396,184,sim_now); sim_run(100);
       st_check("R1 stepper: a stale repeat deadline (10 min in the past) gives at most one step in the next frame",rn<=1&&abs(vb-va)<=SET[S_BREWW].step);
       sim_reset(); }
+    /* R2: SAVE of an MCU setting while a start is pending (ACKed, status bits not yet set) is refused like the reverse */
+    { char kc[sizeof cfg_path], cp[400]; snprintf(kc,sizeof kc,"%s",cfg_path); snprintf(cp,sizeof cp,"%s/_r2_config.json",dir); copy_file(kc,cp); snprintf(cfg_path,sizeof cfg_path,"%s",cp);   /* a copy: a regression must not save into the fixture */
+      sim_reset(); sim_run(1500); act_request(ACT_STEAM,sim_now); sim_run(300); int pend=act.pending==ACT_STEAM&&!wq_busy();
+      page=PG_STEAM; detail_open(S_STEAMT,sim_now); sim_run(600); tap(396,184); sim_run(200); int chg=edit_val!=SET[S_STEAMT].val;
+      int tx0=txq_len; long n0=wq.n_ok; tap(310,316); sim_run(100);
+      st_check("R2 SAVE during a pending steam start (bits not yet set): refused with ONE MOMENT…, nothing queued or sent, the editor stays open",
+               pend&&chg&&!sav.active&&wq.n==0&&txq_len==tx0&&wq.n_ok==n0&&view==V_DETAIL&&!strcmp(toast.msg,TR(TX_G_WAIT)));
+      snprintf(cfg_path,sizeof cfg_path,"%s",kc); sim_reset(); }
 }
 static void st_v617(void){
     printf("== selftest: v6.17 IA consolidation (HOME = live root; one page per feature w. its settings + HOLD TO START; SYSTEM in sections; DIAGNOSTICS behind SYSTEM; one way back) ==\n");
