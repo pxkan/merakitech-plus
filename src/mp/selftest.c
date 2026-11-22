@@ -1210,6 +1210,14 @@ static void st_v7(void){
       int g4[]={CX,20, CX,30, CX,60}; st_gest(g4,3); st_settle(); int p4=page==PG_HOME;                                /* too short (40 px) */
       st_home(); reg[33]=0x1307; sim_run(600); int g5[]={CX,20, CX,40, CX,130}; st_gest(g5,3); st_settle(); int p5=page==PG_SYS&&wq.n==n0;   /* the live view too: SYSTEM stays reachable while something runs (v6.17 behaviour) */
       st_check("pull down from the top of HOME (>= 70 px, vertical, starting above y 96) opens SYSTEM, sending nothing; a drag that starts lower, a diagonal or a short one does nothing; it works in the live view too (SYSTEM stays reachable during an activity)",p1&&p2&&p3&&p4&&p5); }
+    /* ---- (2b) after an activity: the big DONE view for DONE_LIVE_MS (a tap dismisses it), then the rings + the result on the status line ---- */
+    { sim_reset(); sim_run(400); reg[33]=0x1307; sim_run(1500); reg[33]=0x0101; sim_run(600);
+      int a1=act.ph==PH_DONE&&hm_mode==HM_ACTIVE&&hit_test(CX,200,sim_now)==T_DONE;
+      tap(CX,200); sim_run(500); int a2=act.ph==PH_DONE&&hm_mode==HM_IDLE&&page==PG_HOME;
+      char st[96]; int w; uint32_t sc=home_status_text(&hm,st,sizeof st,&w,sim_now); int a3=sc==C_TXT&&strstr(st,"·")!=NULL;
+      sim_reset(); sim_run(400); reg[33]=0x1307; sim_run(1500); reg[33]=0x0101; sim_run(DONE_LIVE_MS+600); int a4=act.ph==PH_DONE&&hm_mode==HM_IDLE;
+      int i=ring_of_act(ACT_WATER); tap(RING_X[i],RING_Y[i]); sim_run(700); int a5=page==PG_WATER;
+      st_check("after an activity the DONE view stays DONE_LIVE_MS (tap = rings back at once), then the rings are usable during the rest of DONE and the status line carries the result (v6.19 parity: the next start is never blocked)",a1&&a2&&a3&&a4&&a5); }
     /* ---- (3) the static layer follows view / page / hm_mode: the ring labels exist only on HOME's ring grid ---- */
     { float la=ring_lab_ang(0)*(float)M_PI/180.f; int lx=RING_X[0]+(int)(RING_R*cosf(la)), ly=RING_Y[0]+(int)(RING_R*sinf(la)); Rect lb=R(lx-22,ly-22,44,44);   /* clear of the live view's edge ring (r 229, in the static layer too) */
       sim_reset(); sim_run(600); int home=st_slay_diff(lb,bgpure); uint32_t k1=static_key_last;
