@@ -304,6 +304,13 @@ class ScenarioRun:
         self.state_path.write_text("")
         self.assert_path.write_text("")
 
+    @staticmethod
+    def _tail(path, n=4000):
+        try:
+            return Path(path).read_text(errors="replace")[-n:]
+        except OSError:
+            return ""
+
     # ------------------------------------------------------------ (b) sim
     def start_sim(self):
         simcfg = self.scen.get("sim", {})
@@ -328,14 +335,17 @@ class ScenarioRun:
                 cmd.append("--replay-hold")       # started by anchor_replay() once the UI runs
         pf = self.dir / "pty_path"
         pf.unlink(missing_ok=True)      # old file from a previous run in the same directory
-        self.sim_proc = subprocess.Popen(cmd, stdout=subprocess.DEVNULL,
-                                         stderr=subprocess.PIPE, text=True)
+        # v6.20 (review 2026-11): stderr goes to a file in the scenario dir — a PIPE nobody drains blocks the
+        # process once 64 KB are written (e.g. a sanitizer report), and the scenario then fails for unrelated reasons
+        self.sim_err = self.dir / "mcu_sim.stderr"
+        with open(self.sim_err, "w") as fh:          # the child keeps its own copy of the fd
+            self.sim_proc = subprocess.Popen(cmd, stdout=subprocess.DEVNULL, stderr=fh, text=True)
         for _ in range(200):
             if pf.exists() and pf.read_text().strip():
                 break
             if self.sim_proc.poll() is not None:
                 raise RuntimeError("mcu_sim died at startup: "
-                                   + (self.sim_proc.stderr.read() or ""))
+                                   + self._tail(self.sim_err))
             time.sleep(0.05)
         self.pty_path = pf.read_text().strip()
         self.sim_ctrl = Ctrl(self.sim_ctrl_path)
@@ -347,7 +357,7 @@ class ScenarioRun:
                 break
             except (FileNotFoundError, ConnectionRefusedError):
                 if self.sim_proc.poll() is not None:
-                    raise RuntimeError("mcu_sim died at startup: " + (self.sim_proc.stderr.read() or ""))
+                    raise RuntimeError("mcu_sim died at startup: " + self._tail(self.sim_err))
                 time.sleep(0.05)
         else:
             self.sim_ctrl.call({"cmd": "ping"})
@@ -387,8 +397,9 @@ class ScenarioRun:
             self.client_kind = "reference"
             cmd = [sys.executable, str(HERE / "ref_client.py")]
         m_spawn = time.monotonic()
-        self.ui_proc = subprocess.Popen(cmd, env=env, stdout=subprocess.DEVNULL,
-                                        stderr=subprocess.PIPE, text=True)
+        self.ui_err = self.dir / "ui.stderr"
+        with open(self.ui_err, "w") as fh:
+            self.ui_proc = subprocess.Popen(cmd, env=env, stdout=subprocess.DEVNULL, stderr=fh, text=True)
         self.ui_ctrl = Ctrl(self.ui_ctrl_path)
         # wait for the first state line (contract: state per frame)
         for _ in range(200):
@@ -396,7 +407,7 @@ class ScenarioRun:
                 break
             if self.ui_proc.poll() is not None:
                 raise RuntimeError("UI client died at startup: "
-                                   + (self.ui_proc.stderr.read() or ""))
+                                   + self._tail(self.ui_err))
             time.sleep(0.05)
         m_a = time.monotonic()
         resp = self.ui_ctrl.call({"cmd": "ping"})
