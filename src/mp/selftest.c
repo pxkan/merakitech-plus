@@ -1302,6 +1302,23 @@ static void st_v620(const char*dir){
                pend&&chg&&!sav.active&&wq.n==0&&txq_len==tx0&&wq.n_ok==n0&&view==V_DETAIL&&!strcmp(toast.msg,TR(TX_G_WAIT)));
       snprintf(cfg_path,sizeof cfg_path,"%s",kc); sim_reset(); }
     st_r3();
+    /* R4: a STOP queued behind a frame that fails (no ACK twice) is still transmitted; the failed frame's own group and starts are not */
+    { sim_reset(); wq.sim_ack=0; ms_t t=sim_now; uint16_t v=(uint16_t)sv(S_BREWW); long f0=wq.n_fail;
+      int q=wq_push(23,&v,1)&&act_push_stop(ACT_GRIND)&&wq.n==2; int stop_tx=0, acked=0;
+      for(int i=0;i<100&&wq.n;i++){ t+=10; wq_step(t); if(last_tx_len==9&&last_tx[3]==6&&last_tx[4]==1){ stop_tx++; if(!acked){ acked=1; st_ack_last(t+5); } } }
+      st_check("R4 STOP (sub6) queued behind a write that gets no ACK twice: the failed write is dropped (FAIL counted), the STOP is still sent and ACKed",
+               q&&wq.n_fail==f0+1&&stop_tx==1&&acked&&wq.n==0&&wq.result==WR_OK&&reg[6]==0);
+      /* the failed frame's own group (a two-frame water stop whose first frame fails) and non-stop frames behind it are dropped */
+      sim_reset(); wq.sim_ack=0; t=sim_now; reg_seen[19]=1; reg[19]=1; f0=wq.n_fail;
+      int q2=act_push_stop(ACT_WATER)&&wq.n==2&&wq_push(23,&v,1)&&wq.n==3&&act_push_stop(ACT_BREW)&&wq.n==4; int subs[8], ns=0;
+      for(int i=0;i<200&&wq.n;i++){ t+=10; int before=wq.state; wq_step(t); if(wq.state==WQ_WAIT&&before==WQ_IDLE&&ns<8) subs[ns++]=last_tx[3]; if(wq.n&&wq.q[0].sub==22&&wq.state==WQ_WAIT) st_ack_last(t+5); }
+      st_check("R4 ... a failing water stop (16 + 19) drops its own second frame and the plain write behind it, but the brew STOP queued after them is still sent",
+               q2&&ns==2&&subs[0]==16&&subs[1]==22&&wq.n_fail==f0+1&&wq.n==0);
+      /* a start queued behind a failing frame is still dropped (never sent late) */
+      sim_reset(); wq.sim_ack=0; t=sim_now; f0=wq.n_fail; int q3=wq_push(23,&v,1)&&act_push(ACT_GRIND)&&wq.n==2; int st_tx=0;
+      for(int i=0;i<100&&wq.n;i++){ t+=10; wq_step(t); if(last_tx[3]==3) st_tx++; }
+      st_check("R4 ... a START queued behind a failing frame is still dropped (only STOP frames survive a failure)",q3&&st_tx==0&&wq.n==0&&wq.n_fail==f0+1);
+      sim_reset(); }
 }
 /* R3 helper: a NORMAL run whose MCU clears the start word 0.4 s after the bits (mcu_sim / BREW §5.1: word 6 is consumed last) */
 static int r3_kind=0; static ms_t r3_t=0;

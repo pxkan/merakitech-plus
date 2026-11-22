@@ -560,7 +560,7 @@ static int act_push_steam_stop(void){
  * anything. Same write queue as everything else: CRC + ACK wait + one retransmit. AUTO-STOP is unchanged: merakiplus sends nothing when the MCU
  * stops by itself. Confirmation (stop_step): the activity's work_sta bits are cleared — grind bit 6; brew bits 1+2 (bits 2 + 12 are cleared
  * in the first cycle after stop, 0x20C4); water bits 1+3 (bit 3 is always cleared, 0x1C9A; bits 1+9 are shared with boiler refill). */
-static int act_push_stop(int kind){
+static int act_push_stop_q(int kind){
     uint16_t z=0; int n0=wq.n;
     switch(kind){
     case ACT_GRIND: return wq_push(6,&z,1);
@@ -572,6 +572,13 @@ static int act_push_stop(int kind){
     case ACT_STEAM: return act_push_steam_stop();
     }
     return 0;
+}
+static int act_push_stop(int kind){   /* v6.20: the stop's frames get a group id, so a failing frame AHEAD of them does not drop them (wq_pop) */
+    static uint8_t grp=0; int n0=wq.n;
+    if(!act_push_stop_q(kind)) return 0;
+    if(++grp==0) grp=1;
+    for(int i=n0;i<wq.n;i++) wq.q[i].keep=grp;
+    return 1;
 }
 #define STOP_CONFIRM_MS 5000   /* how long to wait for the bits to clear (measured: ACK ~20-280 ms + MCU cycle 10 ms + poll <= 0.5 s) */
 static struct { int kind, active; ms_t t_req; long seq, n_req, n_ok, n_fail; int latched; } stp={ACT_NONE,0,0,0,0,0,0,0};   /* v6.20: latched = a STOP for a latched start word (confirmed when the word reads 0) */
