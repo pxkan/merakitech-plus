@@ -1275,6 +1275,7 @@ static void st_v619(void){
 }
 /* ============================ v6.20: code review 2026-11 (docs/dev/REVIEW-2026-11.md) ============================ */
 static void st_r3(void);
+static void st_r5(const char*dir);
 static void st_v620(const char*dir){
     printf("== selftest: v6.20 review fixes (stepper repeat after a failed save, ...) ==\n");
     /* R1: a stepper press DURING SAVING, then the save fails (no ACK) while the finger stays down */
@@ -1302,6 +1303,7 @@ static void st_v620(const char*dir){
                pend&&chg&&!sav.active&&wq.n==0&&txq_len==tx0&&wq.n_ok==n0&&view==V_DETAIL&&!strcmp(toast.msg,TR(TX_G_WAIT)));
       snprintf(cfg_path,sizeof cfg_path,"%s",kc); sim_reset(); }
     st_r3();
+    st_r5(dir);
     /* R4: a STOP queued behind a frame that fails (no ACK twice) is still transmitted; the failed frame's own group and starts are not */
     { sim_reset(); wq.sim_ack=0; ms_t t=sim_now; uint16_t v=(uint16_t)sv(S_BREWW); long f0=wq.n_fail;
       int q=wq_push(23,&v,1)&&act_push_stop(ACT_GRIND)&&wq.n==2; int stop_tx=0, acked=0;
@@ -1508,13 +1510,17 @@ static ms_t st_pw_home(void){ ms_t t=st_home(); ka_next=t+30000; return t; }   /
 /* ================= v6.16: TIME & SCHEDULING selftest ================= */
 #define TM_V_ARM "aa 55 08 ea 07 0b 12 10 23 1c 13 06 1e be b2"   /* 2026-11-18 16:35:28 local, alarm day 19 06:30 (CRC computed independently) */
 #define TM_V_OFF0 PW_V_CMD8                                       /* the same time, alarm 0/0/0 */
+static int st_echo8=1;                     /* v6.20: the controller echoes every pre-arm cmd8 with 0x88 (0 = the echo is lost) */
+static void st_echo_arm(ms_t t){ uint8_t a[15]; memcpy(a,arm.f8,15); a[2]=0x88; uint16_t c=crc16(a,13); a[13]=c&0xFF; a[14]=c>>8; rx_feed(a,15,t); }
 static ms_t st_tm_loop(ms_t t,ms_t dur,int link){
     ms_t end=t+dur;
     for(;t<end;t+=10){
         if(link) last_rx_ms=t;
         wq_step(t);
         if(wq.n&&wq.state==WQ_WAIT&&t-wq.sent_ms>=20) st_ack_last(t);
+        long ns=arm.n_sent;
         pw_step(t); sched_step(t); proto_keepawake(t,0);
+        if(st_echo8&&link&&arm.n_sent!=ns) st_echo_arm(t+5);
     }
     ui_frame(t); return t;
 }
@@ -1593,7 +1599,6 @@ static void st_time(const char*dir){
     st_check("no schedule: nothing is sent while on (v6.15 traffic unchanged)",n==0&&arm.n_sent==0);
     st_own_save(S_PHREP,1,t); st_own_save(S_PREHEAT,1,t); txq_len=0; t=st_tm_loop(t,200,1); n=st_cmd8_frames(NULL,16,fr);
     st_check("schedule ON (every day 06:30): ONE cmd8 pre-arm = " TM_V_ARM,n==1&&!strcmp(fr[0],TM_V_ARM)&&arm.sent&&arm.ad==19&&arm.ah==6&&arm.am==30);
-    { uint8_t a[15]; memcpy(a,arm.f8,15); a[2]=0x88; uint16_t c=crc16(a,13); a[13]=c&0xFF; a[14]=c>>8; rx_feed(a,15,t); }
     t=st_tm_loop(t,20000,1); n=st_cmd8_frames(NULL,16,fr);
     st_check("... no repeat while the alarm is unchanged (20 s); the 0x88 echo is counted",n==1&&arm.n_ack==1);
     rps.n_ver++; t=st_tm_loop(t,6000,1); n=st_cmd8_frames(NULL,16,fr);
@@ -1858,6 +1863,32 @@ static void st_stop(void){
     t=st_home(); st_s0(0x030B,0,0x000C,0,300,t+=100); ui_frame(t); ro_mode=1; t=st_tap(240,372,t); ro_mode=0;
     st_check("MERAKIPLUS_READONLY=1: STOP sends nothing, the toast says why (read-only)",wq.n==0&&stp.n_req==0&&!strcmp(toast.msg,TR(TX_G_RO)));
     sim_reset();
+}
+/* v6.20 R5: a pre-arm / disarm cmd8 whose 0x88 echo is lost is sent again (at most 2 more copies, ARM_GAP_MS apart); with the echo nothing changes */
+static int st_alarm_of(const char*f,int*d,int*h,int*m){ unsigned v[15]; if(sscanf(f,"%x %x %x %x %x %x %x %x %x %x %x %x %x",&v[0],&v[1],&v[2],&v[3],&v[4],&v[5],&v[6],&v[7],&v[8],&v[9],&v[10],&v[11],&v[12])!=13) return 0; *d=(int)v[10]; *h=(int)v[11]; *m=(int)v[12]; return 1; }
+static void st_r5(const char*dir){
+    char keep_sp[256]; snprintf(keep_sp,sizeof keep_sp,"%s",sched_path); snprintf(sched_path,sizeof sched_path,"%s/schedule_r5",dir); unlink(sched_path);
+    int keep_tz=SET[S_TZ].val, keep_dst=SET[S_DST].val; SET[S_TZ].val=48; SET[S_DST].val=0;
+    char fr[16][96]; int n, d,h,m, ok; ms_t t;
+    /* (a) first arm, echo lost: 3 copies of the same alarm, then quiet */
+    sim_reset(); t=st_pw_home(); st_echo8=0; st_own_save(S_PHREP,1,t); st_own_save(S_PREHEAT,1,t); txq_len=0; t=st_tm_loop(t,30000,1); n=st_cmd8_frames(NULL,16,fr);
+    ok=n==3; for(int i=0;i<n;i++){ ok&=st_alarm_of(fr[i],&d,&h,&m)&&d==19&&h==6&&m==30; }
+    st_check("R5 pre-arm (daily 06:30) with the 0x88 echo LOST: the same alarm 19 06:30 is sent 3 times in total (2 retries, >= 5 s apart), then nothing in 30 s",ok&&arm.n_retry==2&&arm.n_ack==0);
+    /* (b) disarm, echo lost: 3 x 0/0/0 */
+    st_echo8=1; sim_reset(); t=st_pw_home(); st_own_save(S_PHREP,1,t); st_own_save(S_PREHEAT,1,t); t=st_tm_loop(t,300,1); int armed=arm.n_ack==1;
+    st_echo8=0; txq_len=0; st_own_save(S_PREHEAT,0,t); t=st_tm_loop(t,30000,1); n=st_cmd8_frames(NULL,16,fr);
+    ok=n==3; for(int i=0;i<n;i++){ ok&=st_alarm_of(fr[i],&d,&h,&m)&&d==0&&h==0&&m==0; }
+    st_check("R5 disarm (PRE-HEAT OFF) with the echo LOST: alarm 0/0/0 is sent 3 times in total — the MCU must not keep the old 06:30 alarm",armed&&ok);
+    /* (c) re-arm 06:30 -> 08:00, the first echo lost, the second arrives: exactly 2 frames */
+    st_echo8=1; sim_reset(); t=st_pw_home(); st_own_save(S_PHREP,1,t); st_own_save(S_PREHEAT,1,t); t=st_tm_loop(t,300,1);
+    st_echo8=0; txq_len=0; st_own_save(S_PHAT,480,t); t=st_tm_loop(t,7000,1); int first=arm.n_ack==1&&!arm.acked; st_echo8=1; t=st_tm_loop(t,30000,1); n=st_cmd8_frames(NULL,16,fr);
+    ok=n==2; for(int i=0;i<n;i++){ ok&=st_alarm_of(fr[i],&d,&h,&m)&&d==19&&h==8&&m==0; }
+    st_check("R5 re-arm 06:30 -> 08:00: first echo lost, the retry is echoed -> exactly 2 frames (alarm 19 08:00), then quiet",first&&ok&&arm.acked);
+    /* (d) with the echo: unchanged traffic (one frame) */
+    sim_reset(); t=st_pw_home(); txq_len=0; st_own_save(S_PHREP,1,t); st_own_save(S_PREHEAT,1,t); t=st_tm_loop(t,30000,1); n=st_cmd8_frames(NULL,16,fr);
+    st_check("R5 with the echo: ONE pre-arm frame, no retry (the v6.16-v6.19 traffic)",n==1&&arm.n_retry==0&&arm.n_ack==1);
+    st_own_save(S_PREHEAT,0,t); t=st_tm_loop(t,300,1);
+    st_echo8=1; unlink(sched_path); snprintf(sched_path,sizeof sched_path,"%s",keep_sp); SET[S_TZ].val=keep_tz; SET[S_DST].val=keep_dst; settings_load(); sim_reset();
 }
 static int selftest(const char*cfgsrc){
     int base_lang=ui_lang;
