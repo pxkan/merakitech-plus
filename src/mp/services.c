@@ -384,9 +384,12 @@ static void ui_touch(int ev,int x,int y,ms_t now){
         memset(&tch,0,sizeof tch); tch.down=1; tch.x0=tch.x=x; tch.y0=tch.y=y; tch.t0=now;
         tch.target=hit_test(x,y,now); tch.scroll0=scroll[page];
         if(tch.target){ rip.x=x; rip.y=y; rip.t0=now; rip.on=1; }
-        if((tch.target==T_MINUS||tch.target==T_PLUS)&&!sav.active){
-            if(view==V_SYS) x_edit=(tch.target==T_PLUS);               /* BOOT UI: − = ORIGINAL, + = MERAKIPLUS */
-            else { edit_step(tch.target==T_PLUS?1:-1,1); tch.rep_next=now+420; }
+        if(tch.target==T_MINUS||tch.target==T_PLUS){
+            tch.rep_next=now+420;                                      /* v6.20: armed on EVERY stepper press — a press during SAVING left it at 0, and the repeat loop ran from 0 to now after a failed save */
+            if(!sav.active){
+                if(view==V_SYS) x_edit=(tch.target==T_PLUS);           /* BOOT UI: − = ORIGINAL, + = MERAKIPLUS */
+                else edit_step(tch.target==T_PLUS?1:-1,1);
+            }
         }
     } else if(ev==TE_MOVE&&tch.down){
         tch.x=x; tch.y=y; int dx=x-tch.x0, dy=y-tch.y0;

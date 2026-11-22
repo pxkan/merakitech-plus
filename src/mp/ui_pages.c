@@ -236,6 +236,7 @@ static void ui_update(ms_t now){
             if(!tch.fired&&now-tch.t0>=HOLD_MS){ int k=page-PG_GRIND; tch.fired=1; act_request(k,now); if(act.pending==k) go_page(PG_HOME,-1,now); }
         }
         if((tch.target==T_MINUS||tch.target==T_PLUS)&&view==V_DETAIL&&!sav.active){
+            if(tch.rep_next<now-500) tch.rep_next=now;                 /* v6.20: never catch up on a stale deadline (at most one step after a long gap) */
             while(now>=tch.rep_next){
                 tch.rep_n++; int mult=tch.rep_n>28?5:1;
                 edit_step(tch.target==T_PLUS?1:-1,mult);

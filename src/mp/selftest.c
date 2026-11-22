@@ -1273,6 +1273,27 @@ static void st_v619(void){
     st_check("... a long sleep that let both boilers cool (stage 30 / 60 at the wake): armed, and both tones play as they heat back up",cold&&st_sp(SE_READY_E)==1&&st_sp(SE_READY_S)==1&&st_sn(SE_JINGLE)==5);
     sim_reset();
 }
+/* ============================ v6.20: code review 2026-11 (docs/dev/REVIEW-2026-11.md) ============================ */
+static void st_v620(const char*dir){
+    (void)dir;
+    printf("== selftest: v6.20 review fixes (stepper repeat after a failed save, ...) ==\n");
+    /* R1: a stepper press DURING SAVING, then the save fails (no ACK) while the finger stays down */
+    { sim_reset(); wq.sim_ack=0; page=PG_BREW; sim_run(300); detail_open(S_BREWW,sim_now); sim_run(600);
+      tap(396,184); sim_run(200); int v0=edit_val; const Setting*s=&SET[S_BREWW];
+      tap(310,316); sim_run(100); int saving=sav.active;
+      ui_touch(TE_DOWN,396,184,sim_now); ms_t t_dn=sim_now; int v_dn=edit_val;
+      int guard=0; while(sav.active&&guard++<200) sim_run(33);
+      sim_run(33); int reps=tch.rep_n, v1=edit_val; ms_t held=sim_now-t_dn;
+      ui_touch(TE_UP,396,184,sim_now); sim_run(100);
+      st_check("R1 stepper: + pressed during SAVING, the save fails (no ACK), finger still down: no catch-up burst (repeats bounded by the hold time), the value does not jump to its limit",
+               saving&&v_dn==v0&&!sav.active&&view==V_DETAIL&&reps<=1+(int)(held/170)&&v1!=s->hi&&abs(v1-v0)<=s->step*(1+(int)(held/170)));
+      /* belt and braces: a stale deadline (a frame gap of minutes) gives at most one step */
+      sim_reset(); page=PG_BREW; sim_run(300); detail_open(S_BREWW,sim_now); sim_run(600);
+      ui_touch(TE_DOWN,396,184,sim_now); sim_run(100); int va=edit_val; tch.rep_next=sim_now-600000; sim_run(33); int vb=edit_val, rn=tch.rep_n;
+      ui_touch(TE_UP,396,184,sim_now); sim_run(100);
+      st_check("R1 stepper: a stale repeat deadline (10 min in the past) gives at most one step in the next frame",rn<=1&&abs(vb-va)<=SET[S_BREWW].step);
+      sim_reset(); }
+}
 static void st_v617(void){
     printf("== selftest: v6.17 IA consolidation (HOME = live root; one page per feature w. its settings + HOLD TO START; SYSTEM in sections; DIAGNOSTICS behind SYSTEM; one way back) ==\n");
     int ok,w,h; char a[96],b[96];
@@ -2469,6 +2490,7 @@ static int selftest(const char*cfgsrc){
     st_v617();
     st_v618(dir);                      /* v6.18 */
     st_v619();                         /* v6.19 */
+    st_v620(dir);                      /* v6.20: review fixes */
     /* ============================ v6.15 ============================ */
     st_graph();
     printf("== selftest [%s]: %s (%d checks, %d failed) — work dir %s ==\n",LANG_CODE[base_lang],st_fail?"FAILED":"ALL OK",st_n,st_fail,dir);
