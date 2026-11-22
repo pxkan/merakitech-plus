@@ -395,6 +395,14 @@ static void ui_touch(int ev,int x,int y,ms_t now){
             if(view==V_MAIN&&page!=PG_HOME&&tch.axis==2&&tch.y0>=LIST_VY0) tch.scrolling=1;   /* lists + DIAGNOSE (v6.17: a drag that starts on the header is the close gesture) */
         }
         if(tch.scrolling) scroll[page]=clampf(tch.scroll0-dy,0,scroll_max(page));
+        if(tch.target==T_ROLL&&view==V_DETAIL&&tch.axis==2&&!sav.active&&!(SET[sel].flags&SF_LOCK)){   /* v7.0: drag the roller: down = smaller */
+            int n=(int)lroundf(dy/(float)ED_STEP_PX);
+            while(tch.roll_n<n){ int v0=edit_val; edit_step(-1,1); tch.roll_n++; if(edit_val==v0){ tch.roll_n=n; break; } }
+            while(tch.roll_n>n){ int v0=edit_val; edit_step(1,1); tch.roll_n--; if(edit_val==v0){ tch.roll_n=n; break; } }
+            roll_off=clampf(dy-n*(float)ED_STEP_PX,-ED_STEP_PX*0.5f,ED_STEP_PX*0.5f);
+            { const Setting*s0=&SET[sel]; int lo=s0->kind==K_ENUM?s0->min:s0->lo, hi2=s0->kind==K_ENUM?s0->max:s0->hi;
+              if((edit_val<=lo&&roll_off>0)||(edit_val>=hi2&&roll_off<0)) roll_off*=0.25f; }               /* at the end: a little rubber band */
+        }
     } else if(ev==TE_UP&&tch.down){
         tch.down=0; int dx=tch.x-tch.x0, dy=tch.y-tch.y0;
         if(tch.scrolling) return;
@@ -404,7 +412,8 @@ static void ui_touch(int ev,int x,int y,ms_t now){
             if(view==V_DETAIL||view==V_SYS){ activate(T_CANCEL,now); return; }
         }
         if((view==V_DETAIL||view==V_SYS)&&!tr.type&&swipe_down(tch.axis,tch.target,dx,dy)){ activate(T_CANCEL,now); return; }   /* v6.11: swipe down = close */
-        if(view==V_MAIN&&page!=PG_HOME&&!tr.type&&tch.y0<LIST_VY0&&swipe_down(tch.axis,tch.target,dx,dy)){ nav_back(now); return; }   /* v6.17: pulling the header down closes a page (inside the list a vertical drag scrolls) */
+        if(view==V_MAIN&&page!=PG_HOME&&!tr.type&&tch.y0<LIST_VY0&&swipe_down(tch.axis,tch.target,dx,dy)){ nav_back(now); return; }
+        if(view==V_MAIN&&page==PG_HOME&&!tr.type&&tch.y0<96&&hm_mode!=HM_ACTIVE&&swipe_down(tch.axis,tch.target,dx,dy)){ nav_open(PG_SYS,now); return; }   /* v7.0: pull down from the top of HOME = SYSTEM (the stock chevron) */   /* v6.17: pulling the header down closes a page (inside the list a vertical drag scrolls) */
         if(!tch.moved&&tch.target&&!tch.fired&&tch.target!=T_MINUS&&tch.target!=T_PLUS&&hit_test(tch.x,tch.y,now)==tch.target) activate(tch.target,now);
     }
 }

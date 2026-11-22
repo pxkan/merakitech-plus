@@ -5,6 +5,9 @@ static const int ACT_X[4]={160,160,320,320};     /* index = ACT_* (grind, brew, 
 #define GEAR_Y 16
 #define GEAR_HW 60
 #define ACT_LAB_Y 346
+#define START_W 232
+#define START_H 48
+#define START_Y (START_CY-24)
 static int sub_font(const HomeM*m){ return text_wf(m->sub,F_S)<=SUB_W-8?F_S:F_XS; }
 /* src/mp/selftest.c — PREVIEW build: --selftest, bench, previews, entry point.
  * Part of the merakiplus.c unity build: #included by src/merakiplus.c in a fixed order, never compiled on its own. */

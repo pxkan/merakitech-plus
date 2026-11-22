@@ -263,6 +263,11 @@ enum { K0=0, KT, KSUB, KLAB, KCHIP, KBTN, KBTNS, KTITLE, KPSUB, KSPL, KDL, KDV, 
  X(TX_B_SAVING, KBTNS, "Saving", "Gemmer") \
  X(TX_B_SWITCH, KBTN, "Switch Now", "Skift nu") \
  X(TX_B_EXIT, KBTNS, "Exit", "Afslut") \
+ X(TX_B_OK, K0, "OK", "OK") \
+ X(TX_R_GRIND, K0, "Grinder", "Kværn") \
+ X(TX_R_WATER, K0, "Hot Water", "Varmt vand") \
+ X(TX_R_BREW, K0, "Brew", "Bryg") \
+ X(TX_R_STEAM, K0, "Steam", "Damp") \
  X(TX_X_BOOTUI, K0, "Boot UI", "Boot-UI") \
  X(TX_X_SWITCH, K0, "Switch to Original Now", "Skift til original nu") \
  X(TX_X_SWITCH_SUB, KXSUB, "Immediate · no restart", "Straks · uden genstart") \

@@ -239,6 +239,7 @@ static void ui_update(ms_t now){
     arc_targets(now);
     if(garc.vis&&view!=V_SPLASH) ui_anim|=arc_ease(&garc,dt);
     if(parc.vis) ui_anim|=arc_ease(&parc,dt);
+    if(roll_off!=0&&!(tch.down&&tch.target==T_ROLL)){ roll_off*=expf(-dt/60.f); if(fabsf(roll_off)<0.6f) roll_off=0; ui_anim=1; }   /* v7.0: the roller settles */
     if(rip.on){ if(now-rip.t0>360) rip.on=0; ui_anim=1; }
     if(toast.dur&&now-toast.t0<toast.dur+50) ui_anim=1;
     if(sav.active||tr.type||tch.scrolling) ui_anim=1;
@@ -255,36 +256,52 @@ static float brand_at(float x,int y,int f,uint32_t cw,int a){
     return text_at(x,y-(int)(FS[pf].cap*0.15f),BRAND_BADGE,pf,cw,a);
 }
 static void brand_c(int cx,int y,int f,uint32_t cw,int a){ brand_at(cx-brand_wf(f)/2,y,f,cw,a); }
+/* v7.0 buttons: an outline pill (secondary) or a solid white pill with deep copper text (primary) */
 static void draw_pill_btn(Rect r,const char*txt,int font,uint32_t bg_t,uint32_t bg_b,uint32_t fg,int press){
-    int w=r.x1-r.x0,h=r.y1-r.y0;
-    rrect_g(r.x0,r.y0+2,w,h,h/2.f,rgb(0,0,0),rgb(0,0,0),70);              /* soft shadow */
-    rrect_g(r.x0,r.y0,w,h,h/2.f,bg_t,bg_b,255);
-    if(press) rrect(r.x0,r.y0,w,h,h/2.f,rgb(255,255,255),36);
-    text_c((r.x0+r.x1)/2,r.y0+(h-(int)FS[font].cap)/2,txt,font,fg,255);
+    int w=r.x1-r.x0,h=r.y1-r.y0; (void)bg_b;
+    if(bg_t==C_TXT){ rrect(r.x0,r.y0+3,w,h,h/2.f,rgb(60,20,6),55); rrect(r.x0,r.y0,w,h,h/2.f,press?rgb(255,230,212):C_TXT,255); }
+    else { if(press) rrect(r.x0,r.y0,w,h,h/2.f,C_TXT,40); rrect_line(r.x0+1,r.y0+1,w-2,h-2,(h-2)/2.f,1.2f,C_TXT,fg==C_DIS?110:235); }
+    text_c((r.x0+r.x1)/2,r.y0+(h-(int)FS[font].cap)/2,txt,font,bg_t==C_TXT?C_ACCD:fg,255);
 }
-static Rect toast_rect(ms_t now){ Rect z={0,0,0,0}; if(!toast.dur||now-toast.t0>=toast.dur) return z; return R(56,90,368,50); }
+/* an outline ring button with something in it (OK, play, −, +) */
+static void draw_ring_btn(float cx,float cy,float r,int en,int pr,float hp){
+    if(pr&&en) disc(cx,cy,r-1,C_TXT,36);
+    ring(cx,cy,r-1.5f,r+1.0f,C_TXT,en?240:110);
+    if(hp>0) arc_aa(cx,cy,r+7,2.2f,-90,-90+360*hp,C_TXT,255);
+}
+static void draw_play(float cx,float cy,float s,uint32_t c,int a){
+    float x0=cx-s*0.38f, x1=cx+s*0.62f;
+    capsule(x0,cy-s*0.6f,x0,cy+s*0.6f,1.4f,c,a); capsule(x0,cy-s*0.6f,x1,cy,1.4f,c,a); capsule(x0,cy+s*0.6f,x1,cy,1.4f,c,a);
+}
+#define AV_CHART_Y 226
+static int toast_y(void){ return (view==V_MAIN&&page==PG_HOME&&hm_mode==HM_ACTIVE)?AV_CHART_Y+10:90; }   /* the live view: over the trace, not the number */
+static Rect toast_rect(ms_t now){ Rect z={0,0,0,0}; if(!toast.dur||now-toast.t0>=toast.dur) return z; return R(52,toast_y()-8,376,52); }
 static Rect rip_rect(void){ Rect z={0,0,0,0}; if(!rip.on) return z; return R((int)rip.x-52,(int)rip.y-52,104,104); }
 static void overlays_damage(ms_t now){
     Rect c0=toast_rect(now), c1=rip_rect();
     if(!r_empty(ov_prev[0])) rl_add(&dmg,ov_prev[0]); if(!r_empty(c0)) rl_add(&dmg,c0); ov_prev[0]=c0;
     if(!r_empty(ov_prev[1])) rl_add(&dmg,ov_prev[1]); if(!r_empty(c1)) rl_add(&dmg,c1); ov_prev[1]=c1;
 }
+/* toast: a deep espresso pill with white text; a warning/error carries the warning icon in yellow */
 static void overlays_draw(ms_t now){
     cv=canvas;
     Rect c1=rip_rect();
     if(!r_empty(c1)){
         set_clip(c1); float t=(now-rip.t0)/360.f; float e=ease_out(clampf(t,0,1));
-        ring(rip.x,rip.y,6+e*30,10+e*38,rgb(255,255,255),(int)(54*(1-t)));
+        ring(rip.x,rip.y,6+e*30,8+e*36,C_TXT,(int)(70*(1-t)));
         rl_add(&pres,c1);
     }
     Rect c0=toast_rect(now);
     if(!r_empty(c0)){
         set_clip(c0); float t=(float)(now-toast.t0); float a=clampf(t/160.f,0,1)*clampf((toast.dur-t)/260.f,0,1);
-        int w=text_w(toast.msg,F_XS)+44; if(w>356)w=356; int x=CX-w/2, y=98-(int)((1-ease_out(clampf(t/200.f,0,1)))*8);
-        rrect_g(x,y+3,w,34,17,rgb(0,0,0),rgb(0,0,0),(int)(90*a));
-        rrect_g(x,y,w,34,17,rgb(58,63,76),rgb(42,46,57),(int)(250*a));
-        disc(x+17,y+17,4,toast.col,(int)(255*a));
-        text_at(x+29,y+12,toast.msg,F_XS,C_TXT,(int)(255*a));
+        int warn=toast.col==C_WARN||toast.col==C_ERR;
+        float iw=warn?text_wf(IC_WARN,F_XS)+8:0;
+        int w=(int)(text_w(toast.msg,F_XS)+iw)+40; if(w>370)w=370; int x=CX-w/2, y=toast_y()-(int)((1-ease_out(clampf(t/200.f,0,1)))*8);
+        rrect(x,y+3,w,36,18,rgb(30,10,2),(int)(80*a));
+        rrect(x,y,w,36,18,rgb(66,28,10),(int)(242*a));
+        float tx=x+20;
+        if(warn){ text_at(tx,y+11,IC_WARN,F_XS,toast.col,(int)(255*a)); tx+=iw; }
+        text_at(tx,y+11,toast.msg,F_XS,C_TXT,(int)(255*a));
         rl_add(&pres,c0);
     }
     set_clip(FULL);
@@ -385,7 +402,7 @@ static void draw_chart(Rect r,ms_t now,const HomeM*m){
 #define RING_HW 1.5f
 static float ring_lab_ang(int i){ static const float A[4]={225,315,135,45}; return A[i]; }   /* the label faces the display's rim */
 static int ring_lab_out(int i){ return i<2; }                                                  /* upper rings: tops outward */
-static const char* ring_label(int i){ return TR(ACT_NAME[RING_ACT[i]]); }
+static const char* ring_label(int i){ static const short L[4]={TX_R_GRIND,TX_R_WATER,TX_R_BREW,TX_R_STEAM}; return TR(L[i]); }
 static float ring_gap_deg(int i){ return text_arc_deg(ring_label(i),F_LAB,RING_R)/2+7.f; }
 /* how far a ring's boiler is: 1 = ready (or no boiler: the grinder), else the share of the way from 20 °C to its ready point */
 static float ring_heat(int i){
@@ -400,6 +417,7 @@ static float ring_heat(int i){
     return clampf((t-200)/(float)(r-200),0,0.98f);                /* the way from 20 °C to the ready point */
 }
 static void draw_chev(int cx,int y,uint32_t c,int a,float hw){ capsule(cx-10,y,cx,y+8,hw,c,a); capsule(cx,y+8,cx+10,y,hw,c,a); }
+static void draw_chev_r(int x,int cy,uint32_t c){ capsule(x-3,cy-6,x+3,cy,1.3f,c,255); capsule(x+3,cy,x-3,cy+6,1.3f,c,255); }
 static void static_home(void){
     if(hm_mode==HM_ERROR){ memcpy(bgbase,bgdark,(size_t)W*H*4); return; }
     if(hm_mode==HM_ACTIVE) return;
@@ -431,9 +449,10 @@ static void draw_status_line(const char*t,uint32_t c,int warn){
 }
 /* HOME's status line (shared w/ the selftest): what matters now, or nothing */
 static uint32_t home_status_text(const HomeM*m,char*o,size_t n,int*warn,ms_t now){
-    o[0]=0; *warn=0; (void)now;
+    o[0]=0; *warn=0;
     int ph=m->ph;
     if(ph==PH_OFFLINE||ph==PH_SLEEP){ snprintf(o,n,"%s",m->sub); *warn=ph==PH_OFFLINE; return ph==PH_OFFLINE?C_WARN:C_TXT2; }
+    if(now-last_bad_ms<10000&&rx_bad>0){ snprintf(o,n,TR(TX_H_CRC),rx_bad); *warn=1; return C_WARN; }   /* line noise: CRC errors in the last 10 s */
     if(m->hint1[0]&&m->hc1==C_WARN){ snprintf(o,n,"%s",m->hint1); *warn=1; return C_WARN; }
     if(act.pending!=ACT_NONE||(tch.down&&!tch.moved&&tch.target>=T_ACT0&&tch.target<=T_ACT3)){ snprintf(o,n,"%s",m->sub); return C_TXT; }
     if(ph==PH_HEAT){ snprintf(o,n,"%s",m->sub); return C_TXT2; }
@@ -450,7 +469,6 @@ static void draw_stop_pill(Rect r,const char*txt,int font,int press){
 #define AV_PH_Y 62
 #define AV_HERO_Y 98
 #define AV_SUB_Y 196
-#define AV_CHART_Y 226
 #define AV_STAT_Y 298
 
 static void draw_home_active(ms_t now){
@@ -528,13 +546,11 @@ static void draw_home(ms_t now){
 /* HOME: discreet title line at the top inside the gauge ring — the wordmark w/ "+" badge */
 /* v6.17: a page's title. Feature pages: the feature's icon in its colour + its name (the same icon as on HOME, so the page is
  * recognisably "the thing behind that button"); SYSTEM / DIAGNOSTICS: the name. No descriptive sub-line any more. */
+static int title_font(const char*t){ return text_wf(t,F_L)<=TITLE_W?F_L:(text_wf(t,F_M)<=TITLE_W?F_M:F_S); }
 static const char* page_title(int pg){ return pg==PG_DIAG?TR(TX_PG_DIAG):TR(TIER_NAME[clampi(tier_of_page(pg),0,4)]); }
-static float page_title_w(int pg){ return text_wf(page_title(pg),F_M)+(pg_feat(pg)?text_wf(ACT_ICON[pg-PG_GRIND],F_IC)+8:0); }
-static void static_page_title(void){
-    const char*t=page_title(page); float x=CX-page_title_w(page)/2;
-    if(pg_feat(page)){ int k=page-PG_GRIND; float iw=text_wf(ACT_ICON[k],F_IC); text_at(x,PG_TITLE_Y-1,ACT_ICON[k],F_IC,ph_hi(ACT_PH[k]),255); x+=iw+8; }
-    text_at(x,PG_TITLE_Y,t,F_M,C_TXT,255);
-}
+static float page_title_w(int pg){ return text_wf(page_title(pg),title_font(page_title(pg))); }
+static void title_c(int y,const char*t,uint32_t c){ char b[96]; snprintf(b,sizeof b-4,"%s",t); int f=title_font(b); if(f==F_S) fit_text(b,F_S,TITLE_W); text_c(CX,y+((int)FS[F_L].cap-(int)FS[f].cap)/2,b,f,c,255); }
+static void static_page_title(void){ title_c(PG_TITLE_Y,page_title(page),C_TXT); }
 static void static_list(void){ static_page_title(); }
 /* soft edges: fade to background at top/bottom of a scroll field */
 static void edge_fade(Rect vr,int top,int bottom){
@@ -553,9 +569,9 @@ static void draw_scroll_ind(float content_h){
     float mx=scroll_max(page); int sc=(int)lroundf(scroll[page]);
     if(W_begin(W_SCROLL,R(444,140,30,200),hi(hi(hi(H0,sc),(int)mx),page))){
         if(mx>0){
-            arc_aa(CX,CY,228,1.4f,-22,22,C_SURF3,255);
+            arc_aa(CX,CY,228,1.2f,-22,22,C_TXT,70);
             float vis=(list_vy1(page)-LIST_VY0)/content_h, span=44*vis, a0=-22+(44-span)*(scroll[page]/mx);
-            arc_aa(CX,CY,228,1.6f,a0,a0+span,C_TXT2,255);
+            arc_aa(CX,CY,228,1.6f,a0,a0+span,C_TXT,230);
         }
         W_end();
     }
@@ -593,10 +609,9 @@ static int row_val_font(const char*label,const char*val,int xr,int*room){
  * the tap area is the whole header (PBACK_*). */
 static void draw_pback(void){
     int pr=pressed(T_BACK);
-    if(W_begin(W_BACKCH,R(CX-26,PG_CHEV_Y-8,52,24),hi(hi(H0,pr),page))){
-        if(pr) rrect(CX-24,PG_CHEV_Y-7,48,22,11,C_SURF3,255);
-        uint32_t c=pr?C_TXT:C_TXT2;
-        capsule(CX-9,PG_CHEV_Y,CX,PG_CHEV_Y+8,1.5f,c,255); capsule(CX,PG_CHEV_Y+8,CX+9,PG_CHEV_Y,1.5f,c,255);
+    if(W_begin(W_BACKCH,R(CX-30,PG_CHEV_Y-8,60,24),hi(hi(H0,pr),page))){
+        if(pr) rrect(CX-24,PG_CHEV_Y-7,48,22,11,C_TXT,40);
+        draw_chev(CX,PG_CHEV_Y,C_TXT,pr?255:200,1.4f);
         W_end();
     }
 }
@@ -632,26 +647,23 @@ static uint32_t diag_row_text(char*o,size_t n,ms_t now){
     snprintf(o,n,"%s",TR(TX_DV_OK)); return C_OK;
 }
 static void draw_start(ms_t now){
-    int k=page-PG_GRIND, en=!act_guard(k,now), pr=pressed(T_START); uint32_t ac=ph_hi(ACT_PH[k]);
+    int k=page-PG_GRIND; const char*g=act_guard(k,now); int en=!g, pr=pressed(T_START);
     float hp=(pr&&en)?clampf((now-tch.t0)/(float)HOLD_MS,0,1):0;
     Rect wr=R(CX-START_HIT_W/2,START_HIT_Y,START_HIT_W,START_HIT_H);
-    if(W_begin(W_START,wr,hi(hi(hi(hi(hi(H0,k),en),pr),(int)(hp*48)),ui_lang))){
-        int x=CX-START_W/2, y=START_Y; float rr=START_H/2.f; const char*t=TR(TX_B_START);
-        rrect(x,y+2,START_W,START_H,rr,rgb(0,0,0),70);
-        rrect(x,y,START_W,START_H,rr,en?mix(C_SURF3,ac,150):C_SURF3,255);                 /* outline in the feature's colour */
-        rrect_g(x+2,y+2,START_W-4,START_H-4,rr-2,pr?C_SURF3:C_SURF2,pr?C_SURF2:C_SURF,255);
-        if(hp>0){ set_clip(R(x,y,(int)(START_W*hp),START_H)); rrect(x+2,y+2,START_W-4,START_H-4,rr-2,mix(C_SURF2,ac,120),255); set_clip(wr); }   /* the hold fills the pill left -> right */
-        float iw=text_wf(ACT_ICON[k],F_IC), tw=text_wf(t,F_S), tx=CX-(iw+10+tw)/2;
-        text_at(tx,y+START_H/2-10,ACT_ICON[k],F_IC,en?ac:C_DIS,255);
-        text_at(tx+iw+10,y+START_H/2-7,t,F_S,en?C_TXT:C_DIS,255);
+    if(W_begin(W_START,wr,hi(hi(hi(hi(hi(H0,k),en),pr),(int)(hp*60)),ui_lang))){
+        draw_ring_btn(CX,START_CY,START_R,en,pr,hp);
+        draw_play(CX+2,START_CY,13,C_TXT,en?255:110);
+        text_c(CX,START_CAP_Y,TR(TX_B_START),F_XS,en?C_TXT2:C_DIS,255);
         W_end();
     }
 }
+static void draw_row_sep(int y){ hspan(y,84,396,C_TXT,46); }
 static void draw_list(ms_t now){
     Row rw[ROW_MAX]; int n=rows_get(page,rw), vy1=list_vy1(page); int sc=(int)lroundf(scroll[page]); int prow=-1;
     draw_pback();
-    { char lv[96]; uint32_t lc=page_live_text(page,lv,sizeof lv-4,now); fit_text(lv,F_XS,LIVE_W);
-      if(W_begin(W_LIVE,R(CX-LIVE_W/2-2,PG_LIVE_Y-3,LIVE_W+4,17),hi(hi(hs(H0,lv),(int)lc),page))){ text_c(CX,PG_LIVE_Y,lv,F_XS,lc,255); W_end(); } }
+    { char lv[96]; uint32_t lc=page_live_text(page,lv,sizeof lv-8,now); int warn=lc==C_WARN; char b2[104];
+      if(warn){ snprintf(b2,sizeof b2,IC_WARN " %s",lv); } else snprintf(b2,sizeof b2,"%s",lv); fit_text(b2,F_XS,LIVE_W);
+      if(W_begin(W_LIVE,R(CX-LIVE_W/2-2,PG_LIVE_Y-3,LIVE_W+4,19),hi(hi(hs(H0,b2),(int)lc),page))){ text_c(CX,PG_LIVE_Y,b2,F_XS,lc,255); W_end(); } }
     if(tch.down&&!tch.moved&&tch.target>=T_ROW0) prow=tch.target-T_ROW0;
     char dgs[16]; uint32_t dgc=diag_row_text(dgs,sizeof dgs,now);
     uint32_t h=hi(hi(hi(hi(H0,sc),prow),page),sec_open*8+ui_lang);
@@ -663,45 +675,43 @@ static void draw_list(ms_t now){
         char b[40]; int c0=-1,c1=-1;
         for(int k=0;k<n;k++){
             int y=row_y0(page,k)-sc;
-            if(page==PG_SYS&&rw[k].kind!=RK_SEC&&rw[k].kind!=RK_DIAG){ if(c0<0) c0=y; c1=y+ROW_H; }   /* the open section's rows */
+            if(page==PG_SYS&&rw[k].kind!=RK_SEC&&rw[k].kind!=RK_DIAG){ if(c0<0) c0=y; c1=y+ROW_H; }
             if(y+ROW_H<LIST_VY0||y>vy1) continue;
-            int pr=(k==prow);
+            int pr=(k==prow); int ty=y+(ROW_H-(int)FS[F_M].cap)/2;
+            if(pr) rrect(76,y+3,328,ROW_H-6,12,C_TXT,34);
+            if(k<n-1&&!(page==PG_SYS&&rw[k+1].kind==RK_SEC&&rw[k].kind!=RK_SEC&&0)) draw_row_sep(y+ROW_H);
             if(rw[k].kind==RK_SET){
                 int i=rw[k].a; const Setting*s=&SET[i]; int lock=(s->flags&SF_LOCK)!=0;
-                int oor=set_oor(s); const char*lab=TR(s->label);
-                rrect_g(72,y,336,ROW_H,16,pr?C_SURF3:C_SURF2,pr?C_SURF2:C_SURF,255);
-                if(oor) rrect(72,y,336,ROW_H,16,C_ERR,34);                                        /* out of spec: red tint */
-                text_at(94,y+18,lab,F_S,lock?C_TXT2:C_TXT,255);
+                int oor=set_oor(s); const char*lab=TR(s->label); int indent=(page==PG_SYS)?14:0;
+                text_at(88+indent,ty,lab,F_M,lock?C_TXT2:C_TXT,255);
                 set_fmt(i,s->val,b,sizeof b-4); const char*u=set_unit(i);
-                int xr=lock?388:372;
-                if(*u&&s->kind==K_NUM){ int uw=text_w(u,F_XS); text_r(xr,y+21,u,F_XS,C_TXT3,255); xr-=uw+6; }
-                int vf=F_M, room=0;
-                if(s->kind==K_ENUM||(s->flags&SF_HHMM)||i==S_TZ){ vf=row_val_font(lab,b,xr,&room); if(vf==F_XS) fit_text(b,F_XS,room); }   /* v6.16: + clock times, zone label */   /* long enum names: M -> S -> XS -> … */
-                text_r(xr,y+(vf==F_M?16:(vf==F_S?18:20)),b,vf,oor?C_ERR:(lock?C_TXT3:C_ACC),255); xr-=text_w(b,vf);
-                if(s->hint&&!lock&&!oor) text_r(xr-7,y+21,"≈",F_XS,C_WARN,255);                   /* estimate marker */
-                if(!lock) text_at(380,y+19,">",F_XS,C_TXT3,255);
-            } else if(rw[k].kind==RK_SEC){   /* v6.17: section header — name, summary, chevron (right = closed, down = open) */
+                int xr=lock?398:378;
+                if(*u&&s->kind==K_NUM){ int uw=text_w(u,F_XS); text_r(xr,ty+(int)FS[F_M].cap-(int)FS[F_XS].cap,u,F_XS,C_TXT2,255); xr-=uw+5; }
+                int vf=F_MB, room=xr-(88+indent+text_w(lab,F_M)+12);
+                if(text_w(b,vf)>room){ vf=F_S; if(text_w(b,vf)>room){ vf=F_XS; fit_text(b,F_XS,room); } }
+                int vy=ty+(int)FS[F_M].cap-(int)FS[vf].cap;
+                if(oor){ float iw=text_wf(IC_WARN,F_XS)+5; text_r(xr,vy,b,vf,C_ERR,255); text_at(xr-text_wf(b,vf)-iw,ty+2,IC_WARN,F_XS,C_ERR,255); }
+                else text_r(xr,vy,b,vf,lock?C_TXT2:C_TXT,255);
+                if(s->hint&&!lock&&!oor) text_r(xr-text_w(b,vf)-6,ty+3,"≈",F_XS,C_TXT2,255);
+                if(!lock) draw_chev_r(394,y+ROW_H/2,C_TXT2);
+            } else if(rw[k].kind==RK_SEC){
                 int open=(rw[k].a==sec_open); char sm[40]; sec_summary(rw[k].a,sm,sizeof sm-4);
-                rrect_g(72,y,336,ROW_H,16,pr?C_SURF3:(open?C_SURF3:C_SURF2),pr?C_SURF2:(open?C_SURF2:C_SURF),255);
-                text_at(94,y+18,TR(SEC_NAME[rw[k].a]),F_S,open?C_ACC:C_TXT,255);
-                if(sm[0]&&!open){ fit_text(sm,F_XS,372-(94+text_w(TR(SEC_NAME[rw[k].a]),F_S)+14)); text_r(366,y+20,sm,F_XS,C_TXT3,255); }
-                if(open){ capsule(378,y+22,384,y+28,1.3f,C_ACC,255); capsule(384,y+28,390,y+22,1.3f,C_ACC,255); }
-                else text_at(380,y+19,">",F_XS,C_TXT3,255);
-            } else if(rw[k].kind==RK_X){     /* v6.2: system actions — two-line rows (label + explanation) */
+                text_at(88,ty,TR(SEC_NAME[rw[k].a]),F_M,C_TXT,255);
+                if(sm[0]&&!open){ fit_text(sm,F_S,372-(88+text_w(TR(SEC_NAME[rw[k].a]),F_M)+14)); text_r(378,ty+(int)FS[F_M].cap-(int)FS[F_S].cap,sm,F_S,C_TXT2,255); }
+                if(open) draw_chev(390,y+ROW_H/2-3,C_TXT,255,1.3f); else draw_chev_r(394,y+ROW_H/2,C_TXT2);
+            } else if(rw[k].kind==RK_X){
                 const char*label,*sub,*val; int lock; xrow_text(rw[k].a,&label,&sub,&val,&lock);
-                rrect_g(72,y,336,ROW_H,16,pr?C_SURF3:C_SURF2,pr?C_SURF2:C_SURF,255);
-                text_at(94,y+10,label,F_S,lock?C_TXT2:C_TXT,255);
-                text_at(94,y+31,sub,F_XS,lock?C_WARN:C_TXT3,255);
-                if(val) text_r(lock?388:372,y+8,val,F_M,lock?C_TXT3:C_ACC,255);
-                if(!lock) text_at(380,y+(val?12:19),">",F_XS,C_TXT3,255);
-            } else {                          /* v6.17: the DIAGNOSTICS entry (advanced) w. the machine's status */
-                rrect_g(72,y,336,ROW_H,16,pr?C_SURF3:C_SURF2,pr?C_SURF2:C_SURF,255);
-                text_at(94,y+18,TR(TX_PG_DIAG),F_S,C_TXT,255);
-                text_r(366,y+18,dgs,F_S,dgc,255);
-                text_at(380,y+19,">",F_XS,C_TXT3,255);
+                text_at(102,y+9,label,F_M,lock?C_TXT2:C_TXT,255);
+                { char sb[96]; snprintf(sb,sizeof sb-4,"%s",sub); fit_text(sb,F_TINY,val?200:270); text_at(102,y+31,sb,F_TINY,lock?C_WARN:C_TXT2,255); }
+                if(val) text_r(lock?398:378,y+9,val,F_S,lock?C_TXT2:C_TXT,255);
+                if(!lock) draw_chev_r(394,y+ROW_H/2,C_TXT2);
+            } else {
+                text_at(88,ty,TR(TX_PG_DIAG),F_M,C_TXT,255);
+                text_r(378,ty+(int)FS[F_M].cap-(int)FS[F_S].cap,dgs,F_S,dgc==C_OK?C_TXT2:C_ERR,255);
+                draw_chev_r(394,y+ROW_H/2,C_TXT2);
             }
         }
-        if(c0>=0){ int ya=c0<LIST_VY0?LIST_VY0:c0, yb=c1>vy1?vy1:c1; if(yb>ya) fill_rect(64,ya,2,yb-ya,C_ACC,150); }   /* the open section's rows are tied together by a thin accent rail */
+        if(c0>=0){ int ya=c0<LIST_VY0?LIST_VY0:c0, yb=c1>vy1?vy1:c1; if(yb>ya) fill_rect(88,ya+10,2,yb-ya-20>0?yb-ya-20:0,C_TXT,120); }
         edge_fade(vr,1,1);
         W_end();
     }
@@ -709,11 +719,11 @@ static void draw_list(ms_t now){
     if(pg_feat(page)) draw_start(now);
 }
 
-/* ================= page: STEPPER DETAIL ================= */
-/* texts for the detail view (shared w/ the selftest's layout check) */
-/* v6.17: the two footer lines ("CONTROLLER NOW + CONFIG" / "STOCK UI: AFTER RESTART", file paths, "SHOWN FROM CONFIG.JSON" …) are gone:
- * they described the implementation on every single editor. What matters is said once — by the SAVED toast, by the row's note, and by
- * the STOCK UI section the stock-only rows now live in. */
+/* ================= page: EDITOR (v7.0: a roller like the stock pickers) =================
+ * The value sits on a vertical roller: the selected value large and white in the middle, its neighbours above and below,
+ * smaller and fading out. Drag the roller up/down (one step per ED_STEP_PX, it follows the finger), tap or hold −/+ (hold
+ * repeats and accelerates, as before), OK saves (the same save path as before: MCU write + ACK, then config.json). The chevron
+ * at the top or a pull down cancels. Locked rows and sensors show their value and an OK that just closes. */
 static void detail_text(int i,char*l,size_t n){
     const Setting*s=&SET[i]; char a[24],b[24]; int lock=(s->flags&SF_LOCK)!=0, sens=(s->flags&SF_SENSOR)!=0;
     if(sens) snprintf(l,n,"%s",TR(TX_D_MEASURED));
@@ -721,81 +731,86 @@ static void detail_text(int i,char*l,size_t n){
     else if(s->kind==K_ENUM){ if(s->max-s->min==1) snprintf(l,n,"%s / %s",TR(s->opts[0]),TR(s->opts[1])); else snprintf(l,n,TR(TX_D_NOPTS),s->max-s->min+1); }
     else { const char*u=set_unit(i); set_fmt(i,s->lo,a,sizeof a); set_fmt(i,s->hi,b,sizeof b); snprintf(l,n,*u?"%s - %s %s":"%s - %s",a,b,u); }
 }
-/* v6.17: is the stepper worth holding? (hold = repeat w. acceleration; shown as a micro-hint while the value is unchanged) */
 static int detail_holdable(const Setting*s){ return s->kind==K_NUM&&!(s->flags&SF_LOCK)&&s->step>0&&(s->hi-s->lo)/s->step>=20; }
 static void static_detail(void){
-    const Setting*s=&SET[sel]; char l[72]; int lock=(s->flags&SF_LOCK)!=0, sens=(s->flags&SF_SENSOR)!=0;
+    const Setting*s=&SET[sel]; char l[72]; int lock=(s->flags&SF_LOCK)!=0;
     detail_text(sel,l,sizeof l);
-    text_c(CX,82,TR(s->label),F_S,C_TXT2,255);
-    /* range line (+ visible hint when max/mapping is an estimate, PARITY §6.6) */
+    title_c(ED_TITLE_Y,TR(s->label),C_TXT);
     if(s->hint&&!lock){
         const char*hint=TR(s->hint);
         float w1=text_wf(l,F_XS), w2=text_wf(" · ",F_XS), w3=text_wf(hint,F_XS); float x=CX-(w1+w2+w3)/2;
-        x=text_at(x,106,l,F_XS,C_TXT3,255); x=text_at(x,106," · ",F_XS,C_TXT3,255); text_at(x,106,hint,F_XS,C_WARN,255);
-    } else text_c(CX,106,l,F_XS,C_TXT3,255);
-    text_c(CX,254,TR(s->note),F_XS,(lock&&!sens&&s->mcu!=M_NONE)?C_WARN:C_TXT3,255);
+        x=text_at(x,ED_RANGE_Y,l,F_XS,C_TXT2,255); x=text_at(x,ED_RANGE_Y," · ",F_XS,C_TXT2,255); text_at(x,ED_RANGE_Y,hint,F_XS,C_WARN,255);
+    } else text_c(CX,ED_RANGE_Y,l,F_XS,C_TXT2,255);
+    { char nt[96]; snprintf(nt,sizeof nt-4,"%s",TR(s->note)); fit_text(nt,F_XS,330); text_c(CX,ED_NOTE_Y,nt,F_XS,(lock&&!(s->flags&SF_SENSOR)&&s->mcu!=M_NONE)?C_WARN:C_TXT2,255); }
 }
-/* v6.11: close chevron at the top of the detail/system view (tap = CANCEL/BACK; swiping down does the same). The down arrow is
- * the "pull down to close" handle; the tap field is 88 x 46 px (BACK_*). */
-/* v6.17: the editor's status line (shared w/ the selftest): SAVING… / out of spec / CHANGED · WAS … / the zone's place names / — when the
- * value is untouched — the one thing about −/+ you cannot see: holding repeats and accelerates. Otherwise empty ("SAVED VALUE" is gone). */
 static uint32_t detail_status(char*l,size_t n){
     const Setting*s=&SET[sel]; char o[40]; int lock=(s->flags&SF_LOCK)!=0; l[0]=0;
-    if(sav.active){ snprintf(l,n,"%s",TR(TX_D_SAVING)); return C_ACC; }
+    if(sav.active){ snprintf(l,n,"%s",TR(TX_D_SAVING)); return C_TXT; }
     if(!lock&&!set_valid(s,edit_val)){ snprintf(l,n,"%s",TR(TX_D_OOR)); return C_ERR; }
-    if(edit_val!=edit_orig){ set_fmt(sel,edit_orig,o,sizeof o); snprintf(l,n,TR(TX_D_CHANGED),o,s->kind==K_NUM?set_unit(sel):""); return C_ACC; }
-    if(sel==S_TZ&&edit_val>=0&&edit_val<TZ_N){ snprintf(l,n-4,"%s",TZT[edit_val].name); fit_text(l,F_XS,276); return C_TXT2; }   /* v6.16: the zone's place names */
+    if(edit_val!=edit_orig){ set_fmt(sel,edit_orig,o,sizeof o); snprintf(l,n,TR(TX_D_CHANGED),o,s->kind==K_NUM?set_unit(sel):""); return C_TXT; }
+    if(sel==S_TZ&&edit_val>=0&&edit_val<TZ_N){ snprintf(l,n-4,"%s",TZT[edit_val].name); fit_text(l,F_XS,276); return C_TXT2; }
     if(detail_holdable(s)) snprintf(l,n,"%s",TR(TX_D_HOLDFAST));
-    return C_TXT3;
+    return C_TXT2;
 }
 static void draw_backch(void){
     int pr=pressed(T_BACK);
-    if(W_begin(W_BACKCH,R(CX-26,42,52,30),hi(H0,pr))){
-        if(pr) rrect(CX-24,44,48,26,13,C_SURF3,255);
-        uint32_t c=pr?C_TXT:C_TXT2;
-        capsule(CX-9,53,CX,61,1.5f,c,255); capsule(CX,61,CX+9,53,1.5f,c,255);
+    if(W_begin(W_BACKCH,R(CX-30,PG_CHEV_Y-8,60,24),hi(H0,pr))){
+        if(pr) rrect(CX-24,PG_CHEV_Y-7,48,22,11,C_TXT,40);
+        draw_chev(CX,PG_CHEV_Y,C_TXT,pr?255:200,1.4f);
         W_end();
     }
 }
+/* the value k steps away from v on the editor's grid (clamped: returns 0 when out of range) */
+#define ROLL_UP 114
+#define ROLL_DN 106
+static int roll_val(const Setting*s,int v,int k,int*out){
+    if(s->kind==K_ENUM){ int r=v+k; if(r<s->min||r>s->max) return 0; *out=r; return 1; }
+    int r=v+k*s->step; if(r<s->lo||r>s->hi) return 0; *out=r; return 1;
+}
+static void draw_roller(const Setting*s,int lock,int eoor){
+    char b[40]; const char*u=set_unit(sel); int num=s->kind==K_NUM; float off=roll_off;
+    for(int k=-2;k<=2;k++){
+        int v; if(k==0) v=edit_val; else if(lock||!roll_val(s,edit_val,k,&v)) continue;
+        set_fmt(sel,v,b,sizeof b-4);
+        float yc=ED_CY+k*ED_STEP_PX+off; float dist=fabsf(yc-ED_CY)/ED_STEP_PX;
+        int f=dist<0.5f?F_ROLL:F_ROLL2;
+        if(f==F_ROLL&&text_wf(b,f)>(num?200:240)){ f=F_L; if(text_wf(b,f)>250) fit_text(b,f,250); }
+        if(f==F_ROLL2&&text_wf(b,f)>230) fit_text(b,F_ROLL2,230);
+        int a=(int)(255*clampf(1.1f-dist*0.45f,0.12f,1));
+        uint32_t c=(k==0)?(eoor?C_ERR:(lock?C_TXT2:C_TXT)):C_TXT2;
+        float nw=text_wf(b,f); int y=(int)lroundf(yc-FS[f].cap/2);
+        float uw=(num&&*u&&k==0)?text_wf(u,F_MB)+8:0;
+        text_at(CX-(nw+uw)/2,y,b,f,c,a);
+        if(uw>0) text_at(CX-(nw+uw)/2+nw+8,y+(int)FS[f].cap-(int)FS[F_MB].cap,u,F_MB,c,a);
+    }
+}
+static void draw_pm(int k,int en,int pr){
+    int cx=k?ED_PX:ED_MX;
+    draw_ring_btn(cx,ED_CY,ED_PM_R,en,pr,0);
+    capsule(cx-10,ED_CY,cx+10,ED_CY,1.4f,C_TXT,en?255:110);
+    if(k) capsule(cx,ED_CY-10,cx,ED_CY+10,1.4f,C_TXT,en?255:110);
+}
 static void draw_detail(ms_t now){
-    (void)now; draw_backch(); const Setting*s=&SET[sel]; char b[40],l[112];
-    int lock=(s->flags&SF_LOCK)!=0; set_fmt(sel,edit_val,b,sizeof b); const char*u=set_unit(sel);
+    (void)now; draw_backch(); const Setting*s=&SET[sel]; char l[112];
+    int lock=(s->flags&SF_LOCK)!=0;
     int eoor=!lock&&!set_valid(s,edit_val);
-    if(W_begin(W_DHERO,R(122,128,236,90),hi(hs(hs(H0,b),u),eoor))){
-        float uw=(*u&&s->kind==K_NUM)?text_wf(u,F_M)+10:0;
-        int f=(s->kind==K_NUM)?F_XXL:F_XL;                       /* largest font that fits in the field */
-        while(f>F_M&&text_wf(b,f)+uw>228) f=(f==F_XXL)?F_XL:(f==F_XL?F_L:F_M);
-        float nw=text_wf(b,f); float x=CX-(nw+uw)/2; int y=173-(int)FS[f].cap/2;
-        text_at(x,y,b,f,eoor?C_ERR:(lock?C_TXT2:C_TXT),255);
-        if(uw>0) text_at(x+nw+10,y+(int)FS[f].cap-18,u,F_M,C_TXT2,255);
-        W_end();
+    if(W_begin(W_DHERO,R(ED_ROLL_X0,ED_CY-ROLL_UP,ED_ROLL_X1-ED_ROLL_X0,ROLL_UP+ROLL_DN),hi(hi(hi(hi(H0,edit_val),eoor),(int)lroundf(roll_off*4)),sv(S_TUNIT)*2+ui_lang))){
+        draw_roller(s,lock,eoor); edge_fade(R(ED_ROLL_X0,ED_CY-ROLL_UP,ED_ROLL_X1-ED_ROLL_X0,ROLL_UP+ROLL_DN),1,1); W_end();
     }
-    int chg=edit_val!=edit_orig;
     { uint32_t stc=detail_status(l,sizeof l);
-      if(W_begin(W_DCHG,R(100,224,280,22),hi(hs(H0,l),(int)stc))){ if(l[0]) text_c(CX,228,l,F_XS,stc,255); W_end(); } }
-    for(int k=0;k<2;k++){
-        int cx=k?396:84, t=k?T_PLUS:T_MINUS; int en=!lock&&!sav.active&&(eoor||(k?edit_val<s->hi:edit_val>s->lo)); int pr=pressed(t);
-        if(W_begin(k?W_PLUS:W_MINUS,R(cx-38,146,76,78),hi(hi(hi(H0,en),pr),lock))){
-            if(!lock){
-                disc(cx,186,30,rgb(0,0,0),70);
-                disc(cx,184,30,pr&&en?C_SURF3:C_SURF2,255);
-                ring(cx,184,29,30.2f,en?C_LINE:C_SURF2,255);
-                const char*g=k?"+":"-"; float gw=text_wf(g,F_XL);
-                text_at(cx-gw/2,184-24,g,F_XL,en?C_TXT:C_DIS,255);
-            }
-            W_end();
-        }
+      if(W_begin(W_DCHG,R(80,ED_STAT_Y-3,320,20),hi(hs(H0,l),(int)stc))){ if(l[0]) text_c(CX,ED_STAT_Y,l,F_XS,stc,255); W_end(); } }
+    for(int k=0;k<2&&!lock;k++){
+        int t=k?T_PLUS:T_MINUS; int en=!sav.active&&(eoor||(k?edit_val<s->hi:edit_val>s->lo)); int pr=pressed(t);
+        int cx=k?ED_PX:ED_MX;
+        if(W_begin(k?W_PLUS:W_MINUS,R(cx-ED_PM_R-4,ED_CY-ED_PM_R-4,2*ED_PM_R+8,2*ED_PM_R+8),hi(hi(H0,en),pr))){ draw_pm(k,en,pr); W_end(); }
     }
-    if(W_begin(W_CANCEL,lock?R(170,286,140,60):R(100,286,136,60),hi(hi(H0,pressed(T_CANCEL)),sav.active))){
-        draw_pill_btn(lock?R(178,292,124,48):R(108,292,124,48),TR(lock?TX_B_BACK:TX_B_CANCEL),F_XS,C_SURF2,C_SURF,sav.active?C_DIS:C_TXT,pressed(T_CANCEL)); W_end();
-    }
-    if(!lock&&W_begin(W_SAVE,R(244,286,136,60),hi(hi(hi(hi(H0,pressed(T_SAVE)),chg),sav.active),lock))){
-        {
-            if(chg&&!sav.active) draw_pill_btn(R(248,292,124,48),TR(TX_B_SAVE),F_S,rgb(250,204,140),rgb(232,174,100),C_ACCD,pressed(T_SAVE));
-            else draw_pill_btn(R(248,292,124,48),TR(sav.active?TX_B_SAVING:TX_B_SAVE),F_S,C_SURF2,C_SURF,C_DIS,0);
-        }
-        W_end();
-    }
+    { int chg=edit_val!=edit_orig, pr=pressed(lock?T_CANCEL:T_SAVE);
+      if(W_begin(W_SAVE,R(CX-ED_OK_R-10,ED_OK_Y-ED_OK_R-10,2*ED_OK_R+20,2*ED_OK_R+20),hi(hi(hi(hi(H0,pr),chg),sav.active),ui_lang))){
+          if(chg&&!sav.active&&!lock) disc(CX,ED_OK_Y,ED_OK_R-1,C_TXT,255);
+          draw_ring_btn(CX,ED_OK_Y,ED_OK_R,!sav.active,pr,0);
+          const char*t=sav.active?"…":TR(TX_B_OK);
+          text_c(CX,ED_OK_Y-(int)FS[F_M].cap/2,t,F_M,(chg&&!sav.active&&!lock)?C_ACCD:C_TXT,255);
+          W_end(); } }
 }
 
 /* ================= v6.2: SYSTEM ACTION (BOOT UI / SWITCH / EXIT REMINDER) =================
@@ -841,83 +856,71 @@ static int sys_hero_font(const char*hero){ if(xsel==X_BOOTUI) return F_H; int f=
 static void static_sys(void){
     SysT t; sys_text(&t);
     if(xsel==X_EXIT){
-        float iw=text_wf(IC_WARN,F_IC), tw=text_wf(t.title,F_S); float x=CX-(iw+9+tw)/2;
-        text_at(x,78,IC_WARN,F_IC,C_WARN,255); text_at(x+iw+9,82,t.title,F_S,C_WARN,255);
-    } else text_c(CX,82,t.title,F_S,C_TXT2,255);
-    text_c(CX,106,t.sub,F_XS,C_TXT3,255);
+        float iw=text_wf(IC_WARN,F_L)+10, tw=text_wf(t.title,F_L); float x=CX-(iw+tw)/2;
+        text_at(x,ED_TITLE_Y,IC_WARN,F_L,C_WARN,255); text_at(x+iw,ED_TITLE_Y,t.title,F_L,C_TXT,255);
+    } else title_c(ED_TITLE_Y,t.title,C_TXT);
+    { char sb[96]; snprintf(sb,sizeof sb-4,"%s",t.sub); fit_text(sb,F_XS,320); text_c(CX,ED_RANGE_Y,sb,F_XS,C_TXT2,255); }
 }
 static void draw_sys(ms_t now){
     (void)now; SysT t; sys_text(&t); int lock=sys_locked(); draw_backch();
     if(xsel==X_EXIT){
-        if(W_begin(W_DHERO,R(60,130,360,102),hi(H0,xsel))){
-            text_c(CX,138,TR(TX_Y_EXIT_L1),F_S,C_TXT,255);
-            text_c(CX,162,TR(TX_Y_EXIT_L2),F_S,C_TXT,255);
+        if(W_begin(W_DHERO,R(56,120,368,130),hi(H0,xsel))){
+            text_c(CX,128,TR(TX_Y_EXIT_L1),F_S,C_TXT,255);
+            text_c(CX,154,TR(TX_Y_EXIT_L2),F_S,C_TXT,255);
             int w=text_w(TR(TX_Y_EXIT_CMD),F_M)+40;
-            rrect_g(CX-w/2,188,w,38,12,C_SURF3,C_SURF2,255);
-            text_c(CX,188+9,TR(TX_Y_EXIT_CMD),F_M,C_ACC,255);
+            rrect_line(CX-w/2,190,w,42,21,1.2f,C_TXT,235);
+            text_c(CX,190+(42-(int)FS[F_M].cap)/2,TR(TX_Y_EXIT_CMD),F_M,C_TXT,255);
             W_end();
         }
     } else {
         int f=sys_hero_font(t.hero);
-        /* BOOT UI: the hero field must not overlap −/+ (x 46..122 / 358..434) — otherwise a hero redraw erases the button edges */
-        if(W_begin(W_DHERO,xsel==X_BOOTUI?R(122,128,236,90):R(92,128,296,90),hi(hi(hs(H0,t.hero),lock),xsel))){
-            text_c(CX,173-(int)FS[f].cap/2,t.hero,f,lock?C_TXT2:C_TXT,255);
+        if(W_begin(W_DHERO,xsel==X_BOOTUI?R(ED_ROLL_X0,ED_CY-50,ED_ROLL_X1-ED_ROLL_X0,100):R(80,ED_CY-50,320,100),hi(hi(hs(H0,t.hero),lock),xsel))){
+            text_c(CX,ED_CY-(int)FS[f].cap/2,t.hero,f,lock?C_TXT2:C_TXT,255);
             W_end();
         }
-        for(int k=0;k<2&&xsel==X_BOOTUI;k++){
-            int cx=k?396:84, tt=k?T_PLUS:T_MINUS; int en=!lock&&(k?!x_edit:x_edit); int pr=pressed(tt);
-            if(W_begin(k?W_PLUS:W_MINUS,R(cx-38,146,76,78),hi(hi(hi(H0,en),pr),lock))){
-                if(!lock){
-                    disc(cx,186,30,rgb(0,0,0),70);
-                    disc(cx,184,30,pr&&en?C_SURF3:C_SURF2,255);
-                    ring(cx,184,29,30.2f,en?C_LINE:C_SURF2,255);
-                    const char*g=k?"+":"-"; float gw=text_wf(g,F_XL);
-                    text_at(cx-gw/2,184-24,g,F_XL,en?C_TXT:C_DIS,255);
-                }
-                W_end();
-            }
+        for(int k=0;k<2&&xsel==X_BOOTUI&&!lock;k++){
+            int tt=k?T_PLUS:T_MINUS; int en=(k?!x_edit:x_edit); int pr=pressed(tt); int cx=k?ED_PX:ED_MX;
+            if(W_begin(k?W_PLUS:W_MINUS,R(cx-ED_PM_R-4,ED_CY-ED_PM_R-4,2*ED_PM_R+8,2*ED_PM_R+8),hi(hi(H0,en),pr))){ draw_pm(k,en,pr); W_end(); }
         }
     }
-    if(W_begin(W_DCHG,R(60,224,360,22),hi(hs(H0,t.status?t.status:""),(int)t.c_status))){ if(t.status) text_c(CX,228,t.status,F_XS,t.c_status,255); W_end(); }
-    if(W_begin(W_XNOTE,R(40,xsel==X_EXIT?238:250,400,22),hi(hs(H0,t.note),(int)t.c_note))){ text_c(CX,xsel==X_EXIT?242:254,t.note,F_XS,t.c_note,255); W_end(); }
-    if(W_begin(W_CANCEL,lock?R(170,286,140,60):R(100,286,136,60),hi(hi(H0,pressed(T_CANCEL)),lock))){
-        draw_pill_btn(lock?R(178,292,124,48):R(108,292,124,48),t.cancel,F_XS,C_SURF2,C_SURF,C_TXT,pressed(T_CANCEL)); W_end();
+    if(W_begin(W_DCHG,R(60,ED_STAT_Y-3,360,20),hi(hs(H0,t.status?t.status:""),(int)t.c_status))){ if(t.status) text_c(CX,ED_STAT_Y,t.status,F_XS,t.c_status,255); W_end(); }
+    if(W_begin(W_XNOTE,R(40,ED_NOTE_Y-3,400,20),hi(hs(H0,t.note),(int)t.c_note))){ char nb[110]; snprintf(nb,sizeof nb-4,"%s",t.note); fit_text(nb,F_XS,340); text_c(CX,ED_NOTE_Y,nb,F_XS,t.c_note,255); W_end(); }
+    if(W_begin(W_CANCEL,lock?R(166,BTN_Y-6,148,BTN_H+12):R(BTN_CX0-4,BTN_Y-6,BTN_W+8,BTN_H+12),hi(hi(H0,pressed(T_CANCEL)),lock))){
+        draw_pill_btn(lock?R(170,BTN_Y,140,BTN_H):R(BTN_CX0,BTN_Y,BTN_W,BTN_H),t.cancel,F_S,C_SURF,C_SURF,C_TXT,pressed(T_CANCEL)); W_end();
     }
     int act_ok=(xsel!=X_BOOTUI)||(x_edit!=x_orig);
-    if(!lock&&W_begin(W_SAVE,R(244,286,136,60),hi(hi(hs(H0,t.ok),pressed(T_SAVE)),act_ok))){
-        if(act_ok) draw_pill_btn(R(248,292,124,48),t.ok,xsel==X_SWITCH?F_XS:F_S,rgb(250,204,140),rgb(232,174,100),C_ACCD,pressed(T_SAVE));
-        else draw_pill_btn(R(248,292,124,48),t.ok,F_S,C_SURF2,C_SURF,C_DIS,0);
+    if(!lock&&W_begin(W_SAVE,R(BTN_CX1-4,BTN_Y-6,BTN_W+8,BTN_H+12),hi(hi(hs(H0,t.ok),pressed(T_SAVE)),act_ok))){
+        if(act_ok) draw_pill_btn(R(BTN_CX1,BTN_Y,BTN_W,BTN_H),t.ok,text_wf(t.ok,F_S)>BTN_W-24?F_XS:F_S,C_TXT,C_TXT,C_ACCD,pressed(T_SAVE));
+        else draw_pill_btn(R(BTN_CX1,BTN_Y,BTN_W,BTN_H),t.ok,F_S,C_SURF,C_SURF,C_DIS,0);
         W_end();
     }
-    if(W_begin(W_XFOOT,R(70,392,340,40),hi(hs(hs(H0,t.l1),t.l2),(int)t.c_l1))){
-        text_c(CX,398,t.l1,F_XS,t.c_l1,255); text_c(CX,416,t.l2,F_XS,C_TXT3,255); W_end();
+    if(W_begin(W_XFOOT,R(84,414,312,36),hi(hs(hs(H0,t.l1),t.l2),(int)t.c_l1))){
+        char a1[110],a2[110]; snprintf(a1,sizeof a1-4,"%s",t.l1); snprintf(a2,sizeof a2-4,"%s",t.l2?t.l2:""); fit_text(a1,F_TINY,300); fit_text(a2,F_TINY,270);
+        text_c(CX,416,a1,F_TINY,t.c_l1==C_TXT3?C_TXT2:t.c_l1,255); text_c(CX,434,a2,F_TINY,C_TXT2,255); W_end();
     }
 }
 /* last frame before the runtime switch: stays on screen until the stock UI draws */
 static const char* bye_sub(void){ return TR(bye_mode==SWM_CONT?TX_Y_BYE_CONT:TX_Y_BYE_START); }
 static void draw_bye(void){
-    if(W_begin(W_BYE,R(60,150,360,180),hi(hi(H0,bye_mode),ui_lang))){
-        float iw=text_wf(IC_CUP,F_ICL); text_at(CX-iw/2,152,IC_CUP,F_ICL,C_ACC,255);
-        text_c(CX,206,TR(TX_Y_BYE_T),F_M,C_TXT,255);
-        text_c(CX,240,bye_sub(),F_XS,C_TXT2,255);
-        text_c(CX,262,TR(TX_Y_BYE_CLOSED),F_XS,C_TXT3,255);
+    if(W_begin(W_BYE,R(50,130,380,220),hi(hi(H0,bye_mode),ui_lang))){
+        float iw=text_wf(IC_CUP,F_ICL); text_at(CX-iw/2,150,IC_CUP,F_ICL,C_TXT,255);
+        text_c(CX,214,TR(TX_Y_BYE_T),F_L,C_TXT,255);
+        text_c(CX,256,bye_sub(),F_XS,C_TXT2,255);
+        text_c(CX,280,TR(TX_Y_BYE_CLOSED),F_XS,C_TXT2,255);
         W_end();
     }
 }
-
-/* ================= v6.14: TURNING OFF… / OFF / TURNING ON… (the power button) =================
- * Black page, power symbol (ring w/ opening at the top + bar), title and one or two lines. The backlight goes off 1.5 s after the off press
- * (like stock), so the OFF page is only seen for a moment — or for 8 s after a tap on the screen. */
-#define OFF_IC_Y 178
+/* ================= v6.14: TURNING OFF… / OFF / TURNING ON… (the power button) — v7.0: the dark layer, a white power ring ================= */
+#define OFF_IC_Y 172
 static void draw_off(ms_t now){
     (void)now; int st=pw.state;
-    if(W_begin(W_OFF,R(60,120,360,210),hi(hi(H0,st),ui_lang))){
-        uint32_t ic=st==PW_OFF?C_DIS:C_ACC;
-        arc_aa(CX,OFF_IC_Y,30,3.0f,-50,230,ic,255);                                   /* the ring: open from -130° to -50° (at the top) */
-        capsule(CX,OFF_IC_Y-40,CX,OFF_IC_Y-6,3.0f,ic,255);                            /* the bar */
-        text_c(CX,232,TR(st==PW_OFFING?TX_PW_OFFING:(st==PW_WAKING?TX_PW_WAKING:TX_PW_OFF)),F_M,st==PW_OFF?C_TXT2:C_TXT,255);
-        text_c(CX,268,TR(st==PW_OFFING?TX_PW_SUB_OFFING:(st==PW_WAKING?TX_PW_SUB_WAKING:TX_PW_SUB_OFF)),F_XS,C_TXT3,255);
-        if(st==PW_OFF) text_c(CX,290,TR(TX_PW_NOTE_OFF),F_XS,C_DIS,255);
+    if(W_begin(W_OFF,R(50,110,380,220),hi(hi(H0,st),ui_lang))){
+        int a=st==PW_OFF?140:255;
+        arc_aa(CX,OFF_IC_Y,32,1.8f,-50,230,C_TXT,a);
+        capsule(CX,OFF_IC_Y-42,CX,OFF_IC_Y-8,1.8f,C_TXT,a);
+        text_c(CX,236,TR(st==PW_OFFING?TX_PW_OFFING:(st==PW_WAKING?TX_PW_WAKING:TX_PW_OFF)),F_L,st==PW_OFF?C_TXT2:C_TXT,255);
+        text_c(CX,276,TR(st==PW_OFFING?TX_PW_SUB_OFFING:(st==PW_WAKING?TX_PW_SUB_WAKING:TX_PW_SUB_OFF)),F_XS,C_TXT2,255);
+        if(st==PW_OFF) text_c(CX,298,TR(TX_PW_NOTE_OFF),F_XS,rgb(200,170,150),255);
         W_end();
     }
 }
@@ -1110,14 +1113,14 @@ static void draw_diag(ms_t now){
 static void splash_status(char*b,size_t n){ snprintf(b,n,MERAKIPLUS_VERSION " · %s",TR(cfg_ok?TX_SPL_CFG_OK:TX_SPL_CFG_MISSING)); }
 static void draw_splash(ms_t now){
     float t=(now-ui_start)/(float)SPLASH_MS; int q=(int)(t*30);
-    if(W_begin(W_SPL,R(CX-SPLASH_W/2,140,SPLASH_W,200),hi(hi(H0,q),ui_lang))){
-        int a=(int)(255*clampf(t*3,0,1));
-        float y=4*(1-ease_out(clampf(t*2.2f,0,1)));
-        float iw=text_wf(IC_BEAN,F_ICL); text_at(CX-iw/2,152+(int)y,IC_BEAN,F_ICL,C_ACC,a);
-        brand_c(CX,204+(int)y,F_XL,C_TXT,a);                       /* wordmark: MERAKI + "+" badge */
-        int a2=(int)(255*clampf(t*3-0.6f,0,1)); char b[96];
-        text_c(CX,270,TR(TX_TAGLINE),F_XS,C_TXT2,a2);
-        splash_status(b,sizeof b); text_c(CX,296,b,F_XS,cfg_ok?C_TXT3:C_WARN,a2);
+    if(W_begin(W_SPL,R(CX-SPLASH_W/2,130,SPLASH_W,210),hi(hi(H0,q),ui_lang))){
+        int a=(int)(255*clampf(t*2.5f,0,1));
+        float y=6*(1-ease_out(clampf(t*2.2f,0,1)));
+        float iw=text_wf(IC_BEAN,F_ICL); text_at(CX-iw/2,140+(int)y,IC_BEAN,F_ICL,C_TXT,a);
+        brand_c(CX,204+(int)y,F_H,C_TXT,a);
+        int a2=(int)(255*clampf(t*3-0.7f,0,1)); char b[96];
+        text_c(CX,262,TR(TX_TAGLINE),F_XS,C_TXT2,a2);
+        splash_status(b,sizeof b); text_c(CX,286,b,F_TINY,cfg_ok?C_TXT2:C_WARN,a2);
         W_end();
     }
 }
@@ -1126,7 +1129,7 @@ static void draw_splash(ms_t now){
 static void static_build(void){
     memcpy(bgbase,bgpure,(size_t)W*H*4);
     cv=bgbase; set_clip(FULL);
-    if(view==V_OFF) memset(bgbase,0,(size_t)W*H*4);                   /* v6.14: the OFF page is black (the backlight is off anyway) */
+    if(view==V_OFF) memcpy(bgbase,bgdark,(size_t)W*H*4);             /* v6.14: the OFF page (v7.0: the dark layer; the backlight goes off anyway) */
     else if(view==V_DETAIL) static_detail();
     else if(view==V_SYS) static_sys();
     else if(view==V_MAIN){

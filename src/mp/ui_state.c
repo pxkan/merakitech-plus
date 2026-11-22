@@ -55,7 +55,8 @@ static int view=V_SPLASH, page=PG_HOME, sel=-1, edit_val=0, edit_orig=0;
 static float scroll[NPAGE];
 static ms_t ui_start=-1, ui_last=0; static int ui_anim=1; static volatile int run=1;
 static int ui_kick=0; static float ft_last=0, ft_max=0;   /* frame time (ms) measured on device, shown on DIAGNOSE */
-static struct { int down,x0,y0,x,y,moved,target,scrolling,fired,rep_n,axis; ms_t t0,rep_next; float scroll0; } tch;
+static struct { int down,x0,y0,x,y,moved,target,scrolling,fired,rep_n,axis,roll_n; ms_t t0,rep_next; float scroll0; } tch;
+static float roll_off=0;          /* v7.0: the editor roller's drag offset in px, eased back to 0 after the release */
 static struct { char msg[96]; ms_t t0; int dur; uint32_t col; } toast;
 static struct { float x,y; ms_t t0; int on; } rip;
 static Rect ov_prev[2];
@@ -456,18 +457,19 @@ static int home_mode_of(int ph){
 #define BACK_W 120
 #define BACK_H 54
 /* v7.0: the editor (a roller like the stock pickers + −/+ rings + an OK ring) and the system action (two pills) */
-#define ED_TITLE_Y 34
-#define ED_RANGE_Y 62
-#define ED_CY 214          /* the roller's centre line */
+#define ED_TITLE_Y 32
+#define TITLE_W 232        /* v7.0: a title near the top must fit the circle's chord there: F_L, else F_M, else F_S (+ … ) */
+#define ED_RANGE_Y 66
+#define ED_CY 190          /* the roller's centre line */
 #define ED_MX 82
 #define ED_PX 398
 #define ED_PM_R 29
 #define ED_ROLL_X0 124
 #define ED_ROLL_X1 356
-#define ED_STEP_PX 54      /* roller: one step per 54 px of drag */
-#define ED_STAT_Y 286
-#define ED_NOTE_Y 308
-#define ED_OK_Y 382
+#define ED_STEP_PX 50      /* roller: one value per 58 px (drag and drawing) */
+#define ED_STAT_Y 300
+#define ED_NOTE_Y 322
+#define ED_OK_Y 390
 #define ED_OK_R 36
 #define BTN_Y 350
 #define BTN_H 50
@@ -480,7 +482,7 @@ static int home_mode_of(int ph){
 #define PBACK_W 160
 #define PBACK_H 74
 #define PG_CHEV_Y 16
-#define PG_TITLE_Y 34
+#define PG_TITLE_Y 32
 #define PG_LIVE_Y 64
 /* v6.17: HOLD TO START on a feature page — same hold (HOLD_MS) and same guard as the HOME icon */
 #define START_R 33         /* v7.0: HOLD TO START is a ring button (play icon) with its caption under it, like the stock screens */
@@ -596,4 +598,4 @@ enum { TE_DOWN, TE_MOVE, TE_UP };
 static int swipe_h(int axis,int dx,int dy){ return axis==1&&abs(dx)>=60&&10*abs(dx)>=17*abs(dy); }
 /* v6.11: swipe DOWN (>= 70 px, vertically locked, |dy| >= 1.7·|dx|) closes the detail/system view like CANCEL — not if
  * the gesture started on −/+ (there the press-down has already changed the value) */
-static int swipe_down(int axis,int target,int dx,int dy){ return axis==2&&dy>=70&&10*dy>=17*abs(dx)&&target!=T_MINUS&&target!=T_PLUS; }
+static int swipe_down(int axis,int target,int dx,int dy){ return axis==2&&dy>=70&&10*dy>=17*abs(dx)&&target!=T_MINUS&&target!=T_PLUS&&target!=T_ROLL; }
