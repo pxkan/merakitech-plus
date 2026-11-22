@@ -23,6 +23,7 @@ check for the file on every call, so a test can switch a failure on and off betw
   * ui_start=never   `nohup ./demo_v9` starts nothing (the binary fails to come up).
   * cp_enospc=SUFFIX `cp X DEST` with DEST ending in SUFFIX writes 100 bytes, then fails (disk full).
   * df_free_kb=N     `df` reports N KB available on every filesystem.
+  * nc_corrupt       every upload received by `nc -l` gets one extra byte (md5 mismatch).
 
 When the shell exits, the server closes the connection (like telnetd), so a client sees a
 transport drop at once instead of waiting for its timeout.
@@ -126,7 +127,7 @@ while True:
     b=c.recv(65536)
     if not b: break
     sys.stdout.buffer.write(b)
-sys.stdout.flush(); c.close()' "$3"; }
+sys.stdout.flush(); c.close()' "$3"; rc=$?; mock_inject nc_corrupt && printf X; return $rc; }
 nohup() {
   case "$1" in
     ./demo_v9) case "$(cat "$R/inject/ui_start" 2>/dev/null)" in

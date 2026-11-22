@@ -462,7 +462,8 @@ class Device:
         self.changed = True
         for attempt in range(3):
             port = random.randint(40000, 49999)
-            _, out = self.sh(f"rm -f {part}; nohup nc -l -p {port} > {part} 2>/dev/null & echo NCPID=$!; sleep 1")
+            _, out = self.sh(f"rm -f {part}; nohup nc -l -p {port} > {part} 2>/dev/null < /dev/null & "
+                             f"echo NCPID=$!; sleep 1")
             ncpid = (re.search(r"NCPID=(\d+)", out) or [None, ""])[1]
             sent = False
             for _ in range(10):
@@ -501,7 +502,7 @@ class Device:
                 return want
             self.sh(f"rm -f {part}", check=False)
             last_err = last_err or f"md5 {got} != {want}"
-            self.o.warn(f"upload attempt {attempt + 1} failed ({last_err}); retrying")
+            self.o.warn(f"upload attempt {attempt + 1} failed ({last_err})" + ("; retrying" if attempt < 2 else ""))
         raise Abort(f"Could not upload {dest}: {last_err}")
 
     def atomic_copy(self, src, dest, want_md5, mode="755"):

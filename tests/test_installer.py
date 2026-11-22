@@ -515,6 +515,20 @@ def disk_full_copy(srv, root):
     check("vendor slot B restored", md5f(root / "new_customer/demo_v9") == orig_b)
 
 
+def corrupt_upload(srv, root):
+    """Every upload arrives corrupted: push retries, then aborts with the destination untouched."""
+    orig_b = md5f(root / "new_customer/demo_v9")
+    md.inject(root, "nc_corrupt")
+    rc, out = run(srv, root, "install", quiet=True)
+    md.uninject(root, "nc_corrupt")
+    att = [l for l in out.splitlines() if "upload attempt" in l]
+    check("corrupt uploads: install exits 1 after 3 attempts", rc == 1 and "Could not upload" in out and len(att) == 3, att)
+    check("only the attempts before the last say 'retrying'",
+          [l.endswith("retrying") for l in att] == [True, True, False], att)
+    check("corrupt uploads: slot B untouched, no .part left", md5f(root / "new_customer/demo_v9") == orig_b
+          and not tmp_files(root), tmp_files(root))
+
+
 def log_location(srv, root):
     """Review finding 7: in install.sh's standalone (curl) mode the tool runs from a mktemp dir;
     its parent is not a checkout, so logs must not go to <parent>/logs (e.g. /tmp/logs)."""
@@ -563,6 +577,7 @@ if __name__ == "__main__":
     scenario("free-space gate", "stock_a", free_space)
     scenario("disk full during a copy; leftover temp files", "stock_a", disk_full_copy)
     scenario("log location in install.sh standalone mode", "stock_a", log_location)
+    scenario("corrupt uploads", "stock_a", corrupt_upload)
     scenario("vendor OTA into slot B after install", "stock_a", ota_after_install)
     scenario("vendor OTA into slot B after install + revert", "stock_a", ota_after_revert)
     scenario("stock UI left SIGSTOPped by an older run", "stock_a", stopped_ui)
