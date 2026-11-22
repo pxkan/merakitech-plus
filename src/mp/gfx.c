@@ -170,11 +170,11 @@ static void bg_build(void){
         uint32_t*p=&bgpure[y*W+x], *q=&bgdark[y*W+x];
         if(x<cx0[y]||x>cx1[y]){ *p=*q=0xFF000000u; continue; }
         float dx=x+0.5f-CX, dy=y+0.5f-CY; float rr=sqrtf(dx*dx+dy*dy), d=rr/RSAFE;
-        float t=powf(d,2.2f);
+        float t=d*d*sqrtf(sqrtf(d));                                      /* ≈ d^2.25 (no powf: this runs for every pixel at start) */
         float lift=clampf(0.55f-(dx+dy)/700.f,0,1);                       /* soft light from the upper left */
         float r=BG_C0R-50*t+10*lift*(1-t), g=BG_C0G-30*t+6*lift*(1-t), b=BG_C0B-16*t+3*lift*(1-t);
         /* guilloche: distance in a blend of a rounded square and a circle, lines every 4.6 px, AA'd, fading out at the centre */
-        float ax=fabsf(dx), ay=fabsf(dy), sq=powf(powf(ax,3.2f)+powf(ay,3.2f),1/3.2f), dd=0.62f*sq+0.38f*rr;
+        float ax=dx*dx, ay=dy*dy, sq=sqrtf(sqrtf(ax*ax+ay*ay)), dd=0.62f*sq+0.38f*rr;   /* rounded square (p = 4) blended w. the circle */
         float ph=dd/4.6f; ph-=floorf(ph); float ln=1-fabsf(ph-0.5f)*2; ln=clampf((ln-0.62f)/0.38f,0,1);
         float amp=(0.035f+0.05f*clampf((d-0.12f)/0.5f,0,1));
         r+=ln*amp*255*0.42f; g+=ln*amp*255*0.30f; b+=ln*amp*255*0.20f;
@@ -570,7 +570,7 @@ static void font_init(void){
 }
 static void font_prewarm(void){
     static const char*const dig="0123456789.-";
-    for(const char*p=dig;*p;p++){ int g=fg_index(*p); for(int ph=0;ph<4;ph++){ glyph_get(F_XXL,g,ph); glyph_get(F_XL,g,ph); glyph_get(F_NUM,g,ph); glyph_get(F_M,g,ph); } }
+    for(const char*p=dig;*p;p++){ int g=fg_index(*p); glyph_get(F_XXL,g,0); glyph_get(F_STAT,g,0); }   /* the live view's digits; the rest on first use */
 }
 
 /* ================= dirty rect lists ================= */

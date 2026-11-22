@@ -2,6 +2,11 @@
  * 480x480 screen, v6.16: feature parity (settings + activity control), its own visual
  * design system, boot-slot integration, product name + two languages — and from v6.4 a SIM build.
  *
+ * v7.0 = v6.19 + THE OEM REDESIGN (display and navigation only; docs/dev/UI_v6.md "CHANGES-v7.0", docs/design/): the stock look —
+ *  a copper background with a fine guilloche, white ring buttons in the stock 2x2 grid with their names set along the arc, line icons,
+ *  real typography (Montserrat, SIL OFL 1.1, baked as outlines into src/mp/font_data.c by tools/gen_font.py and rasterized with exact
+ *  coverage), a live view with a big number + an edge progress ring, white rows on copper, a roller editor, a dark error layer. The
+ *  model, guards, save path, frame policy, recipes, STOP, boot push and everything else that reaches the UART are unchanged.
  * v6.19 = v6.18.1 + (1) NO READY TONE AT A POWER-ON WITH HOT BOILERS (user: jingle + both ready tones back-to-back is redundant): at every
  *  power-on (cold boot of the display, OFF -> on, sleep -> wake) a boiler whose heat stage is already 100 over the first 1.5 s counts as
  *  announced — only the jingle plays; a tone needs a real cold -> hot transition during the session (re-arm after cooling unchanged).
@@ -306,7 +311,7 @@ static int  sim_net_on=1;
 #define KBD_NAME "k62091"
 #define BL_SYSFS "/sys/class/pwm/pwmchip0/pwm2/duty_cycle"
 #define BL_EN_SYSFS "/sys/class/pwm/pwmchip0/pwm2/enable"   /* v6.14: stock uikit_os_back_light_off/on 0xC2278 = blpwm_set_enable(2,0/1) */
-#define MERAKIPLUS_VERSION "V6.19"
+#define MERAKIPLUS_VERSION "V7.0"
 
 /* ---- v6.10: pressure estimate (UI_v6.md §16) ----
  * Word 51 (SPI2 ADC channel 0xA, REGISTERMAP: pressure OR pump-drive candidate) -> bar with ONE linear anchor:
