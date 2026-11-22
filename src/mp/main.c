@@ -70,69 +70,14 @@ static int net_cli(int argc,char**argv){
 #define NET_CLI(argc,argv) (void)argc; (void)argv;
 #define NET_ENABLED sim_net_on
 #endif
+#ifndef MERAKIPLUS_WASM                /* the browser build has no main(): src/mp/wasm_hal.c exports mp_init/mp_step instead */
 int main(int argc,char**argv){
     signal(SIGINT,onsig); signal(SIGTERM,onsig);
     NET_CLI(argc,argv)
-    dev_release=dev_release_impl; dev_reacquire=dev_reacquire_impl;
-    const char*e;
-    if((e=getenv("MERAKIPLUS_CONFIG"))) snprintf(cfg_path,sizeof cfg_path,"%s",e);
-    if((e=getenv("MERAKIPLUS_BAKDIR"))) snprintf(cfg_bakdir,sizeof cfg_bakdir,"%s",e);
-    if(getenv("MERAKIPLUS_NOBL")) bl_enabled=0;
-    if(getenv("MERAKIPLUS_READONLY")) ro_mode=1;
-    if((e=getenv("MERAKIPLUS_ROOT"))) snprintf(sysroot,sizeof sysroot,"%s",e);
-    if((e=getenv("MERAKIPLUS_LANGFILE"))) snprintf(lang_path,sizeof lang_path,"%s",e);
-    if((e=getenv("MERAKIPLUS_SCHEDFILE"))) snprintf(sched_path,sizeof sched_path,"%s",e);   /* v6.16 */
-    if((e=getenv("MERAKIPLUS_SOUNDFILE"))) snprintf(snd_path,sizeof snd_path,"%s",e);       /* v6.18 */
-    if(getenv("MERAKIPLUS_SWITCH_DRY")) sw_dry=1;
-    if(getenv("MERAKIPLUS_NOBOOTPUSH")) bp_on=0;
-    SIM_ENV
-    bs.self_pid=(int)getpid();
-    lang_load();                           /* v6.3: UI language BEFORE the first frame (splash); missing/unreadable/unknown -> English */
-    gfx_init(); settings_load();
-    boot_refresh();                        /* warm up (binary marker scan of slot B) during splash, not on the first tap */
-    uart_open(); fb_open(); inp_open();
-#ifdef DEVICE_RT
-    kbd_open();                            /* v6.14: the power button (k62091) */
-#endif
-    SIM_START
-    ms_t t0=now_ms();
-    net_start(t0,NET_ENABLED);             /* v6.7: wifi at startup + self-heal (first evaluation in the first loop iteration) */
-    proto_keepawake(t0,1);                 /* power=1 + word1=0 (awake) */
-#ifdef DEVICE_RT
-    if(bp_on&&!ro_mode) boot_push_start(1);   /* v6.5: boot push like stock (sub1 len30 + sub112 len3) w/ activity guard */
-#endif
-    RL full; full.n=1; full.r[0]=FULL; pres_prev=full;
+#include "main_setup.c"            /* startup (shared with the browser build's mp_init) */
     while(run){
         ms_t now=now_ms();
-        uint8_t b[512]; int n;
-        while((n=read(ufd,b,sizeof b))>0) rx_feed(b,n,now);
-        rx_feed(b,0,now);                  /* v6.5: the resync watchdog must also run when nothing arrives */
-        wq_step(now);
-        loop_poll(now);                    /* v6.6: the timers live in lt (64 bit) — see loop_poll() */
-        proto_keepawake(now,0);
-        uart_flush();
-        loop_graph(now);
-        inp_poll(now);
-#ifdef DEVICE_RT
-        kbd_poll(now);                     /* v6.14: the power button */
-#endif
-        pw_step(now);                      /* v6.14: hold -> off frames / OFF / TURNING ON… */
-        sched_step(now);                   /* v6.16: pre-arm the pre-heat alarm, one-shot use, auto off */
-        snd_tick(now);                     /* v6.18: start jingle + per-boiler ready tones (display/audio only, no frames) */
-        net_step(now);                     /* v6.7: non-blocking; does nothing between two probes */
-#ifdef DEVICE_RT
-        boot_push_step(now);
-        repush_step(now);                  /* v6.6: MCU restart (0x89 again / defaults signature) -> boot push from scratch */
-#endif
-        SIM_TICK(now)
-        if(!run) break;                    /* REVERT / runtime switch: after step 1 fb/UART are closed — do not touch them any more */
-        if(loop_render_due(now)){
-            struct timespec fa,fb; clock_gettime(CLOCK_MONOTONIC,&fa);
-            ui_frame(now);
-            clock_gettime(CLOCK_MONOTONIC,&fb);
-            loop_rendered(now,(fb.tv_sec-fa.tv_sec)*1e3f+(fb.tv_nsec-fa.tv_nsec)/1e6f);
-            SIM_FRAME(now)
-        }
+#include "main_step.c"             /* one iteration (shared with the browser build's mp_step) */
         struct timespec sl={0, 2*1000*1000}; nanosleep(&sl,NULL);
     }
     /* run.sh mode: last frame (fb is still open; on a real B->A switch it has already been shown and fb closed) */
@@ -156,3 +101,4 @@ int main(int argc,char**argv){
     if(ffd>=0) close(ffd);
     return MAIN_RC;
 }
+#endif /* !MERAKIPLUS_WASM */
