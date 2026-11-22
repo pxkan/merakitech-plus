@@ -19,12 +19,11 @@ sim/studio.sh build --no-classic   # only build build/studio/ (skip the classic 
 - **Compare:** the *Compare* switch runs a second UI, *classic* (default: the v6.19 release `c9a8524`, extracted with
   `git archive`, so it works on any branch), next to *current*, each with its own machine; the drawer's machine
   controls and scenarios apply to both. Other ref: `sim/studio.sh build --classic-ref <ref>`.
-- **On Kenny (the always-on Mac):** a LaunchAgent serves a deployed copy on the tailnet:
-  **http://m1.tail2d748a.ts.net:8765/** (100.71.28.20). Deploy a new build from any checkout with
-  `sim/studio.sh deploy` (builds into `~/merakitech-plus-studio/site`, swaps it in, restarts the agent).
-  Status `sim/studio.sh status`; restart `launchctl kickstart -k gui/$(id -u)/com.kenny.meraki-studio`;
-  stop `launchctl bootout gui/$(id -u)/com.kenny.meraki-studio` (`sim/studio.sh install-agent` brings it back,
-  `uninstall-agent` removes it). Log: `~/Library/Logs/meraki-studio.log`.
+- **As a background service (macOS):** `sim/studio.sh install-agent` installs a LaunchAgent that serves a deployed
+  copy on port 8765, so other devices on your network (or tailnet) can open `http://<host>:8765/`. Deploy a new build
+  from any checkout with `sim/studio.sh deploy` (builds into `~/merakitech-plus-studio/site`, swaps it in, restarts
+  the agent). Status `sim/studio.sh status`; restart `launchctl kickstart -k gui/$(id -u)/<agent label in studio.sh>`;
+  `sim/studio.sh uninstall-agent` removes it. Log: `~/Library/Logs/meraki-studio.log`.
 - **Tests:** `node sim/studio/test_machine.mjs` (protocol vectors from `proto.py` + physics) and
   `node sim/studio/smoke.mjs` (boots the wasm, holds BREW on the real `layout` target, runs a shot to auto-stop).
 - **How it works:** `src/mp/wasm_hal.c` turns the SIM build (`SIM_RT`: sandbox, state JSON, test hooks) into a WASI
