@@ -62,6 +62,17 @@ zig cc -DMERAKIPLUS_PREVIEW -O2 -o build/merakiplus_preview src/merakiplus.c -lm
 
 The simulator can also be played interactively in the browser: `python3 sim/play.py` (see `sim/PLAY.md`).
 
+## Source layout
+
+`src/merakiplus.c` is one translation unit (a *unity build*): it holds the build-type switches, the
+HAL macros and the time base, and then `#include`s the fragments in `src/mp/` in a fixed order —
+`proto` (UART, RX parser, write queue, frame policy), `config`, `net`, `i18n`, `bootslot`, `model`
+(settings, scheduling, recipes, STOP, phases), then the UI: `gfx` (renderer), `ui_state`, `services`
+(power button, schedule, sound), `ui_pages`, `runtime` (boot push, re-push), and the entry points
+`input` / `sim_hal` / `main` (device + SIM) or `preview` / `selftest` (preview build). The fragments
+share one scope, so statics are visible across them and the order matters; build commands stay
+`zig cc … src/merakiplus.c`. Safety-critical code is in `proto.c`, `model.c` and `runtime.c`.
+
 ## Code style
 
 - **C (`src/`, `boot/`):** C11, no external dependencies, static musl. New files must build with
@@ -70,7 +81,7 @@ The simulator can also be played interactively in the browser: `python3 sim/play
   recipes, boot push) are only changed together with a test that proves the behavior.
 - **Python:** standard library, no dependencies, Python 3.8 compatible.
 - **Strings:** all visible UI text exists in English **and** Danish (the string table in
-  `merakiplus.c`). The bilingual UI is a feature — keep both columns in sync.
+  `src/mp/i18n.c`). The bilingual UI is a feature — keep both columns in sync.
 - **Language:** documentation, user-facing CLI messages and new code comments are in English. Some
   older code comments are still in Danish; translating them is a welcome contribution.
 
