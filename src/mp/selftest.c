@@ -1902,6 +1902,15 @@ static void st_r5(const char*dir){
     sim_reset(); t=st_pw_home(); txq_len=0; st_own_save(S_PHREP,1,t); st_own_save(S_PREHEAT,1,t); t=st_tm_loop(t,30000,1); n=st_cmd8_frames(NULL,16,fr);
     st_check("R5 with the echo: ONE pre-arm frame, no retry (the v6.16-v6.19 traffic)",n==1&&arm.n_retry==0&&arm.n_ack==1);
     st_own_save(S_PREHEAT,0,t); t=st_tm_loop(t,300,1);
+    /* R7 (review persist #4): a ONE-SHOT saved while the SoC clock is unset is armed once the clock becomes valid, and used up as usual */
+    { sim_reset(); t=st_pw_home(); clk_fake=10000; st_own_save(S_PHAT,390,t); st_own_save(S_PHREP,0,t); st_own_save(S_PREHEAT,1,t);
+      int saved=sch.on&&sch.once_at==0&&!strcmp(toast.msg,TR(TX_T_NOCLOCK)); txq_len=0; t=st_tm_loop(t,6000,1); int quiet=st_cmd8_frames(NULL,16,fr)==0;
+      clk_fake=PV_CLK; t=st_tm_loop(t,6000,1); n=st_cmd8_frames(NULL,16,fr); int64_t want=st_utc(2026,11,19,5,30,0);
+      char rb[256]; int fd=open(sched_path,O_RDONLY); int rn=fd>=0?(int)read(fd,rb,sizeof rb-1):-1; if(fd>=0) close(fd); if(rn<0) rn=0; rb[rn]=0; char ws[64]; snprintf(ws,sizeof ws,"once_at=%lld",(long long)want);
+      int armed=sch.once_at==want&&n==1&&st_alarm_of(fr[0],&d,&h,&m)&&d==19&&h==6&&m==30&&strstr(rb,ws);
+      clk_fake=want+61; t=st_tm_loop(t,200,1); int used=!sch.on&&!strcmp(toast.msg,TR(TX_T_ONCE_USED)); clk_fake=PV_CLK;
+      st_check("R7 ONCE 06:30 saved with the clock unset (NO CLOCK toast, nothing sent): when the clock becomes valid it is armed for the next 06:30 (once_at saved, cmd8 alarm 19 06:30) and used up a minute after it",
+               saved&&quiet&&armed&&used); }
     st_echo8=1; unlink(sched_path); snprintf(sched_path,sizeof sched_path,"%s",keep_sp); SET[S_TZ].val=keep_tz; SET[S_DST].val=keep_dst; settings_load(); sim_reset();
 }
 static int selftest(const char*cfgsrc){

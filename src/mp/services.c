@@ -166,6 +166,9 @@ static int sched_ok_to_send(ms_t now){
 static void sched_step(ms_t now){
     int64_t u=clk_utc();
     if(!idle_t0) idle_kick(now);                                                   /* first call: the idle timer starts now */
+    if(sch.on&&!REP_MASK[sch.rep]&&sch.once_at==0&&clk_valid(u)){                  /* v6.20: a one-shot saved while the clock was unset is for the */
+        sch.once_at=sched_once_target(u); sched_save(); ui_kick=1;                   /* next hh:mm once the clock is valid (it stayed ON, never armed) */
+    }
     if(sch.on&&!REP_MASK[sch.rep]&&sch.once_at>0&&clk_valid(u)&&u>=sch.once_at+60){   /* one-shot used */
         sch.on=0; sch.once_at=0; SET[S_PREHEAT].val=0; sched_save(); toast_show(TR(TX_T_ONCE_USED),C_OK,now); ui_kick=1;
     }
