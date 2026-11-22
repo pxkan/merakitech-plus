@@ -2,6 +2,12 @@
  * 480x480 screen, v6.16: feature parity (settings + activity control), its own visual
  * design system, boot-slot integration, product name + two languages — and from v6.4 a SIM build.
  *
+ * v6.20 = v6.19 + the fixes of the 2026-11 code review (docs/dev/REVIEW-2026-11.md, CHANGELOG): stepper repeat after a failed save;
+ *  SAVE refused while a start is pending; the existing STOP stays offered for a latched start word; queued STOPs survive a failing
+ *  frame; a pre-arm/disarm cmd8 without its 0x88 echo is resent (max 2); an unusable Wi-Fi password is never "open"; a one-shot saved
+ *  without a clock is armed once the clock is set; config.json.orig via tmp + rename; glyph_next stops at the NUL; NaN-safe SIM JSON,
+ *  hardened ctrl parser and clamped display of absurd config values. The src/mp/ module split (unity build) came just before.
+ *
  * v6.19 = v6.18.1 + (1) NO READY TONE AT A POWER-ON WITH HOT BOILERS (user: jingle + both ready tones back-to-back is redundant): at every
  *  power-on (cold boot of the display, OFF -> on, sleep -> wake) a boiler whose heat stage is already 100 over the first 1.5 s counts as
  *  announced — only the jingle plays; a tone needs a real cold -> hot transition during the session (re-arm after cooling unchanged).
@@ -306,7 +312,7 @@ static int  sim_net_on=1;
 #define KBD_NAME "k62091"
 #define BL_SYSFS "/sys/class/pwm/pwmchip0/pwm2/duty_cycle"
 #define BL_EN_SYSFS "/sys/class/pwm/pwmchip0/pwm2/enable"   /* v6.14: stock uikit_os_back_light_off/on 0xC2278 = blpwm_set_enable(2,0/1) */
-#define MERAKIPLUS_VERSION "V6.19"
+#define MERAKIPLUS_VERSION "V6.20"
 
 /* ---- v6.10: pressure estimate (UI_v6.md §16) ----
  * Word 51 (SPI2 ADC channel 0xA, REGISTERMAP: pressure OR pump-drive candidate) -> bar with ONE linear anchor:

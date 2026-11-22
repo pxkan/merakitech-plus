@@ -89,14 +89,23 @@ self-test and the simulator E2E suite.
 
 | File | md5 (this repo) | Built with |
 |---|---|---|
-| `merakiplus` (V6.19) | `e654f668636322204e18d9ac1b386795` | `./build.sh` → `build/merakiplus` |
-| `merakiplus_sim_arm` (V6.19) | `8624e302c23e96d11f249234803a61f9` | `./build.sh` → `build/merakiplus_sim_arm` |
+| `merakiplus` (V6.20) | `c8b91a4c8d2d1de56a7fb9cea8d85e06` | `./build.sh` → `build/merakiplus` |
+| `merakiplus_sim_arm` (V6.20) | `462541a35ee24d7162663141f6d59fe7` | `./build.sh` → `build/merakiplus_sim_arm` |
 | `merakiplus_snd` (V6.18.1) | `a7659c176b8ef78385b0b612a69e81ca` | `./build.sh` → `build/merakiplus_snd` |
-| `switcher` | `f2b95b16b33a9e1bc868a2f5b2414e6b` | `./build.sh` → `build/switcher` |
+| `switcher` (v6.20) | `c9d937fa36c51e2e58276041b6761ac0` | `./build.sh` → `build/switcher` |
 | `tinj_hold` | `e9806fb92e9b8a7e506a34639173c648` | `./build.sh` → `build/tinj_hold` |
 | `keyinj` | `a0cbd4bc2a670abe0e250ec34a193843` | `./build.sh` → `build/keyinj` |
-| `merakiplus_sim-linux-x86_64` (V6.19) | `efd5b527db2588f24b06433d8d1da34d` | `zig cc -target x86_64-linux-musl -DMERAKIPLUS_SIM -O2 -static -s src/merakiplus.c -lm` |
-| `merakiplus_sim-macos-arm64` (V6.19) | `200f37daf772cc02d79f2fd15b9d680a` | `zig cc -DMERAKIPLUS_SIM -O2 -s src/merakiplus.c -lm` (Mach-O builds are not bit-reproducible) |
+| `merakiplus_sim-linux-x86_64` (V6.20) | `d240e5ed112d3a630a813b7e75126003` | `zig cc -target x86_64-linux-musl -DMERAKIPLUS_SIM -O2 -static -s src/merakiplus.c -lm` |
+| `merakiplus_sim-macos-arm64` (V6.20) | `ad8735e2f122bf0a486ea8f06b77adf5` | `zig cc -DMERAKIPLUS_SIM -O2 -s src/merakiplus.c -lm` (Mach-O builds are not bit-reproducible) |
+
+**v6.20 (2026-11-22, code review fixes, docs/dev/REVIEW-2026-11.md):** `merakiplus`, `merakiplus_sim_arm` and both
+host SIM builds were rebuilt from the v6.20 sources, and `switcher` because the switch child now closes its inherited
+file descriptors (`boot/switcher.c`, O_CLOEXEC + `close_fds_from(3)`). Built on macOS (arm64) with the official zig
+0.17.1 (`~/.local/bin/zig`, its own cache) via `./build.sh` plus the two SIM commands in the table. `merakiplus_snd`,
+`tinj_hold`, `keyinj` and `grab_shim.so` are unchanged (fresh builds of the first three are byte-identical; the
+`.so` stays the on-device-verified build). None of the v6.20 binaries has been run on a machine yet; behaviour is
+covered by the UI self-test (EN + DA, also under ASan + UBSan), the switcher self-test and the simulator E2E suite.
+The v6.19 builds were `e654f668…` (`merakiplus`), `8624e302…` (`merakiplus_sim_arm`), `f2b95b16…` (`switcher`).
 
 The ARM builds above are reproducible: running `./build.sh` on the same sources with the **official**
 zig 0.17.1 release (the ziglang.org tarball CI installs) gives the same md5 on macOS and Linux,
