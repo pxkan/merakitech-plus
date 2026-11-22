@@ -1,9 +1,9 @@
 c42076c807c54d477a5868977404186d  grab_shim.so
 a0cbd4bc2a670abe0e250ec34a193843  keyinj
-c8b91a4c8d2d1de56a7fb9cea8d85e06  merakiplus
-d240e5ed112d3a630a813b7e75126003  merakiplus_sim-linux-x86_64
-ad8735e2f122bf0a486ea8f06b77adf5  merakiplus_sim-macos-arm64
-462541a35ee24d7162663141f6d59fe7  merakiplus_sim_arm
+cb6f2b12f18621fa4e9759b0a8d63b08  merakiplus
+f61e56dd060774e463751e0743b9096f  merakiplus_sim-linux-x86_64
+b60733ccb7b51fc9e6041ecfe16c17c0  merakiplus_sim-macos-arm64
+01075812f6f6493ee247b170a3ad9de7  merakiplus_sim_arm
 a7659c176b8ef78385b0b612a69e81ca  merakiplus_snd
 c9d937fa36c51e2e58276041b6761ac0  switcher
 e9806fb92e9b8a7e506a34639173c648  tinj_hold
