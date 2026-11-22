@@ -508,7 +508,8 @@ static Rect stop_pill(int n,int i){ if(n<=1) return R(CX-STOP_PILL1_W/2,STOP_PIL
 static int stop_font(int n){ return n>1?F_S:F_M; }
 static int diag_hint(int ph){ return ph==PH_ERROR||ph==PH_OFFLINE; }      /* HOME's hint line points to DIAGNOSTICS -> it is a tap target */
 static int hit_test(int x,int y,ms_t now){
-    if(view==V_SPLASH||view==V_BYE||view==V_OFF||tr.type) return T_NONE;
+    if(view==V_SPLASH||view==V_BYE||view==V_OFF) return T_NONE;
+    if(tr.type&&!(view==V_MAIN&&page==PG_HOME&&hm_mode==HM_ACTIVE)) return T_NONE;   /* v7.0: the fade/slide INTO the live view must not swallow STOP */
     if((view==V_SYS||view==V_DETAIL)&&in_r(x,y,BACK_X0,BACK_Y0,BACK_W,BACK_H)) return T_BACK;   /* v6.11: close chevron at the top */
     if(view==V_SYS){
         if(sys_locked()){ if(in_r(x,y,170,SB_Y-4,140,SB_H+8)) return T_CANCEL; return T_NONE; }
