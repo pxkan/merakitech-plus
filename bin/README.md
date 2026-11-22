@@ -2,7 +2,7 @@
 
 | File | What | Built from |
 |---|---|---|
-| `merakiplus` | **Meraki+ v6.19** device binary (static ARMv7, musl). Installed as `/new_customer/demo_v9`. | `src/merakiplus.c` |
+| `merakiplus` | **Meraki+ v7.0** device binary (static ARMv7, musl). Installed as `/new_customer/demo_v9`. | `src/merakiplus.c` |
 | `merakiplus_snd` | sound helper (ARMv7, dynamic against the display's glibc 2.28; `dlopen`s the display's own `libmi_*.so` at run time). Installed as `/new_customer/merakiplus/merakiplus_snd`, next to `audio/` | `src/merakiplus_snd.c` |
 | `switcher` | gesture switcher daemon (center-hold 5 s → stock to Meraki+), only with `--gesture` | `boot/switcher.c` |
 | `grab_shim.so` | tiny LD_PRELOAD shim so the switcher can see touches while the stock UI runs (only with `--gesture`) | `boot/grab_shim.c` |
@@ -15,6 +15,23 @@
 **No vendor firmware, libraries or scripts are included here or anywhere in this repository.**
 
 ## Provenance of the ARM binaries
+
+**v7.0 (2026-11-22, the OEM redesign):** `merakiplus`, `merakiplus_sim_arm` and the two host SIM builds were rebuilt from the
+v7.0 source with the official zig 0.17.1. The change is display and navigation only (docs/dev/UI_v6.md "CHANGES-v7.0"): the
+copper look, the ring HOME, the live view, the roller editor, real typography (Montserrat outlines in `src/mp/font_data.c`,
+SIL OFL 1.1, see `third_party/montserrat/`; +125 KB). The model, guards, save path, frame policy, recipes, STOP, boot push and
+everything that reaches the UART are the v6.20 code. `merakiplus_snd`, `switcher`, `tinj_hold`, `keyinj` and `grab_shim.so`
+are byte-identical to v6.20. **Not yet verified on a machine**: covered by the UI self-test (EN + DA, also as a 32-bit ARM
+binary under qemu), the simulator E2E suite (EN + DA) and Sim Studio's headless smoke.
+
+**v6.20 (2026-11-22, code review fixes, docs/dev/REVIEW-2026-11.md):** `merakiplus`, `merakiplus_sim_arm` and both
+host SIM builds were rebuilt from the v6.20 sources, and `switcher` because the switch child now closes its inherited
+file descriptors (`boot/switcher.c`, O_CLOEXEC + `close_fds_from(3)`). Built on macOS (arm64) with the official zig
+0.17.1 (`~/.local/bin/zig`, its own cache) via `./build.sh` plus the two SIM commands in the table. `merakiplus_snd`,
+`tinj_hold`, `keyinj` and `grab_shim.so` are unchanged (fresh builds of the first three are byte-identical; the
+`.so` stays the on-device-verified build). None of the v6.20 binaries has been run on a machine yet; behaviour is
+covered by the UI self-test (EN + DA, also under ASan + UBSan), the switcher self-test and the simulator E2E suite.
+The v6.19 builds were `e654f668…` (`merakiplus`), `8624e302…` (`merakiplus_sim_arm`), `f2b95b16…` (`switcher`).
 
 **v6.19 (2026-11-21, no ready tones at a power-on with hot boilers + nicer sounds):** `merakiplus`,
 `merakiplus_sim_arm` and the two host SIM builds were rebuilt from the v6.19 source with the official zig 0.17.1. The
@@ -89,23 +106,14 @@ self-test and the simulator E2E suite.
 
 | File | md5 (this repo) | Built with |
 |---|---|---|
-| `merakiplus` (V6.20) | `c8b91a4c8d2d1de56a7fb9cea8d85e06` | `./build.sh` → `build/merakiplus` |
-| `merakiplus_sim_arm` (V6.20) | `462541a35ee24d7162663141f6d59fe7` | `./build.sh` → `build/merakiplus_sim_arm` |
+| `merakiplus` (V7.0) | `f33ce8a1e8c8591cdcd65bf8aea5f97e` | `./build.sh` → `build/merakiplus` |
+| `merakiplus_sim_arm` (V7.0) | `b3746ba90cf547bcb0c67b3ad9c5680b` | `./build.sh` → `build/merakiplus_sim_arm` |
 | `merakiplus_snd` (V6.18.1) | `a7659c176b8ef78385b0b612a69e81ca` | `./build.sh` → `build/merakiplus_snd` |
 | `switcher` (v6.20) | `c9d937fa36c51e2e58276041b6761ac0` | `./build.sh` → `build/switcher` |
 | `tinj_hold` | `e9806fb92e9b8a7e506a34639173c648` | `./build.sh` → `build/tinj_hold` |
 | `keyinj` | `a0cbd4bc2a670abe0e250ec34a193843` | `./build.sh` → `build/keyinj` |
-| `merakiplus_sim-linux-x86_64` (V6.20) | `d240e5ed112d3a630a813b7e75126003` | `zig cc -target x86_64-linux-musl -DMERAKIPLUS_SIM -O2 -static -s src/merakiplus.c -lm` |
-| `merakiplus_sim-macos-arm64` (V6.20) | `ad8735e2f122bf0a486ea8f06b77adf5` | `zig cc -DMERAKIPLUS_SIM -O2 -s src/merakiplus.c -lm` (Mach-O builds are not bit-reproducible) |
-
-**v6.20 (2026-11-22, code review fixes, docs/dev/REVIEW-2026-11.md):** `merakiplus`, `merakiplus_sim_arm` and both
-host SIM builds were rebuilt from the v6.20 sources, and `switcher` because the switch child now closes its inherited
-file descriptors (`boot/switcher.c`, O_CLOEXEC + `close_fds_from(3)`). Built on macOS (arm64) with the official zig
-0.17.1 (`~/.local/bin/zig`, its own cache) via `./build.sh` plus the two SIM commands in the table. `merakiplus_snd`,
-`tinj_hold`, `keyinj` and `grab_shim.so` are unchanged (fresh builds of the first three are byte-identical; the
-`.so` stays the on-device-verified build). None of the v6.20 binaries has been run on a machine yet; behaviour is
-covered by the UI self-test (EN + DA, also under ASan + UBSan), the switcher self-test and the simulator E2E suite.
-The v6.19 builds were `e654f668…` (`merakiplus`), `8624e302…` (`merakiplus_sim_arm`), `f2b95b16…` (`switcher`).
+| `merakiplus_sim-linux-x86_64` (V7.0) | `4b9aec3ead3b50f6c6a11b6445592ac4` | `zig cc -target x86_64-linux-musl -DMERAKIPLUS_SIM -O2 -static -s src/merakiplus.c -lm` |
+| `merakiplus_sim-macos-arm64` (V7.0) | `47d42a1b43649212625fb62f60b6b4f4` | `zig cc -DMERAKIPLUS_SIM -O2 -s src/merakiplus.c -lm` (Mach-O builds are not bit-reproducible) |
 
 The ARM builds above are reproducible: running `./build.sh` on the same sources with the **official**
 zig 0.17.1 release (the ziglang.org tarball CI installs) gives the same md5 on macOS and Linux,

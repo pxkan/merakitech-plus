@@ -77,9 +77,12 @@ reference mode is still available with `--force-reference`.
   where you hit. Mapping: `raw = px*4096/480` (inverse: `px = raw*480/4096`), the same formula as
   `tinj_hold`/CONTRACT §4.
 * **"Show touch targets (layout)"** overlays the actual touch targets on the fb: against the SIM build
-  they are fetched live from the build's ctrl `layout` hook (the hit_test geometry — HOME: grind 150,372 ·
-  brew 210,372 · water 270,372 · steam 330,372 · gear 240,449; on a page: `back` = the header, one target
-  per row, `start` = HOLD TO START); against the reference client
+  they are fetched live from the build's ctrl `layout` hook (the hit_test geometry; v7.0 HOME: the four
+  rings r 72 — grind 160,154 · water 320,154 · brew 160,326 · steam 320,326 — and `gear` = the chevron at the
+  top (rect 180..300 × 0..58, hidden while an activity runs); in the live view the STOP pill(s) at y 358..426;
+  on a page: `back` = the header, one target per row, `start` = HOLD TO START (the ring at 240,384); in the
+  editor `minus` 82,190 · `plus` 398,190 · `save` = OK 240,390 · `cancel` = the chevron at the top · `roller`);
+  against the reference client
   its known button layout is used (grind 130,160 · brew 350,160 · water 130,330 · steam 350,330 ·
   settings 240,430). The gesture zone is always shown.
 
@@ -250,7 +253,7 @@ python3 sim/play.py --smoke --no-browser
 
 The visually relevant checks against the real UI:
 
-* **BREW via a touch hold on the real touch target (210,372 via ctrl `layout`) → phase PRE/EXT in the
+* **BREW via a touch hold on the real touch target (v6.x: 210,372; v7.0: the BREW ring 160,326 — always via ctrl `layout`) → phase PRE/EXT in the
   state + the fb changes** (real graphics).
 * **STEAM → auto-stop at the target** (milk ≥ setpoint word48≥word25, sim log + state).
 * **Settings SAVE → the config in the sandbox changes (brewTemper=880) + md5 log** + word-for-word MCU

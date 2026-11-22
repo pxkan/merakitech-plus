@@ -3,47 +3,29 @@
 /* ====================================================================== */
 /* ================= UI: design tokens, state, pages ==================== */
 /* ====================================================================== */
-#define C_TXT    rgb(242,244,247)
-/* v6.11: contrast raised (WCAG 2.x, measured in the selftest): C_TXT2 >= 7:1 on background/surfaces, C_TXT3 (small captions in F_XS) >= 4.5:1
- * on background, C_SURF and C_SURF2 (v6.10: 104,111,126 = 3.4:1 on background and 2.9:1 on list rows). What used to be at 3.4:1 but is a
- * DISABLED state (icons, stepper glyph, locked values, offline hero) is drawn in C_DIS — disabled UI is exempt in WCAG and is
- * meant to look switched off. */
-#define C_TXT2   rgb(176,183,196)
-#define C_TXT3   rgb(140,147,162)
-#define C_DIS    rgb(98,105,120)
-#define C_SURF   rgb(25,28,35)
-#define C_SURF2  rgb(37,41,51)
-#define C_SURF3  rgb(52,57,70)
-#define C_LINE   rgb(56,61,73)
-#define C_ACC    rgb(244,192,122)     /* crema — the only UI accent */
-#define C_ACCD   rgb(46,34,18)
-#define C_OK     rgb(98,222,168)
-#define C_ERR    rgb(255,96,96)
-#define C_WARN   rgb(255,190,84)
-#define C_STOP_T  rgb(214,58,62)      /* v6.17: the STOP button — bright red, white text >= 4.5:1 on it (v6.13: 120,40,44 / 92,28,34 w. pink text; 1.8:1 against the background) */
-#define C_STOP_B  rgb(182,42,50)
-#define C_STOP_FG rgb(255,255,255)
-/* semantic phase colours (hi = light end of gradient, lo = dark end) */
-static uint32_t ph_hi(int p){
-    switch(p){
-    case PH_OFFLINE: return rgb(124,130,144); case PH_SLEEP: return rgb(136,144,222);
-    case PH_ERROR:   return rgb(255,96,96);   case PH_HEAT:  return rgb(255,186,84);
-    case PH_READY:   return rgb(98,222,168);  case PH_GRIND: return rgb(174,228,112);
-    case PH_PRE:     return rgb(92,180,255);  case PH_EXT:   return rgb(255,142,68);
-    case PH_WATER:   return rgb(70,216,230);  case PH_STEAM: return rgb(198,152,255);
-    default:         return rgb(98,222,168);
-    }
-}
-static uint32_t ph_lo(int p){
-    switch(p){
-    case PH_OFFLINE: return rgb(66,70,80);    case PH_SLEEP: return rgb(58,62,120);
-    case PH_ERROR:   return rgb(130,36,40);   case PH_HEAT:  return rgb(150,78,26);
-    case PH_READY:   return rgb(24,104,92);   case PH_GRIND: return rgb(62,116,46);
-    case PH_PRE:     return rgb(30,74,168);   case PH_EXT:   return rgb(166,54,28);
-    case PH_WATER:   return rgb(20,96,140);   case PH_STEAM: return rgb(88,56,170);
-    default:         return rgb(24,104,92);
-    }
-}
+/* v7.0 DESIGN TOKENS — the OEM language: white on copper. Hierarchy comes from size and weight first, then from a warm cream;
+ * colour is reserved for what must not be missed (errors, blocked starts), which also switch the background to a dark
+ * espresso layer. C_* names are kept from v6 so the logic that picks a colour (ok / warn / err / accent) did not change. */
+#define C_TXT    rgb(255,255,255)
+#define C_TXT2   rgb(255,236,220)     /* secondary: warm cream */
+#define C_TXT3   rgb(250,220,196)     /* captions */
+#define C_DIS    rgb(222,160,122)     /* disabled: dissolves into the copper on purpose */
+#define C_SURF   rgb(150,70,30)       /* pressed / filled surfaces on copper */
+#define C_SURF2  rgb(164,78,34)
+#define C_SURF3  rgb(196,104,54)
+#define C_LINE   rgb(226,150,108)     /* hairlines (row separators) */
+#define C_ACC    rgb(255,255,255)     /* the accent IS white (values, rings, SAVE) */
+#define C_ACCD   rgb(140,62,24)       /* text on a white pill: deep copper */
+#define C_OK     rgb(255,255,255)
+#define C_ERR    rgb(255,214,74)      /* errors on copper: a hot yellow, always with an icon; the error SCREEN is dark with red */
+#define C_WARN   rgb(255,226,120)     /* blocked / attention: pale yellow (with an icon where space allows) */
+#define C_RED    rgb(255,92,72)       /* the dark error layer's accent */
+#define C_STOP_T  rgb(255,255,255)    /* STOP: a solid white pill with deep copper text — the brightest thing on screen */
+#define C_STOP_B  rgb(255,247,240)
+#define C_STOP_FG rgb(140,52,18)
+/* phase colours (v6: a rainbow) are monochrome in v7: white on copper; the gauge/progress uses white, ERROR/OFFLINE get their own */
+static uint32_t ph_hi(int p){ switch(p){ case PH_ERROR: return C_RED; case PH_OFFLINE: case PH_SLEEP: return rgb(240,200,176); default: return C_TXT; } }
+static uint32_t ph_lo(int p){ switch(p){ case PH_ERROR: return rgb(150,40,30); default: return rgb(236,176,140); } }
 static const int ACT_PH[4]={PH_GRIND,PH_EXT,PH_WATER,PH_STEAM};
 static const char*const ACT_ICON[4]={IC_BEAN,IC_CUP,IC_DROP,IC_STEAM};
 static const short ACT_NAME[4]={TX_A_GRIND,TX_A_BREW,TX_A_WATER,TX_A_STEAM};
@@ -63,7 +45,7 @@ enum { V_SPLASH=0, V_MAIN, V_DETAIL, V_SYS, V_BYE, V_OFF };   /* v6.14: V_OFF = 
  * the settings lived in three lists that followed the spec's tiers, not the activity they belong to. */
 enum { PG_HOME=0, PG_GRIND, PG_BREW, PG_WATER, PG_STEAM, PG_SYS, PG_DIAG, NPAGE };
 #define PG_T0 PG_GRIND     /* first list page (page = PG_T0 + SET[].tier) */
-enum { T_NONE=0, T_ACT0, T_ACT1, T_ACT2, T_ACT3, T_STOP, T_MINUS, T_PLUS, T_SAVE, T_CANCEL, T_START, T_DIAG, T_GRAPH, T_PINFO, T_GEAR, T_BACK, T_STOPS, T_ROW0=32 };   /* v6.11: T_GEAR (HOME -> SYSTEM), T_BACK (close chevron); v6.17: T_START (a feature page's HOLD TO START), T_DIAG (HOME's error/offline hint -> DIAGNOSTICS) */
+enum { T_NONE=0, T_ACT0, T_ACT1, T_ACT2, T_ACT3, T_STOP, T_MINUS, T_PLUS, T_SAVE, T_CANCEL, T_START, T_DIAG, T_GRAPH, T_PINFO, T_GEAR, T_BACK, T_STOPS, T_ROLL, T_DONE, T_ROW0=32 };   /* v6.11: T_GEAR (HOME -> SYSTEM), T_BACK (close chevron); v6.17: T_START (a feature page's HOLD TO START), T_DIAG (HOME's error/offline hint -> DIAGNOSTICS) */
 static int pinfo_hit(int x,int y);   /* v6.10: tap on the chart / BAR field -> toast w. the basis for ≈BAR (defined at draw_chart) */
 static int diag_hint_shown(void);    /* v6.17: HOME's error/offline hint is on screen (the chart field is empty) -> it is the tap target for DIAGNOSTICS */
 #define SPLASH_MS 1500
@@ -73,7 +55,8 @@ static int view=V_SPLASH, page=PG_HOME, sel=-1, edit_val=0, edit_orig=0;
 static float scroll[NPAGE];
 static ms_t ui_start=-1, ui_last=0; static int ui_anim=1; static volatile int run=1;
 static int ui_kick=0; static float ft_last=0, ft_max=0;   /* frame time (ms) measured on device, shown on DIAGNOSE */
-static struct { int down,x0,y0,x,y,moved,target,scrolling,fired,rep_n,axis; ms_t t0,rep_next; float scroll0; } tch;
+static struct { int down,x0,y0,x,y,moved,target,scrolling,fired,rep_n,axis,roll_n; ms_t t0,rep_next; float scroll0; } tch;
+static float roll_off=0;          /* v7.0: the editor roller's drag offset in px, eased back to 0 after the release */
 static struct { char msg[96]; ms_t t0; int dur; uint32_t col; } toast;
 static struct { float x,y; ms_t t0; int on; } rip;
 static Rect ov_prev[2];
@@ -171,12 +154,12 @@ static int sec_of_set(int i){ for(int sc=0;sc<NSEC;sc++) for(const signed char*p
 #ifdef MERAKIPLUS_PREVIEW
 static int row_find(int pg,int kind,int a){ Row r[ROW_MAX]; int n=rows_get(pg,r); for(int k=0;k<n;k++) if(r[k].kind==kind&&r[k].a==a) return k; return -1; }
 #endif
-#define ROW_H 50
-#define ROW_P 58
-#define LIST_Y0 96
+#define ROW_H 50          /* v7.0: rows are white text on copper with a hairline between them (v6: 50 px chips, 58 px pitch) */
+#define ROW_P 50
+#define LIST_Y0 92
 #define LIST_VY0 86
-#define LIST_VY1 394
-#define FEAT_VY1 342       /* v6.17: a feature page's list ends above its HOLD TO START pill */
+#define LIST_VY1 404
+#define FEAT_VY1 344       /* v6.17: a feature page's list ends above its HOLD TO START pill */
 static int list_vy1(int pg){ return pg_feat(pg)?FEAT_VY1:LIST_VY1; }
 static int page_rows(int pg){ Row r[ROW_MAX]; return rows_get(pg,r); }
 static int row_y0(int pg,int k){ (void)pg; return LIST_Y0+k*ROW_P; }   /* content coordinate (before scroll) */
@@ -335,7 +318,8 @@ static void save_step(ms_t now){
 static void compose(ms_t now);
 static void arc_targets(ms_t now);
 static void go_page(int np,int dir,ms_t now){
-    if(np==page||tr.type) return;
+    if(np==page||tr.type==TR_SLIDE) return;
+    if(tr.type==TR_FADE) tr.type=TR_NONE;          /* v7.0: a page change may cut a cross-fade short (taps are live during fades) */
     memcpy(snapA,canvas,(size_t)W*H*4);
     page=np; static_dirty=1; if(np==PG_HOME) act.gkind=-1; arc_targets(now); compose(now);
     memcpy(snapB,canvas,(size_t)W*H*4);
@@ -345,13 +329,13 @@ static void fade_to(ms_t now,int dur){ tr.type=TR_FADE; tr.t0=now; tr.dur=dur; t
 /* v6.17: sheets. nav_open() slides a page in from the right, nav_back() slides back to its parent. SYSTEM always opens with its sections
  * closed and at the top; DIAGNOSTICS remembers where it was opened from. */
 static void nav_open(int np,ms_t now){
-    if(np==page||tr.type) return;
+    if(np==page||tr.type==TR_SLIDE) return;
     if(np==PG_DIAG) diag_from=(page==PG_SYS)?PG_SYS:PG_HOME;
     if(np==PG_SYS&&page==PG_HOME){ sec_open=-1; scroll[PG_SYS]=0; }
     if(pg_feat(np)) scroll[np]=0;
     go_page(np,1,now);
 }
-static void nav_back(ms_t now){ if(page!=PG_HOME&&!tr.type) go_page(page_parent(page),-1,now); }
+static void nav_back(ms_t now){ if(page!=PG_HOME&&tr.type!=TR_SLIDE) go_page(page_parent(page),-1,now); }
 static void sec_toggle(int sc){
     sec_open=(sec_open==sc)?-1:sc;
     scroll[PG_SYS]=clampf(sec_open<0?0:(float)(sc*ROW_P),0,scroll_max(PG_SYS));   /* the opened header goes to the top of the field */
@@ -456,72 +440,111 @@ static void edit_step(int dir,int mult){
 /* ---- hit-test ---- */
 static int in_r(int x,int y,int rx,int ry,int rw,int rh){ return x>=rx&&x<rx+rw&&y>=ry&&y<ry+rh; }
 static int in_c(int x,int y,int cx,int cy,int r){ int dx=x-cx,dy=y-cy; return dx*dx+dy*dy<=r*r; }
-static const int ACT_X[4]={150,210,270,330};
-#define ACT_Y 372
+/* v7.0: HOME's ring grid (the stock layout: grind, water / brew, steam) and the mode HOME is drawn in */
+static const short RING_X[4]={160,320,160,320}, RING_Y[4]={154,154,326,326};
+#define RING_R 72
+static const int RING_ACT[4]={ACT_GRIND,ACT_WATER,ACT_BREW,ACT_STEAM};
+static int ring_of_act(int k){ for(int i=0;i<4;i++) if(RING_ACT[i]==k) return i; return 0; }
+enum { HM_IDLE=0, HM_DIM, HM_ACTIVE, HM_ERROR };
+static int hm_mode=-1;
+#define DONE_LIVE_MS 3000      /* v7.0: the big DONE number stays this long (a tap dismisses it); then the rings are back and the
+                                  result sits on the status line for the rest of the 8 s DONE time — the next start is never blocked */
+static ms_t done_dismissed=-1;   /* act.t_done of the DONE view that was tapped away */
+static int home_mode_of(int ph,ms_t now){
+    if(phase_active(ph)) return HM_ACTIVE;
+    { int sk[2]; if(stop_btns(now,sk)) return HM_ACTIVE; }    /* v6.20 x v7.0: a latched start word offers STOP — the live view is where STOP lives */
+    if(ph==PH_DONE) return (now-act.t_done<DONE_LIVE_MS&&done_dismissed!=act.t_done)?HM_ACTIVE:HM_IDLE;
+    if(ph==PH_ERROR) return HM_ERROR;
+    if(ph==PH_OFFLINE||ph==PH_SLEEP) return HM_DIM;
+    return HM_IDLE;
+}
+#define HOME_CHEV_Y 16
+#define HOME_STAT_Y 46
+#define HOME_CLOCK_Y 428
+#define STAT_PITCH 100
 #define HINT_W 304         /* v6.11: the chart area's hint lines (the chart itself is 244 wide; the hint text may use 304) */
-#define ACT_LAB_Y 405      /* v6.17: each icon's target ("18.5 G", "36 G", "360 G", "65°") right under it — what a hold will do */
-#define GEAR_Y 448
-#define GEAR_HW 32
-#define BACK_X0 (CX-44)    /* v6.11: close chevron in detail/system: 88 x 46 px tap area above the title */
-#define BACK_Y0 34
-#define BACK_W 88
-#define BACK_H 46
+#define BACK_X0 (CX-60)    /* v6.11: close chevron in detail/system: 88 x 46 px tap area above the title */
+#define BACK_Y0 4
+#define BACK_W 120
+#define BACK_H 54
+/* v7.0: the editor (a roller like the stock pickers + −/+ rings + an OK ring) and the system action (two pills) */
+#define ED_TITLE_Y 32
+#define TITLE_W 214        /* v7.0: a title near the top must fit the circle's chord there (2 x chord at the cap top, y 32) — F_L, else F_M, else F_S (+ … ); 232 let the ends of long F_L titles reach under the bezel */
+#define ED_RANGE_Y 66
+#define ED_CY 190          /* the roller's centre line */
+#define ED_MX 82
+#define ED_PX 398
+#define ED_PM_R 29
+#define ED_ROLL_X0 124
+#define ED_ROLL_X1 356
+#define ED_STEP_PX 50      /* roller: one value per 58 px (drag and drawing) */
+#define ED_STAT_Y 300
+#define ED_NOTE_Y 322
+#define ED_OK_Y 390
+#define ED_OK_R 36
+#define SB_Y 350
+#define SB_H 50
+#define SB_W 136
+#define SB_X0 (CX-SB_W-8-4)
+#define SB_X1 (CX+8-4)
 /* v6.17: a page's header = chevron (y 22..30) + title (y 44) + one line under it (y 70). The whole header is the close target. */
 #define PBACK_X0 (CX-80)
-#define PBACK_Y0 14
+#define PBACK_Y0 4
 #define PBACK_W 160
-#define PBACK_H 66
-#define PG_CHEV_Y 22
-#define PG_TITLE_Y 44
-#define PG_LIVE_Y 70
+#define PBACK_H 74
+#define PG_CHEV_Y 16
+#define PG_TITLE_Y 32
+#define PG_LIVE_Y 64
 /* v6.17: HOLD TO START on a feature page — same hold (HOLD_MS) and same guard as the HOME icon */
-#define START_W 232
-#define START_H 48
-#define START_Y 350
-#define START_HIT_W 248
-#define START_HIT_Y 344
-#define START_HIT_H 60
+#define START_R 33         /* v7.0: HOLD TO START is a ring button (play icon) with its caption under it, like the stock screens */
+#define START_CY 384
+#define START_CAP_Y 428
+#define START_HIT_W 200
+#define START_HIT_Y 348
+#define START_HIT_H 98
 /* v6.13: the STOP buttons' tap areas (hit) and drawn pills. ONE button: same tap area as v6.6's STOP STEAM (180 x 56), the pill
  * 160 x 44 in F_S (v6.6-v6.12: 150 — "STOP WATER" / "STOP KVÆRN" are 123 / 122 px and need 14 px of space on each side).
  * TWO buttons (main activity + latched steam): two areas of 148 x 56 each side by side, no gap between; the pills 136 x 44 in F_XS. */
 /* v6.17: STOP is the most important control while something runs, so it is the largest and brightest thing below the numbers: ONE button
  * 216 x 54 in F_M (tap area 232 x 60), TWO buttons 152 x 54 in F_S (tap areas 160 x 60, no gap between) — bright red with white text
  * (v6.13-v6.16: 160 x 44 / 136 x 44 in a dark red that read as "disabled"). */
-#define STOP_PILL1_W 216
-#define STOP_PILL2_W 152
-#define STOP_PILL_H 54
-#define STOP_PILL_Y 346
-#define STOP_Y 342
-#define STOP_H 60
-static Rect stop_hit(int n,int i){ if(n<=1) return R(CX-116,STOP_Y,232,STOP_H); return i==0?R(80,STOP_Y,160,STOP_H):R(240,STOP_Y,160,STOP_H); }
-static Rect stop_pill(int n,int i){ if(n<=1) return R(CX-STOP_PILL1_W/2,STOP_PILL_Y,STOP_PILL1_W,STOP_PILL_H); return i==0?R(84,STOP_PILL_Y,STOP_PILL2_W,STOP_PILL_H):R(244,STOP_PILL_Y,STOP_PILL2_W,STOP_PILL_H); }
+#define STOP_PILL1_W 200
+#define STOP_PILL2_W 148
+#define STOP_PILL_H 56
+#define STOP_PILL_Y 364
+#define STOP_Y 358
+#define STOP_H 68
+static Rect stop_hit(int n,int i){ if(n<=1) return R(CX-110,STOP_Y,220,STOP_H); return i==0?R(76,STOP_Y,164,STOP_H):R(240,STOP_Y,164,STOP_H); }
+static Rect stop_pill(int n,int i){ if(n<=1) return R(CX-STOP_PILL1_W/2,STOP_PILL_Y,STOP_PILL1_W,STOP_PILL_H); return i==0?R(86,STOP_PILL_Y,STOP_PILL2_W,STOP_PILL_H):R(246,STOP_PILL_Y,STOP_PILL2_W,STOP_PILL_H); }
 static int stop_font(int n){ return n>1?F_S:F_M; }
 static int diag_hint(int ph){ return ph==PH_ERROR||ph==PH_OFFLINE; }      /* HOME's hint line points to DIAGNOSTICS -> it is a tap target */
 static int hit_test(int x,int y,ms_t now){
-    if(view==V_SPLASH||view==V_BYE||view==V_OFF||tr.type) return T_NONE;
+    if(view==V_SPLASH||view==V_BYE||view==V_OFF) return T_NONE;
+    if(tr.type==TR_SLIDE&&!(view==V_MAIN&&page==PG_HOME&&hm_mode==HM_ACTIVE)) return T_NONE;   /* v7.0: only a SLIDE (the geometry moves) blocks taps; during a cross-fade the state and its targets are already the new ones (HOME's mode fades, editor open/close) — and the fade/slide INTO the live view must never swallow STOP */
     if((view==V_SYS||view==V_DETAIL)&&in_r(x,y,BACK_X0,BACK_Y0,BACK_W,BACK_H)) return T_BACK;   /* v6.11: close chevron at the top */
     if(view==V_SYS){
-        if(sys_locked()){ if(in_r(x,y,170,284,140,64)) return T_CANCEL; return T_NONE; }
-        if(xsel==X_BOOTUI){ if(in_c(x,y,84,184,42)) return T_MINUS; if(in_c(x,y,396,184,42)) return T_PLUS; }
-        if(in_r(x,y,100,284,136,64)) return T_CANCEL;
-        if(in_r(x,y,244,284,136,64)) return T_SAVE;
+        if(sys_locked()){ if(in_r(x,y,170,SB_Y-4,140,SB_H+8)) return T_CANCEL; return T_NONE; }
+        if(xsel==X_BOOTUI){ if(in_c(x,y,ED_MX,ED_CY,40)) return T_MINUS; if(in_c(x,y,ED_PX,ED_CY,40)) return T_PLUS; }
+        if(in_r(x,y,SB_X0,SB_Y-4,SB_W+8,SB_H+8)) return T_CANCEL;
+        if(in_r(x,y,SB_X1,SB_Y-4,SB_W+8,SB_H+8)) return T_SAVE;
         return T_NONE;
     }
     if(view==V_DETAIL){
-        if(SET[sel].flags&SF_LOCK){ if(in_r(x,y,170,284,140,64)) return T_CANCEL; return T_NONE; }   /* locked/sensor: BACK only */
-        if(in_c(x,y,84,184,42)) return T_MINUS;
-        if(in_c(x,y,396,184,42)) return T_PLUS;
-        if(in_r(x,y,100,284,136,64)) return T_CANCEL;
-        if(in_r(x,y,244,284,136,64)) return T_SAVE;
+        if(SET[sel].flags&SF_LOCK){ if(in_c(x,y,CX,ED_OK_Y,ED_OK_R+8)) return T_CANCEL; return T_NONE; }   /* locked/sensor: BACK only */
+        if(in_c(x,y,ED_MX,ED_CY,40)) return T_MINUS;
+        if(in_c(x,y,ED_PX,ED_CY,40)) return T_PLUS;
+        if(in_c(x,y,CX,ED_OK_Y,ED_OK_R+8)) return T_SAVE;
+        if(in_r(x,y,ED_ROLL_X0,ED_CY-110,ED_ROLL_X1-ED_ROLL_X0,220)) return T_ROLL;
         return T_NONE;
     }
     if(page==PG_HOME){
-        int p=phase_raw(now), sk[2], sn=stop_btns(now,sk);
+        int sk[2], sn=stop_btns(now,sk);
         if(sn){ for(int i=0;i<sn;i++){ Rect r=stop_hit(sn,i); if(in_r(x,y,r.x0,r.y0,r.x1-r.x0,r.y1-r.y0)) return i?T_STOPS:T_STOP; } }   /* v6.13: STOP for grind/brew/water + latched steam */
-        else if(!phase_active(p)) for(int i=0;i<4;i++) if(in_c(x,y,ACT_X[i],ACT_Y,30)) return T_ACT0+i;
-        if(pinfo_hit(x,y)) return T_PINFO;
-        if(diag_hint_shown()&&in_r(x,y,CX-HINT_W/2,236,HINT_W,58)) return T_DIAG;   /* v6.17: "TAP FOR DETAILS" (error / offline) */
-        if(in_r(x,y,CX-GEAR_HW,GEAR_Y-22,2*GEAR_HW,46)) return T_GEAR;          /* v6.11: the gear; v6.17: -> SYSTEM */
+        if(hm_mode==HM_ACTIVE){ if(in_r(x,y,CX-60,0,120,44)) return T_GEAR; if(pinfo_hit(x,y)) return T_PINFO; if(act.ph==PH_DONE&&!sn) return T_DONE; return T_NONE; }   /* v7.0: SYSTEM stays reachable while something runs (as v6's gear) */
+        if(diag_hint_shown()&&in_r(x,y,70,HOME_STAT_Y-2,340,32)) return T_DIAG;   /* offline: the status line -> DIAGNOSTICS (before the chevron, whose area reached down over it) */
+        if(in_r(x,y,CX-60,0,120,58)) return T_GEAR;                                 /* v7.0: the chevron at the top -> SYSTEM */
+        if(hm_mode==HM_ERROR){ if(in_r(x,y,60,96,360,250)) return T_DIAG; return T_NONE; }
+        if(!phase_active(phase_raw(now))) for(int i=0;i<4;i++) if(in_c(x,y,RING_X[i],RING_Y[i],RING_R+4)) return T_ACT0+RING_ACT[i];
         return T_NONE;
     }
     if(in_r(x,y,PBACK_X0,PBACK_Y0,PBACK_W,PBACK_H)) return T_BACK;              /* v6.17: every page but HOME closes with its header chevron */
@@ -561,6 +584,7 @@ static void activate(int t,ms_t now){
     if(t==T_STOP||t==T_STOPS){ int sk[2]; stop_btns(now,sk); int k=sk[t==T_STOPS]; if(k!=ACT_NONE) stop_request(k,now); return; }   /* v6.13 */
     if(t>=T_ACT0&&t<=T_ACT3){ nav_open(PG_GRIND+(t-T_ACT0),now); return; }          /* v6.17: a TAP opens the feature's page (v6.6-v6.16: only a toast "HOLD THE BUTTON TO START"); the HOLD still starts */
     if(t==T_START){ const char*g=act_guard(page-PG_GRIND,now); toast_show(g?g:TR(TX_T_HOLD_HINT),g?C_WARN:C_TXT,now); return; }   /* a tap on HOLD TO START: say what is missing */
+    if(t==T_DONE){ done_dismissed=act.t_done; return; }                             /* v7.0: a tap on the DONE view brings the rings back */
     if(t==T_GEAR){ nav_open(PG_SYS,now); return; }                                   /* v6.11; v6.17: -> SYSTEM */
     if(t==T_DIAG){ nav_open(PG_DIAG,now); return; }                                  /* v6.17 */
     if(t==T_BACK&&view==V_MAIN){ nav_back(now); return; }                            /* v6.17: a page's header chevron */
@@ -588,4 +612,4 @@ enum { TE_DOWN, TE_MOVE, TE_UP };
 static int swipe_h(int axis,int dx,int dy){ return axis==1&&abs(dx)>=60&&10*abs(dx)>=17*abs(dy); }
 /* v6.11: swipe DOWN (>= 70 px, vertically locked, |dy| >= 1.7·|dx|) closes the detail/system view like CANCEL — not if
  * the gesture started on −/+ (there the press-down has already changed the value) */
-static int swipe_down(int axis,int target,int dx,int dy){ return axis==2&&dy>=70&&10*dy>=17*abs(dx)&&target!=T_MINUS&&target!=T_PLUS; }
+static int swipe_down(int axis,int target,int dx,int dy){ return axis==2&&dy>=70&&10*dy>=17*abs(dx)&&target!=T_MINUS&&target!=T_PLUS&&target!=T_ROLL; }

@@ -1,92 +1,274 @@
 # Meraki+ — UI guide
 
-This guide is extracted from the full UI specification ([dev/UI_v6.md](dev/UI_v6.md)) and describes the
-pages, touch zones and settings in **Meraki+ v6.18.1**. For a short user guide, see
+This guide describes the screens, gestures and settings of **Meraki+ v7.0**. It is extracted from the full
+UI specification ([dev/UI_v6.md](dev/UI_v6.md)); for a short user guide, see
 [README → Usage](../README.md#usage). Addresses in square brackets (e.g. `[0x12bcfc]`) refer to the
 place in the original UI program where the limit was read (see [dev/PARITY.md](dev/PARITY.md)).
 
-The UI is available in **English and Danish** (*gear → SYSTEM → DISPLAY · SOUND → UI LANGUAGE*). This guide uses the English
-labels; where a Danish label is useful for cross-reference with the developer notes, it is given in
-parentheses.
+v7.0 changed only the display and the navigation: the screens now use the look of the stock UI (white
+on a copper background, ring buttons, a roller to pick values, the Montserrat typeface). What the UI
+sends to the machine, the limits, the save path and all guards are the same as in v6.19.
 
-## 3. Page map and touch
+The UI is available in **English and Danish** (*System › Display · Sound › UI Language*). This guide uses
+the English labels, written as they appear on screen (v7 uses normal capitalisation instead of the v6
+upper-case labels); where a Danish label helps, it is given in parentheses.
 
-**v6.17** replaced the five-page carousel (HOME · BREW · STEAM·WATER · SYSTEM · DIAGNOSTICS, changed by
-swiping) with one root and sheets — the reasoning is in [ux-audit-v617.md](ux-audit-v617.md):
+## 3. Screens and touch
 
 ```
-HOME ─ icon, tap ─► GRIND / BREW / WATER / STEAM   (live line · that feature's settings · HOLD TO START)
-     ─ icon, hold ► starts the activity (650 ms)
-     ─ gear ──────► SYSTEM ─ DISPLAY · SOUND · CLOCK · SCHEDULE · STOCK UI (sections, one open at a time)
-     │                     └ DIAGNOSTICS ─► DIAGNOSTICS
-     └ error / offline hint, tap ─► DIAGNOSTICS
+HOME ─ ring, tap ──► Grind / Brew / Water / Steam page   (live line · that feature's settings · Hold to Start)
+     ─ ring, hold ─► starts the activity (650 ms)
+     ─ chevron at the top (tap) or pull down ─► System ─ Display · Sound · Clock · Schedule · Stock UI
+     │                                                  (sections, one open at a time)
+     │                                                └ Diagnostics ─► Diagnostics
+     └ error screen / offline line, tap ─► Diagnostics
+row on a page ─► editor (roller)          Stock UI › Boot UI / Switch to Original Now ─► system action
 ```
 
-**Open** by tapping the thing; **go back** with the chevron at the top of every page and editor (the
-whole header is the target), or swipe right. There are no page dots, no edge zones and no page swipes.
+**Open** by tapping the thing. **Go back** with the chevron at the top of every page and editor (the
+whole header is the target), by pulling the header down, or by swiping right. There are no page dots,
+no edge zones and no page swipes. A page slides in from the right (260 ms) and back out to the right;
+editors fade in and out (200 ms).
 
-| Page | Opened by | Contents |
+### 3.1 HOME: four rings
+
+<p>
+  <img src="../screenshots/home-ready-en.png" width="240" alt="HOME, ready">
+  <img src="../screenshots/home-heating.png" width="240" alt="HOME while the boilers heat up">
+</p>
+
+HOME is the stock layout: four white ring buttons, **Grinder** and **Hot Water** at the top, **Brew** and
+**Steam** at the bottom. Each ring has
+
+* its name set along the ring, in a gap of the ring facing the edge of the display;
+* a line icon (two beans, a drop, a cup on a saucer, a steam cloud);
+* **its target inside**: what a hold will do — the grind dose (*18.5 g*), the brew weight (*36 g*), the
+  hot-water amount (*40 g*) and the milk temperature (*65°*). *--* while the setting has not been read.
+
+**Tap** a ring to open that feature's page. **Hold** a ring for 650 ms to start it: the ring fills
+faintly, an inner arc sweeps once around, and the line at the top says what will happen (*Hold · brew
+36.0 g*). When the start is sent the line says *Starting Brew…* and, as soon as the machine reports the
+activity, HOME becomes the live view (3.2). If the machine does not acknowledge the start: toast *The
+machine did not answer*; if the activity does not begin within 3.5 s (steam: 15 s): *No start · check the
+machine*. If a start is not possible (no connection, an error, a config value out of spec, grind mode =
+time, …), a hold shows the reason as a toast with a warning icon and nothing is sent.
+
+**Heat-up arc.** While a boiler heats, its rings show a faint full ring with a white arc that grows from the
+label gap as the temperature rises — the share of the way from 20 °C to that boiler's ready point. The
+**Brew** and **Hot Water** rings follow the brew boiler (word 40, against the brew temperature set point),
+the **Steam** ring follows the steam boiler (word 47, against the steam ready point); the **Grinder**
+ring is always complete. A ring becomes a complete white ring when the machine's heat stage reports the
+boiler ready (or the temperature is at the set point). The line at the top says *Heating to 87.0°*.
+
+**The line at the top** (under the chevron) shows only what matters now, in this order: *No connection to
+the machine* or *Waking up…*; *CRC n* (with a warning icon) for 10 s after line errors; a reason that
+blocks every start (*Config out of spec · fix first*, *Config missing · start blocked*); *Starting …* /
+*Hold · …* during a start; *Heating to 87.0°*; the next planned pre-heat (*Pre-heat · Mon 06:30*, with a
+clock icon). Otherwise it is empty.
+
+**The chevron** at the top opens SYSTEM (tap it, or pull down from the top of the screen). The **clock**
+sits at the bottom (12/24 h as in the stock UI); while the clock is not set, the wordmark *Meraki+* is
+shown instead.
+
+### 3.2 The live view (brewing, steaming, grinding, hot water)
+
+<p>
+  <img src="../screenshots/brew-extraction.png" width="240" alt="Brewing: the live view">
+  <img src="../screenshots/steam.png" width="240" alt="Steaming: the live view">
+  <img src="../screenshots/hotwater-stopped.png" width="240" alt="Hot water stopped with STOP">
+</p>
+
+While something runs — started here, on the machine or by the steam wand — and for 8 s after it ends
+(*Done*), HOME shows one live view instead of the rings (a 280 ms cross-fade). From top to bottom:
+
+* the phase: *Grinding*, *Pre-Infusion*, *Extraction*, *Hot Water*, *Steam·Auto*, *Steam·Wand*, *Done*
+  (with the steam label added, e.g. *Extraction · Steam·Auto*, when steam runs at the same time as another activity);
+* **the number**, large and white: the weight in the cup / the dose / the hot-water weight in grams, or
+  the milk temperature;
+* the target line: *Stops at 36.0 g*, *Stops at 65.0°*, *Release the wand to stop* (wand steam has no
+  target and no auto-stop), *Done in 4.2 s*;
+* **a progress ring** at the very edge of the display, filling clockwise from 12 o'clock: weight / target,
+  or for automatic steam (milk − 20 °C) / (target − 20 °C);
+* **a fine trace** of the last 40 s: brew and hot water show the pressure (filled) and the weight (a
+  line), captioned *Pressure* and *Weight*; grinding shows the weight with a dashed target line; steam
+  shows the milk temperature with a dashed target line (*Milk Temp* · *Target*). Pump pulses outside the
+  activity are small ticks on the baseline;
+* **three numbers**: brew = time, **≈bar**, flow; grinding = time, current, grinder step; hot water =
+  time, flow, boiler; steam = time, boiler, level. When steam runs alongside another activity, the third
+  number is the milk temperature;
+* **STOP**, a solid white pill with copper text — the brightest thing on the screen: *Stop Brew*, *Stop
+  Grind*, *Stop Water*, *Stop Steam*. With a main activity and latched steam at the same time there are
+  two pills side by side (left = the main activity, right = *Stop Steam*). Wand steam has no STOP (release
+  the wand). STOP disappears in the *Done* view.
+
+The chevron, the clock and the rings are not shown in the live view; nothing can be started from it.
+**≈bar** is an estimate, not a measurement (see below). A tap on the trace (while it shows pressure) or on
+the ≈bar number shows the basis as a toast. After line errors *CRC n* appears in yellow under the phase
+name.
+
+**Pressure labelling:** the value is labelled `≈bar` and the trace `Pressure`. The conversion is a single
+linear anchor: the pre-infusion plateau in the recording (358 raw) = config `preInfusionPressure`
+(4 bar), i.e. k = 4/358 = 0.01117 bar per raw unit. Above 20 bar no number is shown (*Pulse*). With
+*Diagnostics › Graph = raw* the raw word 51 is shown instead, labelled *Raw*. Basis and caveats:
+[calibration.md §16](calibration.md#16-pressure-estimate-v610).
+
+### 3.3 Feature pages and Hold to Start
+
+<img src="../screenshots/page-brew.png" width="240" alt="The Brew page">
+
+A tap on a ring opens that feature's page: the title, one **live line** under it, the feature's settings
+as rows, and a **Hold to Start** ring button at the bottom.
+
+| Page | Live line | Rows |
 |---|---|---|
-| **HOME** | — (root) | clock (or the wordmark while the clock is not set) · phase chip · gauge · hero number · sub-line · chart (40 s) / one hint line · 3 stats · the 4 activity icons **with their targets underneath** (grind dose, brew weight, water amount, milk temperature) — or the STOP button(s) while something runs · the gear |
-| **GRIND** | tap the bean icon | live line *ON THE SCALE 0.0 G* · GRIND DOSE, GRIND MODE · HOLD TO START |
-| **BREW** | tap the cup icon | live line *BOILER 92.4° · GROUP 70°* · BREW WEIGHT, BREW TEMP, PRE-INFUSION, PRE-INF. TIME, PRE-INF. PRESSURE, GROUP HEAD (4 in view, the list scrolls) · HOLD TO START |
-| **WATER** | tap the drop icon | live line *WATER 99.9°* (word 40 — the "water sensor") · HOT WATER, WATER MODE · HOLD TO START |
-| **STEAM** | tap the steam icon | live line *BOILER 130° · MILK 22.6°* · MILK TEMP, STEAM LEVEL · HOLD TO START |
-| **SYSTEM** | the gear | *MERAKI+ V6.18.1* · four section headers with a summary (**DISPLAY · SOUND** *ENGLISH* · **CLOCK** *16:35* · **SCHEDULE** *06:30 / OFF* · **STOCK UI**) + the **DIAGNOSTICS** row (*OK* / the error code / *DOWN*). Closed: 5 rows, no scrolling. A tap on a header opens it (and closes the other) |
-| **DIAGNOSTICS** | SYSTEM's last row, or a tap on HOME's error / offline hint | STATUS, BOOT · SLOT · SWITCHER, NET, GRAPH (smooth / raw), PRESSURE · ESTIMATE, RAW COUNTERS, POWER BUTTON, TIME · SCHEDULE, SOUND (v6.18), ABOUT — scrolls vertically. Its chevron returns to where it was opened from |
+| **Grind** (Grinder ring) | *On the scale 0.0 g* | Grind Dose, Grind Mode |
+| **Brew** | *Boiler 92.4° · group 70°* | Brew Weight, Brew Temp, Pre-Infusion, Pre-Inf. Time, Pre-Inf. Pressure, Group Head (5 in view, the list scrolls) |
+| **Water** (Hot Water ring) | *Water 99.9°* (word 40 — the stock UI's "water sensor") | Hot Water, Water Mode |
+| **Steam** | *Boiler 130° · milk 22.6°* | Milk Temp, Steam Level |
 
-A feature page's live line turns **amber and names the reason** when a start is not possible (*NO
-CONNECTION*, *ERROR ACTIVE · START BLOCKED*, *GRIND = TIME · USE STOCK UI*, *CONFIG OUT OF SPEC · FIX
-FIRST*, …); HOLD TO START is then dimmed. **While an activity runs, no feature page is shown**: started
-from the page, on the machine or by the wand, the UI is on HOME, where the STOP button is. SYSTEM,
-DIAGNOSTICS and an open editor stay.
+A row is the label on the left (white), the value on the right (bold, with its unit) and a small chevron.
+Estimated limits put `≈` in front of the value; a value outside its proven range is shown in yellow with a
+warning icon. Rows are separated by hairlines; a pressed row gets a faint highlight.
 
-Modal views: **splash** (boot), **stepper detail** (from a row) and — from v6.2 — the **system
-action** (BOOT UI, switch confirmation, exit reminder; same geometry and button zones as the stepper
-detail) as well as the last frame before a runtime switch. From v6.17 the stepper detail has no
-footer lines; its status line shows *CHANGED · WAS …*, *SAVING…*, the zone's place names, or — on an
-untouched editor with ≥ 20 steps — *HOLD - OR + TO GO FAST*.
+**Hold to Start** is a ring with a play icon and the caption under it. Hold it for 650 ms: an arc sweeps
+around the ring, the start is sent (the same request as holding the ring on HOME) and the UI returns to
+HOME, where the live view and STOP are. A short tap shows *Keep holding to start*, or the reason a start is
+blocked. When a start is not possible, the live line turns pale yellow with a warning icon and names the
+reason (*No connection*, *Error active · start blocked*, *Grind = time · use stock UI*, *Config out of spec
+· fix first*, …) and the button is dimmed.
 
-**HOME per phase** — the hero number and the gauge change meaning, so the most important value is
-always the largest:
+**While an activity runs, no feature page is shown**: started from the page, on the machine or by the
+wand, the UI goes to HOME, where STOP is. SYSTEM, DIAGNOSTICS and an open editor stay.
 
-| Phase | Hero | Gauge | Stats |
-|---|---|---|---|
-| READY / HEATING UP / ASLEEP / ERROR | brew boiler temp (word 40), label *BREW BOILER*, sub-line *TARGET 87.0°* | 20–120 °C, marker = brew setpoint | group (42), steam (47), weight (39) |
-| GRINDING | dose weight (word 38) | weight / target, marker = target | time, current (58), grinder step (37) |
-| PRE-INFUSION / EXTRACTION | weight in the cup (word 39), label *IN THE CUP*, sub-line *STOPS AT 36.0 G* (v6.17: the target is stated once) | **raw pressure** (word 51, 0–1600) + inner ring = weight/target | time, ≈bar, flow (52) |
-| HOT WATER | weight (39) | weight / target | time, flow, boiler |
-| STEAM | milk temp (word 48) | 20–80 °C, marker = target | time, boiler (word 47), level |
-| DONE (8 s) | final value | as for the activity | "DONE IN x S" |
+### 3.4 The editor: a roller
 
-**Pressure labelling (v6.10; v6.11: shorter texts; v6.17: `≈BAR`):** the gauge still shows the raw scale. The bar
-value is labelled `≈BAR` (v6.11–v6.16: `≈BAR EST.`; v6.10: `≈BAR · EST.`) and the chart `PRESSURE` (v6.10:
-`PRESS. ≈BAR · EST.`; the estimate is in the field right below). The conversion is a single linear
-anchor: the pre-infusion plateau in the recording (358 raw) = config `preInfusionPressure` (4 bar),
-i.e. k = 4/358 = 0.01117 bar per raw unit. Above 20 bar no number is shown (*PULSE*). Basis and
-caveats: [calibration.md §16](calibration.md#16-pressure-estimate-v610). (Up to and including v6.9:
-`≈BAR*` / `PRESSURE* UNCALIBRATED` with the hypothesis "1346 raw ≈ 9 bar".)
+<p>
+  <img src="../screenshots/setting-brew-temp.png" width="240" alt="The editor for Brew Temp">
+  <img src="../screenshots/editor-roller.png" width="240" alt="The editor after a change: OK is filled">
+</p>
 
-**Touch zones** (for testing; pixel coordinates):
+A tap on a row opens the editor, like the stock pickers: the setting's name at the top, the range under it
+(*85.0 - 96.0 °C*; an estimated maximum adds *· Max = estimate* in pale yellow), and the value on a
+vertical **roller** — the selected value large and white in the middle, the neighbours above (smaller)
+and below (larger), fading out.
+
+* **Drag** the roller up or down: one step per 50 px, the values follow the finger, and the roller
+  settles on the value when you let go. Dragging down gives smaller values. At the ends it gives a little
+  and springs back.
+* **− / +** (the two rings left and right): a press is one step; **hold** to repeat, faster and faster,
+  and in steps of 5 after a while. An untouched editor with at least 20 steps says *Hold - or + to go fast*.
+* **OK** (the ring at the bottom) saves. It fills white as soon as the value differs from the saved one,
+  and the status line says *Changed · was 87.0 °C*. While the value is written it shows *…* and the status
+  line *Saving…*; on success a toast (*Saved · active now* for values the machine uses, *Saved* for
+  config-only values) and the editor closes. OK on an unchanged value just closes.
+* **Cancel** with the chevron at the top, by pulling down (≥ 70 px, not started on −, + or the roller), or by
+  swiping right. Brightness and UI language preview live while you pick and return to the saved value on
+  cancel.
+* The line under the roller is the setting's note (*Target for the brew boiler*); for the time zone the
+  status line shows the zone's place names.
+* **Locked rows and sensors** show their value in cream without − / + and without dragging; OK just
+  closes. The note says why (e.g. *No effect · pre-inf. time is used*).
+* A value out of spec (only possible if the file was changed outside the stock UI) is yellow, with
+  *Out of spec · pick a new value*; the first − / + or drag brings it into range.
+
+The **system action** (*System › Stock UI › Boot UI* and *Switch to Original Now*, and the exit reminder)
+uses the same header, a large word in the middle (*Meraki+* / *Original*; − / + choose for Boot UI), a
+status and a note line, two pills — **Cancel** (outline) and **Save** / **Switch** (solid white) — and two
+footer lines. When it is locked, only **Back** is shown.
+
+### 3.5 SYSTEM
+
+<p>
+  <img src="../screenshots/settings-system.png" width="240" alt="System, all sections closed">
+  <img src="../screenshots/system-sound.png" width="240" alt="System › Display · Sound open">
+  <img src="../screenshots/system-schedule.png" width="240" alt="System › Schedule open">
+</p>
+
+Opened by the chevron at the top of HOME (or a pull down from the top). The line under the title is the
+product and version. Four **section headers** with a summary on the right — **Display · Sound** (*English*),
+**Clock** (*16:35*, or *Not set*), **Schedule** (*06:30* or *Off*), **Stock UI** — and the **Diagnostics**
+row (*OK*, the error code, or *Down*). With all sections closed that is five rows and nothing scrolls. A tap on
+a header opens it (and closes the other one); the opened header moves to the top, shows a down chevron, and
+its rows are indented with a thin bar on the left.
+
+| Section | Rows |
+|---|---|
+| Display · Sound | UI Language, Brightness, Temp Unit, Sound, Ready Tone, Volume |
+| Clock | Time Format, Daylight Saving, Time Zone (locked) |
+| Schedule | Pre-Heat, Pre-Heat At, Repeat, Auto Off |
+| Stock UI | Boot UI, Switch to Original Now (system actions), Stock Lang., Water Shortcut, Cleaning Reminder, Auto Time, Pause Time (locked) |
+
+### 3.6 DIAGNOSTICS
+
+<img src="../screenshots/diagnostics.png" width="240" alt="Diagnostics">
+
+Opened from SYSTEM's last row, or by a tap on HOME's error screen or offline line; its chevron returns to
+where it was opened from. One scrolling page of label / value cells in two columns, grouped under centred
+captions: STATUS (link, phase, E1/E2/E3, awake, mains, version, boot push), Boot · Slot · Switcher, Net,
+**Graph** (a pill: tap = smooth / raw; display only, forgotten on restart), Pressure · Estimate, Raw
+Counters, Power Button, Time · Schedule, Sound, About. Values that need attention are pale yellow, errors
+yellow.
+
+### 3.7 Errors, offline and asleep
+
+<img src="../screenshots/home-error.png" width="240" alt="HOME with an error">
+
+* **Error** (E1 / E2 / E3 from the machine): the whole screen turns dark espresso with a **red ring** and an
+  exclamation mark, the code (*E2*), what it means (*Brew boiler sensor fault*) and *Code E2 · tap for
+  details*. A tap there opens DIAGNOSTICS; the chevron at the top still opens SYSTEM. The rings are not
+  shown, so nothing can be started from HOME.
+* **No connection**: the rings are dimmed and the top line says *No connection to the machine* with a
+  warning icon; a tap on that line opens DIAGNOSTICS. Ring taps still open the pages; a hold shows *No
+  connection*.
+* **Asleep**: the rings are dimmed and the top line says *Waking up…*. Meraki+ keeps the machine awake
+  itself (keep-awake every 30 s), so this is short.
+
+Toasts (short messages) are a dark espresso pill with white text near the top (in the live view: over the
+trace, not over the number) for 2.4 s; warnings and errors carry a yellow warning icon.
+
+### 3.8 The power button pages
+
+TURNING OFF… / OFF / TURNING ON… use the dark layer with a white power symbol (dimmed while off): *Turning
+off…* · *The machine goes to sleep*; *Off* · *Hold the power button to turn on* · *The screen turns off ·
+touch to show*; *Turning on…* · *Keep holding the button a moment*. The behaviour is unchanged from v6.14 —
+see §19 and [power.md](power.md).
+
+### 3.9 Splash
+
+At start: the bean icon, the wordmark *Meraki+*, *Advanced Brewing Interface* and the version with *Config
+loaded* (or *Config missing* in yellow), while the progress ring at the edge sweeps once around (1.5 s);
+then a fade to HOME.
+
+### 3.10 Touch zones
+
+**Touch zones** (for testing; pixel coordinates on the 480 × 480 frame, both ends inclusive, from
+`hit_test()` in `src/mp/ui_state.c` and `ui_touch()` in `src/mp/services.c`). Every button acts on
+release, and only if the finger is still on the same target; a press shows a 360 ms ripple. Nothing
+reacts during a page transition, the splash, the power-off pages or the last frame before a runtime switch.
 
 | Element | Zone | Gesture |
 |---|---|---|
-| GRIND / BREW / WATER / STEAM (HOME, idle) | circles r=30 around (150 / 210 / 270 / 330, 372); the target text is at y 405 | **tap** = open the feature's page · **hold ≥ 650 ms** = start (a ring fills around the icon) |
-| STOP (HOME, while something runs) | one button: 124..356 × 342..402 (232 × 60 px; pill 216 × 54) · two buttons (main activity + latched steam): 80..240 and 240..400 × 342..402 (pills 152 × 54) | tap |
-| Gear (HOME) | 208..271 × 426..471 (64 × 46 px) | tap = SYSTEM (no frame) |
-| Error / offline hint (HOME, only in those two states) | 88..392 × 236..294 | tap = DIAGNOSTICS |
-| The chart / the BAR field (v6.10) | the chart 118..362 × 240..294 when it shows pressure; the BAR field 193..287 × 298..338 during brewing | tap = toast with the basis (*PRE-INF. 4 BAR = RAW 358 · LINEAR*) — no frames |
-| **Page header** (every page but HOME) | 160..319 × 14..79 (160 × 66 px: chevron + title) | tap = back · pull down ≥ 70 px = back |
-| Swipe right (every page and editor but HOME) | anywhere, not started on −/+; ≥ 60 px, started horizontally (axis lock in the first 14 px), ≤ ~30° skew | back. A swipe left does nothing; HOME reacts to no swipe |
-| List row k | x 64..416, y center 121 + 58·k − scroll (feature pages: the list ends at y 342, SYSTEM at 394) | tap = the editor / open-close the section / the system action / DIAGNOSTICS; vertical drag scrolls |
-| HOLD TO START (feature pages) | 116..363 × 344..403 (248 × 60 px; pill 232 × 48) | **hold ≥ 650 ms** = start (the pill fills, the UI returns to HOME) · a short tap = toast *KEEP HOLDING TO START* or the reason it is blocked |
-| BOOT UI / SWITCH TO ORIGINAL NOW | the first two rows of SYSTEM › STOCK UI | tap opens the system action |
-| DIAGNOSTICS | the whole field y 86..394; the GRAPH pill 90..390 × 44 px high | vertical drag scrolls; tap on the pill = smooth / raw |
-| Close chevron (detail + system view) | 196..283 × 34..79 (88 × 46 px) | tap = CANCEL / BACK |
-| Swipe down (detail + system view) | anywhere, not started on −/+ | ≥ 70 px vertical, ≤ ~30° skew = CANCEL / BACK |
-| − / + | circles r=42 around (84,184) / (396,184) | tap = one step; hold = repeat (170 → 90 → 45 ms, ×5 steps after ~28 repeats) |
-| CANCEL / SAVE | 100..236 / 244..380 × 284..348 | tap |
-| BACK (locked row / sensor) | 170..310 × 284..348 | tap; −/+ do not exist |
+| **Rings** Grinder / Hot Water / Brew / Steam (HOME, while nothing runs) | circles r = 76 around (160, 154) / (320, 154) / (160, 326) / (320, 326); the drawn ring has r = 72 | **tap** = the feature's page · **hold ≥ 650 ms** = start (an inner arc, r = 62, sweeps once around from 12 o'clock) |
+| **Chevron** (HOME, top) | 180..299 × 0..57 | tap = SYSTEM |
+| **Pull down** (HOME) | starts above y = 96, ≥ 70 px down, at most ~30° from vertical (\|dy\| ≥ 1.7·\|dx\|); not in the live view | SYSTEM |
+| Status line (HOME, offline only) | 70..409 × 36..69 | tap = DIAGNOSTICS |
+| Error screen (HOME, error) | 60..419 × 96..345 (the red ring, the code and the two lines under it) | tap = DIAGNOSTICS (the chevron still opens SYSTEM) |
+| **STOP**, one button (live view) | 130..349 × 358..425 (220 × 68); pill 200 × 56 at 140..339 × 364..419 | tap |
+| **STOP**, two buttons (main activity + latched steam) | 76..239 and 240..403 × 358..425 (164 × 68 each, no gap); pills 148 × 56 at 86..233 and 246..393 | tap: left = the main activity, right = steam |
+| The trace / the ≈bar number (live view) | trace 118..361 × 240..293 while it shows pressure; ≈bar 190..289 × 298..337 during pre-infusion / extraction | tap = toast with the basis (*Pre-inf. 4 bar = raw 358 · linear*); no frames |
+| **Page header** (every page but HOME) | 160..319 × 4..77 (chevron + title) | tap = back · a drag that starts above y = 86 and goes ≥ 70 px down = back |
+| **Swipe right** (every page, editor and system action; not HOME) | anywhere, not started on − / +; ≥ 60 px, horizontal at the first 14 px of movement (axis lock), at most ~30° skew | back / cancel. A swipe left does nothing; HOME reacts to no horizontal swipe |
+| List row k | x 64..415, y 88 + 50·k − scroll .. 145 + 50·k − scroll (row 50 px, pitch 50, 4 px extra above and below; the first match wins), inside the list field y 86..343 (feature pages) / 86..403 (SYSTEM) | tap = editor / open-close the section / system action / DIAGNOSTICS · a vertical drag that starts at y ≥ 86 scrolls |
+| **Hold to Start** (feature pages) | 140..339 × 348..445; ring r = 33 at (240, 384), caption at y = 428 | **hold ≥ 650 ms** = start (an arc at r = 40 sweeps around; the UI goes to HOME) · a short tap = toast *Keep holding to start* or the reason it is blocked |
+| DIAGNOSTICS | the field y 86..403 scrolls; the GRAPH pill x 90..389, y 592 − scroll .. 635 − scroll | vertical drag scrolls; tap on the pill = smooth / raw |
+| Editor / system action: **chevron** | 180..299 × 4..57 | tap = cancel / back |
+| Editor / system action: **pull down** | anywhere, not started on −, + or the roller; ≥ 70 px down, ≤ ~30° skew | cancel / back |
+| Editor: **− / +** | circles r = 40 around (82, 190) / (398, 190); drawn ring r = 29 | press = one step · hold = repeat: first repeat at 420 ms, then every 170 ms (repeats 1–4), 90 ms (5–13), 45 ms; from the 29th repeat 5 steps at a time on a 5-step grid |
+| Editor: **roller** | 124..355 × 80..299 | vertical drag: one step per 50 px, the values follow the finger; drag down = smaller. At either end the roller gives a little and springs back |
+| Editor: **OK** | circle r = 44 around (240, 390); drawn ring r = 36 | tap = save (unchanged value: just close). Locked row / sensor: close |
+| System action: **− / +** (Boot UI) | the same two circles | − = Original, + = Meraki+ |
+| System action: **Cancel / Save** (or Switch / Exit) | 92..235 / 244..387 × 346..403; pills 136 × 50 at y = 350 | tap |
+| System action, locked: **Back** | 170..309 × 346..403 | tap |
 
 ---
 
@@ -98,63 +280,63 @@ range and step are address-proven in PARITY.md §2 · **ESTIMATE** = min and ste
 estimate · **LOCKED** = shown without an editor · **SENSOR** = read-only measured value.
 
 The tables below keep the grouping of the spec (tier 1 espresso, tier 1 steam/water, config-only). **Where
-a row is shown since v6.17:** GRIND DOSE, GRIND MODE → **GRIND** · BREW WEIGHT, BREW TEMP, PRE-INFUSION,
-PRE-INF. TIME, PRE-INF. PRESSURE, GROUP HEAD → **BREW** · HOT WATER, WATER MODE → **WATER** (the WATER SENSOR
-is that page's live line, not a row) · MILK TEMP, STEAM LEVEL → **STEAM** · UI LANGUAGE, BRIGHTNESS, TEMP UNIT,
-SOUND, READY TONE, VOLUME → **SYSTEM › DISPLAY · SOUND** (v6.18: + the two sound rows; VOLUME moved here from STOCK
-UI because it now sets Meraki+'s sounds too) · TIME FORMAT, DAYLIGHT SAVING, TIME ZONE → **SYSTEM › CLOCK** ·
-PRE-HEAT, PRE-HEAT AT, REPEAT, AUTO OFF → **SYSTEM › SCHEDULE** · BOOT UI, SWITCH TO ORIGINAL NOW, STOCK LANG.,
-WATER SHORTCUT, CLEANING REMINDER, AUTO TIME, PAUSE TIME → **SYSTEM › STOCK UI** (what only the stock UI reads).
+a row is shown (since v6.17):** Grind Dose, Grind Mode → **Grind** · Brew Weight, Brew Temp, Pre-Infusion,
+Pre-Inf. Time, Pre-Inf. Pressure, Group Head → **Brew** · Hot Water, Water Mode → **Water** (the Water Sensor
+is that page's live line, not a row) · Milk Temp, Steam Level → **Steam** · UI Language, Brightness, Temp Unit,
+Sound, Ready Tone, Volume → **System › Display · Sound** (v6.18: + the two sound rows; Volume moved here from Stock
+UI because it now sets Meraki+'s sounds too) · Time Format, Daylight Saving, Time Zone → **System › Clock** ·
+Pre-Heat, Pre-Heat At, Repeat, Auto Off → **System › Schedule** · Boot UI, Switch to Original Now, Stock Lang.,
+Water Shortcut, Cleaning Reminder, Auto Time, Pause Time → **System › Stock UI** (what only the stock UI reads).
 
-### 4.1 Espresso (spec tier 1) — the GRIND and BREW pages
-| Label | config field | Word | Write on SAVE | Min..max / step | Shown as | Status |
+### 4.1 Espresso (spec tier 1) — the Grind and Brew pages
+| Label | config field | Word | Write on save | Min..max / step | Shown as | Status |
 |---|---|---|---|---|---|---|
-| GRIND DOSE | `autoGrindWeight` | 4 | sub4 len1 | 10..309 / 1 | 1.0–30.9 g | **PROVEN** [0xf4984] |
-| GRIND MODE | `grindMode` | 2 | sub2 len1 | 1..2 | 1 WEIGHT / 2 TIME | **PROVEN** [0x122180] |
-| BREW WEIGHT | `autobrewWeight` | 23 | sub23 len1 | 100..990 / 10 | 10–99 g | **PROVEN** [0x12be5c] |
-| BREW TEMP | `brewTemper` | 11 | sub11 len1 | 850..960 / 10 | 85.0–96.0 °C | **PROVEN** [0x12bcfc] |
-| PRE-INFUSION | `preInfusionSwitch` | 112 high byte | sub112 len2 | 0..1 | OFF / ON | **PROVEN** [0x103858] |
-| PRE-INF. TIME | `preInfusionTime` | 113 high byte | sub113 len1 | 5..15 / 1 (ceiling 60) | 5–15 s | **ESTIMATE** (max) |
-| PRE-INF. PRESSURE | `preInfusionPressure` | 112 low byte | sub112 len2 | 3..4 / 1 | 3–4 bar | **PROVEN** (MCU 0x1E10 only knows 3 and 4) |
-| PAUSE TIME | `breakTime` | 113 low byte | — (no editor) | — | 5 s | **LOCKED** (no effect, §4.5) |
-| GROUP HEAD | `headTemper` | 114 | sub114 len1 | 30..80 / 10 (ceiling 100) | 30–80 °C | **ESTIMATE** (max) |
+| Grind Dose | `autoGrindWeight` | 4 | sub4 len1 | 10..309 / 1 | 1.0–30.9 g | **PROVEN** [0xf4984] |
+| Grind Mode | `grindMode` | 2 | sub2 len1 | 1..2 | 1 Weight / 2 Time | **PROVEN** [0x122180] |
+| Brew Weight | `autobrewWeight` | 23 | sub23 len1 | 100..990 / 10 | 10–99 g | **PROVEN** [0x12be5c] |
+| Brew Temp | `brewTemper` | 11 | sub11 len1 | 850..960 / 10 | 85.0–96.0 °C | **PROVEN** [0x12bcfc] |
+| Pre-Infusion | `preInfusionSwitch` | 112 high byte | sub112 len2 | 0..1 | Off / On | **PROVEN** [0x103858] |
+| Pre-Inf. Time | `preInfusionTime` | 113 high byte | sub113 len1 | 5..15 / 1 (ceiling 60) | 5–15 s | **ESTIMATE** (max) |
+| Pre-Inf. Pressure | `preInfusionPressure` | 112 low byte | sub112 len2 | 3..4 / 1 | 3–4 bar | **PROVEN** (MCU 0x1E10 only knows 3 and 4) |
+| Pause Time | `breakTime` | 113 low byte | — (no editor) | — | 5 s | **LOCKED** (no effect, §4.5) |
+| Group Head | `headTemper` | 114 | sub114 len1 | 30..80 / 10 (ceiling 100) | 30–80 °C | **ESTIMATE** (max) |
 
-### 4.2 Steam and hot water (spec tier 1) — the STEAM and WATER pages
-| Label | config field | Word | Write on SAVE | Min..max / step | Shown as | Status |
+### 4.2 Steam and hot water (spec tier 1) — the Steam and Water pages
+| Label | config field | Word | Write on save | Min..max / step | Shown as | Status |
 |---|---|---|---|---|---|---|
-| MILK TEMP | `AtuoSteamTarge` | 25 | sub25 len1 | 450..700 / 10 | 45.0–70.0 °C | **PROVEN** [0x12bf80] |
-| STEAM LEVEL | `steamGears` | 14 | sub14 len1 | 1..4 / 1 | GENTLE / MILD / MEDIUM / STRONG | **PROVEN** [0xdd028] |
-| HOT WATER | `autoHotWaterTarget` | 17 | sub17 len1 | 300..5000 / 100 | 30–500 g in steps of 10 g | **PROVEN** [0xfbf0c] |
-| WATER MODE | `hotWaterMode` | (16/19 in the start block) | — config only | 1..2 | 1 AUTO / 2 MANUAL | **PROVEN** [0x11344c] |
-| WATER SENSOR | *(none)* | 40 (read-only) | — no write exists | — | live, e.g. 99.9 °C | **SENSOR** [0x112c9c] |
+| Milk Temp | `AtuoSteamTarge` | 25 | sub25 len1 | 450..700 / 10 | 45.0–70.0 °C | **PROVEN** [0x12bf80] |
+| Steam Level | `steamGears` | 14 | sub14 len1 | 1..4 / 1 | Gentle / Mild / Medium / Strong | **PROVEN** [0xdd028] |
+| Hot Water | `autoHotWaterTarget` | 17 | sub17 len1 | 300..5000 / 100 | 30–500 g in steps of 10 g | **PROVEN** [0xfbf0c] |
+| Water Mode | `hotWaterMode` | (16/19 in the start block) | — config only | 1..2 | 1 Auto / 2 Manual | **PROVEN** [0x11344c] |
+| Water Sensor | *(none)* | 40 (read-only) | — no write exists | — | live, e.g. 99.9 °C | **SENSOR** [0x112c9c] |
 
-### 4.3 SYSTEM (config only — no MCU write)
+### 4.3 System (config only — no MCU write)
 | Label | config field | Min..max | Shown as | Spec tier | Status |
 |---|---|---|---|---|---|
-| **UI LANGUAGE** (v6.3) | *(none — its own file `/new_customer/merakiplus/lang`)* | 0..1 | ENGLISH / DANSK (endonyms) | — | merakiplus's own setting; **not** a spec parameter and not in `--dump-table` (CHANGES-v6.3 item 2) |
-| BRIGHTNESS | `backlight` | 1..10 | live preview (PWM `duty = 100 − 7·v`) | 2 | **PROVEN** 0..10; **0 deliberately left out** (duty 100 = a dark screen the user cannot find their way back from) |
-| VOLUME | `volume` | 0..100 | 0–100 | 2 | **PROVEN** for the slider; UI hint about the discrete selector (§4.4). v6.18: also Meraki+'s sound volume, capped at 70 like stock (0 = mute) — [audio.md](audio.md) |
-| **SOUND** (v6.18) | *(none — its own file `/new_customer/merakiplus/sound`, `sound=`)* | 0..2 | OFF / ON / STOCK SOUNDS | — | merakiplus's own setting: the start jingle + ready tones; STOCK SOUNDS = the display's own `/customer/audio/*.mp3` if present |
-| **READY TONE** (v6.18) | *(none — the same file, `ready=`)* | 0..3 | OFF / BREW BOILER / STEAM BOILER / BOTH BOILERS | — | merakiplus's own setting: which boiler announces itself (its own tone each) |
-| TEMP UNIT | `Temperature` | 0..1 | 0 °F / 1 °C — also controls merakiplus's display | 2 | **PROVEN** |
-| STOCK LANG. (before v6.3: LANGUAGE) | `language` | 0..10 | 11 languages, Danish not among them (the names are shown in the UI language) | 2 | **PROVEN** — unlocked in v6.1; only controls the stock UI |
-| WATER SHORTCUT | `hotWaterShortcut` | 0..1 | OFF / ON | 2 | **PROVEN** |
-| DAYLIGHT SAVING | `sumtime` | 0..1 | OFF / ON | 2 | **PROVEN** |
-| CLEANING REMINDER | `clearTip` | 0..1 | OFF / ON | 2 | **PROVEN** |
-| TIME FORMAT | `timemode` | 0..1 | **0 = 12-HOUR / 1 = 24-HOUR** (corrected in v6.16) | 3 | **PROVEN** [`update_time` 0xD5944: `eor model[0x59], #1` at 0xD5970] |
-| AUTO TIME | `Automatically` | 0..1 | OFF / ON | 3 | **PROVEN** |
-| TIME ZONE | `timeZone` | — | `UTC+01:00` + place names (v6.16) | 3 | **LOCKED** (set in the stock UI) |
-| PRE-HEAT · PRE-HEAT AT · REPEAT (v6.16) | *(none — `/new_customer/merakiplus/schedule`)* | off/on · 00:00–23:55 · once / every day / Mon–Fri / Sat–Sun | the next occurrence is sent as the controller's wake alarm | — | Meraki+'s own ([time-scheduling.md](time-scheduling.md)) |
-| AUTO OFF (v6.16) | *(same file)* | off / 15 / 20 / 30 / 60 min | power-off after that long without touch or activity | — | Meraki+'s own (stock: fixed 30 min) |
+| **UI Language** (v6.3) | *(none — its own file `/new_customer/merakiplus/lang`)* | 0..1 | English / Dansk (endonyms) | — | merakiplus's own setting; **not** a spec parameter and not in `--dump-table` (CHANGES-v6.3 item 2) |
+| Brightness | `backlight` | 1..10 | live preview (PWM `duty = 100 − 7·v`) | 2 | **PROVEN** 0..10; **0 deliberately left out** (duty 100 = a dark screen the user cannot find their way back from) |
+| Volume | `volume` | 0..100 | 0–100 | 2 | **PROVEN** for the slider; UI hint about the discrete selector (§4.4). v6.18: also Meraki+'s sound volume, capped at 70 like stock (0 = mute) — [audio.md](audio.md) |
+| **Sound** (v6.18) | *(none — its own file `/new_customer/merakiplus/sound`, `sound=`)* | 0..2 | Off / On / Stock Sounds | — | merakiplus's own setting: the start jingle + ready tones; Stock Sounds = the display's own `/customer/audio/*.mp3` if present |
+| **Ready Tone** (v6.18) | *(none — the same file, `ready=`)* | 0..3 | OFF / Brew Boiler / Steam Boiler / Both Boilers | — | merakiplus's own setting: which boiler announces itself (its own tone each) |
+| Temp Unit | `Temperature` | 0..1 | 0 °F / 1 °C — also controls merakiplus's display | 2 | **PROVEN** |
+| Stock Lang. (before v6.3: LANGUAGE) | `language` | 0..10 | 11 languages, Danish not among them (the names are shown in the UI language) | 2 | **PROVEN** — unlocked in v6.1; only controls the stock UI |
+| Water Shortcut | `hotWaterShortcut` | 0..1 | Off / On | 2 | **PROVEN** |
+| Daylight Saving | `sumtime` | 0..1 | Off / On | 2 | **PROVEN** |
+| Cleaning Reminder | `clearTip` | 0..1 | Off / On | 2 | **PROVEN** |
+| Time Format | `timemode` | 0..1 | **0 = 12-Hour / 1 = 24-Hour** (corrected in v6.16) | 3 | **PROVEN** [`update_time` 0xD5944: `eor model[0x59], #1` at 0xD5970] |
+| Auto Time | `Automatically` | 0..1 | Off / On | 3 | **PROVEN** |
+| Time Zone | `timeZone` | — | `UTC+01:00` + place names (v6.16) | 3 | **LOCKED** (set in the stock UI) |
+| Pre-Heat · Pre-Heat At · Repeat (v6.16) | *(none — `/new_customer/merakiplus/schedule`)* | Off/On · 00:00–23:55 · once / every day / Mon–Fri / Sat–Sun | the next occurrence is sent as the controller's wake alarm | — | Meraki+'s own ([time-scheduling.md](time-scheduling.md)) |
+| Auto Off (v6.16) | *(same file)* | off / 15 / 20 / 30 / 60 min | power-off after that long without touch or activity | — | Meraki+'s own (stock: fixed 30 min) |
 
 ### 4.4 What is still estimated or locked
 | Row | What is uncertain | How the UI shows it | Why it is justifiable |
 |---|---|---|---|
-| PRE-INF. TIME | the picker's number of options has not been mapped (PARITY §6.6); max 15 = the stock UI's own default | **`MAX = ESTIMATE`** in amber next to the range + `≈` in front of the value in the list | 5–15 s is harmless; the field is one byte |
-| GROUP HEAD | the same picker anomaly; the spec's max of 80 is itself a cautious estimate | **`MAX = ESTIMATE`** + `≈` | E1 only triggers at > 110 °C; 80 is far below |
-| VOLUME | the stock UI has two controls: a 0–100 slider (what merakiplus edits) and a discrete High/Medium/Low/Mute selector whose mapping has not been mapped | **`STEPS = ESTIMATE`** + `≈` (the note says *"MERAKI+ + STOCK UI SOUNDS"*) | config only, no MCU write |
-| PAUSE TIME | max unknown — and the value has no effect | locked, amber note *"NO EFFECT · PRE-INF. TIME IS USED"* | §4.5 |
-| TIME ZONE | the size and meaning of the index table | locked, *"SET IT IN THE STOCK UI"* | an invalid index could break the stock UI's time/DST logic |
+| Pre-Inf. Time | the picker's number of options has not been mapped (PARITY §6.6); max 15 = the stock UI's own default | **`Max = estimate`** in pale yellow next to the range + `≈` in front of the value in the list | 5–15 s is harmless; the field is one byte |
+| Group Head | the same picker anomaly; the spec's max of 80 is itself a cautious estimate | **`Max = estimate`** + `≈` | E1 only triggers at > 110 °C; 80 is far below |
+| Volume | the stock UI has two controls: a 0–100 slider (what merakiplus edits) and a discrete High/Medium/Low/Mute selector whose mapping has not been mapped | **`Steps = estimate`** + `≈` (the note says *"Meraki+ + stock UI sounds"*) | config only, no MCU write |
+| Pause Time | max unknown — and the value has no effect | locked, pale-yellow note *"No effect · pre-inf. time is used"* | §4.5 |
+| Time Zone | the size and meaning of the index table | locked, *"Set it in the stock UI"* | an invalid index could break the stock UI's time/DST logic |
 
 **The estimate rule:** if the stock UI itself has saved a value above my estimated max (e.g.
 `headTemper=90`), that is evidence that the picker reaches it, and the range is extended to that value
@@ -166,7 +348,7 @@ in the stock UI, and correct `max` in the two SF_EST rows.
 ### 4.5 Deliberately removed, locked or not exposed
 | Field | Decision | Rationale (spec) |
 |---|---|---|
-| hot water **temperature** | **live line on the WATER page** (v6.1–v6.16: a read-only sensor row), not a setting | The stock UI has no setpoint: the temperature shown is the e-boiler's measured value (word 40, `hotWaterTemperUpdate` 0x112c9c). It is shown where you would look for it — at the top of the WATER page |
+| hot water **temperature** | **live line on the Water page** (v6.1–v6.16: a read-only sensor row), not a setting | The stock UI has no setpoint: the temperature shown is the e-boiler's measured value (word 40, `hotWaterTemperUpdate` 0x112c9c). It is shown where you would look for it — at the top of the Water page |
 | `breakTime` | **locked**, the value is shown | The MCU recipe 0x1E10 copies `preInfusionTime` into the low byte of word113 before the timing `word13 + word113_lo` is computed — the separate pause value is always replaced. An editor would be a button with no effect. The value is still packed into word113 lo, so the frames are identical to the stock UI's |
 | `brewMode` | **removed** | vestigial: `get/setExtractModeValue` has 0 callers |
 | `sleepMode`, `sleepModeSetting` | **removed** | no editor in the stock UI (the setters have 0 callers); sleep timing is hard-coded (~600 s screensaver / ~1800 s power-off). merakiplus keeps the machine awake itself (§7.1) |
@@ -176,15 +358,15 @@ in the stock UI, and correct `max` in the two SF_EST rows.
 | calibration (words 26/27), reboot (word 30), drain (28/29), back-flush (20), self-test (8) | not exposed **and** impossible to send | §7a |
 
 ### 4.6 Range guard (three layers)
-1. **The stepper** clamps to the range and snaps to the step grid.
-2. **SAVE** rejects anything outside the range; an activity start is blocked if a config value used in
-   a cmd6 frame is out of spec or missing (*"CONFIG OUT OF SPEC · FIX FIRST"*).
+1. **The editor** (roller and − / +) clamps to the range and snaps to the step grid.
+2. **OK (save)** rejects anything outside the range; an activity start is blocked if a config value used in
+   a cmd6 frame is out of spec or missing (*"Config out of spec · fix first"*).
 3. **The frame policy** (§7a) rejects any frame with a word outside its range — even if layers 1–2
    should have a bug.
 
 A config value outside a proven range can only occur if the file was changed outside the stock UI. It
-is shown as it is, in red (a list row with a red tint, the detail with *"OUT OF SPEC · PICK A NEW
-VALUE"*), and the first tap on −/+ brings it into range.
+is shown as it is, in yellow with a warning icon (the list row's value; the editor's value with *"Out of spec · pick a
+new value"*), and the first − / + or roller step brings it into range.
 
 ---
 
@@ -192,7 +374,7 @@ VALUE"*), and the first tap on −/+ brings it into range.
 
 | # | Quirk (PARITY) | Consequence in merakiplus |
 |---|---|---|
-| 1 | Hot water has no temperature setting; the display is word 40 | sensor row (§4.5) |
+| 1 | Hot water has no temperature setting; the display is word 40 | the Water page's live line (§4.5) |
 | 2 | `brewMode` vestigial | removed |
 | 3 | `sleepMode`/`sleepModeSetting` without an editor, timing hard-coded | removed |
 | 4 | word112 = `(switch<<8)\|pressure`, word113 = `(time<<8)\|pause`, word114 = `headTemper` in whole °C (MCU ×10) | `pack112`/`pack113` match exactly — tested for all combinations + 5 byte vectors (§10) |
@@ -201,7 +383,7 @@ VALUE"*), and the first tap on −/+ brings it into range.
 | 7 | `breakTime` is overwritten by the MCU | locked (§4.5). Before BREW, word113 is only compared on the **high byte**, otherwise the mirror (e.g. `0606` after a brew) would trigger an unnecessary re-sync every time |
 | 8 | A boot push exists: `fuart_thread` sends `sub1 len30` + `sub112 len3` | the reload semantics in §5 have been corrected |
 | 9 | Trigger words 3/6/9/26/27/30 must be 0 in normal blocks; word30 = 1 reboots the MCU | §7a |
-| 10 | ~~Steam requires the physical wand switch~~ — **disproven live** (STEAMLIVE §6.3): display steam starts 0.22 s after the write with the wand switch = 0. The wand switch alone gives a *flush* without auto-stop | **v6.6:** *"STARTING STEAM…"*, then *STEAM·AUTO*; the wand alone = *STEAM·WAND* without a STOP button ([CHANGES-v6.6](dev/UI_v6.md#changes-v66) item 2) |
+| 10 | ~~Steam requires the physical wand switch~~ — **disproven live** (STEAMLIVE §6.3): display steam starts 0.22 s after the write with the wand switch = 0. The wand switch alone gives a *flush* without auto-stop | **v6.6:** *"Starting Steam…"*, then *Steam·Auto*; the wand alone = *Steam·Wand* without a STOP button ([CHANGES-v6.6](dev/UI_v6.md#changes-v66) item 2) |
 | 11 | Picker navigation is anomalous → number of options unknown | SF_EST + a visible hint (§4.4) |
 | 12 | Volume: slider + discrete selector | hint (§4.4) |
 
@@ -259,24 +441,24 @@ as *"STOP NOT CONFIRMED · TRY AGAIN"* after 5 s. This path has never been seen 
 
 ### 18.2 The UI
 
-* **The button** is in the same place and has the same style as STOP STEAM: the red pill in the action
-  row. **v6.17:** touch area 232 × 60 px, pill 216 × 54 px in F_M, bright red with white text (≥ 4.5 : 1;
-  the red is 4.0 : 1 against the background). v6.13–v6.16: 180 × 56 / 160 × 44 px in F_S and a dark red
-  (1.9 : 1 against the background). The texts
-  are *STOP WATER / STOP BREW / STOP GRIND* and *STOP VAND / STOP BRYG / STOP KVÆRN*. The button is
-  shown while the activity's work_sta bits are set (`phase_main`). It is gone in the DONE view, and the
-  valve pulse after a brew (`0105`) gives no button.
+* **The button** (v7.0): a solid white pill with deep copper text (8 : 1), the brightest thing on the
+  screen, under the three numbers of the live view: pill 200 × 56 px in F_M, touch area 220 × 68 px
+  (130..349 × 358..425). History: v6.17–v6.19 a bright red pill 216 × 54 px; v6.13–v6.16 160 × 44 px in a
+  dark red that read as disabled. The texts are *Stop Water / Stop Brew / Stop Grind / Stop Steam* and
+  *Stop vand / Stop bryg / Stop kværn / Stop damp*. The button is shown while the activity's work_sta
+  bits are set (`phase_main`). It is gone in the *Done* view, and the valve pulse after a brew (`0105`)
+  gives no button.
 * **Two buttons:** if a main activity runs at the same time as latched steam (e.g. `5327` + word 24 =
-  1), there are two buttons side by side: left = the main activity, right = STOP STEAM. Each has a
-  touch area of 160 × 60 px and a pill of 152 × 54 px in F_S (v6.13–v6.16: 148 × 56 / 136 × 44 px in F_XS). The wand/flush still has no STOP button.
-* **Feedback:** a tap (activated on release, like all buttons) immediately shows the toast *"STOPPING
-  WATER…"*. When the MCU has cleared the bits, *"WATER STOPPED"* (green) follows. If there is no ACK,
-  not even after a retransmit, *"STOP: NO REPLY · TRY AGAIN"* (red) is shown. If the bits have not
-  been cleared after 5 s, *"STOP NOT CONFIRMED · TRY AGAIN"* (yellow) is shown. An ACK alone does not
-  count as confirmation. A new tap while the stop frame is waiting for an ACK does not queue another
-  frame.
-* **The sub-line** is the auto-stop expectation: *"STOPS AT 40.0 G"* (v6.13–v6.16: *"AUTO-STOP AT 40.0 G ·
-  OR STOP"* — the button is right below it).
+  1), there are two pills side by side: left = the main activity, right = *Stop Steam*. Each has a touch
+  area of 164 × 68 px (no gap between them) and a pill of 148 × 56 px in F_S. The wand/flush still has no
+  STOP button.
+* **Feedback:** a tap (activated on release, like all buttons) immediately shows the toast *Stopping
+  water…*. When the MCU has cleared the bits, *Water stopped* follows. If there is no ACK, not even after a
+  retransmit, *Stop: no reply · try again* is shown; if the bits have not been cleared after 5 s, *Stop not
+  confirmed · try again*. Both carry the yellow warning icon. An ACK alone does not count as confirmation.
+  A new tap while the stop frame is waiting for an ACK does not queue another frame.
+* **The target line** is the auto-stop expectation: *Stops at 40.0 g* (v6.13–v6.16: *"AUTO-STOP AT 40.0 G ·
+  OR STOP"*).
 * **Frame policy:** stop frames only contain zeros and go through the same gate and write queue as
   everything else (CRC + ACK wait + one retransmit). They require no intent and cannot start anything.
   `MERAKIPLUS_READONLY=1` sends nothing, and the toast says why.
@@ -310,24 +492,24 @@ KEY, one key). merakiplus never read that node.
 |---|---|---|---|
 | Which node | `open("/dev/input/event1", O_RDWR)` in its own thread — **no EVIOCGRAB**. For every `EV_KEY` (the code is not checked) `value` is stored (1 = down, 0 = released) | `app_powerKey_thread` 0x140AB4 (string 0x17BCEC); stored in app+0x15A8 | the k62091 node, read-only, **without a grab**. Selection: `MERAKIPLUS_KBD` → a node whose name contains `k62091` → the first node with EV_KEY and without EV_ABS → `/dev/input/event1`. All EV_KEY codes count as the button |
 | When it powers off | `SleepRefresh` (lv_timer 100 ms): only when the second changes, e60 is incremented while the button is down. `dealPowerState(1)` powers off when e60 > 1 — i.e. the button held across **two second boundaries = 1.0–2.0 s**. A short press only wakes the stock UI's screensaver | `SleepRefresh` 0x149268 (timer 100 ms at 0x1354A8), e60 = 0x1E0E60, `dealPowerState` 0x14911C | **HOLD 1.5 s** (in the middle of the stock UI's window). Short press: nothing (counted on DIAGNOSTICS) |
-| Blocking | While `isExtractionOrSteamSwitchOn()` is true, it does not count and does not power off: work_sta bit 12 (brew) or bit 14 (steam), mirror word 22 (brew active), 24 (steam) or 6 (grind). **Hot water does not block.** The stock UI NEVER stops an activity on power-off | `isExtractionOrSteamSwitchOn` 0x1481E0 (`GetMaichinState(0x1000/0x4000)`, words 22/24/6) | The same predicate (+ merakiplus's own start in progress for the three). Toast *STOP THE ACTIVITY FIRST · THEN OFF*. When the activity has ended, a **new full hold** powers off (the counter stands still, like e60). Hot water: power-off is sent, no stop frame |
-| No connection | Only powers off if mirror word 0 ≠ 0 | 0x149210 | Only if the link is up and the controller has replied with word 0 ≠ 0. Otherwise toast *NO CONNECTION · CANNOT TURN OFF* — the button may be what just woke a sleeping controller. READ-ONLY: nothing |
+| Blocking | While `isExtractionOrSteamSwitchOn()` is true, it does not count and does not power off: work_sta bit 12 (brew) or bit 14 (steam), mirror word 22 (brew active), 24 (steam) or 6 (grind). **Hot water does not block.** The stock UI NEVER stops an activity on power-off | `isExtractionOrSteamSwitchOn` 0x1481E0 (`GetMaichinState(0x1000/0x4000)`, words 22/24/6) | The same predicate (+ merakiplus's own start in progress for the three). Toast *Stop the activity first · then off*. When the activity has ended, a **new full hold** powers off (the counter stands still, like e60). Hot water: power-off is sent, no stop frame |
+| No connection | Only powers off if mirror word 0 ≠ 0 | 0x149210 | Only if the link is up and the controller has replied with word 0 ≠ 0. Otherwise toast *No connection · cannot turn off* — the button may be what just woke a sleeping controller. READ-ONLY: nothing |
 | Power-off frames | `powerOff`: mirror word 0 = 0 → `performSleepActions` → `powerOffSend(0,0,0)` = **cmd8** (15 bytes) → `usleep(80000)` → `usart_send(6,0,2)` = **cmd6 sub0 len2 [word 0 = 0, word 1 = the mirror]** | `powerOff` 0x149074, `performSleepActions` 0x148324 (0x148F50, 0x14905C), `powerOffSend` 0x14700C, buffer `powerSendBuf` 0x1A6030 | Exactly that: `aa 55 08 <year lo> <year hi> <month 1-12> <day> <h> <m> <s> 00 00 00 <crc>` (example 2026-11-18 16:35:28: `aa 55 08 ea 07 0b 12 10 23 1c 00 00 00 cc df`), **≥ 80 ms** later `aa 55 06 00 02 00 00 00 00 56 94` (word 1 = 0 = awake, as merakiplus's keep-awake keeps it). The cmd6 frame goes through the write queue (CRC, ACK, one retransmit) and the frame policy with the new intent `I_POWEROFF` |
 | cmd8's contents | year (u16), month (+1), day, hour, minute, second, alarm day/hour/minute = the next scheduled pre-heat (`performSleepActions`); no schedule = alarm 0/0/0 | 0x14703C–0x147148 (CRC_GetModbus16 over 13 bytes) | v6.16: stock's local time (UTC + zone + DST; v6.14 sent UTC) + the next pre-heat occurrence, or 0/0/0 without a schedule ([time-scheduling.md](time-scheduling.md)). The MCU's 0x88 acknowledgement is only counted for DIAGNOSTICS — the stock UI does not wait for it either |
 | The MCU | The status task sees word 0 = 0 (every 500 ms) and starts `sleep`. It deletes `boiler_heat`, `head_heat`, **`status`** (RX parser + replies) and `run`, sets work_sta = 0 and resets the outputs. It only wakes on a **hold of the button** (its own GPIO PC.8, 8 × 100 ms low after a release) or the alarm → `reset muc` (CPU reset) | MEM03 0x29D4/0x29D8, sleep task 0x2F52 (0x2E1E deletes tasks; 0x2F0C outputs 0), alarm comparison 0x2FE2–0x3036, reset 0x326 (SYS IPRST) | merakiplus sends nothing more: keep-awake stands still, and polls are not answered (the link goes down — expected). The cmd8 parser 0x9C88 stores the 10 bytes in 0x20000E18 |
-| Screen | Backlight off (`blpwm_set_enable(2,0)` + duty 0), off page. 1.5 s later: fb closed, `killall dispinit`, GPIOs released, **`echo mem > /sys/power/state`** (SoC suspend). After resume: mirror word 0 = 1, `killall demo_v9` → the watchdog restarts the stock UI → `PowerOn` | 0x1490C0–0x1490FC, 0x149494–0x14952C, `uikit_os_back_light_off` 0xC2278 | TURNING OFF… immediately, OFF after the ACK. The backlight is switched off 1.5 s after the press: duty 99 (dimmest) and then `pwm2/enable = 0` (merakiplus does not write the stock UI's duty 0 — with "polarity inversed" that is the brightest light if the enable did not take effect). **No SoC suspend and no killall** (a deliberate deviation: the network guard and telnet stay alive; merakiplus is not a restartable app behind a watchdog in run.sh mode) |
-| Power on | The SoC wakes from the same button press; the stock UI restarts and sends `PowerOn` (word 0 = 1) at startup. The MCU wakes by itself (reset; word 0 starts as 1) | `app_init` 0xD9170 → `PowerOn` 0x146EF8 | A button press in OFF → backlight on, *TURNING ON… · KEEP HOLDING THE BUTTON A MOMENT*. When the controller has replied with word 0 = 1 for 0.6 s → PowerOn `aa 55 06 00 01 01 00 c5 5f` + awake `aa 55 06 01 01 00 00 c5 33` (the same two frames as at startup) → HOME, toast *MACHINE IS ON*, keep-awake runs again. Without a reply within 10 s: back to OFF. If the controller replies by itself with word 0 = 1 while merakiplus is in OFF (alarm, or the button was held without merakiplus seeing it), it powers on the same way. After the MCU reset the controller is on its startup values — **merakiplus's re-push** (v6.6, the 0x89 round) puts the config's values back |
+| Screen | Backlight off (`blpwm_set_enable(2,0)` + duty 0), off page. 1.5 s later: fb closed, `killall dispinit`, GPIOs released, **`echo mem > /sys/power/state`** (SoC suspend). After resume: mirror word 0 = 1, `killall demo_v9` → the watchdog restarts the stock UI → `PowerOn` | 0x1490C0–0x1490FC, 0x149494–0x14952C, `uikit_os_back_light_off` 0xC2278 | *Turning off…* immediately, *Off* after the ACK. The backlight is switched off 1.5 s after the press: duty 99 (dimmest) and then `pwm2/enable = 0` (merakiplus does not write the stock UI's duty 0 — with "polarity inversed" that is the brightest light if the enable did not take effect). **No SoC suspend and no killall** (a deliberate deviation: the network guard and telnet stay alive; merakiplus is not a restartable app behind a watchdog in run.sh mode) |
+| Power on | The SoC wakes from the same button press; the stock UI restarts and sends `PowerOn` (word 0 = 1) at startup. The MCU wakes by itself (reset; word 0 starts as 1) | `app_init` 0xD9170 → `PowerOn` 0x146EF8 | A button press in OFF → backlight on, *Turning on… · Keep holding the button a moment*. When the controller has replied with word 0 = 1 for 0.6 s → PowerOn `aa 55 06 00 01 01 00 c5 5f` + awake `aa 55 06 01 01 00 00 c5 33` (the same two frames as at startup) → HOME, toast *Machine is on*, keep-awake runs again. Without a reply within 10 s: back to OFF. If the controller replies by itself with word 0 = 1 while merakiplus is in OFF (alarm, or the button was held without merakiplus seeing it), it powers on the same way. After the MCU reset the controller is on its startup values — **merakiplus's re-push** (v6.6, the 0x89 round) puts the config's values back |
 | Touch while off | (the SoC sleeps — touch does nothing) | — | Touches are swallowed (no navigation, no frames). The OFF page is shown for 8 s; then the backlight goes off again. Touch cannot switch the machine on: the controller cannot receive anything while it sleeps |
 
 ### 19.2 The UI
-* **TURNING OFF… / OFF / TURNING ON…** is a black page with a power symbol (ring + line; crema during
-  TURNING OFF and TURNING ON, dimmed during OFF). During OFF: *HOLD THE POWER BUTTON TO TURN ON* and
-  *THE SCREEN TURNS OFF · TOUCH TO SHOW*. An open detail is closed without SAVE (brightness and
-  language previews are reverted); after POWER ON Meraki+ is on HOME, like the stock UI
-  (`navigator_popToHome`).
-* **DIAGNOSTICS → POWER BUTTON** (a new block between RAW COUNTERS and ABOUT): state, *POWER · WORD 0*
-  (the controller's reply or *NO REPLY*), *PRESS · OFF · ON*, *LAST KEY* (`code = value · age`), node
-  (`/dev/input/event1 · k62091` or *NO BUTTON NODE FOUND*).
+* **Turning off… / Off / Turning on…** (v7.0: the dark espresso layer instead of black) shows a white power
+  symbol (ring + line; dimmed while off), the state in F_L and one or two lines under it: *The machine goes
+  to sleep*; *Hold the power button to turn on* and *The screen turns off · touch to show*; *Keep holding
+  the button a moment*. An open editor is closed without saving (brightness and language previews are
+  reverted); after power-on Meraki+ is on HOME, like the stock UI (`navigator_popToHome`).
+* **Diagnostics › Power Button** (a block between Raw Counters and About): *State*, *Power · Word 0* (the
+  controller's reply or *No reply*), *Press · Off · On*, *Last Key* (`code = value · age`), node
+  (`/dev/input/event1 · k62091` or *No button node found*).
 * Sheets: `power_states_en.png` · `power_states_da.png`.
 
 ### 19.3 Limits
@@ -356,11 +538,12 @@ The full description — the reversed stock audio path with addresses, the rules
   power-on / wake plays nothing (v6.19: only the jingle). A boiler is re-armed only after real cooling (stage ≤ 30 or
   15 °C below its ready point).
   Silent while OFF / asleep; a tone that comes due during an activity is skipped (logged *suppressed*).
-* **Where to set it:** *SYSTEM › DISPLAY · SOUND* — SOUND (OFF / ON / STOCK SOUNDS), READY TONE (OFF / BREW BOILER /
-  STEAM BOILER / BOTH BOILERS), VOLUME (config `volume`, 0 = mute, capped at 70). SAVE of any of them plays a short
-  test tone (when the machine is on).
-* **Where to see it:** *DIAGNOSTICS › SOUND* — `SOUND · VOLUME` (*ON · 31*, *OFF*, amber *VOLUME 0* / *NO PLAYER*) and
-  `LAST SOUND` (*JINGLE · PLAYED*, *STEAM · PLAYED*, *BREW · SKIPPED*, *BREW · MUTED*, …). On the device every event is
+* **Where to set it:** *System › Display · Sound* — Sound (Off / On / Stock Sounds), Ready Tone (Off / Brew Boiler /
+  Steam Boiler / Both Boilers), Volume (config `volume`, 0 = mute, capped at 70). Saving any of them (OK in the editor)
+  plays a short test tone (when the machine is on).
+* **Where to see it:** *Diagnostics › Sound* — *Sound · Volume* (*On · 31*, *Off*, pale-yellow *Volume 0* / *No player*) and
+  *Last Sound* (*Jingle · Played*, *Steam · Played*, *Brew · Skipped*, *Brew · Muted*, …). On the device every event is
   also a line in `/tmp/merakiplus_snd.log`.
+* The sounds and their rules did not change in v7.0.
 * Previews: `100_system_display_sound`, `101_detail_sound`, `102_detail_ready_tone`, `103_detail_volume`,
   `104_sound_saved_toast`, `105_diag_sound` (EN + DA).

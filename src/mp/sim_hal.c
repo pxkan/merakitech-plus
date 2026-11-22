@@ -599,16 +599,21 @@ static void sim_dispatch(const char*line,char*out,size_t on,ms_t now){
         jb(&j,"{\"ok\":true,\"page\":\"%s\",\"targets\":[",sim_page_key()); int c=0;
 #define LT_C(nm,x,y,r) jb(&j,"%s{\"name\":\"%s\",\"x\":%d,\"y\":%d,\"r\":%d}",c++?",":"",nm,x,y,r)
 #define LT_R(nm,x,y,w,h) jb(&j,"%s{\"name\":\"%s\",\"x\":%d,\"y\":%d,\"w\":%d,\"h\":%d}",c++?",":"",nm,(x)+(w)/2,(y)+(h)/2,w,h)
-        if(view==V_DETAIL||view==V_SYS){
-            int locked=(view==V_SYS)?sys_locked():((SET[sel].flags&SF_LOCK)!=0);
-            if(locked) LT_R("back",170,284,140,64);
-            else { if(view==V_DETAIL||xsel==X_BOOTUI){ LT_C("minus",84,184,42); LT_C("plus",396,184,42); } LT_R("cancel",100,284,136,64); LT_R("save",244,284,136,64); }
+        if(view==V_DETAIL){                                                    /* v7.0: the roller editor */
+            LT_R("cancel",BACK_X0,BACK_Y0,BACK_W,BACK_H);                       /* the chevron at the top (= CANCEL; a pull down does the same) */
+            if(SET[sel].flags&SF_LOCK) LT_C("back",CX,ED_OK_Y,ED_OK_R+8);
+            else { LT_C("minus",ED_MX,ED_CY,40); LT_C("plus",ED_PX,ED_CY,40); LT_C("save",CX,ED_OK_Y,ED_OK_R+8); LT_R("roller",ED_ROLL_X0,ED_CY-110,ED_ROLL_X1-ED_ROLL_X0,220); }
+        } else if(view==V_SYS){
+            if(sys_locked()) LT_R("back",170,SB_Y-4,140,SB_H+8);
+            else { if(xsel==X_BOOTUI){ LT_C("minus",ED_MX,ED_CY,40); LT_C("plus",ED_PX,ED_CY,40); } LT_R("cancel",SB_X0,SB_Y-4,SB_W+8,SB_H+8); LT_R("save",SB_X1,SB_Y-4,SB_W+8,SB_H+8); }
         } else if(view==V_MAIN&&page==PG_HOME){
             int sk[2], sn=stop_btns(now,sk);                                   /* v6.13: STOP for grind/brew/water + latched steam */
             if(sn){ for(int i=0;i<sn;i++){ Rect r=stop_hit(sn,i); LT_R(STOP_KEY[sk[i]],r.x0,r.y0,r.x1-r.x0,r.y1-r.y0); } }
-            else if(!phase_active(phase_raw(now))) for(int k=0;k<4;k++) LT_C(ACT_KEY[k],ACT_X[k],ACT_Y,30);   /* tap = the feature's page, hold = start */
-            if(diag_hint_shown()) LT_R("diag",CX-HINT_W/2,236,HINT_W,58);
-            LT_R("gear",CX-GEAR_HW,GEAR_Y-22,2*GEAR_HW,46);
+            else if(hm_mode==HM_ACTIVE&&act.ph==PH_DONE) LT_R("done",60,60,360,290);   /* v7.0: the 3 s DONE view: a tap brings the rings back */
+            else if(!phase_active(phase_raw(now))&&hm_mode!=HM_ERROR&&hm_mode!=HM_ACTIVE) for(int k=0;k<4;k++){ int i=ring_of_act(k); LT_C(ACT_KEY[k],RING_X[i],RING_Y[i],RING_R); }   /* v7.0: the rings: tap = the feature's page, hold = start */
+            if(hm_mode==HM_ERROR) LT_R("diag",60,96,360,250);
+            else if(diag_hint_shown()) LT_R("diag",70,HOME_STAT_Y-2,340,32);
+            LT_R("gear",CX-60,0,120,hm_mode==HM_ACTIVE?44:58);               /* v7.0: the chevron at the top -> SYSTEM */
         } else if(view==V_MAIN){                                               /* v6.17: every page but HOME: "back" (the header) */
             LT_R("back",PBACK_X0,PBACK_Y0,PBACK_W,PBACK_H);
             if(pg_list(page)){
@@ -621,7 +626,7 @@ static void sim_dispatch(const char*line,char*out,size_t on,ms_t now){
         }
 #undef LT_C
 #undef LT_R
-        jb(&j,"],\"swipe\":\"right >= 60 px = back (every page and editor but home); no carousel since v6.17\"");
+        jb(&j,"],\"swipe\":\"right >= 60 px = back (every page and editor but home); no carousel since v6.17; v7.0: pull down from the top of home = system\"");
     }
     else jb(&j,"{\"ok\":false,\"error\":\"unknown cmd\"");
 done:

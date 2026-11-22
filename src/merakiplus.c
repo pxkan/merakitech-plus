@@ -2,6 +2,11 @@
  * 480x480 screen, v6.16: feature parity (settings + activity control), its own visual
  * design system, boot-slot integration, product name + two languages — and from v6.4 a SIM build.
  *
+ * v7.0 = v6.20 + THE OEM REDESIGN (display and navigation only; docs/dev/UI_v6.md "CHANGES-v7.0", docs/design/): the stock look —
+ *  a copper background with a fine guilloche, white ring buttons in the stock 2x2 grid with their names set along the arc, line icons,
+ *  real typography (Montserrat, SIL OFL 1.1, baked as outlines into src/mp/font_data.c by tools/gen_font.py and rasterized with exact
+ *  coverage), a live view with a big number + an edge progress ring, white rows on copper, a roller editor, a dark error layer. The
+ *  model, guards, save path, frame policy, recipes, STOP, boot push and everything else that reaches the UART are unchanged.
  * v6.20 = v6.19 + the fixes of the 2026-11 code review (docs/dev/REVIEW-2026-11.md, CHANGELOG): stepper repeat after a failed save;
  *  SAVE refused while a start is pending; the existing STOP stays offered for a latched start word; queued STOPs survive a failing
  *  frame; a pre-arm/disarm cmd8 without its 0x88 echo is resent (max 2); an unusable Wi-Fi password is never "open"; a one-shot saved
@@ -315,7 +320,7 @@ static int  sim_net_on=1;
 #define KBD_NAME "k62091"
 #define BL_SYSFS "/sys/class/pwm/pwmchip0/pwm2/duty_cycle"
 #define BL_EN_SYSFS "/sys/class/pwm/pwmchip0/pwm2/enable"   /* v6.14: stock uikit_os_back_light_off/on 0xC2278 = blpwm_set_enable(2,0/1) */
-#define MERAKIPLUS_VERSION "V6.20"
+#define MERAKIPLUS_VERSION "V7.0"
 
 /* ---- v6.10: pressure estimate (UI_v6.md §16) ----
  * Word 51 (SPI2 ADC channel 0xA, REGISTERMAP: pressure OR pump-drive candidate) -> bar with ONE linear anchor:
@@ -372,6 +377,7 @@ static ms_t now_ms(void){ struct timespec ts; clock_gettime(CLOCK_MONOTONIC,&ts)
 #include "mp/i18n.c"
 #include "mp/bootslot.c"
 #include "mp/model.c"
+#include "mp/font_data.c"
 #include "mp/gfx.c"
 #include "mp/ui_state.c"
 #include "mp/services.c"

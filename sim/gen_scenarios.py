@@ -64,14 +64,21 @@ SCENARIOS.append(base(
      {"kind": "word", "word": 36, "t": 6, "window": 3, "value": 0},
      {"kind": "sim_log", "assert": "no_writes_between", "t0": 1, "t1": 11.5,
       "except_subs": [0, 1, 112]},
-     {"kind": "point", "t": 6, "point": [240, 8], "color": [98, 222, 168], "tol": 30},
-     # v6.5-scenarios: merakiplus's gauge arc (r 207-221) in the phase gradient — not
-     # the reference client's page band. Ref oracle: sim_ui_profile-ref.json.
-     {"kind": "point", "t": 6, "point": [240, 20], "color": [61, 163, 130], "tol": 30},
-     # v6.5-scenarios: dark vignette background w/ white hero text (the phase is
-     # shown in ring/chip/gauge) — not the reference client's phase-filled circle.
-     {"kind": "region", "t": 6, "rect": [200, 200, 80, 80],
-      "color": [32, 36, 42], "tol": 20}]))
+     # v7.0 (OEM look): READY is shown by the boiler rings. A ring whose boiler is still
+     # heating is a faint track (alpha 95, ~[211,152,125] here) + a partial white arc; at
+     # READY it is drawn solid white. Sampled on the solid 2-px stroke at the top of the
+     # BREW ring (160,326 r72 -> y 253) and the STEAM ring (320,326), far from the label gaps.
+     # (v6: point (240,8) = the phase ring in the READY green.)
+     {"kind": "point", "t": 6, "point": [160, 253], "color": [255, 255, 255], "tol": 30},
+     {"kind": "point", "t": 6, "point": [320, 253], "color": [255, 255, 255], "tol": 30},
+     # v7.0: HOME's chevron (SYSTEM) is drawn white at the top centre (tip at 239,23).
+     # (v6: point (240,20) = the gauge arc.) Ref oracle: sim_ui_profile-ref.json.
+     {"kind": "point", "t": 6, "point": [239, 23], "color": [248, 244, 242], "tol": 30},
+     # v7.0: the copper background between the four rings (bgpure; the dark bgdark error
+     # layer would be ~[30,20,17]); the region is clear of the ring strokes and averages
+     # the guilloche texture. (v6: dark vignette [32,36,42] in 200,200,80,80.)
+     {"kind": "region", "t": 6, "rect": [214, 214, 52, 52],
+      "color": [188, 94, 42], "tol": 20}]))
 
 # ---------------------------------------------------------------- sleep→wake
 SCENARIOS.append(base(
@@ -126,6 +133,12 @@ SCENARIOS.append(base(
      snap(5, "preinfusion"), snap(15, "extraction"), snap(33, "stop")],
     [{"kind": "phase_seq", "t0": 0, "t1": 40,
       "values": ["READY", "PRE", "EXT", "READY"]},
+     # v7.0: the live view shows the solid white STOP pill (200x56 at 140,364), sampled on
+     # its left and right ends, clear of the label and the rounded caps. Ref: REF profile.
+     {"kind": "region", "t": 15, "rect": [152, 376, 20, 32],
+      "color": [255, 255, 255], "tol": 20},
+     {"kind": "region", "t": 15, "rect": [308, 376, 20, 32],
+      "color": [255, 255, 255], "tol": 20},
      {"kind": "phase", "t": 4, "window": 1.5, "value": "PRE"},
      {"kind": "phase", "t": 12, "window": 2, "value": "EXT"},
      {"kind": "word_hold", "word": 51, "t0": 3.2, "t1": 8.2, "min": 330, "max": 395},
@@ -276,9 +289,15 @@ SCENARIOS.append(base(
      ui(4, "action", name="brew"), snap(5, "error")],
     [{"kind": "phase", "t": 5, "window": 1.5, "value": "ERROR"},
      {"kind": "word", "word": 34, "t": 5, "window": 1.5, "value": 32},
-     {"kind": "toast", "t": 4.5, "window": 1.0, "contains": "FEJL AKTIV"},
+     {"kind": "toast", "t": 4.5, "window": 1.0, "contains": "Fejl aktiv"},
      {"kind": "word", "word": 22, "t": 6.5, "window": 1, "value": 0},
-     {"kind": "phase", "t": 9.5, "window": 1.5, "value": "READY"}]))
+     {"kind": "phase", "t": 9.5, "window": 1.5, "value": "READY"},
+     # v7.0: the error view is the DARK layer (bgdark, espresso brown-black — not the
+     # copper ~[188,94,42]), sampled below the hint line and above the clock, with the red
+     # error ring (240,170 r44-47; its bottom stroke at 240,215). Ref oracle: REF profile.
+     {"kind": "region", "t": 5, "rect": [180, 345, 120, 60],
+      "color": [28, 18, 15], "tol": 20},
+     {"kind": "point", "t": 5, "point": [240, 215], "color": [255, 92, 72], "tol": 40}]))
 
 SCENARIOS.append(base(
     "fault_e2", "E2 bit4 (milk NTC): steam is safety-stopped", 16,
@@ -319,7 +338,7 @@ SCENARIOS.append(base(
      ui(7, "save", param="brew_temp", value=880),
      snap(4, "save-blocked"), snap(9, "save-ok")],
     [{"kind": "save", "t": 3.6, "window": 0.9, "state": "fail", "param": "brew_temp"},
-     {"kind": "toast", "t": 3.6, "window": 1.2, "contains": "GEM FEJLET"},
+     {"kind": "toast", "t": 3.6, "window": 1.2, "contains": "Gem fejlet"},
      {"kind": "config", "field": "brewTemper", "t": 5, "value": 870},
      {"kind": "sim_log", "assert": "acks_dropped_min", "value": 2},
      {"kind": "sim_log", "assert": "writes_min", "sub": 11, "value": 2,
@@ -357,7 +376,7 @@ SCENARIOS.append(base(
      ui(8, "action", name="brew"),
      snap(3.5, "oor-blocked"), snap(10, "brew-after-fix")],
     [{"kind": "config_oor_min", "t0": 1, "t1": 5, "min": 3},
-     {"kind": "toast", "t": 3.5, "window": 1, "contains": "UDEN FOR SPEC"},
+     {"kind": "toast", "t": 3.5, "window": 1, "contains": "uden for spec"},
      {"kind": "sim_log", "assert": "no_writes_between", "t0": 1, "t1": 5.5,
       "except_subs": [0, 1, 112]},
      {"kind": "cmd6", "field": "block", "op": ">=", "value": 1},

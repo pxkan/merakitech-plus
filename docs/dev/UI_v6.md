@@ -1,4 +1,4 @@
-# UI_v6 — Meraki+ (identifier merakiplus) v6.18: start jingle + one ready tone per boiler (sound) + one page per feature + SYSTEM in sections + DIAGNOSTICS behind SYSTEM (UX audit) + clock + correct 24-hour flag + planned pre-heat and auto off + graph reset on activity start + the physical power button + manual STOP for water / brew / grind + settings parity (spec-aligned) + boot slot integration + EN/DA + design for the round screen + SIM build/E2E + boot push and RX resync on the device + live-proven phase semantics, 64-bit clock and re-push after an MCU restart + Wi-Fi at startup and self-healing (network guard) + HOME without REVERT + calm graph and stable weight (display conditioning, weight latch, dead band) + pressure as a ≈bar estimate (anchor: pre-infusion = config pressure) + UX review (plain language, contrast, start hint, gear, close chevron, swipe guard, DIAGNOSTICS groups)
+# UI_v6 — Meraki+ (identifier merakiplus) v7.0: the redesign in the stock (OEM) look — white on copper, ring buttons on HOME, a roller editor, Montserrat typography (display and navigation only; CHANGES-v7.0) · v6.18–v6.19: start jingle + one ready tone per boiler (sound) + one page per feature + SYSTEM in sections + DIAGNOSTICS behind SYSTEM (UX audit) + clock + correct 24-hour flag + planned pre-heat and auto off + graph reset on activity start + the physical power button + manual STOP for water / brew / grind + settings parity (spec-aligned) + boot slot integration + EN/DA + design for the round screen + SIM build/E2E + boot push and RX resync on the device + live-proven phase semantics, 64-bit clock and re-push after an MCU restart + Wi-Fi at startup and self-healing (network guard) + HOME without REVERT + calm graph and stable weight (display conditioning, weight latch, dead band) + pressure as a ≈bar estimate (anchor: pre-infusion = config pressure) + UX review (plain language, contrast, start hint, gear, close chevron, swipe guard, DIAGNOSTICS groups)
 
 > **Note (public edition):** Development notes written during development. Paths such as
 > `artifacts/…`, `boot_install.py` steps and md5 tables refer to the author's working environment; as
@@ -38,116 +38,271 @@ Kept unchanged: the global circle clip (chord mask in `pset`/`hspan`, R=234), th
 
 ## 2. Design system
 
-**Colors** (near-black with a radial vignette, ordered dither against banding; pure black outside R=234):
+**v7.0** replaced the v6 look (near-black, a 270° gauge, a rainbow of phase colours, an upper-case stroke font)
+with the stock UI's own language: **white on copper**, ring buttons, a roller picker, real typography. The
+tokens live at the top of `src/mp/ui_state.c`; the type styles, the text engine and the background in
+`src/mp/gfx.c`; the pages in `src/mp/ui_pages.c`. The reference renders are
+[docs/design/v7-key-screens.png](../design/v7-key-screens.png) and
+[docs/design/v7-before-after.png](../design/v7-before-after.png).
+
+Hierarchy comes from **size and weight first**, then from a warm cream for secondary text. Colour is kept for
+what must not be missed (errors, blocked starts), and the error screen and the power pages switch to a dark
+espresso layer. The `C_*` names are kept from v6, so the logic that picks a colour (ok / warn / err /
+accent) did not change; only the values did.
+
+### 2.1 Colour tokens
 
 | Token | RGB | Use |
 |---|---|---|
-| text 1 / 2 / 3 | 242,244,247 / **176,183,196** / **140,147,162** (v6.11; v6.10: 160,167,180 / 104,111,126) | values / sub-lines / micro labels — contrast measured in the self-test: text 3 ≥ 4.5:1 on the background, surfaces 1 and 2; text 2 ≥ 7:1 |
-| disabled (v6.11) | 98,105,120 | inactive icons, stepper signs at the limit, offline hero, disabled SAVE — ≥ 3:1 (large glyphs), deliberately weaker than text 3 |
-| surface 1 / 2 / 3 | 25,28,35 / 37,41,51 / 52,57,70 | chips, buttons, pressed state |
-| accent "crema" | 244,192,122 | **the only UI accent**: settings values, SAVE, stepper ring, splash |
-| ok / warning / error | 98,222,168 / 255,190,84 / 255,96,96 | toasts, CRC chip, errors |
+| `C_TXT` | 255,255,255 | primary text, values, rings, icons, chevrons |
+| `C_TXT2` | 255,236,220 | secondary text (warm cream): live lines, sub-lines, ring targets, units, summaries |
+| `C_TXT3` | 250,220,196 | captions: stat labels, DIAGNOSTICS labels |
+| `C_DIS` | 222,160,122 | disabled — dissolves into the copper on purpose (inactive Save, the ring targets while dimmed) |
+| `C_SURF` / `C_SURF2` / `C_SURF3` | 150,70,30 / 164,78,34 / 196,104,54 | filled surfaces on copper (the DIAGNOSTICS Graph pill, the idle trace's dashed baseline) |
+| `C_LINE` | 226,150,108 | hairlines (the trace baseline, DIAGNOSTICS caption rules) |
+| `C_ACC` | 255,255,255 | the accent **is** white (values, rings, a changed status, DIAGNOSTICS captions) |
+| `C_ACCD` | 140,62,24 | text on a white fill: deep copper (OK when filled, Save) |
+| `C_OK` | 255,255,255 | confirmations (a white toast text without an icon) |
+| `C_ERR` | 255,214,74 | errors on copper: a hot yellow, always with the warning icon where text is short |
+| `C_WARN` | 255,226,120 | blocked / attention: pale yellow (with the warning icon where space allows) |
+| `C_RED` | 255,92,72 | the dark error layer's accent (the ring on HOME's error screen; phase colour of ERROR) |
+| `C_STOP_T` / `C_STOP_B` / `C_STOP_FG` | 255,255,255 / 255,247,240 / 140,52,18 | STOP: a solid white pill with deep copper text |
+| toast | 66,28,10 (α 242) with a 3 px shadow 30,10,2 | the toast pill (dark espresso) |
 
-Semantic phase colors (used consistently on the gauge fill, lit ticks, phase chip, sub-line, chart and active button):
+**Phase colours** (v6: ten hues) are monochrome in v7: `ph_hi()` is white for every phase except ERROR
+(`C_RED`) and OFFLINE / ASLEEP (240,200,176); `ph_lo()` is 236,176,140 (ERROR 150,40,30). They colour the trace.
 
-| Phase | Color | | Phase | Color |
+### 2.2 Background
+
+`bg_build()` renders two full-screen layers once at start (nothing is computed per frame):
+
+* **copper**: a burnt-orange disc, base 182,90,40, a little lighter towards the upper left (`lift`, up to
+  +10/+6/+3) and darker towards the rim (−50/−30/−16 at r = 234, growing as ≈ (r/234)^2.25). Measured in the
+  render: 189,94,42 at the centre, ~167,81,36 at r = 150, ~141,66,27 at r = 220;
+* a fine **guilloche** on top: lines every 4.6 px of the distance in a blend of a rounded square
+  ((x^4 + y^4)^(1/4)) and a circle (0.62 : 0.38), so the lines form soft chevrons on the diagonals like
+  the stock screen's; anti-aliased, amplitude 3.5 % at the centre rising to 8.5 % towards the rim;
+* **dark** (the error screen and the power pages): espresso brown-black, 34,22,19 at the centre to ~12,7,6 at
+  the rim, with the same texture at half strength;
+* both with a 4 × 4 ordered dither against banding; pure black outside R = 234 (`RSAFE`, the bezel). Every
+  primitive clips to that circle.
+
+### 2.3 Typography
+
+All text is **Montserrat** (SIL OFL 1.1, [third_party/montserrat/](../../third_party/montserrat/README.md)) in
+four weights, baked into `src/mp/font_data.c` by `tools/gen_font.py` as TrueType outlines, advances and GPOS
+pair kerning (122 glyphs per weight; `--check` keeps the file in sync). A glyph is rasterized the first time
+a style needs it — exact-area coverage (every outline edge adds its covered area to the cells it crosses, a
+prefix sum per row gives the coverage) — and cached as 8-bit alpha in 4 sub-pixel phases, so text keeps its
+true spacing at small sizes. Text is drawn exactly as written: v7 uses normal capitalisation (the string
+table was rewritten from upper case for v7). Digits are tabular where the style says so, so values do not
+jump.
+
+| Style | Face | Size (em px) | Cap height (px) | Tracking | Tabular | Use |
+|---|---|---|---|---|---|---|
+| `F_TINY` | SemiBold | 13 | 9.1 | 0.3 | yes | micro captions (stat labels, DIAGNOSTICS / system-action footer) |
+| `F_XS` | Medium | 15.5 | 10.9 | 0.1 | yes | captions, toasts, hints, live lines, range and note lines |
+| `F_S` | Medium | 18 | 12.6 | 0 | yes | body text, the live view's phase and target line, ring targets, pill text (two STOPs) |
+| `F_M` | SemiBold | 21 | 14.7 | 0 | yes | row labels, buttons, one STOP, OK |
+| `F_MB` | Bold | 21 | 14.7 | 0 | yes | row values; the unit next to the roller value |
+| `F_L` | SemiBold | 28 | 19.6 | 0 | yes | page and editor titles (fit to 232 px, else `F_M`, else `F_S` + …), the unit next to the live number, the error code |
+| `F_LAB` | SemiBold | 22 | 15.4 | 0.4 | no | ring labels set along the arc (HOME) |
+| `F_CLK` | Bold | 20 | 14.0 | 0.2 | yes | the clock under the rings |
+| `F_NUM` | Light | 40 | 28.0 | 0 | yes | medium numbers (defined; no v7 page uses it) |
+| `F_STAT` | Light | 30 | 21.0 | 0 | yes | the three numbers in the live view |
+| `F_XL` | Light | 60 | 42.0 | 0 | yes | large words in the system action |
+| `F_ROLL` | Light | 64 | 44.8 | 0 | yes | the roller's selected value |
+| `F_ROLL2` | Medium | 30 | 21.0 | 0 | yes | the roller's neighbours |
+| `F_XXL` | Light | 112 | 78.4 | −1 | yes | the live view's number (weight, milk temperature) |
+| `F_H` | SemiBold | 36 | 25.2 | 0 | no | the word hero in the system action (Boot UI), the splash wordmark |
+| `F_IC` / `F_ICL` | Medium | 22 / 48 | — | 0 | — | inline icons / the icons in the HOME rings |
+
+Cap height = em × 700/1000 (Montserrat's cap height). **Labels along a ring** (`text_arc`) are rasterized per
+glyph with rotation, centred on an angle, with the text's vertical centre on the ring's radius: on the upper
+rings the tops point outward and the text runs clockwise, on the lower rings the tops point to the centre and
+it runs counter-clockwise, so both read upright-ish.
+
+**Icons** are line drawings from the stroke engine (`GD[]`: bean, cup, drop, steam, check, cross, moon,
+warning, bolt, clock), addressed by the control bytes `\x01..\x0b` inside a string and sized to the style's
+cap height (box = 1.3 × cap height, the style's stroke width). The **wordmark** is "Meraki" in the style's
+face plus a small raised "+" in a lighter style.
+
+### 2.4 Rings, buttons, rows
+
+* **HOME rings**: r = 72 at (160, 154), (320, 154), (160, 326), (320, 326); a 3 px white line (half-width
+  1.5). The label sits in a gap of the ring centred at 225° / 315° / 135° / 45° (facing the display's rim);
+  the gap is half the label's angular width + 7° on each side. Icon (`F_ICL`) 34 px above the centre, the
+  target (`F_S`, cream) 20 px below. **Heat-up**: a faint full track (half-width 1.2, α 95) and a white arc
+  (half-width 1.9) from the gap's end, proportional to (T − 20 °C) / (ready − 20 °C), capped at 98 % until the
+  heat stage or the temperature says ready. **Pressed**: a white disc α 30 inside. **Hold**: an arc at
+  r = 62 (half-width 2.2) sweeps from 12 o'clock over 650 ms. **Dimmed** (offline / asleep): labels and icons
+  α 120, the ring α 110, the target in `C_DIS`.
+* **Progress ring** (live view, splash): r = 229, half-width 1.6, the full circle from 12 o'clock clockwise;
+  track 204,122,80, fill white, eased.
+* **Ring buttons** (OK r = 36, − / + r = 29, Hold to Start r = 33): an outline ring (2.5 px, α 240; α 110 when
+  disabled); pressed = white disc α 36; a hold arc at r + 7. OK fills white with copper text once the value is
+  changed.
+* **Pills**: secondary = 1.2 px white outline; primary = solid white with deep copper text and a 3 px soft
+  shadow. STOP is a primary pill with `C_STOP_FG` text.
+* **Rows**: 50 px high, 50 px pitch (v6: 50 px chips on a 58 px pitch), first row top at y = 92. Label `F_M`
+  at x = 88 (SYSTEM section rows +14 px); value `F_MB` right-aligned at x = 378 (locked: 398) with the unit in
+  `F_XS` cream; a small chevron at x = 394. Hairline separators 84..396 (white α 46). Pressed: a rounded
+  rect 76..403, white α 34. An open SYSTEM section gets a 2 px bar (white α 120) at x = 88 next to its rows.
+  The scroll indicator is a short arc at r = 228 on the right (±22°). The list field fades into the
+  background over 14 px at its top and bottom.
+* **Header** (pages and editors): the close chevron at y = 16, the title at y = 32, one line at y = 64.
+
+### 2.5 Motion
+
+Page slide 260 ms (ease-in-out; open from the right, back to the right) · cross-fade 200 ms into / out of the
+editor and the system action · a 280 ms cross-fade when HOME changes mode (rings ↔ live view ↔ error) · splash
+1.5 s with the progress ring sweeping once around, then a 320 ms fade · progress ring eased (τ ≈ 110 ms) · the
+roller follows the finger and settles exponentially (τ ≈ 60 ms) after release, with a rubber band (¼ of the
+offset) at either end · hold arcs (650 ms) on the rings and Hold to Start · touch ripple 360 ms · pressed
+states on all buttons · toast: fade in 160 ms, slide 8 px over 200 ms, fade out 260 ms, 2.4 s in total. The
+static layer (background + labels + titles) is rebuilt only when what selects it changes (view, page, HOME
+mode, open editor, language).
+
+### 2.6 Errors and blocked starts
+
+* On copper, an **error** is `C_ERR` (hot yellow) and a **blocked / attention** state `C_WARN` (pale
+  yellow), with the warning icon wherever the text is short (HOME's top line, a page's live line, toasts,
+  out-of-spec values). Colour is never the only signal.
+* **HOME's error screen** switches to the dark layer: a red ring (r = 44–47 at y = 170) with a white
+  exclamation mark, the code in `F_L`, the meaning in `F_S` cream and *Code E2 · tap for details*; the whole
+  block is the tap target for DIAGNOSTICS.
+* **Offline / asleep** dims the rings instead of colouring them.
+* **Toasts** are a dark espresso pill with white text; warnings and errors carry the warning icon in yellow.
+* A **disabled** control is drawn at reduced alpha / in `C_DIS`; it never changes hue.
+
+### 2.7 Contrast policy
+
+Measured (WCAG 2.x contrast ratio) against the copper as rendered — the centre is the lightest spot:
+
+| Token | centre (189,94,42) | r = 150 (~167,81,36) | r = 220 (~141,66,27) | dark layer centre |
 |---|---|---|---|---|
-| OFFLINE | gray 124,130,144 | | GRINDING | lime 174,228,112 |
-| ASLEEP | indigo 136,144,222 | | PRE-INFUSION | blue 92,180,255 |
-| ERROR | red 255,96,96 | | EXTRACTION | copper 255,142,68 |
-| HEATING UP | amber 255,186,84 | | HOT WATER | cyan 70,216,230 |
-| READY / DONE | mint 98,222,168 | | STEAM | violet 198,152,255 |
+| `C_TXT` white | 4.4 | 5.5 | 7.3 | 17.6 |
+| `C_TXT2` cream | 3.8 | 4.8 | 6.3 | 15.3 |
+| `C_TXT3` caption | 3.4 | 4.2 | 5.6 | 13.5 |
+| `C_WARN` | 3.4 | 4.3 | 5.7 | 13.8 |
+| `C_ERR` | 3.1 | 3.9 | 5.2 | 12.6 |
+| `C_DIS` | 2.0 | 2.5 | 3.3 | 7.9 |
 
-**Typography:** a custom stroke font (stroke-drawn glyphs on a 10-unit grid, rasterized with a distance field → real anti-aliasing, cached per size). Deliberately **upper-case typography with letter spacing**; numbers are **tabular** (all digits the same width, so values do not jump). Full ÆØÅ. Scale (cap height px): XS 11 · S 14 · M 18 · L 26 · XL 44 · XXL 66 (hero number). Icons (bean, cup, drop, steam) are glyphs in the same engine.
-
-> Deviation from the task text: it mentioned a scaled bitmap font (1x–4x). A 5×7 font scaled ×8 gives staircase edges that cannot be called polished, so I wrote a stroke font instead. Still plain C without dependencies, and the font data is ~70 lines in the source.
-
-**Grid:** a centered column; everything lies inside the gauge's inner radius (~193). List rows: 336×50 px chips, 58 px pitch, corner radius 16. Pills: fully rounded, a 2 px soft shadow.
-
-**Gauge:** a 270° arc (135°→405°), center line r=214, thickness 14, round ends, a dark→light gradient along the fill, a white "head" dot, a soft glow ±5 px, 50 ticks (every 5th larger) r 225..232 that light up in the phase color up to the value, a white **target marker** across the ring. During a brew a thin white inner ring (r=198) = weight progress towards the auto-stop.
-
-**Motion:** exponentially eased gauge fill (τ≈110 ms) · a sweep from zero when the gauge changes scale (temperature ↔ weight ↔ pressure) · a 300 ms color crossfade on a phase change · touch ripple (360 ms) · a pressed state on all buttons · a hold ring around the activity button · a pulsing ring on the active activity · page slide 260 ms (ease-in-out) · crossfade 200 ms into/out of the detail · toast fade/slide · splash with an arc sweep (1.5 s).
+STOP text on its white pill: 8.0 : 1; copper text on a white fill (OK, Save): 7.5 : 1; white on the toast
+pill: 15 : 1, the warning icon on it 11.7 : 1. The policy that follows from the copper: anything that must be
+read is white or cream **and** at least `F_XS` Medium, with the important values large (`F_MB` and up) and in
+white; captions in `C_TXT3` are used only for labels under or next to a white value; disabled is
+deliberately weak (≈ 2 : 1 at the centre) because it is never the only way to learn something (a tap on a
+disabled start says why). The v6.11 self-test thresholds (`C_TXT3` ≥ 4.5 : 1, `C_TXT2` ≥ 7 : 1 against the
+background) were defined for the dark v6 background and are not met at the centre of the copper; they need
+new targets for v7.
 
 ---
 
 ## 3. Page map and touch
 
-**v6.17** replaced the five-page carousel (HOME · BREW · STEAM·WATER · SYSTEM · DIAGNOSTICS, changed by
-swiping) with one root and sheets — the reasoning is in [ux-audit-v617.md](../ux-audit-v617.md) and CHANGES-v6.17 below:
+**v6.17** replaced the five-page carousel with one root and sheets ([ux-audit-v617.md](../ux-audit-v617.md),
+CHANGES-v6.17). **v7.0** kept that structure and changed how it looks and how a few things are reached: the
+four HOME icons became the stock 2 × 2 ring grid, the gear at the bottom became the stock chevron at the top
+(tap or pull down), the stepper detail became a roller with − / + and OK, and HOME's idle gauge / hero / stats
+were dropped in favour of the rings (the live view keeps the number, the trace and the stats).
 
 ```
-HOME ─ icon, tap ─► GRIND / BREW / WATER / STEAM   (live line · that feature's settings · HOLD TO START)
-     ─ icon, hold ► starts the activity (650 ms)
-     ─ gear ──────► SYSTEM ─ DISPLAY · CLOCK · SCHEDULE · STOCK UI (sections, one open at a time)
-     │                     └ DIAGNOSTICS ─► DIAGNOSTICS
-     └ error / offline hint, tap ─► DIAGNOSTICS
+HOME ─ ring, tap ──► GRIND / BREW / WATER / STEAM   (live line · that feature's settings · Hold to Start)
+     ─ ring, hold ─► starts the activity (650 ms)
+     ─ chevron at the top, tap / pull down ─► SYSTEM ─ Display · Sound · Clock · Schedule · Stock UI
+     │                                                (sections, one open at a time)
+     │                                              └ Diagnostics ─► DIAGNOSTICS
+     └ error screen / offline line, tap ─► DIAGNOSTICS
+row ─► editor (roller)                  Stock UI › Boot UI / Switch to Original Now ─► system action
 ```
 
-**Open** by tapping the thing; **go back** with the chevron at the top of every page and editor (the
-whole header is the target), or swipe right. There are no page dots, no edge zones and no page swipes.
+**Open** by tapping the thing; **go back** with the chevron at the top of every page and editor (the whole
+header is the target), a pull down on the header, or a swipe right. There are no page dots, no edge zones and
+no page swipes.
 
 | Page | Opened by | Contents |
 |---|---|---|
-| **HOME** | — (root) | clock (or the wordmark while the clock is not set) · phase chip · gauge · hero number · sub-line · chart (40 s) / one hint line · 3 stats · the 4 activity icons **with their targets underneath** (grind dose, brew weight, water amount, milk temperature) — or the STOP button(s) while something runs · the gear |
-| **GRIND** | tap the bean icon | live line *ON THE SCALE 0.0 G* · GRIND DOSE, GRIND MODE · HOLD TO START |
-| **BREW** | tap the cup icon | live line *BOILER 92.4° · GROUP 70°* · BREW WEIGHT, BREW TEMP, PRE-INFUSION, PRE-INF. TIME, PRE-INF. PRESSURE, GROUP HEAD (4 in view, the list scrolls) · HOLD TO START |
-| **WATER** | tap the drop icon | live line *WATER 99.9°* (word 40 — the "water sensor") · HOT WATER, WATER MODE · HOLD TO START |
-| **STEAM** | tap the steam icon | live line *BOILER 130° · MILK 22.6°* · MILK TEMP, STEAM LEVEL · HOLD TO START |
-| **SYSTEM** | the gear | *MERAKI+ V6.20* · four section headers with a summary (**DISPLAY · SOUND** *ENGLISH* · **CLOCK** *16:35* · **SCHEDULE** *06:30 / OFF* · **STOCK UI**) + the **DIAGNOSTICS** row (*OK* / the error code / *DOWN*). Closed: 5 rows, no scrolling. A tap on a header opens it (and closes the other) |
-| **DIAGNOSTICS** | SYSTEM's last row, or a tap on HOME's error / offline hint | STATUS, BOOT · SLOT · SWITCHER, NET, GRAPH (smooth / raw), PRESSURE · ESTIMATE, RAW COUNTERS, POWER BUTTON, TIME · SCHEDULE, SOUND (v6.18), ABOUT — scrolls vertically. Its chevron returns to where it was opened from |
+| **HOME** (idle) | — (root) | chevron (y 16) · one status line (y 46; empty when nothing matters) · four rings with label, icon, target and heat-up arc · the clock (y 428; the wordmark while the clock is not set) |
+| **HOME** (live view) | an activity runs, or its *Done* (8 s) | phase (y 62) · the number + unit (`F_XXL`, y 98) · target line (y 196) · trace 260 × 60 (y 226) · three numbers (`F_STAT`, y 298, pitch 100) with labels · STOP pill(s) (y 364) · the progress ring at r = 229 |
+| **HOME** (error) | E1 / E2 / E3 | the dark layer · red ring with "!" · code · meaning · *Code E2 · tap for details* · chevron · clock |
+| **GRIND** | tap the Grinder ring | live line *On the scale 0.0 g* · Grind Dose, Grind Mode · Hold to Start |
+| **BREW** | tap the Brew ring | live line *Boiler 92.4° · group 70°* · Brew Weight, Brew Temp, Pre-Infusion, Pre-Inf. Time, Pre-Inf. Pressure, Group Head (5 in view, the list scrolls) · Hold to Start |
+| **WATER** | tap the Hot Water ring | live line *Water 99.9°* (word 40 — the "water sensor") · Hot Water, Water Mode · Hold to Start |
+| **STEAM** | tap the Steam ring | live line *Boiler 130° · milk 22.6°* · Milk Temp, Steam Level · Hold to Start |
+| **SYSTEM** | HOME's chevron (tap or pull down) | *Meraki+ V7.0* · four section headers with a summary (**Display · Sound** *English* · **Clock** *16:35* · **Schedule** *06:30 / Off* · **Stock UI**) + the **Diagnostics** row (*OK* / the error code / *Down*). Closed: 5 rows, no scrolling. A tap on a header opens it (and closes the other); it moves to the top of the field |
+| **DIAGNOSTICS** | SYSTEM's last row, or a tap on HOME's error screen / offline line | STATUS, Boot · Slot · Switcher, Net, Graph (smooth / raw), Pressure · Estimate, Raw Counters, Power Button, Time · Schedule, Sound, About — scrolls vertically. Its chevron returns to where it was opened from |
 
-A feature page's live line turns **amber and names the reason** when a start is not possible (*NO
-CONNECTION*, *ERROR ACTIVE · START BLOCKED*, *GRIND = TIME · USE STOCK UI*, *CONFIG OUT OF SPEC · FIX
-FIRST*, …); HOLD TO START is then dimmed. **While an activity runs, no feature page is shown**: started
-from the page, on the machine or by the wand, the UI is on HOME, where the STOP button is. SYSTEM,
-DIAGNOSTICS and an open editor stay.
+A feature page's live line turns **pale yellow with a warning icon and names the reason** when a start is not
+possible (*No connection*, *Error active · start blocked*, *Grind = time · use stock UI*, *Config out of spec ·
+fix first*, …); Hold to Start is then dimmed. **While an activity runs, no feature page is shown**: started
+from the page, on the machine or by the wand, the UI is on HOME, where STOP is. SYSTEM, DIAGNOSTICS and an
+open editor stay.
 
-Modal views: **splash** (boot), **stepper detail** (from a row) and — from v6.2 — the **system
-action** (BOOT UI, switch confirmation, exit reminder; same geometry and button zones as the stepper
-detail) as well as the last frame before a runtime switch. From v6.17 the stepper detail has no
-footer lines; its status line shows *CHANGED · WAS …*, *SAVING…*, the zone's place names, or — on an
-untouched editor with ≥ 20 steps — *HOLD - OR + TO GO FAST*.
+Modal views: **splash** (boot), the **editor** (from a row) and the **system action** (Boot UI, switch
+confirmation, exit reminder) as well as the last frame before a runtime switch, and the power pages
+(TURNING OFF / OFF / TURNING ON). The editor: title (y 32), range (y 66), roller centred at y 190 (neighbours
+±50 px, ±2 values, fading out 114 px above / 106 px below the centre), − / + rings at x 82 / 398, status line
+(y 300: *Changed · was …*, *Saving…*, *Out of spec · pick a new value*, the zone's place names, or — on an
+untouched editor with ≥ 20 steps — *Hold - or + to go fast*), note (y 322), OK ring (y 390). The system
+action keeps the header, puts its word hero at y 190, status / note at y 300 / 322, the two pills at
+y 350..399 and two footer lines at y 416 / 434.
 
-**HOME per phase** — the hero number and the gauge change meaning, so the most important value is
+**HOME's mode** (`home_mode_of()`): idle rings (READY, HEATING UP) · dimmed rings (OFFLINE, ASLEEP) · live
+view (any active phase, and DONE) · error screen (ERROR). A mode change rebuilds the static layer and
+cross-fades (280 ms) when HOME is on screen.
+
+**The live view per phase** — the number and the progress ring change meaning, so the most important value is
 always the largest:
 
-| Phase | Hero | Gauge | Stats |
-|---|---|---|---|
-| READY / HEATING UP / ASLEEP / ERROR | brew boiler temp (word 40), label *BREW BOILER*, sub-line *TARGET 87.0°* | 20–120 °C, marker = brew setpoint | group (42), steam (47), weight (39) |
-| GRINDING | dose weight (word 38) | weight / target, marker = target | time, current (58), grinder step (37) |
-| PRE-INFUSION / EXTRACTION | weight in the cup (word 39), label *IN THE CUP*, sub-line *STOPS AT 36.0 G* (v6.17: the target is stated once) | **raw pressure** (word 51, 0–1600) + inner ring = weight/target | time, ≈bar, flow (52) |
-| HOT WATER | weight (39) | weight / target | time, flow, boiler |
-| STEAM | milk temp (word 48) | 20–80 °C, marker = target | time, boiler (word 47), level |
-| DONE (8 s) | final value | as for the activity | "DONE IN x S" |
+| Phase | Number | Progress ring | Trace | Stats |
+|---|---|---|---|---|
+| GRINDING | dose weight (word 38, latched source), target line *Stops at 18.5 g* | weight / dose | weight + dashed target line | time, current (58), grinder step (37) |
+| PRE-INFUSION / EXTRACTION | weight in the cup (word 39), *Stops at 36.0 g* | weight / brew weight | pressure (area) + weight (line) | time, **≈bar**, flow (52) |
+| HOT WATER | weight (39), *Stops at 40.0 g* | weight / target | pressure + weight | time, flow, boiler (40) |
+| STEAM (auto) | milk temp (word 48), *Stops at 65.0°* | (milk − 20 °C) / (target − 20 °C) | milk temp + dashed target line | time, boiler (word 47), level |
+| STEAM (wand) | milk temp, *Release the wand to stop* | (milk − 20 °C) / 60 °C | milk temp, no target | time, boiler, level |
+| DONE (8 s) | final value, *Done in 4.2 s* (auto steam: + the expected rise) | as for the activity | as for the activity | as for the activity |
 
-**Pressure labelling (v6.10; v6.11: shorter texts; v6.17: `≈BAR`):** the gauge still shows the raw scale. The bar
-value is labelled `≈BAR` (v6.11–v6.16: `≈BAR EST.`; v6.10: `≈BAR · EST.`) and the chart `PRESSURE` (v6.10:
-`PRESS. ≈BAR · EST.`; the estimate is in the field right below). The conversion is a single linear
-anchor: the pre-infusion plateau in the recording (358 raw) = config `preInfusionPressure` (4 bar),
-i.e. k = 4/358 = 0.01117 bar per raw unit. Above 20 bar no number is shown (*PULSE*). Basis and
-caveats: [§16](#16-pressure-estimate-v610). (Up to and including v6.9:
-`≈BAR*` / `PRESSURE* UNCALIBRATED` with the hypothesis "1346 raw ≈ 9 bar".)
+With steam running alongside another activity the phase reads e.g. *Extraction · Steam·Auto* and the third
+number is the milk temperature. The idle HOME no longer shows the boiler temperature as a number: the heat-up
+arcs on the rings, *Heating to 87.0°* in the status line and the feature pages' live lines carry it.
 
-**Touch zones** (for testing; pixel coordinates):
+**Pressure labelling (v6.10; v6.11: shorter texts; v6.17: `≈BAR`; v7.0: `≈bar`):** the value is labelled
+`≈bar` and the trace `Pressure`. The conversion is a single linear anchor: the pre-infusion plateau in the
+recording (358 raw) = config `preInfusionPressure` (4 bar), i.e. k = 4/358 = 0.01117 bar per raw unit. Above
+20 bar no number is shown (*Pulse*). Basis and caveats: [§16](#16-pressure-estimate-v610). (Up to and including
+v6.9: `≈BAR*` / `PRESSURE* UNCALIBRATED` with the hypothesis "1346 raw ≈ 9 bar"; v6.10–v6.19 drew the raw
+pressure on the 270° gauge, which v7 no longer has.)
+
+**Touch zones** (for testing; pixel coordinates on the 480 × 480 frame, both ends inclusive, from
+`hit_test()` in `src/mp/ui_state.c` and `ui_touch()` in `src/mp/services.c`). Every button acts on
+release, and only if the finger is still on the same target; a press shows a 360 ms ripple. Nothing
+reacts during a page transition, the splash, the power-off pages or the last frame before a runtime switch.
 
 | Element | Zone | Gesture |
 |---|---|---|
-| GRIND / BREW / WATER / STEAM (HOME, idle) | circles r=30 around (150 / 210 / 270 / 330, 372); the target text is at y 405 | **tap** = open the feature's page · **hold ≥ 650 ms** = start (a ring fills around the icon) |
-| STOP (HOME, while something runs) | one button: 124..356 × 342..402 (232 × 60 px; pill 216 × 54) · two buttons (main activity + latched steam): 80..240 and 240..400 × 342..402 (pills 152 × 54) | tap |
-| Gear (HOME) | 208..271 × 426..471 (64 × 46 px) | tap = SYSTEM (no frame) |
-| Error / offline hint (HOME, only in those two states) | 88..392 × 236..294 | tap = DIAGNOSTICS |
-| The chart / the BAR field (v6.10) | the chart 118..362 × 240..294 when it shows pressure; the BAR field 193..287 × 298..338 during brewing | tap = toast with the basis (*PRE-INF. 4 BAR = RAW 358 · LINEAR*) — no frames |
-| **Page header** (every page but HOME) | 160..319 × 14..79 (160 × 66 px: chevron + title) | tap = back · pull down ≥ 70 px = back |
-| Swipe right (every page and editor but HOME) | anywhere, not started on −/+; ≥ 60 px, started horizontally (axis lock in the first 14 px), ≤ ~30° skew | back. A swipe left does nothing; HOME reacts to no swipe |
-| List row k | x 64..416, y center 121 + 58·k − scroll (feature pages: the list ends at y 342, SYSTEM at 394) | tap = the editor / open-close the section / the system action / DIAGNOSTICS; vertical drag scrolls |
-| HOLD TO START (feature pages) | 116..363 × 344..403 (248 × 60 px; pill 232 × 48) | **hold ≥ 650 ms** = start (the pill fills, the UI returns to HOME) · a short tap = toast *KEEP HOLDING TO START* or the reason it is blocked |
-| BOOT UI / SWITCH TO ORIGINAL NOW | the first two rows of SYSTEM › STOCK UI | tap opens the system action |
-| DIAGNOSTICS | the whole field y 86..394; the GRAPH pill 90..390 × 44 px high | vertical drag scrolls; tap on the pill = smooth / raw |
-| Close chevron (detail + system view) | 196..283 × 34..79 (88 × 46 px) | tap = CANCEL / BACK |
-| Swipe down (detail + system view) | anywhere, not started on −/+ | ≥ 70 px vertical, ≤ ~30° skew = CANCEL / BACK |
-| − / + | circles r=42 around (84,184) / (396,184) | tap = one step; hold = repeat (170 → 90 → 45 ms, ×5 steps after ~28 repeats) |
-| CANCEL / SAVE | 100..236 / 244..380 × 284..348 | tap |
-| BACK (locked row / sensor) | 170..310 × 284..348 | tap; −/+ do not exist |
+| **Rings** Grinder / Hot Water / Brew / Steam (HOME, while nothing runs) | circles r = 76 around (160, 154) / (320, 154) / (160, 326) / (320, 326); the drawn ring has r = 72 | **tap** = the feature's page · **hold ≥ 650 ms** = start (an inner arc, r = 62, sweeps once around from 12 o'clock) |
+| **Chevron** (HOME, top) | 180..299 × 0..57 | tap = SYSTEM |
+| **Pull down** (HOME) | starts above y = 96, ≥ 70 px down, at most ~30° from vertical (\|dy\| ≥ 1.7·\|dx\|); not in the live view | SYSTEM |
+| Status line (HOME, offline only) | 70..409 × 36..69 | tap = DIAGNOSTICS |
+| Error screen (HOME, error) | 60..419 × 96..345 (the red ring, the code and the two lines under it) | tap = DIAGNOSTICS (the chevron still opens SYSTEM) |
+| **STOP**, one button (live view) | 130..349 × 358..425 (220 × 68); pill 200 × 56 at 140..339 × 364..419 | tap |
+| **STOP**, two buttons (main activity + latched steam) | 76..239 and 240..403 × 358..425 (164 × 68 each, no gap); pills 148 × 56 at 86..233 and 246..393 | tap: left = the main activity, right = steam |
+| The trace / the ≈bar number (live view) | trace 118..361 × 240..293 while it shows pressure; ≈bar 190..289 × 298..337 during pre-infusion / extraction | tap = toast with the basis (*Pre-inf. 4 bar = raw 358 · linear*); no frames |
+| **Page header** (every page but HOME) | 160..319 × 4..77 (chevron + title) | tap = back · a drag that starts above y = 86 and goes ≥ 70 px down = back |
+| **Swipe right** (every page, editor and system action; not HOME) | anywhere, not started on − / +; ≥ 60 px, horizontal at the first 14 px of movement (axis lock), at most ~30° skew | back / cancel. A swipe left does nothing; HOME reacts to no horizontal swipe |
+| List row k | x 64..415, y 88 + 50·k − scroll .. 145 + 50·k − scroll (row 50 px, pitch 50, 4 px extra above and below; the first match wins), inside the list field y 86..343 (feature pages) / 86..403 (SYSTEM) | tap = editor / open-close the section / system action / DIAGNOSTICS · a vertical drag that starts at y ≥ 86 scrolls |
+| **Hold to Start** (feature pages) | 140..339 × 348..445; ring r = 33 at (240, 384), caption at y = 428 | **hold ≥ 650 ms** = start (an arc at r = 40 sweeps around; the UI goes to HOME) · a short tap = toast *Keep holding to start* or the reason it is blocked |
+| DIAGNOSTICS | the field y 86..403 scrolls; the GRAPH pill x 90..389, y 592 − scroll .. 635 − scroll | vertical drag scrolls; tap on the pill = smooth / raw |
+| Editor / system action: **chevron** | 180..299 × 4..57 | tap = cancel / back |
+| Editor / system action: **pull down** | anywhere, not started on −, + or the roller; ≥ 70 px down, ≤ ~30° skew | cancel / back |
+| Editor: **− / +** | circles r = 40 around (82, 190) / (398, 190); drawn ring r = 29 | press = one step · hold = repeat: first repeat at 420 ms, then every 170 ms (repeats 1–4), 90 ms (5–13), 45 ms; from the 29th repeat 5 steps at a time on a 5-step grid |
+| Editor: **roller** | 124..355 × 80..299 | vertical drag: one step per 50 px, the values follow the finger; drag down = smaller. At either end the roller gives a little and springs back |
+| Editor: **OK** | circle r = 44 around (240, 390); drawn ring r = 36 | tap = save (unchanged value: just close). Locked row / sensor: close |
+| System action: **− / +** (Boot UI) | the same two circles | − = Original, + = Meraki+ |
+| System action: **Cancel / Save** (or Switch / Exit) | 92..235 / 244..387 × 346..403; pills 136 × 50 at y = 350 | tap |
+| System action, locked: **Back** | 170..309 × 346..403 | tap |
 
 ---
 
@@ -2418,20 +2573,68 @@ timing, setting or string changed (only `TX_DV_VERSION*`); the helper `merakiplu
    (new), `sim/scenarios/audio_power_cycle.json`, `sim/CONTRACT.md`, `bin/` (`merakiplus`, `merakiplus_sim_arm`, host SIM
    builds), `bin/MD5SUMS`, `tools/merakiplus.py` (VERSION 6.19, `BIN_MD5`, `AUDIO_MD5`), docs, CHANGELOG, README badge.
 
+## CHANGES-v7.0
+
+**The redesign in the stock (OEM) look.** v6.19 → v7.0 changes **the display and the navigation only**. The
+reference renders are [docs/design/v7-key-screens.png](../design/v7-key-screens.png) and
+[docs/design/v7-before-after.png](../design/v7-before-after.png); the user-facing description is
+[docs/ui-guide.md §3](../ui-guide.md#3-screens-and-touch); the design system is §2 and the page map / touch zones
+§3 above.
+
+**What changed**
+
+1. **Look.** White on copper instead of near-black: new values for the `C_*` tokens (the names and the logic
+   that picks them are unchanged), phase colours reduced to white (ERROR red, OFFLINE / ASLEEP a dim cream), a
+   pre-rendered copper background with a fine guilloche and a dark espresso layer for the error screen and the
+   power pages (§2.1, §2.2).
+2. **Typography.** Montserrat in four weights (SIL OFL 1.1, `third_party/montserrat/`), baked into
+   `src/mp/font_data.c` by `tools/gen_font.py` (`--check` in `build.sh`), rasterized with exact-area coverage and
+   cached; labels along the ring arcs (`text_arc`); the stroke engine remains for the icons. The string table
+   uses normal capitalisation instead of upper case (§2.3).
+3. **HOME.** The stock 2 × 2 grid of ring buttons (Grinder, Hot Water / Brew, Steam) with the label along the
+   ring, a line icon and the target inside; a heat-up arc per ring; one status line under the chevron; the clock
+   at the bottom. The idle gauge, hero number, chart and stats are gone from the idle HOME.
+4. **Live view.** While something runs: the phase, the large number, the target line, a thin progress ring at
+   r = 229 (instead of the 270° gauge and its inner weight ring), a monochrome trace, three numbers and a solid
+   white STOP pill (instead of red).
+5. **Navigation.** SYSTEM is opened by the chevron at the top of HOME or by pulling down from the top (the gear
+   at the bottom is gone). Ring tap / hold, the page headers, swipe right = back and the swipe guard work as in
+   v6.17.
+6. **Editor.** A roller like the stock pickers (drag, one step per 50 px; neighbours fade), − / + rings with
+   the same hold-to-repeat, and an OK ring that fills when the value changed. The CANCEL / SAVE pills of the
+   stepper detail are gone from the editor: cancel = the chevron, a pull down, or a swipe right. The system
+   action keeps its two pills (Cancel outline, Save / Switch solid white).
+7. **Pages.** Rows are white text on copper with hairlines (50 px pitch, v6: 58), Hold to Start is a ring button
+   with a play icon and its caption, the error screen is dark with a red ring, the power pages and the splash
+   use the new layers and type, toasts are a dark espresso pill.
+
+**What did not change:** the model, the phase state machine, the activity control and its guards, the frame
+policy (§7a), the UART protocol, the write queue, the boot push and re-push, the save path and its order
+(§5), the settings table (labels aside: limits, steps, words, config fields), manual STOP and its frames
+(§18), the power button semantics (§19), the sounds and their rules, the clock / schedule / auto off, the boot
+slot integration and the runtime switch. No frame differs from v6.19.
+
+**Open points**
+
+* The v6.11 contrast thresholds in the self-test (`C_TXT3` ≥ 4.5 : 1, `C_TXT2` ≥ 7 : 1 against the background)
+  were defined for the dark v6 background; on copper they are not met at the centre (measured values in §2.7).
+* Appendix A below was generated from the v6.19 string table and still shows the upper-case strings;
+  regenerate it from `STR_TABLE`.
+
 ## Appendix A — string table (id / EN / DA)
 
-<!-- I18N-APPENDIX:BEGIN (generated by i18n_appendix.py — edit STR_TABLE in merakiplus.c, not here) -->
+<!-- I18N-APPENDIX:BEGIN (generated by tools/i18n_appendix.py — edit STR_TABLE in src/mp/i18n.c, not here) -->
 
-**461 string ids × 2 languages** (52 are the same in EN and DA: units, proper names, technical words and commands). Class = the field the string is shown in; the self-test measures every classified string in both languages against the field's pixel budget (`-` = measured in its context by the layout tests). `%s`/`%d` are placeholders for numbers and names; text in `code font` inside a string is shown in lower case (paths, commands). Source: `round_v6/strings.tsv` (`--dump-strings`). The EN and DA columns are the UI's actual strings and are deliberately kept in both languages.
+**465 string ids × 2 languages** (48 are the same in EN and DA: units, proper names, technical words and commands). Class = the field the string is shown in; the self-test measures every classified string in both languages against the field's pixel budget (`-` = measured in its context by the layout tests). `%s`/`%d` are placeholders. Since v7.0 the text is drawn exactly as written (Title Case / sentence case in English, sentence case in Danish). Source: `--dump-strings` of the preview build.
 
 
 **Units (identical in both languages)**
 
 | id | class | EN | DA |
 |---|---|---|---|
-| `TX_U_G` | - | `G` | `G` |
-| `TX_U_S` | - | `S` | `S` |
-| `TX_U_BAR` | - | `BAR` | `BAR` |
+| `TX_U_G` | - | `g` | `g` |
+| `TX_U_S` | - | `s` | `s` |
+| `TX_U_BAR` | - | `bar` | `bar` |
 | `TX_U_C` | - | `°C` | `°C` |
 | `TX_U_F` | - | `°F` | `°F` |
 
@@ -2439,570 +2642,525 @@ timing, setting or string changed (only `TX_DV_VERSION*`); the helper `merakiplu
 
 | id | class | EN | DA |
 |---|---|---|---|
-| `TX_TAGLINE` | tagline | `ADVANCED BREWING INTERFACE` | `AVANCERET BRYGGE-INTERFACE` |
-| `TX_SPL_CFG_OK` | - | `CONFIG LOADED` | `CONFIG INDLÆST` |
-| `TX_SPL_CFG_MISSING` | - | `CONFIG MISSING` | `CONFIG MANGLER` |
-| `TX_PG_SYSTEM` | page-title | `SYSTEM` | `SYSTEM` |
-| `TX_PG_DIAG` | page-title | `DIAGNOSTICS` | `DIAGNOSE` |
-| `TX_SEC_DISPLAY` | - | `DISPLAY · SOUND` | `SKÆRM · LYD` |
-| `TX_SEC_CLOCK` | - | `CLOCK` | `UR` |
-| `TX_SEC_SCHED` | - | `SCHEDULE` | `TIDSPLAN` |
-| `TX_SEC_STOCK` | - | `STOCK UI` | `STOCK-UI` |
-| `TX_LV_GRIND` | - | `ON THE SCALE %s G` | `PÅ VÆGTEN %s G` |
-| `TX_LV_BREW` | - | `BOILER %s° · GROUP %s°` | `KEDEL %s° · GRUPPE %s°` |
-| `TX_LV_WATER` | - | `WATER %s°` | `VAND %s°` |
-| `TX_LV_STEAM` | - | `BOILER %s° · MILK %s°` | `KEDEL %s° · MÆLK %s°` |
+| `TX_TAGLINE` | tagline | `Advanced Brewing Interface` | `Avanceret brygge-interface` |
+| `TX_SPL_CFG_OK` | - | `Config loaded` | `Config indlæst` |
+| `TX_SPL_CFG_MISSING` | - | `Config missing` | `Config mangler` |
+| `TX_PG_SYSTEM` | page-title | `System` | `System` |
+| `TX_PG_DIAG` | page-title | `Diagnostics` | `Diagnose` |
+| `TX_SEC_DISPLAY` | - | `Display · Sound` | `Skærm · lyd` |
+| `TX_SEC_CLOCK` | - | `Clock` | `Ur` |
+| `TX_SEC_SCHED` | - | `Schedule` | `Tidsplan` |
+| `TX_SEC_STOCK` | - | `Stock UI` | `Stock-UI` |
+| `TX_LV_GRIND` | - | `On the scale %s g` | `På vægten %s g` |
+| `TX_LV_BREW` | - | `Boiler %s° · group %s°` | `Kedel %s° · gruppe %s°` |
+| `TX_LV_WATER` | - | `Water %s°` | `Vand %s°` |
+| `TX_LV_STEAM` | - | `Boiler %s° · milk %s°` | `Kedel %s° · mælk %s°` |
 
 **Settings: row labels (SL), notes (SN) and hints (SH)**
 
 | id | class | EN | DA |
 |---|---|---|---|
-| `TX_SL_GRINDW` | - | `GRIND DOSE` | `KVÆRN-DOSIS` |
-| `TX_SN_GRINDW` | note | `STOPS AUTOMATICALLY AT THIS WEIGHT` | `STOPPER AUTOMATISK VED DENNE VÆGT` |
-| `TX_SL_GRINDMODE` | - | `GRIND MODE` | `KVÆRN-TILSTAND` |
-| `TX_SN_GRINDMODE` | note | `MERAKI+ STARTS WEIGHT MODE ONLY` | `MERAKI+ STARTER KUN VÆGT-TILSTAND` |
-| `TX_SL_BREWW` | - | `BREW WEIGHT` | `BRYG-VÆGT` |
-| `TX_SN_BREWW` | note | `STOPS AUTOMATICALLY AT THIS WEIGHT` | `STOPPER AUTOMATISK VED DENNE VÆGT` |
-| `TX_SL_BREWT` | - | `BREW TEMP` | `BRYG-TEMP` |
-| `TX_SN_BREWT` | note | `TARGET FOR THE BREW BOILER` | `MÅL FOR BRYGKEDLEN` |
-| `TX_SL_PISW` | - | `PRE-INFUSION` | `PRE-INFUSION` |
-| `TX_SN_PISW` | note | `SOAKS THE PUCK BEFORE FULL PRESSURE` | `VÆDER KAFFEN FØR FULDT TRYK` |
-| `TX_SL_PITIME` | - | `PRE-INF. TIME` | `PRE-INF. TID` |
-| `TX_SN_PITIME` | note | `SOAK TIME BEFORE FULL PRESSURE` | `VÆDE-TID FØR FULDT TRYK` |
-| `TX_SL_PIPRESS` | - | `PRE-INF. PRESSURE` | `PRE-INF. TRYK` |
-| `TX_SN_PIPRESS` | note | `THE MACHINE ONLY KNOWS 3 AND 4` | `MASKINEN KENDER KUN 3 OG 4` |
-| `TX_SL_BREAK` | - | `PAUSE TIME` | `PAUSE-TID` |
-| `TX_SN_BREAK` | note | `NO EFFECT · PRE-INF. TIME IS USED` | `INGEN EFFEKT · PRE-INF. TID BRUGES` |
-| `TX_SL_HEADT` | - | `GROUP HEAD` | `GRUPPEHOVED` |
-| `TX_SN_HEADT` | note | `TARGET FOR THE GROUP HEAD` | `MÅL FOR GRUPPEHOVEDET` |
-| `TX_SL_STEAMT` | - | `MILK TEMP` | `MÆLKETEMP` |
-| `TX_SN_STEAMT` | note | `STEAM STOPS AT THIS MILK TEMP` | `DAMPEN STOPPER VED DENNE MÆLKETEMP` |
-| `TX_SL_STEAMG` | - | `STEAM LEVEL` | `DAMP-NIVEAU` |
-| `TX_SN_STEAMG` | note | `STEAM POWER 1-4` | `DAMP-STYRKE 1-4` |
-| `TX_SL_HOTW` | - | `HOT WATER` | `VARMT VAND` |
-| `TX_SN_HOTW` | note | `STOPS AUTOMATICALLY AT THIS WEIGHT` | `STOPPER AUTOMATISK VED DENNE VÆGT` |
-| `TX_SL_HOTMODE` | - | `WATER MODE` | `VAND-TILSTAND` |
-| `TX_SN_HOTMODE` | note | `MERAKI+ STARTS AUTO ONLY` | `MERAKI+ STARTER KUN AUTO` |
-| `TX_SL_HOTT` | - | `WATER SENSOR` | `VAND-SENSOR` |
-| `TX_SN_HOTT` | note | `MEASURED ONLY · NO TARGET EXISTS` | `KUN MÅLT · INTET MÅL FINDES` |
-| `TX_SL_UILANG` | - | `UI LANGUAGE` | `UI-SPROG` |
-| `TX_SN_UILANG` | note | `LIVE PREVIEW · SAVE TO KEEP` | `LIVE PREVIEW · GEM FOR AT BEHOLDE` |
-| `TX_SL_BL` | - | `BRIGHTNESS` | `LYSSTYRKE` |
-| `TX_SN_BL` | note | `LIVE PREVIEW` | `LIVE PREVIEW` |
-| `TX_SL_VOL` | - | `VOLUME` | `LYDSTYRKE` |
-| `TX_SN_VOL` | note | `MERAKI+ + STOCK UI SOUNDS` | `MERAKI+ + STOCK-UI LYDE` |
-| `TX_SH_VOL` | - | `STEPS = ESTIMATE` | `TRIN = SKØN` |
-| `TX_SL_TUNIT` | - | `TEMP UNIT` | `TEMP-ENHED` |
-| `TX_SN_TUNIT` | note | `ALSO APPLIES IN MERAKI+` | `GÆLDER OGSÅ I MERAKI+` |
-| `TX_SL_LANG` | - | `STOCK LANG.` | `STOCK-SPROG` |
-| `TX_SN_LANG` | note | `STOCK UI ONLY` | `KUN STOCK-UI` |
-| `TX_SL_HOTSC` | - | `WATER SHORTCUT` | `VAND-GENVEJ` |
-| `TX_SN_HOTSC` | note | `STOCK UI HOME SHORTCUT` | `STOCK-UI HJEM-GENVEJ` |
-| `TX_SL_DST` | - | `DAYLIGHT SAVING` | `SOMMERTID` |
-| `TX_SL_CLEARTIP` | - | `CLEANING REMINDER` | `RENSE-PÅMINDELSE` |
-| `TX_SN_CLEARTIP` | note | `STOCK UI TIP` | `STOCK-UI TIP` |
-| `TX_SL_TIMEMODE` | - | `TIME FORMAT` | `TIDSFORMAT` |
-| `TX_SL_AUTOTIME` | - | `AUTO TIME` | `AUTO-TID` |
-| `TX_SN_AUTOTIME` | note | `STOCK UI NETWORK TIME` | `STOCK-UI NETVÆRKSTID` |
-| `TX_SL_TZ` | - | `TIME ZONE` | `TIDSZONE` |
-| `TX_SN_TZ` | note | `SET IT IN THE STOCK UI` | `SÆTTES I STOCK-UI'ET` |
-| `TX_SH_EST` | - | `MAX = ESTIMATE` | `MAX = SKØN` |
+| `TX_SL_GRINDW` | - | `Grind Dose` | `Kværn-dosis` |
+| `TX_SN_GRINDW` | note | `Stops automatically at this weight` | `Stopper automatisk ved denne vægt` |
+| `TX_SL_GRINDMODE` | - | `Grind Mode` | `Kværn-tilstand` |
+| `TX_SN_GRINDMODE` | note | `Meraki+ starts weight mode only` | `Meraki+ starter kun vægt-tilstand` |
+| `TX_SL_BREWW` | - | `Brew Weight` | `Bryg-vægt` |
+| `TX_SN_BREWW` | note | `Stops automatically at this weight` | `Stopper automatisk ved denne vægt` |
+| `TX_SL_BREWT` | - | `Brew Temp` | `Bryg-temp` |
+| `TX_SN_BREWT` | note | `Target for the brew boiler` | `Mål for brygkedlen` |
+| `TX_SL_PISW` | - | `Pre-Infusion` | `Pre-infusion` |
+| `TX_SN_PISW` | note | `Soaks the puck before full pressure` | `Væder kaffen før fuldt tryk` |
+| `TX_SL_PITIME` | - | `Pre-Inf. Time` | `Pre-inf. tid` |
+| `TX_SN_PITIME` | note | `Soak time before full pressure` | `Væde-tid før fuldt tryk` |
+| `TX_SL_PIPRESS` | - | `Pre-Inf. Pressure` | `Pre-inf. tryk` |
+| `TX_SN_PIPRESS` | note | `The machine only knows 3 and 4` | `Maskinen kender kun 3 og 4` |
+| `TX_SL_BREAK` | - | `Pause Time` | `Pause-tid` |
+| `TX_SN_BREAK` | note | `No effect · pre-inf. time is used` | `Ingen effekt · pre-inf. tid bruges` |
+| `TX_SL_HEADT` | - | `Group Head` | `Gruppehoved` |
+| `TX_SN_HEADT` | note | `Target for the group head` | `Mål for gruppehovedet` |
+| `TX_SL_STEAMT` | - | `Milk Temp` | `Mælketemp` |
+| `TX_SN_STEAMT` | note | `Steam stops at this milk temp` | `Dampen stopper ved denne mælketemp` |
+| `TX_SL_STEAMG` | - | `Steam Level` | `Damp-niveau` |
+| `TX_SN_STEAMG` | note | `Steam power 1-4` | `Damp-styrke 1-4` |
+| `TX_SL_HOTW` | - | `Hot Water` | `Varmt vand` |
+| `TX_SN_HOTW` | note | `Stops automatically at this weight` | `Stopper automatisk ved denne vægt` |
+| `TX_SL_HOTMODE` | - | `Water Mode` | `Vand-tilstand` |
+| `TX_SN_HOTMODE` | note | `Meraki+ starts auto only` | `Meraki+ starter kun auto` |
+| `TX_SL_HOTT` | - | `Water Sensor` | `Vand-sensor` |
+| `TX_SN_HOTT` | note | `Measured only · no target exists` | `Kun målt · intet mål findes` |
+| `TX_SL_UILANG` | - | `UI Language` | `UI-sprog` |
+| `TX_SN_UILANG` | note | `Live preview · save to keep` | `Live preview · gem for at beholde` |
+| `TX_SL_BL` | - | `Brightness` | `Lysstyrke` |
+| `TX_SN_BL` | note | `Live preview` | `Live preview` |
+| `TX_SL_VOL` | - | `Volume` | `Lydstyrke` |
+| `TX_SN_VOL` | note | `Meraki+ + stock UI sounds` | `Meraki+ + stock-UI lyde` |
+| `TX_SH_VOL` | - | `Steps = estimate` | `Trin = skøn` |
+| `TX_SL_TUNIT` | - | `Temp Unit` | `Temp-enhed` |
+| `TX_SN_TUNIT` | note | `Also applies in Meraki+` | `Gælder også i Meraki+` |
+| `TX_SL_LANG` | - | `Stock Lang.` | `Stock-sprog` |
+| `TX_SN_LANG` | note | `Stock UI only` | `Kun stock-UI` |
+| `TX_SL_HOTSC` | - | `Water Shortcut` | `Vand-genvej` |
+| `TX_SN_HOTSC` | note | `Stock UI home shortcut` | `Stock-UI hjem-genvej` |
+| `TX_SL_DST` | - | `Daylight Saving` | `Sommertid` |
+| `TX_SL_CLEARTIP` | - | `Cleaning Reminder` | `Rense-påmindelse` |
+| `TX_SN_CLEARTIP` | note | `Stock UI tip` | `Stock-UI tip` |
+| `TX_SL_TIMEMODE` | - | `Time Format` | `Tidsformat` |
+| `TX_SL_AUTOTIME` | - | `Auto Time` | `Auto-tid` |
+| `TX_SN_AUTOTIME` | note | `Stock UI network time` | `Stock-UI netværkstid` |
+| `TX_SL_TZ` | - | `Time Zone` | `Tidszone` |
+| `TX_SN_TZ` | note | `Set it in the stock UI` | `Sættes i stock-UI'et` |
+| `TX_SH_EST` | - | `Max = estimate` | `Max = skøn` |
+| `TX_SL_PREHEAT` | - | `Pre-Heat` | `Forvarmning` |
+| `TX_SL_PHAT` | - | `Pre-Heat At` | `Forvarm kl.` |
+| `TX_SL_PHREP` | - | `Repeat` | `Gentag` |
+| `TX_SL_AUTOOFF` | - | `Auto Off` | `Auto-sluk` |
+| `TX_SN_PREHEAT` | note | `The machine wakes + heats itself` | `Maskinen vågner + varmer selv` |
+| `TX_SN_PHAT` | note | `Local time` | `Lokal tid` |
+| `TX_SN_PHREP` | note | `Once = switches itself off after use` | `En gang = slår sig selv fra bagefter` |
+| `TX_SN_AUTOOFF` | note | `No touch or activity · then off` | `Ingen berøring eller aktivitet · så sluk` |
+| `TX_SN_TIMEFMT` | note | `Home clock + stock UI clock` | `Ur på hjem + stock-UI'ets ur` |
+| `TX_SL_SOUND` | - | `Sound` | `Lyd` |
+| `TX_SL_SNDRDY` | - | `Ready Tone` | `Klar-tone` |
+| `TX_SN_SOUND` | note | `Start jingle + boiler ready tones` | `Start-jingle + klar-toner` |
+| `TX_SN_SNDRDY` | note | `Its own tone per boiler · when hot` | `Sin egen tone pr. kedel · når varm` |
 
 **Enum names**
 
 | id | class | EN | DA |
 |---|---|---|---|
-| `TX_E_OFF` | - | `OFF` | `FRA` |
-| `TX_E_ON` | - | `ON` | `TIL` |
-| `TX_E_WEIGHT` | - | `WEIGHT` | `VÆGT` |
-| `TX_E_TIME` | - | `TIME` | `TID` |
-| `TX_E_AUTO` | - | `AUTO` | `AUTO` |
-| `TX_E_MANUAL` | - | `MANUAL` | `MANUEL` |
-| `TX_E_GENTLE` | - | `GENTLE` | `BLID` |
-| `TX_E_MILD` | - | `MILD` | `MILD` |
-| `TX_E_MEDIUM` | - | `MEDIUM` | `MEDIUM` |
-| `TX_E_STRONG` | - | `STRONG` | `STÆRK` |
-| `TX_E_24H` | - | `24-HOUR` | `24-TIMERS` |
-| `TX_E_12H` | - | `12-HOUR` | `12-TIMERS` |
-| `TX_LG_EN` | - | `ENGLISH` | `ENGELSK` |
-| `TX_LG_DE` | - | `GERMAN` | `TYSK` |
-| `TX_LG_FR` | - | `FRENCH` | `FRANSK` |
-| `TX_LG_IT` | - | `ITALIAN` | `ITALIENSK` |
-| `TX_LG_ES` | - | `SPANISH` | `SPANSK` |
-| `TX_LG_PL` | - | `POLISH` | `POLSK` |
-| `TX_LG_AR` | - | `ARABIC` | `ARABISK` |
-| `TX_LG_ZHS` | - | `CHINESE SIMPL.` | `KINESISK FORENKL.` |
-| `TX_LG_ZHT` | - | `CHINESE TRAD.` | `KINESISK TRAD.` |
-| `TX_LG_KO` | - | `KOREAN` | `KOREANSK` |
-| `TX_LG_JA` | - | `JAPANESE` | `JAPANSK` |
-| `TX_UL_EN` | - | `ENGLISH` | `ENGLISH` |
-| `TX_UL_DA` | - | `DANSK` | `DANSK` |
+| `TX_E_OFF` | - | `Off` | `Fra` |
+| `TX_E_ON` | - | `On` | `Til` |
+| `TX_E_WEIGHT` | - | `Weight` | `Vægt` |
+| `TX_E_TIME` | - | `Time` | `Tid` |
+| `TX_E_AUTO` | - | `Auto` | `Auto` |
+| `TX_E_MANUAL` | - | `Manual` | `Manuel` |
+| `TX_E_GENTLE` | - | `Gentle` | `Blid` |
+| `TX_E_MILD` | - | `Mild` | `Mild` |
+| `TX_E_MEDIUM` | - | `Medium` | `Medium` |
+| `TX_E_STRONG` | - | `Strong` | `Stærk` |
+| `TX_E_24H` | - | `24-Hour` | `24-timers` |
+| `TX_E_12H` | - | `12-Hour` | `12-timers` |
+| `TX_UL_EN` | - | `English` | `English` |
+| `TX_UL_DA` | - | `Dansk` | `Dansk` |
+| `TX_E_ONCE` | - | `Once` | `En gang` |
+| `TX_E_DAILY` | - | `Every Day` | `Hver dag` |
+| `TX_E_WORKDAYS` | - | `Mon-Fri` | `Man-fre` |
+| `TX_E_WEEKEND` | - | `Sat-Sun` | `Lør-søn` |
+| `TX_E_MIN15` | - | `15 min` | `15 min` |
+| `TX_E_MIN20` | - | `20 min` | `20 min` |
+| `TX_E_MIN30` | - | `30 min` | `30 min` |
+| `TX_E_MIN60` | - | `60 min` | `60 min` |
+| `TX_E_SND_STOCK` | - | `Stock Sounds` | `Stock-lyde` |
+| `TX_E_RDY_BREW` | - | `Brew Boiler` | `Brygkedel` |
+| `TX_E_RDY_STEAM` | - | `Steam Boiler` | `Dampkedel` |
+| `TX_E_RDY_BOTH` | - | `Both Boilers` | `Begge kedler` |
+| `TX_O_SWITCHED` | console | `== merakiplus: runtime switch B->A (user button): stock UI pid %d started from /customer/demo_v9; merakiplus exits\n` | `== merakiplus: runtime-skift B->A (bruger-knap): stock-UI pid %d startet fra /customer/demo_v9; merakiplus afslutter\n` |
+| `TX_O_RESTART` | console | `== merakiplus: STOCK UI NEEDS A RESTART OF demo_v9 FOR NEW VALUES:   kill $(pidof demo_v9)\n==        (config.json changed by merakiplus; the watchdog restarts it, the boot push syncs the controller)\n` | `== merakiplus: STOCK-UI KRAEVER GENSTART AF demo_v9 FOR NYE VAERDIER:   kill $(pidof demo_v9)\n==        (config.json aendret af merakiplus; watchdog genstarter, boot-push synker controlleren)\n` |
+| `TX_O_CFGCHANGED` | console | `== merakiplus: config.json changed %d time(s) - no paused stock UI is waiting; the next stock start reads it itself\n` | `== merakiplus: config.json aendret %d gang(e) - intet pauset stock-UI venter; naeste stock-start laeser den selv\n` |
+| `TX_O_BLOCKED` | console | `== merakiplus: %ld cmd6 frame(s) rejected by the frame policy (see UI_v6.md)\n` | `== merakiplus: %ld cmd6-frame(s) afvist af frame-politikken (se UI_v6.md)\n` |
 
 **Phases, error codes and activities**
 
 | id | class | EN | DA |
 |---|---|---|---|
-| `TX_PH_OFFLINE` | phase-chip | `OFFLINE` | `OFFLINE` |
-| `TX_PH_SLEEP` | phase-chip | `ASLEEP` | `SOVER` |
-| `TX_PH_ERROR` | phase-chip | `ERROR` | `FEJL` |
-| `TX_PH_HEAT` | phase-chip | `HEATING UP` | `VARMER OP` |
-| `TX_PH_READY` | phase-chip | `READY` | `KLAR` |
-| `TX_PH_GRIND` | phase-chip | `GRINDING` | `KVÆRNER` |
-| `TX_PH_PRE` | phase-chip | `PRE-INFUSION` | `PRE-INFUSION` |
-| `TX_PH_EXT` | phase-chip | `EXTRACTION` | `EKSTRAKTION` |
-| `TX_PH_WATER` | phase-chip | `HOT WATER` | `VARMT VAND` |
-| `TX_PH_STEAM` | phase-chip | `STEAM` | `DAMP` |
-| `TX_PH_DONE` | phase-chip | `DONE` | `FÆRDIG` |
-| `TX_PH_STEAM_AUTO` | phase-chip | `STEAM·AUTO` | `DAMP·AUTO` |
-| `TX_PH_STEAM_WAND` | phase-chip | `STEAM·WAND` | `DAMP·WAND` |
-| `TX_ER_E3_BREW` | home-sub | `BREW BOILER TOO HOT` | `BRYGKEDLEN ER FOR VARM` |
-| `TX_ER_E3_STEAM` | home-sub | `STEAM BOILER TOO HOT` | `DAMPKEDLEN ER FOR VARM` |
-| `TX_ER_E1_GROUP` | home-sub | `GROUP HEAD TOO HOT` | `GRUPPEHOVEDET ER FOR VARMT` |
-| `TX_ER_E1_MAINS` | home-sub | `PROBLEM WITH MAINS VOLTAGE` | `PROBLEM MED NETSPÆNDINGEN` |
-| `TX_ER_E2_BREW` | home-sub | `BREW BOILER SENSOR FAULT` | `FEJL PÅ BRYGKEDEL-SENSOR` |
-| `TX_ER_E2_GROUP` | home-sub | `GROUP HEAD SENSOR FAULT` | `FEJL PÅ GRUPPEHOVED-SENSOR` |
-| `TX_ER_E2_STEAM` | home-sub | `STEAM BOILER SENSOR FAULT` | `FEJL PÅ DAMPKEDEL-SENSOR` |
-| `TX_ER_E2_MILK` | home-sub | `MILK SENSOR FAULT` | `FEJL PÅ MÆLKESENSOR` |
-| `TX_ER_UNKNOWN` | home-sub | `UNKNOWN FAULT` | `UKENDT FEJL` |
-| `TX_A_GRIND` | - | `GRIND` | `KVÆRN` |
-| `TX_A_BREW` | - | `BREW` | `BRYG` |
-| `TX_A_WATER` | - | `WATER` | `VAND` |
-| `TX_A_STEAM` | - | `STEAM` | `DAMP` |
+| `TX_PH_OFFLINE` | phase-chip | `Offline` | `Offline` |
+| `TX_PH_SLEEP` | phase-chip | `Asleep` | `Sover` |
+| `TX_PH_ERROR` | phase-chip | `Error` | `Fejl` |
+| `TX_PH_HEAT` | phase-chip | `Heating Up` | `Varmer op` |
+| `TX_PH_READY` | phase-chip | `Ready` | `Klar` |
+| `TX_PH_GRIND` | phase-chip | `Grinding` | `Kværner` |
+| `TX_PH_PRE` | phase-chip | `Pre-Infusion` | `Pre-infusion` |
+| `TX_PH_EXT` | phase-chip | `Extraction` | `Ekstraktion` |
+| `TX_PH_WATER` | phase-chip | `Hot Water` | `Varmt vand` |
+| `TX_PH_STEAM` | phase-chip | `Steam` | `Damp` |
+| `TX_PH_DONE` | phase-chip | `Done` | `Færdig` |
+| `TX_PH_STEAM_AUTO` | phase-chip | `Steam·Auto` | `Damp·auto` |
+| `TX_PH_STEAM_WAND` | phase-chip | `Steam·Wand` | `Damp·wand` |
+| `TX_A_GRIND` | - | `Grind` | `Kværn` |
+| `TX_A_BREW` | - | `Brew` | `Bryg` |
+| `TX_A_WATER` | - | `Water` | `Vand` |
+| `TX_A_STEAM` | - | `Steam` | `Damp` |
 
 **Guards and toasts**
 
 | id | class | EN | DA |
 |---|---|---|---|
-| `TX_G_RO` | toast | `READ-ONLY · NO WRITES` | `READ-ONLY · INGEN WRITES` |
-| `TX_G_NOLINK` | toast | `NO CONNECTION` | `INGEN FORBINDELSE` |
-| `TX_G_ERROR` | toast | `ERROR ACTIVE · START BLOCKED` | `FEJL AKTIV · START SPÆRRET` |
-| `TX_G_SLEEP` | toast | `WAKING UP · ONE MOMENT` | `VÅGNER · ET ØJEBLIK` |
-| `TX_G_BUSY` | toast | `ACTIVITY IN PROGRESS` | `AKTIVITET I GANG` |
-| `TX_G_WAIT` | toast | `ONE MOMENT…` | `ET ØJEBLIK…` |
-| `TX_G_NOCFG` | toast | `CONFIG MISSING · START BLOCKED` | `CONFIG MANGLER · START SPÆRRET` |
-| `TX_G_OOR` | toast | `CONFIG OUT OF SPEC · FIX FIRST` | `CONFIG UDEN FOR SPEC · RET FØRST` |
-| `TX_G_GRINDTIME` | toast | `GRIND = TIME · USE STOCK UI` | `KVÆRN = TID · BRUG STOCK-UI` |
-| `TX_G_WATERMAN` | toast | `WATER = MANUAL · USE STOCK UI` | `VAND = MANUEL · BRUG STOCK-UI` |
-| `TX_T_POLICY` | toast | `BLOCKED BY A SAFETY RULE` | `SPÆRRET AF EN SIKKERHEDSREGEL` |
-| `TX_T_QFULL` | toast | `BUSY · TRY AGAIN` | `OPTAGET · PRØV IGEN` |
-| `TX_T_RANGE` | toast | `OUT OF RANGE` | `UDEN FOR GRÆNSER` |
-| `TX_T_CFG_UNAVAIL` | toast | `CONFIG UNAVAILABLE · NOT SAVED` | `CONFIG UTILGÆNGELIG · INTET GEMT` |
-| `TX_T_NOLINK_SAVE` | toast | `NO CONNECTION · NOT SAVED` | `INGEN FORBINDELSE · INTET GEMT` |
-| `TX_T_WAIT_ACT` | toast | `WAIT UNTIL THE ACTIVITY ENDS` | `VENT TIL AKTIVITET ER SLUT` |
-| `TX_T_WRITE_REJ` | toast | `NOT ACCEPTED · NOT SAVED` | `IKKE ACCEPTERET · INTET GEMT` |
-| `TX_T_NOACK_SAVE` | toast | `SAVE FAILED · NO REPLY` | `GEM FEJLET · INTET SVAR` |
-| `TX_T_SAVED_MCU` | toast | `SAVED · ACTIVE NOW` | `GEMT · AKTIV NU` |
-| `TX_T_SAVED_CFG` | toast | `SAVED` | `GEMT` |
-| `TX_T_CFG_ERR` | toast | `CONFIG ERROR · NOT SAVED` | `CONFIG-FEJL · INTET GEMT` |
-| `TX_T_LANG_SAVED` | toast | `LANGUAGE SAVED · ENGLISH` | `SPROG GEMT · DANSK` |
-| `TX_T_LANG_NOFILE` | toast | `LANGUAGE ACTIVE · FILE NOT SAVED` | `SPROG AKTIVT · FIL IKKE GEMT` |
-| `TX_T_DRYRUN` | toast | DRY RUN · SEE `cfgbak/boot_ui.log` | DRY-RUN · SE `cfgbak/boot_ui.log` |
-| `TX_T_SW_FAIL_NOBIN` | toast | `SWITCH FAILED · NO STOCK BINARY` | `SKIFT FEJLEDE · INGEN STOCK-BINÆR` |
-| `TX_T_SW_FAIL_FORK` | toast | `SWITCH FAILED · FORK ERROR` | `SKIFT FEJLEDE · FORK-FEJL` |
-| `TX_T_SW_FAIL_DIED` | toast | `SWITCH FAILED · STOCK UI EXITED` | `SKIFT FEJLEDE · STOCK-UI STOPPEDE` |
-| `TX_T_BOOT_SAVED_OURS` | toast | `SAVED · NEXT RESTART: MERAKI+` | `GEMT · NÆSTE GENSTART: MERAKI+` |
-| `TX_T_BOOT_SAVED_ORIG` | toast | `SAVED · NEXT RESTART: ORIGINAL` | `GEMT · NÆSTE GENSTART: ORIGINAL` |
-| `TX_T_BOOT_LOCKED` | toast | `LOCKED · FLAG NOT CHANGED` | `LÅST · FLAG IKKE ÆNDRET` |
-| `TX_T_BOOT_ERR` | toast | `FLAG ERROR · NOTHING CHANGED` | `FLAG-FEJL · INTET ÆNDRET` |
-| `TX_T_STOP_SENT` | toast | `STOPPING STEAM…` | `STOPPER DAMP…` |
-| `TX_T_STOP_GRIND` | toast | `STOPPING GRIND…` | `STOPPER KVÆRN…` |
-| `TX_T_STOP_BREW` | toast | `STOPPING BREW…` | `STOPPER BRYG…` |
-| `TX_T_STOP_WATER` | toast | `STOPPING WATER…` | `STOPPER VAND…` |
-| `TX_T_STOPPED_GRIND` | toast | `GRIND STOPPED` | `KVÆRN STOPPET` |
-| `TX_T_STOPPED_BREW` | toast | `BREW STOPPED` | `BRYG STOPPET` |
-| `TX_T_STOPPED_WATER` | toast | `WATER STOPPED` | `VAND STOPPET` |
-| `TX_T_STOPPED_STEAM` | toast | `STEAM STOPPED` | `DAMP STOPPET` |
-| `TX_T_STOP_NOACK` | toast | `STOP: NO REPLY · TRY AGAIN` | `STOP: INTET SVAR · PRØV IGEN` |
-| `TX_T_STOP_UNCONF` | toast | `STOP NOT CONFIRMED · TRY AGAIN` | `STOP IKKE BEKRÆFTET · PRØV IGEN` |
-| `TX_T_STOP_FAIL` | toast | `STOP NOT SENT · TRY AGAIN` | `STOP IKKE SENDT · PRØV IGEN` |
-| `TX_T_PW_BUSY` | toast | `STOP THE ACTIVITY FIRST · THEN OFF` | `STOP AKTIVITETEN FØRST · SÅ SLUK` |
-| `TX_T_PW_NOLINK` | toast | `NO CONNECTION · CANNOT TURN OFF` | `INGEN FORBINDELSE · SLUKKER IKKE` |
-| `TX_T_PW_NOACK` | toast | `POWER OFF: NO REPLY · TRY AGAIN` | `SLUK: INTET SVAR · PRØV IGEN` |
-| `TX_T_PW_ON` | toast | `MACHINE IS ON` | `MASKINEN ER TÆNDT` |
-| `TX_T_HOLD_HINT` | toast | `KEEP HOLDING TO START` | `BLIV VED AT HOLDE FOR START` |
-| `TX_T_PINFO` | - | `PRE-INF. %d BAR = RAW %d · LINEAR` | `PRÆ-INF. %d BAR = RÅ %d · LINEÆR` |
-| `TX_T_NOACK` | toast | `THE MACHINE DID NOT ANSWER` | `MASKINEN SVAREDE IKKE` |
-| `TX_T_NOSTART` | toast | `NO START · CHECK THE MACHINE` | `INGEN START · TJEK MASKINEN` |
+| `TX_G_RO` | toast | `Read-only · no writes` | `Read-only · ingen writes` |
+| `TX_G_NOLINK` | toast | `No connection` | `Ingen forbindelse` |
+| `TX_G_ERROR` | toast | `Error active · start blocked` | `Fejl aktiv · start spærret` |
+| `TX_G_SLEEP` | toast | `Waking up · one moment` | `Vågner · et øjeblik` |
+| `TX_G_BUSY` | toast | `Activity in progress` | `Aktivitet i gang` |
+| `TX_G_WAIT` | toast | `One moment…` | `Et øjeblik…` |
+| `TX_G_NOCFG` | toast | `Config missing · start blocked` | `Config mangler · start spærret` |
+| `TX_G_OOR` | toast | `Config out of spec · fix first` | `Config uden for spec · ret først` |
+| `TX_G_GRINDTIME` | toast | `Grind = time · use stock UI` | `Kværn = tid · brug stock-UI` |
+| `TX_G_WATERMAN` | toast | `Water = manual · use stock UI` | `Vand = manuel · brug stock-UI` |
+| `TX_T_POLICY` | toast | `Blocked by a safety rule` | `Spærret af en sikkerhedsregel` |
+| `TX_T_QFULL` | toast | `Busy · try again` | `Optaget · prøv igen` |
+| `TX_T_RANGE` | toast | `Out of range` | `Uden for grænser` |
+| `TX_T_CFG_UNAVAIL` | toast | `Config unavailable · not saved` | `Config utilgængelig · intet gemt` |
+| `TX_T_NOLINK_SAVE` | toast | `No connection · not saved` | `Ingen forbindelse · intet gemt` |
+| `TX_T_WAIT_ACT` | toast | `Wait until the activity ends` | `Vent til aktivitet er slut` |
+| `TX_T_WRITE_REJ` | toast | `Not accepted · not saved` | `Ikke accepteret · intet gemt` |
+| `TX_T_NOACK_SAVE` | toast | `Save failed · no reply` | `Gem fejlet · intet svar` |
+| `TX_T_SAVED_MCU` | toast | `Saved · active now` | `Gemt · aktiv nu` |
+| `TX_T_SAVED_CFG` | toast | `Saved` | `Gemt` |
+| `TX_T_CFG_ERR` | toast | `Config error · not saved` | `Config-fejl · intet gemt` |
+| `TX_T_LANG_SAVED` | toast | `Language saved · English` | `Sprog gemt · dansk` |
+| `TX_T_LANG_NOFILE` | toast | `Language active · file not saved` | `Sprog aktivt · fil ikke gemt` |
+| `TX_T_DRYRUN` | toast | `Dry run · see 'cfgbak/boot_ui.log'` | `Dry-run · se 'cfgbak/boot_ui.log'` |
+| `TX_T_SW_FAIL_NOBIN` | toast | `Switch failed · no stock binary` | `Skift fejlede · ingen stock-binær` |
+| `TX_T_SW_FAIL_FORK` | toast | `Switch failed · fork error` | `Skift fejlede · fork-fejl` |
+| `TX_T_SW_FAIL_DIED` | toast | `Switch failed · stock UI exited` | `Skift fejlede · stock-UI stoppede` |
+| `TX_T_BOOT_SAVED_OURS` | toast | `Saved · next restart: Meraki+` | `Gemt · næste genstart: Meraki+` |
+| `TX_T_BOOT_SAVED_ORIG` | toast | `Saved · next restart: original` | `Gemt · næste genstart: original` |
+| `TX_T_BOOT_LOCKED` | toast | `Locked · flag not changed` | `Låst · flag ikke ændret` |
+| `TX_T_BOOT_ERR` | toast | `Flag error · nothing changed` | `Flag-fejl · intet ændret` |
+| `TX_T_STOP_SENT` | toast | `Stopping steam…` | `Stopper damp…` |
+| `TX_T_STOP_GRIND` | toast | `Stopping grind…` | `Stopper kværn…` |
+| `TX_T_STOP_BREW` | toast | `Stopping brew…` | `Stopper bryg…` |
+| `TX_T_STOP_WATER` | toast | `Stopping water…` | `Stopper vand…` |
+| `TX_T_STOPPED_GRIND` | toast | `Grind stopped` | `Kværn stoppet` |
+| `TX_T_STOPPED_BREW` | toast | `Brew stopped` | `Bryg stoppet` |
+| `TX_T_STOPPED_WATER` | toast | `Water stopped` | `Vand stoppet` |
+| `TX_T_STOPPED_STEAM` | toast | `Steam stopped` | `Damp stoppet` |
+| `TX_T_STOP_NOACK` | toast | `Stop: no reply · try again` | `Stop: intet svar · prøv igen` |
+| `TX_T_STOP_UNCONF` | toast | `Stop not confirmed · try again` | `Stop ikke bekræftet · prøv igen` |
+| `TX_T_STOP_FAIL` | toast | `Stop not sent · try again` | `Stop ikke sendt · prøv igen` |
+| `TX_T_PW_BUSY` | toast | `Stop the activity first · then off` | `Stop aktiviteten først · så sluk` |
+| `TX_T_PW_NOLINK` | toast | `No connection · cannot turn off` | `Ingen forbindelse · slukker ikke` |
+| `TX_T_PW_NOACK` | toast | `Power off: no reply · try again` | `Sluk: intet svar · prøv igen` |
+| `TX_T_PW_ON` | toast | `Machine is on` | `Maskinen er tændt` |
+| `TX_T_HOLD_HINT` | toast | `Keep holding to start` | `Bliv ved at holde for start` |
+| `TX_T_PINFO` | - | `Pre-inf. %d bar = raw %d · linear` | `Præ-inf. %d bar = rå %d · lineær` |
+| `TX_T_NOACK` | toast | `The machine did not answer` | `Maskinen svarede ikke` |
+| `TX_T_NOSTART` | toast | `No start · check the machine` | `Ingen start · tjek maskinen` |
+| `TX_T_OWN_SAVED` | toast | `Schedule saved` | `Tidsplan gemt` |
+| `TX_T_OWN_NOFILE` | toast | `Active · file not saved` | `Aktiv · fil ikke gemt` |
+| `TX_T_SND_SAVED` | toast | `Sound saved` | `Lyd gemt` |
+| `TX_T_AUTOOFF_SOON` | toast | `Auto off in 30 s · touch to stay on` | `Auto-sluk om 30 s · rør skærmen` |
+| `TX_T_ONCE_USED` | toast | `One-time pre-heat used · now off` | `Forvarmning brugt · nu fra` |
+| `TX_T_NOCLOCK` | toast | `Clock not set · no pre-heat alarm` | `Ur ikke sat · ingen forvarm-alarm` |
 
-**HOME (labels, sub-lines, hold hints, stats, chart, buttons)**
+**HOME (ring labels, sub-lines, hold hints, stats, chart)**
 
 | id | class | EN | DA |
 |---|---|---|---|
-| `TX_H_DOSE` | home-label | `DOSE` | `DOSIS` |
-| `TX_H_CUP` | home-label | `IN THE CUP` | `I KOPPEN` |
-| `TX_H_MILK_TGT` | home-label | `MILK · TARGET %s°` | `MÆLK · MÅL %s°` |
-| `TX_H_MILK` | home-label | `MILK` | `MÆLK` |
-| `TX_H_MILK_PROBE` | home-label | `MILK PROBE` | `MÆLKEPROBE` |
-| `TX_H_BOILER` | home-label | `BREW BOILER` | `BRYGKEDEL` |
+| `TX_H_DOSE` | home-label | `Dose` | `Dosis` |
+| `TX_H_CUP` | home-label | `In the Cup` | `I koppen` |
+| `TX_H_MILK_TGT` | home-label | `Milk · Target %s°` | `Mælk · mål %s°` |
+| `TX_H_MILK` | home-label | `Milk` | `Mælk` |
+| `TX_H_MILK_PROBE` | home-label | `Milk Probe` | `Mælkeprobe` |
+| `TX_H_BOILER` | home-label | `Brew Boiler` | `Brygkedel` |
 | `TX_H_CRC` | - | `CRC %u` | `CRC %u` |
-| `TX_H_DONE_IN` | home-sub | `DONE IN %s` | `FÆRDIG PÅ %s` |
-| `TX_H_AUTOSTOP_G` | home-sub | `STOPS AT %s G` | `STOPPER VED %s G` |
-| `TX_H_AUTOSTOP_T` | home-sub | `STOPS AT %s°` | `STOPPER VED %s°` |
-| `TX_H_WAND_NOSTOP` | home-sub | `RELEASE THE WAND TO STOP` | `SLIP WAND FOR AT STOPPE` |
-| `TX_H_DONE_RISE` | home-sub | `DONE IN %s · RISES ≈%s° MORE` | `FÆRDIG PÅ %s · STIGER ≈%s° TIL` |
-| `TX_H_NORESP` | home-sub | `NO CONNECTION TO THE MACHINE` | `INGEN FORBINDELSE TIL MASKINEN` |
-| `TX_H_WAKING` | home-sub | `WAKING UP…` | `VÅGNER…` |
-| `TX_H_HEATING_TO` | home-sub | `HEATING TO %s°` | `PÅ VEJ MOD %s°` |
-| `TX_H_SET_TO` | home-sub | `TARGET %s°` | `MÅL %s°` |
-| `TX_H_STARTING` | home-sub | `STARTING %s…` | `STARTER %s…` |
-| `TX_H_HOLD_GRIND` | home-sub | `HOLD · GRIND %s G` | `HOLD · KVÆRN %s G` |
-| `TX_H_HOLD_BREW` | home-sub | `HOLD · BREW %s G` | `HOLD · BRYG %s G` |
-| `TX_H_HOLD_WATER` | home-sub | `HOLD · HOT WATER %s G` | `HOLD · VARMT VAND %s G` |
-| `TX_H_HOLD_STEAM` | home-sub | `HOLD · STEAM TO %s°` | `HOLD · DAMP TIL %s°` |
-| `TX_ST_TIME` | - | `TIME` | `TID` |
-| `TX_ST_BAR` | - | `≈BAR` | `≈BAR` |
-| `TX_ST_PRAW` | - | `RAW` | `RÅ` |
-| `TX_ST_PULSE` | - | `PULSE` | `PULS` |
-| `TX_ST_FLOW` | - | `FLOW` | `FLOW` |
-| `TX_ST_CURRENT` | - | `CURRENT` | `STRØM` |
-| `TX_ST_GRINDSTEP` | - | `STEP` | `TRIN` |
-| `TX_ST_BOILER` | - | `BOILER` | `KEDEL` |
-| `TX_ST_STEAMBOILER` | - | `STEAM` | `DAMP` |
-| `TX_ST_LEVEL` | - | `LEVEL` | `NIVEAU` |
-| `TX_ST_GROUP` | - | `GROUP` | `GRUPPE` |
-| `TX_ST_WEIGHT` | - | `WEIGHT` | `VÆGT` |
-| `TX_ST_MILK` | - | `MILK` | `MÆLK` |
-| `TX_C_HINT` | - | `HOLD = START · TAP = SETTINGS` | `HOLD = START · TRYK = INDSTIL` |
-| `TX_C_PREHEAT` | - | `{icon11} PRE-HEAT · %s %s` | `{icon11} FORVARMNING · %s %s` |
-| `TX_C_ERRCODE` | - | `CODE %s · TAP FOR DETAILS` | `KODE %s · TRYK FOR DETALJER` |
-| `TX_C_DIAGREF` | - | `TAP FOR DETAILS` | `TRYK FOR DETALJER` |
-| `TX_C_PRESS` | - | `PRESSURE` | `TRYK` |
-| `TX_C_WEIGHT` | - | `WEIGHT` | `VÆGT` |
-| `TX_C_MILK` | - | `MILK TEMP` | `MÆLKETEMP` |
-| `TX_C_TARGET` | - | `- - TARGET` | `- - MÅL` |
-| `TX_C_RAW` | - | `RAW` | `RÅ` |
-| `TX_B_STOP_STEAM` | - | `STOP STEAM` | `STOP DAMP` |
-| `TX_B_STOP_GRIND` | - | `STOP GRIND` | `STOP KVÆRN` |
-| `TX_B_STOP_BREW` | - | `STOP BREW` | `STOP BRYG` |
-| `TX_B_STOP_WATER` | - | `STOP WATER` | `STOP VAND` |
+| `TX_H_DONE_IN` | home-sub | `Done in %s` | `Færdig på %s` |
+| `TX_H_AUTOSTOP_G` | home-sub | `Stops at %s g` | `Stopper ved %s g` |
+| `TX_H_AUTOSTOP_T` | home-sub | `Stops at %s°` | `Stopper ved %s°` |
+| `TX_H_WAND_NOSTOP` | home-sub | `Release the wand to stop` | `Slip wand for at stoppe` |
+| `TX_H_DONE_RISE` | home-sub | `Done in %s · rises ≈%s° more` | `Færdig på %s · stiger ≈%s° til` |
+| `TX_H_NORESP` | home-sub | `No connection to the machine` | `Ingen forbindelse til maskinen` |
+| `TX_H_WAKING` | home-sub | `Waking up…` | `Vågner…` |
+| `TX_H_HEATING_TO` | home-sub | `Heating to %s°` | `På vej mod %s°` |
+| `TX_H_SET_TO` | home-sub | `Target %s°` | `Mål %s°` |
+| `TX_H_STARTING` | home-sub | `Starting %s…` | `Starter %s…` |
+| `TX_H_HOLD_GRIND` | home-sub | `Hold · grind %s g` | `Hold · kværn %s g` |
+| `TX_H_HOLD_BREW` | home-sub | `Hold · brew %s g` | `Hold · bryg %s g` |
+| `TX_H_HOLD_WATER` | home-sub | `Hold · hot water %s g` | `Hold · varmt vand %s g` |
+| `TX_H_HOLD_STEAM` | home-sub | `Hold · steam to %s°` | `Hold · damp til %s°` |
+| `TX_ST_TIME` | - | `Time` | `Tid` |
+| `TX_ST_BAR` | - | `≈bar` | `≈bar` |
+| `TX_ST_PRAW` | - | `Raw` | `Rå` |
+| `TX_ST_PULSE` | - | `Pulse` | `Puls` |
+| `TX_ST_FLOW` | - | `Flow` | `Flow` |
+| `TX_ST_CURRENT` | - | `Current` | `Strøm` |
+| `TX_ST_GRINDSTEP` | - | `Step` | `Trin` |
+| `TX_ST_BOILER` | - | `Boiler` | `Kedel` |
+| `TX_ST_STEAMBOILER` | - | `Steam` | `Damp` |
+| `TX_ST_LEVEL` | - | `Level` | `Niveau` |
+| `TX_ST_GROUP` | - | `Group` | `Gruppe` |
+| `TX_ST_WEIGHT` | - | `Weight` | `Vægt` |
+| `TX_ST_MILK` | - | `Milk` | `Mælk` |
+| `TX_C_HINT` | - | `Hold = start · tap = settings` | `Hold = start · tryk = indstil` |
+| `TX_C_PREHEAT` | - | `{icon11} Pre-heat · %s %s` | `{icon11} Forvarmning · %s %s` |
+| `TX_C_ERRCODE` | - | `Code %s · tap for details` | `Kode %s · tryk for detaljer` |
+| `TX_C_DIAGREF` | - | `Tap for details` | `Tryk for detaljer` |
+| `TX_C_PRESS` | - | `Pressure` | `Tryk` |
+| `TX_C_WEIGHT` | - | `Weight` | `Vægt` |
+| `TX_C_MILK` | - | `Milk Temp` | `Mælketemp` |
+| `TX_C_TARGET` | - | `- - Target` | `- - Mål` |
+| `TX_C_RAW` | - | `Raw` | `Rå` |
+| `TX_R_GRIND` | - | `Grinder` | `Kværn` |
+| `TX_R_WATER` | - | `Hot Water` | `Varmt vand` |
+| `TX_R_BREW` | - | `Brew` | `Bryg` |
+| `TX_R_STEAM` | - | `Steam` | `Damp` |
 
 **Buttons**
 
 | id | class | EN | DA |
 |---|---|---|---|
-| `TX_B_START` | - | `HOLD TO START` | `HOLD FOR START` |
-| `TX_B_BACK` | button | `BACK` | `TILBAGE` |
-| `TX_B_CANCEL` | button | `CANCEL` | `ANNULLER` |
-| `TX_B_SAVE` | button | `SAVE` | `GEM` |
-| `TX_B_SAVING` | button | `SAVING` | `GEMMER` |
-| `TX_B_SWITCH` | button | `SWITCH NOW` | `SKIFT NU` |
-| `TX_B_EXIT` | button | `EXIT` | `AFSLUT` |
+| `TX_B_STOP_STEAM` | - | `Stop Steam` | `Stop damp` |
+| `TX_B_STOP_GRIND` | - | `Stop Grind` | `Stop kværn` |
+| `TX_B_STOP_BREW` | - | `Stop Brew` | `Stop bryg` |
+| `TX_B_STOP_WATER` | - | `Stop Water` | `Stop vand` |
+| `TX_B_START` | - | `Hold to Start` | `Hold for start` |
+| `TX_B_BACK` | button | `Back` | `Tilbage` |
+| `TX_B_CANCEL` | button | `Cancel` | `Annuller` |
+| `TX_B_SAVE` | button | `Save` | `Gem` |
+| `TX_B_SAVING` | button | `Saving` | `Gemmer` |
+| `TX_B_SWITCH` | button | `Switch Now` | `Skift nu` |
+| `TX_B_EXIT` | button | `Exit` | `Afslut` |
+| `TX_B_OK` | - | `OK` | `OK` |
 
 **SYSTEM: startup / UI choice (BOOT UI, lock reasons, help texts)**
 
 | id | class | EN | DA |
 |---|---|---|---|
-| `TX_X_BOOTUI` | - | `BOOT UI` | `BOOT-UI` |
-| `TX_X_SWITCH` | - | `SWITCH TO ORIGINAL NOW` | `SKIFT TIL ORIGINAL NU` |
-| `TX_X_SWITCH_SUB` | row-sub | `IMMEDIATE · NO RESTART` | `STRAKS · UDEN GENSTART` |
-| `TX_BN_ORIGINAL` | - | `ORIGINAL` | `ORIGINAL` |
-| `TX_BN_OURS` | - | `MERAKI+` | `MERAKI+` |
-| `TX_BN_SLOTB` | - | `SLOT B` | `SLOT B` |
-| `TX_BL_NOMOUNT` | row-sub | `LOCKED · SLOT B NOT MOUNTED` | `LÅST · SLOT B IKKE MOUNTET` |
-| `TX_BL_NOMOUNT_L` | note | `/new_customer` IS NOT MOUNTED | `/new_customer` ER IKKE MOUNTET |
-| `TX_BL_NOBIN` | row-sub | LOCKED · SLOT B HAS NO `demo_v9` | LÅST · SLOT B UDEN `demo_v9` |
-| `TX_BL_NOBIN_L` | note | `/new_customer/demo_v9` IS MISSING | `/new_customer/demo_v9` MANGLER |
-| `TX_BL_VENDOR` | row-sub | `LOCKED · SLOT B IS NOT MERAKI+` | `LÅST · SLOT B ER IKKE MERAKI+` |
-| `TX_BL_VENDOR_L` | note | `/new_customer/demo_v9` IS NOT MERAKI+ | `/new_customer/demo_v9` ER IKKE MERAKI+ |
-| `TX_BS_OURS` | - | `NOW: MERAKI+ (B) AT BOOT` | `NU: MERAKI+ (B) VED BOOT` |
-| `TX_BS_ORIG` | - | `NOW: ORIGINAL (A) AT BOOT` | `NU: ORIGINAL (A) VED BOOT` |
-| `TX_BS_SLOTB` | - | `NOW: SLOT B (NOT MERAKI+) AT BOOT` | `NU: SLOT B (IKKE MERAKI+) VED BOOT` |
-| `TX_BH1` | row-sub | `APPLIES AT NEXT RESTART` | `GÆLDER NÆSTE GENSTART` |
-| `TX_BH2` | foot-1 | `OTA MAY OVERWRITE THIS` | `OTA KAN OVERSKRIVE DETTE` |
-| `TX_BH3` | foot-2 | CHOICE — SEE BOOT`.md` §7 | VALG — SE BOOT`.md` §7 |
-| `TX_SW_LOCK` | row-sub | `LOCKED · STOCK BINARY MISSING` | `LÅST · STOCK-BINÆR MANGLER` |
-| `TX_SW_LOCK_L` | note | `/customer/demo_v9` IS MISSING | `/customer/demo_v9` MANGLER |
+| `TX_X_BOOTUI` | - | `Boot UI` | `Boot-UI` |
+| `TX_X_SWITCH` | - | `Switch to Original Now` | `Skift til original nu` |
+| `TX_X_SWITCH_SUB` | row-sub | `Immediate · no restart` | `Straks · uden genstart` |
+| `TX_BN_ORIGINAL` | - | `Original` | `Original` |
+| `TX_BN_OURS` | - | `Meraki+` | `Meraki+` |
+| `TX_BN_SLOTB` | - | `Slot B` | `Slot B` |
+| `TX_BL_NOMOUNT` | row-sub | `Locked · slot B not mounted` | `Låst · slot B ikke mountet` |
+| `TX_BL_NOMOUNT_L` | note | `'/new_customer' is not mounted` | `'/new_customer' er ikke mountet` |
+| `TX_BL_NOBIN` | row-sub | `Locked · slot B has no 'demo_v9'` | `Låst · slot B uden 'demo_v9'` |
+| `TX_BL_NOBIN_L` | note | `'/new_customer/demo_v9' is missing` | `'/new_customer/demo_v9' mangler` |
+| `TX_BL_VENDOR` | row-sub | `Locked · slot B is not Meraki+` | `Låst · slot B er ikke Meraki+` |
+| `TX_BL_VENDOR_L` | note | `'/new_customer/demo_v9' is not Meraki+` | `'/new_customer/demo_v9' er ikke Meraki+` |
+| `TX_BS_OURS` | - | `Now: Meraki+ (B) at boot` | `Nu: Meraki+ (B) ved boot` |
+| `TX_BS_ORIG` | - | `Now: original (A) at boot` | `Nu: original (A) ved boot` |
+| `TX_BS_SLOTB` | - | `Now: slot B (not Meraki+) at boot` | `Nu: slot B (ikke Meraki+) ved boot` |
+| `TX_BH1` | row-sub | `Applies at next restart` | `Gælder næste genstart` |
+| `TX_BH2` | foot-1 | `OTA may overwrite this` | `OTA kan overskrive dette` |
+| `TX_BH3` | foot-2 | `Choice — see BOOT'.md' §7` | `Valg — se BOOT'.md' §7` |
 
-**Stepper detail**
+**Editor**
 
 | id | class | EN | DA |
 |---|---|---|---|
-| `TX_D_MEASURED` | - | `MEASURED VALUE · NOT A SETTING` | `MÅLT VÆRDI · INGEN INDSTILLING` |
-| `TX_D_NOEDIT` | - | `CANNOT BE CHANGED HERE` | `KAN IKKE ÆNDRES HER` |
-| `TX_D_NOPTS` | - | `%d OPTIONS` | `%d VALG` |
-| `TX_D_SAVING` | status | `SAVING…` | `GEMMER…` |
-| `TX_D_OOR` | status | `OUT OF SPEC · PICK A NEW VALUE` | `UDEN FOR SPEC · VÆLG NY VÆRDI` |
-| `TX_D_HOLDFAST` | status | `HOLD - OR + TO GO FAST` | `HOLD - ELLER + FOR HURTIGT` |
-| `TX_D_CHANGED` | - | `CHANGED · WAS %s %s` | `ÆNDRET · FØR %s %s` |
-| `TX_D_LOCKED` | status | `LOCKED` | `LÅST` |
+| `TX_D_MEASURED` | - | `Measured value · not a setting` | `Målt værdi · ingen indstilling` |
+| `TX_D_NOEDIT` | - | `Cannot be changed here` | `Kan ikke ændres her` |
+| `TX_D_NOPTS` | - | `%d options` | `%d valg` |
+| `TX_D_SAVING` | status | `Saving…` | `Gemmer…` |
+| `TX_D_OOR` | status | `Out of spec · pick a new value` | `Uden for spec · vælg ny værdi` |
+| `TX_D_HOLDFAST` | status | `Hold - or + to go fast` | `Hold - eller + for hurtigt` |
+| `TX_D_CHANGED` | - | `Changed · was %s %s` | `Ændret · før %s %s` |
+| `TX_D_LOCKED` | status | `Locked` | `Låst` |
 
 **System actions: switch confirmation, exit reminder, goodbye screen**
 
 | id | class | EN | DA |
 |---|---|---|---|
-| `TX_Y_CHANGED` | - | `CHANGED · WAS %s` | `ÆNDRET · FØR %s` |
-| `TX_Y_FLAG_YES` | foot-1 | FLAG `/customer/new` EXISTS | FLAG `/customer/new` FINDES |
-| `TX_Y_FLAG_NO` | foot-1 | NO FLAG `/customer/new` | INTET FLAG `/customer/new` |
-| `TX_Y_FLAG_HANDSOFF` | foot-2 | `FLAG IS NOT TOUCHED HERE` | `FLAGET RØRES IKKE HERFRA` |
-| `TX_Y_NEXT` | - | `NEXT RESTART: %s` | `NÆSTE GENSTART: %s` |
-| `TX_Y_NOSTOCK` | foot-1 | `NO STOCK UI TO START` | `INTET STOCK-UI AT STARTE` |
-| `TX_Y_STAYS` | foot-2 | `MERAKI+ KEEPS RUNNING` | `MERAKI+ BLIVER KØRENDE` |
-| `TX_Y_CLOSE_CONT` | status | `MERAKI+ CLOSES · STOCK UI RESUMES` | `MERAKI+ LUKKER · STOCK-UI FORTSÆTTER` |
-| `TX_Y_CLOSE_START` | status | `MERAKI+ CLOSES · STOCK UI STARTS` | `MERAKI+ LUKKER · STOCK-UI STARTER` |
-| `TX_Y_REMINDER_FOLLOWS` | note | `CONFIG CHANGED · REMINDER FOLLOWS` | `CONFIG ÆNDRET · PÅMINDELSE FØLGER` |
-| `TX_Y_PAUSED_PID` | note | `STOCK UI IS PAUSED · PID %d` | `STOCK-UI ER PAUSET · PID %d` |
-| `TX_Y_RUNSH` | foot-1 | `RUN.SH MODE · CLEAN EXIT` | `RUN.SH-TILSTAND · REN EXIT` |
-| `TX_Y_BACK_RUNSH` | foot-2 | `BACK HERE: RUN.SH` | `TILBAGE HERTIL: RUN.SH` |
-| `TX_Y_FRESH` | note | `FRESH START · READS CURRENT CONFIG` | `FRISK START · LÆSER AKTUEL CONFIG` |
-| `TX_Y_BACK_GESTURE1` | foot-1 | `BACK HERE: 3 LONG PRESSES` | `TILBAGE HERTIL: 3 LANGE TRYK` |
-| `TX_Y_BACK_GESTURE2` | foot-2 | `TOP LEFT CORNER (1.5 S)` | `ØVERST TIL VENSTRE (1.5 S)` |
-| `TX_Y_NOSWITCHER` | foot-1 | `SWITCHER DAEMON NOT RUNNING` | `SWITCHER-DAEMON KØRER IKKE` |
-| `TX_Y_BACK_RESTART` | foot-2 | `BACK HERE: RESTART` | `TILBAGE HERTIL: GENSTART` |
-| `TX_Y_BACK_TELNET` | foot-2 | `BACK HERE: TELNET ONLY` | `TILBAGE HERTIL: KUN TELNET` |
-| `TX_Y_EXIT_TITLE` | - | `CONFIG HAS CHANGED` | `CONFIG ER ÆNDRET` |
-| `TX_Y_EXIT_SUB` | - | `STOCK UI HAS OLD VALUES` | `STOCK-UI HAR GAMLE VÆRDIER` |
-| `TX_Y_EXIT_NOTE` | note | `RUN VIA TELNET · WATCHDOG RESTARTS IT` | `KØR VIA TELNET · WATCHDOG STARTER DEN IGEN` |
-| `TX_Y_EXIT_F1` | foot-1 | `OTHERWISE STOCK UI SENDS` | `ELLERS SENDER STOCK-UI` |
-| `TX_Y_EXIT_F2` | foot-2 | `OLD VALUES WHEN BREWING` | `GAMLE VÆRDIER VED BRYG` |
-| `TX_Y_EXIT_L1` | - | `STOCK UI NEEDS A RESTART OF` | `STOCK-UI KRÆVER GENSTART AF` |
-| `TX_Y_EXIT_L2` | - | `demo_v9` FOR NEW VALUES | `demo_v9` FOR NYE VÆRDIER |
-| `TX_Y_EXIT_CMD` | - | `kill $(pidof demo_v9)` | `kill $(pidof demo_v9)` |
-| `TX_Y_BYE_T` | - | `SWITCHING TO ORIGINAL` | `SKIFTER TIL ORIGINAL` |
-| `TX_Y_BYE_CONT` | - | `STOCK UI RESUMES` | `STOCK-UI FORTSÆTTER` |
-| `TX_Y_BYE_START` | - | `STOCK UI STARTING · ONE MOMENT` | `STOCK-UI STARTER · ET ØJEBLIK` |
-| `TX_Y_BYE_CLOSED` | - | `MERAKI+ HAS CLOSED` | `MERAKI+ ER AFSLUTTET` |
-
-**Other**
-
-| id | class | EN | DA |
-|---|---|---|---|
-| `TX_PW_OFFING` | - | `TURNING OFF…` | `SLUKKER…` |
-| `TX_PW_OFF` | - | `OFF` | `SLUKKET` |
-| `TX_PW_WAKING` | - | `TURNING ON…` | `TÆNDER…` |
-| `TX_PW_SUB_OFFING` | - | `THE MACHINE GOES TO SLEEP` | `MASKINEN GÅR I DVALE` |
-| `TX_PW_SUB_OFF` | - | `HOLD THE POWER BUTTON TO TURN ON` | `HOLD KNAPPEN INDE FOR AT TÆNDE` |
-| `TX_PW_SUB_WAKING` | - | `KEEP HOLDING THE BUTTON A MOMENT` | `HOLD KNAPPEN INDE ET ØJEBLIK` |
-| `TX_PW_NOTE_OFF` | - | `THE SCREEN TURNS OFF · TOUCH TO SHOW` | `SKÆRMEN SLUKKER · RØR FOR AT VISE` |
+| `TX_SW_LOCK` | row-sub | `Locked · stock binary missing` | `Låst · stock-binær mangler` |
+| `TX_SW_LOCK_L` | note | `'/customer/demo_v9' is missing` | `'/customer/demo_v9' mangler` |
+| `TX_Y_CHANGED` | - | `Changed · was %s` | `Ændret · før %s` |
+| `TX_Y_FLAG_YES` | foot-1 | `Flag '/customer/new' exists` | `Flag '/customer/new' findes` |
+| `TX_Y_FLAG_NO` | foot-1 | `No flag '/customer/new'` | `Intet flag '/customer/new'` |
+| `TX_Y_FLAG_HANDSOFF` | foot-2 | `Flag is not touched here` | `Flaget røres ikke herfra` |
+| `TX_Y_NEXT` | - | `Next restart: %s` | `Næste genstart: %s` |
+| `TX_Y_NOSTOCK` | foot-1 | `No stock UI to start` | `Intet stock-UI at starte` |
+| `TX_Y_STAYS` | foot-2 | `Meraki+ keeps running` | `Meraki+ bliver kørende` |
+| `TX_Y_CLOSE_CONT` | status | `Meraki+ closes · stock UI resumes` | `Meraki+ lukker · stock-UI fortsætter` |
+| `TX_Y_CLOSE_START` | status | `Meraki+ closes · stock UI starts` | `Meraki+ lukker · stock-UI starter` |
+| `TX_Y_REMINDER_FOLLOWS` | note | `Config changed · reminder follows` | `Config ændret · påmindelse følger` |
+| `TX_Y_PAUSED_PID` | note | `Stock UI is paused · PID %d` | `Stock-UI er pauset · PID %d` |
+| `TX_Y_RUNSH` | foot-1 | `run.sh mode · clean exit` | `run.sh-tilstand · ren exit` |
+| `TX_Y_BACK_RUNSH` | foot-2 | `Back here: run.sh` | `Tilbage hertil: run.sh` |
+| `TX_Y_FRESH` | note | `Fresh start · reads current config` | `Frisk start · læser aktuel config` |
+| `TX_Y_BACK_GESTURE1` | foot-1 | `Back here: 3 long presses` | `Tilbage hertil: 3 lange tryk` |
+| `TX_Y_BACK_GESTURE2` | foot-2 | `Top left corner (1.5 s)` | `Øverst til venstre (1.5 s)` |
+| `TX_Y_NOSWITCHER` | foot-1 | `Switcher daemon not running` | `Switcher-daemon kører ikke` |
+| `TX_Y_BACK_RESTART` | foot-2 | `Back here: restart` | `Tilbage hertil: genstart` |
+| `TX_Y_BACK_TELNET` | foot-2 | `Back here: telnet only` | `Tilbage hertil: kun telnet` |
+| `TX_Y_EXIT_TITLE` | - | `Config has changed` | `Config er ændret` |
+| `TX_Y_EXIT_SUB` | - | `Stock UI has old values` | `Stock-UI har gamle værdier` |
+| `TX_Y_EXIT_NOTE` | note | `Run via telnet · watchdog restarts it` | `Kør via telnet · watchdog starter den igen` |
+| `TX_Y_EXIT_F1` | foot-1 | `Otherwise stock UI sends` | `Ellers sender stock-UI` |
+| `TX_Y_EXIT_F2` | foot-2 | `Old values when brewing` | `Gamle værdier ved bryg` |
+| `TX_Y_EXIT_L1` | - | `Stock UI needs a restart of` | `Stock-UI kræver genstart af` |
+| `TX_Y_EXIT_L2` | - | `'demo_v9' for new values` | `'demo_v9' for nye værdier` |
+| `TX_Y_EXIT_CMD` | - | `'kill $(pidof demo_v9)'` | `'kill $(pidof demo_v9)'` |
+| `TX_Y_BYE_T` | - | `Switching to original` | `Skifter til original` |
+| `TX_Y_BYE_CONT` | - | `Stock UI resumes` | `Stock-UI fortsætter` |
+| `TX_Y_BYE_START` | - | `Stock UI starting · one moment` | `Stock-UI starter · et øjeblik` |
+| `TX_Y_BYE_CLOSED` | - | `Meraki+ has closed` | `Meraki+ er afsluttet` |
 
 **DIAGNOSTICS (labels, values, full-width lines, ABOUT block)**
 
 | id | class | EN | DA |
 |---|---|---|---|
-| `TX_DL_LINK` | - | `LINK` | `LINK` |
-| `TX_DL_PHASE` | - | `PHASE` | `FASE` |
+| `TX_DL_LINK` | - | `Link` | `Link` |
+| `TX_DL_PHASE` | - | `Phase` | `Fase` |
 | `TX_DL_RXOK` | - | `RX OK` | `RX OK` |
-| `TX_DL_RXCRC` | - | `RX CRC / RESYNC` | `RX CRC / RESYNC` |
+| `TX_DL_RXCRC` | - | `RX CRC / Resync` | `RX CRC / resync` |
 | `TX_DL_WORKSTA` | - | `WORK_STA` | `WORK_STA` |
 | `TX_DL_E123` | - | `E1 / E2 / E3` | `E1 / E2 / E3` |
-| `TX_DL_CMD6` | - | `CMD6 OK·RTX·ERR·BLK` | `CMD6 OK·RTX·FEJL·BLOK` |
-| `TX_DL_AWAKE` | - | `AWAKE (WORD 1)` | `VÅGEN (ORD 1)` |
-| `TX_DL_MAINS` | - | `MAINS` | `NET` |
-| `TX_DL_CURRENT` | - | `CURRENT 1 / 2` | `STRØM 1 / 2` |
-| `TX_DL_FRAMEMS` | - | `FRAME MS NOW/MAX` | `FRAME MS NU/MAX` |
-| `TX_DL_MIRROR` | - | `MIRROR 112-114` | `SPEJL 112-114` |
-| `TX_DL_CFGMD5` | - | `CONFIG MD5` | `CONFIG MD5` |
-| `TX_DL_VERSION` | - | `VERSION` | `VERSION` |
-| `TX_DL_BP_A` | - | `BOOT PUSH 1-30` | `BOOT-PUSH 1-30` |
-| `TX_DL_BP_B` | - | `BOOT PUSH 112-114` | `BOOT-PUSH 112-114` |
-| `TX_DL_BP_A_RE` | - | `RE-PUSH %d · 1-30` | `RE-PUSH %d · 1-30` |
+| `TX_DL_CMD6` | - | `CMD6 OK·RTX·ERR·BLK` | `CMD6 OK·RTX·fejl·blok` |
+| `TX_DL_AWAKE` | - | `Awake (word 1)` | `Vågen (ord 1)` |
+| `TX_DL_MAINS` | - | `Mains` | `Net` |
+| `TX_DL_CURRENT` | - | `Current 1 / 2` | `Strøm 1 / 2` |
+| `TX_DL_FRAMEMS` | - | `Frame ms Now/Max` | `Frame ms nu/max` |
+| `TX_DL_MIRROR` | - | `Mirror 112-114` | `Spejl 112-114` |
+| `TX_DL_CFGMD5` | - | `Config MD5` | `Config MD5` |
+| `TX_DL_VERSION` | - | `Version` | `Version` |
+| `TX_DL_BP_A` | - | `Boot Push 1-30` | `Boot-push 1-30` |
+| `TX_DL_BP_B` | - | `Boot Push 112-114` | `Boot-push 112-114` |
+| `TX_DL_BP_A_RE` | - | `Re-Push %d · 1-30` | `Re-push %d · 1-30` |
 | `TX_DL_BP_B_RE` | - | `112-114` | `112-114` |
-| `TX_DL_FLAG` | diag-label | FLAG `/customer/new` | FLAG `/customer/new` |
-| `TX_DL_NEXTBOOT` | diag-label | `NEXT BOOT` | `NÆSTE BOOT` |
-| `TX_DL_STARTED` | diag-label | `STARTED FROM` | `STARTET FRA` |
-| `TX_DL_SLOTB` | diag-label | `SLOT B` | `SLOT B` |
-| `TX_DL_SWITCHER` | diag-label | `SWITCHER DAEMON` | `SWITCHER-DAEMON` |
-| `TX_DL_STOCK` | diag-label | `STOCK PROCESS` | `STOCK-PROCES` |
+| `TX_DL_FLAG` | diag-label | `Flag '/customer/new'` | `Flag '/customer/new'` |
+| `TX_DL_NEXTBOOT` | diag-label | `Next Boot` | `Næste boot` |
+| `TX_DL_STARTED` | diag-label | `Started from` | `Startet fra` |
+| `TX_DL_SLOTB` | diag-label | `Slot B` | `Slot B` |
+| `TX_DL_SWITCHER` | diag-label | `Switcher Daemon` | `Switcher-daemon` |
+| `TX_DL_STOCK` | diag-label | `Stock Process` | `Stock-proces` |
 | `TX_DV_OK` | diag-value | `OK` | `OK` |
-| `TX_DV_DOWN` | diag-value | `DOWN` | `NEDE` |
-| `TX_DV_YES` | diag-value | `YES` | `JA` |
-| `TX_DV_NO` | diag-value | `NO` | `NEJ` |
-| `TX_DV_MAINS` | - | `%u V · %u HZ` | `%u V · %u HZ` |
-| `TX_DV_VERSION` | - | `MERAKI+ V6.20` | `MERAKI+ V6.20` |
-| `TX_DV_VERSION_RO` | - | `MERAKI+ V6.20 RO` | `MERAKI+ V6.20 RO` |
-| `TX_DV_MISSING` | diag-value | `MISSING` | `MANGLER` |
-| `TX_DV_FLAG_YES` | diag-value | `EXISTS` | `FINDES` |
-| `TX_DV_FLAG_NO` | diag-value | `NOT PRESENT` | `FINDES IKKE` |
-| `TX_DV_SLOTA` | diag-value | `SLOT A` | `SLOT A` |
-| `TX_DV_SLOTB` | diag-value | `SLOT B` | `SLOT B` |
-| `TX_DV_RUNSH` | diag-value | `RUN.SH` | `RUN.SH` |
-| `TX_DV_UNKNOWN` | diag-value | `UNKNOWN` | `UKENDT` |
-| `TX_DV_B_OK` | diag-value | `MERAKI+ FOUND` | `MERAKI+ FUNDET` |
-| `TX_DV_B_NOMOUNT` | diag-value | `NOT MOUNTED` | `IKKE MOUNTET` |
-| `TX_DV_B_NOBIN` | diag-value | `NO DEMO_V9` | `UDEN DEMO_V9` |
-| `TX_DV_B_VENDOR` | diag-value | `NOT MERAKI+` | `IKKE MERAKI+` |
-| `TX_DV_RUNNING` | diag-value | `RUNNING` | `KØRER` |
-| `TX_DV_NOTRUNNING` | diag-value | `NOT RUNNING` | `KØRER IKKE` |
-| `TX_DV_NONE` | diag-value | `NONE` | `INGEN` |
-| `TX_DV_ALSO` | diag-value | `ALSO RUNNING!` | `KØRER SAMTIDIG!` |
-| `TX_DV_PAUSED` | diag-value | `PAUSED` | `PAUSET` |
-| `TX_DV_BP_OFF` | diag-value | `OFF` | `FRA` |
-| `TX_DV_BP_WAIT` | diag-value | `WAITING` | `VENTER` |
-| `TX_DV_BP_SENT` | diag-value | `SENDING` | `SENDER` |
-| `TX_DV_BP_NOACK` | diag-value | `NO ACK` | `INGEN ACK` |
-| `TX_DV_BP_BLOCKED` | diag-value | `REJECTED` | `AFVIST` |
-| `TX_DV_BP_NOCFG` | diag-value | `NO CONFIG` | `INGEN CONFIG` |
-| `TX_DV_BP_SKIP` | diag-value | `SKIPPED` | `SPRUNGET OVER` |
-| `TX_DG_CAP` | full-line | `BOOT · SLOT · SWITCHER` | `BOOT · SLOT · SWITCHER` |
-| `TX_DG_L_PID` | full-line | `PID · MERAKI+ / STOCK UI / SWITCHER` | `PID · MERAKI+ / STOCK-UI / SWITCHER` |
-| `TX_DG_L_EXE` | full-line | RUNNING FROM · `/proc/self/exe` | KØRER FRA · `/proc/self/exe` |
-| `TX_DG_L_EVT` | full-line | LAST SWITCH · `/tmp/switcher.log` | SENESTE SKIFT · `/tmp/switcher.log` |
-| `TX_DG_L_NET` | full-line | `NETWORK · WPA PID / IP / STATE` | `NETVÆRK · WPA-PID / IP / TILSTAND` |
-| `TX_NS_OFF` | - | `OFF` | `FRA` |
-| `TX_NS_DOWN` | - | `DOWN` | `NEDE` |
-| `TX_NS_STARTING` | - | `STARTING` | `STARTER` |
-| `TX_NS_CONNECTING` | - | `CONNECTING` | `FORBINDER` |
-| `TX_NS_UP` | - | `UP` | `OPPE` |
-| `TX_DG_NOEXE` | full-line | `NOT READABLE` | `IKKE LÆSBAR` |
-| `TX_DG_NOEVT` | full-line | `NO SWITCH EVENT IN THE LOG` | `INGEN SKIFT-HÆNDELSE I LOGGEN` |
-| `TX_DG_NOLOG` | full-line | `LOG NOT READABLE` | `LOG IKKE LÆSBAR` |
-| `TX_DG_L_GRAPH` | full-line | `GRAPH · TAP TO TOGGLE` | `GRAF · TRYK FOR AT SKIFTE` |
-| `TX_DV_G_SMOOTH` | full-line | `SMOOTH · MEDIAN 3 + EMA` | `GLAT · MEDIAN 3 + EMA` |
-| `TX_DV_G_RAW` | full-line | `RAW · UNFILTERED` | `RÅ · UFILTRERET` |
-| `TX_DG_PCAP` | full-line | `PRESSURE · ESTIMATE` | `TRYK · ESTIMAT` |
-| `TX_DG_L_PANCH` | full-line | `ANCHOR · PRE-INF. IN RECORDING` | `ANKER · PRÆ-INF. I OPTAGELSEN` |
-| `TX_DV_PANCH` | - | %d BAR = RAW %d · `k` %.5f | %d BAR = RÅ %d · `k` %.5f |
-| `TX_DG_L_PNOW` | full-line | `NOW · WORD 51 · PUMP SIDE, LINEAR` | `NU · ORD 51 · PUMPE-SIDE, LINEÆR` |
-| `TX_DV_PNOW` | - | `RAW %d = ≈%.1f BAR` | `RÅ %d = ≈%.1f BAR` |
-| `TX_DV_PPULSE` | - | `RAW %d · PULSE, NO PRESSURE` | `RÅ %d · PULS, IKKE TRYK` |
-| `TX_DV_PMAINT` | - | `RAW %d · MAINTENANCE PULSE` | `RÅ %d · VEDLIGEHOLD-PULS` |
-| `TX_DG_ABOUT` | full-line | `ABOUT` | `OM` |
-| `TX_DG_RAWCAP` | full-line | `RAW COUNTERS · SERVICE` | `RÅ TÆLLERE · SERVICE` |
-| `TX_DG_L_LANG` | full-line | UI LANGUAGE · `merakiplus/lang` | UI-SPROG · `merakiplus/lang` |
-| `TX_DG_LANG_DEFAULT` | - | `%s · DEFAULT (NO FILE)` | `%s · STANDARD (INGEN FIL)` |
-| `TX_DG_LANG_FILE` | - | `%s · FROM FILE` | `%s · FRA FIL` |
-| `TX_DG_LANG_UNKNOWN` | - | `%s · UNKNOWN FILE VALUE` | `%s · UKENDT VÆRDI I FIL` |
-| `TX_DG_LANG_SESSION` | - | `%s · NOT SAVED` | `%s · IKKE GEMT` |
-| `TX_DG_PWCAP` | full-line | `POWER BUTTON` | `TÆND/SLUK-KNAP` |
-| `TX_DG_L_PWNODE` | full-line | `BUTTON NODE · EVDEV · NO GRAB` | `KNAP-NODE · EVDEV · INTET GRAB` |
-| `TX_DL_PW_STATE` | diag-label | `STATE` | `TILSTAND` |
-| `TX_DL_PW_W0` | diag-label | `POWER · WORD 0` | `STRØM · ORD 0` |
-| `TX_DL_PW_COUNT` | diag-label | `PRESS · OFF · ON` | `TRYK · SLUK · TÆND` |
-| `TX_DL_PW_LAST` | diag-label | `LAST KEY` | `SIDSTE KNAP` |
-| `TX_DV_PW_ON` | diag-value | `ON` | `TÆNDT` |
-| `TX_DV_PW_OFFING` | diag-value | `TURNING OFF` | `SLUKKER` |
-| `TX_DV_PW_OFF` | diag-value | `OFF` | `SLUKKET` |
-| `TX_DV_PW_WAKING` | diag-value | `TURNING ON` | `TÆNDER` |
-| `TX_DV_PW_NOREPLY` | diag-value | `NO REPLY` | `INTET SVAR` |
-| `TX_DV_PW_KEY` | - | `%d = %d · %ld S` | `%d = %d · %ld S` |
-| `TX_DV_PW_NOKEY` | diag-value | `NO PRESS YET` | `INGEN TRYK` |
-| `TX_DV_PW_NONODE` | full-line | `NO BUTTON NODE FOUND` | `INGEN KNAP-NODE FUNDET` |
+| `TX_DV_DOWN` | diag-value | `Down` | `Nede` |
+| `TX_DV_YES` | diag-value | `Yes` | `Ja` |
+| `TX_DV_NO` | diag-value | `No` | `Nej` |
+| `TX_DV_MAINS` | - | `%u V · %u Hz` | `%u V · %u Hz` |
+| `TX_DV_VERSION` | - | `Meraki+ V7.0` | `Meraki+ V7.0` |
+| `TX_DV_VERSION_RO` | - | `Meraki+ V7.0 RO` | `Meraki+ V7.0 RO` |
+| `TX_DV_MISSING` | diag-value | `Missing` | `Mangler` |
+| `TX_DV_FLAG_YES` | diag-value | `Exists` | `Findes` |
+| `TX_DV_FLAG_NO` | diag-value | `Not present` | `Findes ikke` |
+| `TX_DV_SLOTA` | diag-value | `Slot A` | `Slot A` |
+| `TX_DV_SLOTB` | diag-value | `Slot B` | `Slot B` |
+| `TX_DV_RUNSH` | diag-value | `run.sh` | `run.sh` |
+| `TX_DV_UNKNOWN` | diag-value | `Unknown` | `Ukendt` |
+| `TX_DV_B_OK` | diag-value | `Meraki+ found` | `Meraki+ fundet` |
+| `TX_DV_B_NOMOUNT` | diag-value | `Not mounted` | `Ikke mountet` |
+| `TX_DV_B_NOBIN` | diag-value | `No demo_v9` | `Uden demo_v9` |
+| `TX_DV_B_VENDOR` | diag-value | `Not Meraki+` | `Ikke Meraki+` |
+| `TX_DV_RUNNING` | diag-value | `Running` | `Kører` |
+| `TX_DV_NOTRUNNING` | diag-value | `Not running` | `Kører ikke` |
+| `TX_DV_NONE` | diag-value | `None` | `Ingen` |
+| `TX_DV_ALSO` | diag-value | `Also running!` | `Kører samtidig!` |
+| `TX_DV_PAUSED` | diag-value | `Paused` | `Pauset` |
+| `TX_DV_BP_OFF` | diag-value | `Off` | `Fra` |
+| `TX_DV_BP_WAIT` | diag-value | `Waiting` | `Venter` |
+| `TX_DV_BP_SENT` | diag-value | `Sending` | `Sender` |
+| `TX_DV_BP_NOACK` | diag-value | `No ACK` | `Ingen ACK` |
+| `TX_DV_BP_BLOCKED` | diag-value | `Rejected` | `Afvist` |
+| `TX_DV_BP_NOCFG` | diag-value | `No config` | `Ingen config` |
+| `TX_DV_BP_SKIP` | diag-value | `Skipped` | `Sprunget over` |
+| `TX_DG_CAP` | full-line | `Boot · Slot · Switcher` | `Boot · slot · switcher` |
+| `TX_DG_L_PID` | full-line | `PID · Meraki+ / Stock UI / Switcher` | `PID · Meraki+ / stock-UI / switcher` |
+| `TX_DG_L_EXE` | full-line | `Running from · '/proc/self/exe'` | `Kører fra · '/proc/self/exe'` |
+| `TX_DG_L_EVT` | full-line | `Last Switch · '/tmp/switcher.log'` | `Seneste skift · '/tmp/switcher.log'` |
+| `TX_DG_L_NET` | full-line | `Network · WPA PID / IP / State` | `Netværk · WPA-PID / IP / tilstand` |
+| `TX_NS_OFF` | - | `Off` | `Fra` |
+| `TX_NS_DOWN` | - | `Down` | `Nede` |
+| `TX_NS_STARTING` | - | `Starting` | `Starter` |
+| `TX_NS_CONNECTING` | - | `Connecting` | `Forbinder` |
+| `TX_NS_UP` | - | `Up` | `Oppe` |
+| `TX_DG_NOEXE` | full-line | `Not readable` | `Ikke læsbar` |
+| `TX_DG_NOEVT` | full-line | `No switch event in the log` | `Ingen skift-hændelse i loggen` |
+| `TX_DG_NOLOG` | full-line | `Log not readable` | `Log ikke læsbar` |
+| `TX_DG_L_GRAPH` | full-line | `Graph · Tap to Toggle` | `Graf · tryk for at skifte` |
+| `TX_DV_G_SMOOTH` | full-line | `Smooth · median 3 + EMA` | `Glat · median 3 + EMA` |
+| `TX_DV_G_RAW` | full-line | `Raw · unfiltered` | `Rå · ufiltreret` |
+| `TX_DG_PCAP` | full-line | `Pressure · Estimate` | `Tryk · estimat` |
+| `TX_DG_L_PANCH` | full-line | `Anchor · Pre-Inf. in Recording` | `Anker · præ-inf. i optagelsen` |
+| `TX_DV_PANCH` | - | `%d bar = raw %d · 'k' %.5f` | `%d bar = rå %d · 'k' %.5f` |
+| `TX_DG_L_PNOW` | full-line | `Now · Word 51 · Pump Side, Linear` | `Nu · ord 51 · pumpe-side, lineær` |
+| `TX_DV_PNOW` | - | `Raw %d = ≈%.1f bar` | `Rå %d = ≈%.1f bar` |
+| `TX_DV_PPULSE` | - | `Raw %d · pulse, no pressure` | `Rå %d · puls, ikke tryk` |
+| `TX_DV_PMAINT` | - | `Raw %d · maintenance pulse` | `Rå %d · vedligehold-puls` |
+| `TX_DG_ABOUT` | full-line | `About` | `Om` |
+| `TX_DG_RAWCAP` | full-line | `Raw Counters · Service` | `Rå tællere · service` |
+| `TX_DG_L_LANG` | full-line | `UI Language · 'merakiplus/lang'` | `UI-sprog · 'merakiplus/lang'` |
+| `TX_DG_LANG_DEFAULT` | - | `%s · default (no file)` | `%s · standard (ingen fil)` |
+| `TX_DG_LANG_FILE` | - | `%s · from file` | `%s · fra fil` |
+| `TX_DG_LANG_UNKNOWN` | - | `%s · unknown file value` | `%s · ukendt værdi i fil` |
+| `TX_DG_LANG_SESSION` | - | `%s · not saved` | `%s · ikke gemt` |
+| `TX_DG_PWCAP` | full-line | `Power Button` | `Tænd/sluk-knap` |
+| `TX_DG_L_PWNODE` | full-line | `Button Node · evdev · No Grab` | `Knap-node · evdev · intet grab` |
+| `TX_DL_PW_STATE` | diag-label | `State` | `Tilstand` |
+| `TX_DL_PW_W0` | diag-label | `Power · Word 0` | `Strøm · ord 0` |
+| `TX_DL_PW_COUNT` | diag-label | `Press · Off · On` | `Tryk · sluk · tænd` |
+| `TX_DL_PW_LAST` | diag-label | `Last Key` | `Sidste knap` |
+| `TX_DV_PW_ON` | diag-value | `On` | `Tændt` |
+| `TX_DV_PW_OFFING` | diag-value | `Turning off` | `Slukker` |
+| `TX_DV_PW_OFF` | diag-value | `Off` | `Slukket` |
+| `TX_DV_PW_WAKING` | diag-value | `Turning on` | `Tænder` |
+| `TX_DV_PW_NOREPLY` | diag-value | `No reply` | `Intet svar` |
+| `TX_DV_PW_KEY` | - | `%d = %d · %ld s` | `%d = %d · %ld s` |
+| `TX_DV_PW_NOKEY` | diag-value | `No press yet` | `Ingen tryk` |
+| `TX_DV_PW_NONODE` | full-line | `No button node found` | `Ingen knap-node fundet` |
+| `TX_DG_SNDCAP` | full-line | `Sound` | `Lyd` |
+| `TX_DL_SND` | diag-label | `Sound · Volume` | `Lyd · lydstyrke` |
+| `TX_DL_SND_LAST` | diag-label | `Last Sound` | `Sidste lyd` |
+| `TX_DV_SND_ON` | diag-value | `On · %d` | `Til · %d` |
+| `TX_DV_SND_STOCK` | diag-value | `Stock · %d` | `Stock · %d` |
+| `TX_DV_SND_OFF` | diag-value | `Off` | `Fra` |
+| `TX_DV_SND_MUTE` | diag-value | `Volume 0` | `Lydstyrke 0` |
+| `TX_DV_SND_NOHELPER` | diag-value | `No player` | `Ingen afspiller` |
+| `TX_DV_SE_JINGLE` | diag-value | `Jingle` | `Jingle` |
+| `TX_DV_SE_BREW` | diag-value | `Brew` | `Bryg` |
+| `TX_DV_SE_STEAM` | diag-value | `Steam` | `Damp` |
+| `TX_DV_SE_PREVIEW` | diag-value | `Test` | `Test` |
+| `TX_DV_SO_PLAYED` | diag-value | `Played` | `Spillet` |
+| `TX_DV_SO_MUTED` | diag-value | `Muted` | `Lydløs` |
+| `TX_DV_SO_SKIP` | diag-value | `Skipped` | `Udeladt` |
+| `TX_DV_SO_FAIL` | diag-value | `Failed` | `Fejl` |
+| `TX_DV_SO_DROP` | diag-value | `Busy` | `Optaget` |
+| `TX_DG_TCAP` | full-line | `Time · Schedule` | `Tid · plan` |
+| `TX_DL_T_CLOCK` | diag-label | `Local Time` | `Lokal tid` |
+| `TX_DL_T_ZONE` | diag-label | `Zone · DST` | `Zone · sommertid` |
+| `TX_DL_T_AUTOOFF` | diag-label | `Auto Off · Idle` | `Auto-sluk · hvile` |
+| `TX_DL_T_ALARM` | diag-label | `Alarm Sent · d h:m` | `Alarm sendt · d t:m` |
+| `TX_DG_L_NEXT` | full-line | `Next Pre-Heat · Controller Alarm` | `Næste forvarmning · alarm` |
+| `TX_DV_T_NOTSET` | diag-value | `Not set` | `Ikke sat` |
+| `TX_DV_T_NONE` | diag-value | `None` | `Ingen` |
+| `TX_DV_T_NOSCHED` | full-line | `No pre-heat planned` | `Ingen forvarmning planlagt` |
+| `TX_DV_T_DST` | - | `%s · DST` | `%s · sommertid` |
+| `TX_DV_T_STD` | - | `%s · standard` | `%s · normaltid` |
+| `TX_DV_T_IDLE` | - | `%s · %d:%02d` | `%s · %d:%02d` |
 
-**Settings: row labels (SL), notes (SN) and hints (SH)**
-
-| id | class | EN | DA |
-|---|---|---|---|
-| `TX_SL_PREHEAT` | - | `PRE-HEAT` | `FORVARMNING` |
-| `TX_SL_PHAT` | - | `PRE-HEAT AT` | `FORVARM KL.` |
-| `TX_SL_PHREP` | - | `REPEAT` | `GENTAG` |
-| `TX_SL_AUTOOFF` | - | `AUTO OFF` | `AUTO-SLUK` |
-| `TX_SN_PREHEAT` | note | `THE MACHINE WAKES + HEATS ITSELF` | `MASKINEN VÅGNER + VARMER SELV` |
-| `TX_SN_PHAT` | note | `LOCAL TIME` | `LOKAL TID` |
-| `TX_SN_PHREP` | note | `ONCE = SWITCHES ITSELF OFF AFTER USE` | `EN GANG = SLÅR SIG SELV FRA BAGEFTER` |
-| `TX_SN_AUTOOFF` | note | `NO TOUCH OR ACTIVITY · THEN OFF` | `INGEN BERØRING ELLER AKTIVITET · SÅ SLUK` |
-| `TX_SN_TIMEFMT` | note | `HOME CLOCK + STOCK UI CLOCK` | `UR PÅ HJEM + STOCK-UI'ETS UR` |
-
-**Enum names**
-
-| id | class | EN | DA |
-|---|---|---|---|
-| `TX_E_ONCE` | - | `ONCE` | `EN GANG` |
-| `TX_E_DAILY` | - | `EVERY DAY` | `HVER DAG` |
-| `TX_E_WORKDAYS` | - | `MON-FRI` | `MAN-FRE` |
-| `TX_E_WEEKEND` | - | `SAT-SUN` | `LØR-SØN` |
-| `TX_E_MIN15` | - | `15 MIN` | `15 MIN` |
-| `TX_E_MIN20` | - | `20 MIN` | `20 MIN` |
-| `TX_E_MIN30` | - | `30 MIN` | `30 MIN` |
-| `TX_E_MIN60` | - | `60 MIN` | `60 MIN` |
-
-**Guards and toasts**
-
-| id | class | EN | DA |
-|---|---|---|---|
-| `TX_T_OWN_SAVED` | toast | `SCHEDULE SAVED` | `TIDSPLAN GEMT` |
-| `TX_T_OWN_NOFILE` | toast | `ACTIVE · FILE NOT SAVED` | `AKTIV · FIL IKKE GEMT` |
-
-**Settings: row labels (SL), notes (SN) and hints (SH)**
+**Power button**
 
 | id | class | EN | DA |
 |---|---|---|---|
-| `TX_SL_SOUND` | - | `SOUND` | `LYD` |
-| `TX_SL_SNDRDY` | - | `READY TONE` | `KLAR-TONE` |
-| `TX_SN_SOUND` | note | `START JINGLE + BOILER READY TONES` | `START-JINGLE + KLAR-TONER` |
-| `TX_SN_SNDRDY` | note | `ITS OWN TONE PER BOILER · WHEN HOT` | `SIN EGEN TONE PR. KEDEL · NÅR VARM` |
-
-**Enum names**
-
-| id | class | EN | DA |
-|---|---|---|---|
-| `TX_E_SND_STOCK` | - | `STOCK SOUNDS` | `STOCK-LYDE` |
-| `TX_E_RDY_BREW` | - | `BREW BOILER` | `BRYGKEDEL` |
-| `TX_E_RDY_STEAM` | - | `STEAM BOILER` | `DAMPKEDEL` |
-| `TX_E_RDY_BOTH` | - | `BOTH BOILERS` | `BEGGE KEDLER` |
-
-**Guards and toasts**
-
-| id | class | EN | DA |
-|---|---|---|---|
-| `TX_T_SND_SAVED` | toast | `SOUND SAVED` | `LYD GEMT` |
-
-**DIAGNOSTICS (labels, values, full-width lines, ABOUT block)**
-
-| id | class | EN | DA |
-|---|---|---|---|
-| `TX_DG_SNDCAP` | full-line | `SOUND` | `LYD` |
-| `TX_DL_SND` | diag-label | `SOUND · VOLUME` | `LYD · LYDSTYRKE` |
-| `TX_DL_SND_LAST` | diag-label | `LAST SOUND` | `SIDSTE LYD` |
-| `TX_DV_SND_ON` | diag-value | `ON · %d` | `TIL · %d` |
-| `TX_DV_SND_STOCK` | diag-value | `STOCK · %d` | `STOCK · %d` |
-| `TX_DV_SND_OFF` | diag-value | `OFF` | `FRA` |
-| `TX_DV_SND_MUTE` | diag-value | `VOLUME 0` | `LYDSTYRKE 0` |
-| `TX_DV_SND_NOHELPER` | diag-value | `NO PLAYER` | `INGEN AFSPILLER` |
-| `TX_DV_SE_JINGLE` | diag-value | `JINGLE` | `JINGLE` |
-| `TX_DV_SE_BREW` | diag-value | `BREW` | `BRYG` |
-| `TX_DV_SE_STEAM` | diag-value | `STEAM` | `DAMP` |
-| `TX_DV_SE_PREVIEW` | diag-value | `TEST` | `TEST` |
-| `TX_DV_SO_PLAYED` | diag-value | `PLAYED` | `SPILLET` |
-| `TX_DV_SO_MUTED` | diag-value | `MUTED` | `LYDLØS` |
-| `TX_DV_SO_SKIP` | diag-value | `SKIPPED` | `UDELADT` |
-| `TX_DV_SO_FAIL` | diag-value | `FAILED` | `FEJL` |
-| `TX_DV_SO_DROP` | diag-value | `BUSY` | `OPTAGET` |
-
-**Guards and toasts**
-
-| id | class | EN | DA |
-|---|---|---|---|
-| `TX_T_AUTOOFF_SOON` | toast | `AUTO OFF IN 30 S · TOUCH TO STAY ON` | `AUTO-SLUK OM 30 S · RØR SKÆRMEN` |
-| `TX_T_ONCE_USED` | toast | `ONE-TIME PRE-HEAT USED · NOW OFF` | `FORVARMNING BRUGT · NU FRA` |
-| `TX_T_NOCLOCK` | toast | `CLOCK NOT SET · NO PRE-HEAT ALARM` | `UR IKKE SAT · INGEN FORVARM-ALARM` |
+| `TX_PW_OFFING` | - | `Turning off…` | `Slukker…` |
+| `TX_PW_OFF` | - | `Off` | `Slukket` |
+| `TX_PW_WAKING` | - | `Turning on…` | `Tænder…` |
+| `TX_PW_SUB_OFFING` | - | `The machine goes to sleep` | `Maskinen går i dvale` |
+| `TX_PW_SUB_OFF` | - | `Hold the power button to turn on` | `Hold knappen inde for at tænde` |
+| `TX_PW_SUB_WAKING` | - | `Keep holding the button a moment` | `Hold knappen inde et øjeblik` |
+| `TX_PW_NOTE_OFF` | - | `The screen turns off · touch to show` | `Skærmen slukker · rør for at vise` |
 
 **Other**
 
 | id | class | EN | DA |
 |---|---|---|---|
+| `TX_LG_EN` | - | `English` | `Engelsk` |
+| `TX_LG_DE` | - | `German` | `Tysk` |
+| `TX_LG_FR` | - | `French` | `Fransk` |
+| `TX_LG_IT` | - | `Italian` | `Italiensk` |
+| `TX_LG_ES` | - | `Spanish` | `Spansk` |
+| `TX_LG_PL` | - | `Polish` | `Polsk` |
+| `TX_LG_AR` | - | `Arabic` | `Arabisk` |
+| `TX_LG_ZHS` | - | `Chinese Simpl.` | `Kinesisk forenkl.` |
+| `TX_LG_ZHT` | - | `Chinese Trad.` | `Kinesisk trad.` |
+| `TX_LG_KO` | - | `Korean` | `Koreansk` |
+| `TX_LG_JA` | - | `Japanese` | `Japansk` |
+| `TX_ER_E3_BREW` | home-sub | `Brew boiler too hot` | `Brygkedlen er for varm` |
+| `TX_ER_E3_STEAM` | home-sub | `Steam boiler too hot` | `Dampkedlen er for varm` |
+| `TX_ER_E1_GROUP` | home-sub | `Group head too hot` | `Gruppehovedet er for varmt` |
+| `TX_ER_E1_MAINS` | home-sub | `Problem with mains voltage` | `Problem med netspændingen` |
+| `TX_ER_E2_BREW` | home-sub | `Brew boiler sensor fault` | `Fejl på brygkedel-sensor` |
+| `TX_ER_E2_GROUP` | home-sub | `Group head sensor fault` | `Fejl på gruppehoved-sensor` |
+| `TX_ER_E2_STEAM` | home-sub | `Steam boiler sensor fault` | `Fejl på dampkedel-sensor` |
+| `TX_ER_E2_MILK` | home-sub | `Milk sensor fault` | `Fejl på mælkesensor` |
+| `TX_ER_UNKNOWN` | home-sub | `Unknown fault` | `Ukendt fejl` |
 | `TX_AM` | - | `A.M.` | `A.M.` |
 | `TX_PM` | - | `P.M.` | `P.M.` |
-| `TX_WD_SUN` | - | `SUN` | `SØN` |
-| `TX_WD_MON` | - | `MON` | `MAN` |
-| `TX_WD_TUE` | - | `TUE` | `TIR` |
-| `TX_WD_WED` | - | `WED` | `ONS` |
-| `TX_WD_THU` | - | `THU` | `TOR` |
-| `TX_WD_FRI` | - | `FRI` | `FRE` |
-| `TX_WD_SAT` | - | `SAT` | `LØR` |
-
-**DIAGNOSTICS (labels, values, full-width lines, ABOUT block)**
-
-| id | class | EN | DA |
-|---|---|---|---|
-| `TX_DG_TCAP` | full-line | `TIME · SCHEDULE` | `TID · PLAN` |
-| `TX_DL_T_CLOCK` | diag-label | `LOCAL TIME` | `LOKAL TID` |
-| `TX_DL_T_ZONE` | diag-label | `ZONE · DST` | `ZONE · SOMMERTID` |
-| `TX_DL_T_AUTOOFF` | diag-label | `AUTO OFF · IDLE` | `AUTO-SLUK · HVILE` |
-| `TX_DL_T_ALARM` | diag-label | `ALARM SENT · D H:M` | `ALARM SENDT · D T:M` |
-| `TX_DG_L_NEXT` | full-line | `NEXT PRE-HEAT · CONTROLLER ALARM` | `NÆSTE FORVARMNING · ALARM` |
-| `TX_DV_T_NOTSET` | diag-value | `NOT SET` | `IKKE SAT` |
-| `TX_DV_T_NONE` | diag-value | `NONE` | `INGEN` |
-| `TX_DV_T_NOSCHED` | full-line | `NO PRE-HEAT PLANNED` | `INGEN FORVARMNING PLANLAGT` |
-| `TX_DV_T_DST` | - | `%s · DST` | `%s · SOMMERTID` |
-| `TX_DV_T_STD` | - | `%s · STANDARD` | `%s · NORMALTID` |
-| `TX_DV_T_IDLE` | - | `%s · %d:%02d` | `%s · %d:%02d` |
-
-**Console (stdout on exit; ASCII)**
-
-| id | class | EN | DA |
-|---|---|---|---|
-| `TX_O_SWITCHED` | console | `== merakiplus: runtime switch B->A (user button): stock UI pid %d started from /customer/demo_v9; merakiplus exits\n` | `== merakiplus: runtime-skift B->A (bruger-knap): stock-UI pid %d startet fra /customer/demo_v9; merakiplus afslutter\n` |
-| `TX_O_RESTART` | console | `== merakiplus: STOCK UI NEEDS A RESTART OF demo_v9 FOR NEW VALUES:   kill $(pidof demo_v9)\n==        (config.json changed by merakiplus; the watchdog restarts it, the boot push syncs the controller)\n` | `== merakiplus: STOCK-UI KRAEVER GENSTART AF demo_v9 FOR NYE VAERDIER:   kill $(pidof demo_v9)\n==        (config.json aendret af merakiplus; watchdog genstarter, boot-push synker controlleren)\n` |
-| `TX_O_CFGCHANGED` | console | `== merakiplus: config.json changed %d time(s) - no paused stock UI is waiting; the next stock start reads it itself\n` | `== merakiplus: config.json aendret %d gang(e) - intet pauset stock-UI venter; naeste stock-start laeser den selv\n` |
-| `TX_O_BLOCKED` | console | `== merakiplus: %ld cmd6 frame(s) rejected by the frame policy (see UI_v6.md)\n` | `== merakiplus: %ld cmd6-frame(s) afvist af frame-politikken (se UI_v6.md)\n` |
+| `TX_WD_SUN` | - | `Sun` | `Søn` |
+| `TX_WD_MON` | - | `Mon` | `Man` |
+| `TX_WD_TUE` | - | `Tue` | `Tir` |
+| `TX_WD_WED` | - | `Wed` | `Ons` |
+| `TX_WD_THU` | - | `Thu` | `Tor` |
+| `TX_WD_FRI` | - | `Fri` | `Fre` |
+| `TX_WD_SAT` | - | `Sat` | `Lør` |
 
 <!-- I18N-APPENDIX:END -->

@@ -81,5 +81,7 @@ for t in switcher_selftest grab_shim_selftest merakiplus_snd_selftest; do
 done
 python3 tools/gen_audio.py --check > build/audio_check.log 2>&1 || { cat build/audio_check.log; echo "build.sh: audio/ differs from tools/gen_audio.py" >&2; exit 1; }
 printf '   audio: %s\n' "$(tail -n 1 build/audio_check.log)"
+python3 tools/gen_font.py --check > build/font_check.log 2>&1 || { cat build/font_check.log; echo "build.sh: src/mp/font_data.c differs from tools/gen_font.py" >&2; exit 1; }
+printf '   %s\n' "$(tail -n 1 build/font_check.log)"
 
 say "done -> build/"

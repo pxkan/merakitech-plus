@@ -61,7 +61,7 @@
       "kind": "toast",
       "t": 3.5,
       "window": 1,
-      "contains": "UDEN FOR SPEC"
+      "contains": "uden for spec"
     },
     {
       "kind": "sim_log",

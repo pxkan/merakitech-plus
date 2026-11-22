@@ -3,6 +3,56 @@
 All notable changes to Meraki+. Details (with evidence, frames and test figures) are in
 [docs/dev/UI_v6.md](docs/dev/UI_v6.md) under *CHANGES-v6.x*. All dates are 2026.
 
+## [7.0] — 2026-11-22
+**The OEM redesign.** Meraki+ now looks like the machine's own UI, only better crafted, and keeps all of its power,
+revealed step by step instead of crammed onto HOME. Built on v6.20 (the review fixes). **Display and navigation only:** the model, the guards, the save
+path (MCU write + ACK, then config.json), the frame policy, the activity recipes, STOP, the boot push, keep-awake and
+every other thing that reaches the UART are the same code as before. Before/after: [docs/design/](docs/design/).
+### Changed
+- **The look.** A copper background with a fine guilloche (pre-rendered once), white on copper everywhere; colour is
+  reserved for what must not be missed: errors switch to a dark espresso layer with a red ring, blocked starts carry a
+  warning icon in pale yellow.
+- **Real typography.** Montserrat (SIL OFL 1.1) in four weights, baked into `src/mp/font_data.c` by the new
+  `tools/gen_font.py` as TrueType outlines + GPOS kerning and rasterized on the display with exact-area coverage
+  (glyph cache with ¼-px phases, tabular digits). Text is drawn as written: the string table is Title Case / sentence
+  case in English and sentence case in Danish (was all caps with letter spacing). `build.sh` checks the generated file.
+- **HOME = the stock 2×2 ring buttons** (Grinder, Hot Water / Brew, Steam) with line icons, each ring's name set along its
+  arc and its target inside ("18.5 g", "36 g", "65°"). A ring whose boiler is heating fills up as an arc. Tap = the
+  feature's page, hold = start (an arc sweeps around inside the ring). The chevron at the top (tap, or pull down from the
+  top) opens SYSTEM — the gear is gone; the clock sits at the bottom; a one-line status under the chevron says only what
+  matters now (heating, blocked, no connection, CRC errors, a planned pre-heat).
+- **The live view** while something runs: the phase name, the big white weight (or milk temperature), a thin progress
+  ring at the edge of the screen (weight / target, milk / target), a fine trace, three numbers (time, ≈bar, flow …) and
+  a solid white **STOP** pill — the brightest thing on the screen. The DONE screen stays for 8 s as before.
+- **Pages and settings:** white rows on copper with hairlines; HOLD TO START is a ring button with a play icon. The
+  editor is a **roller** like the stock pickers: drag it, tap or hold −/+ (repeat + acceleration as before), OK saves;
+  the chevron, a pull down or a swipe right cancels.
+- **Every other screen** in the same language: SYSTEM, the system action (BOOT UI / SWITCH TO ORIGINAL NOW), DIAGNOSTICS,
+  the splash (with a ring sweep), the power-off pages (dark layer), errors, offline (dimmed rings), sleep, toasts.
+### Added
+- **Sim Studio** (`sim/studio.sh`): the real UI compiled to WebAssembly with a tunable JS machine model, in the browser
+  at ≥ 30 fps with real pointer input; scenarios, a control drawer, a UART log, PNG export and a side-by-side compare
+  with v6.19. See [sim/README.md](sim/README.md#sim-studio).
+- `third_party/montserrat/` (the four TTFs + OFL), `tools/gen_font.py`, `tools/previews.py` (preview frames → PNG /
+  contact sheet).
+### Notes
+- Frame budget (host, Apple silicon; the device must still be read on DIAGNOSTICS): brew frame 0.027 ms (v6.19: 0.041),
+  full rebuild 0.20 ms (0.30), HOME rebuild with the four arc labels 0.36 ms, start-up (two background layers + font)
+  4.1 ms. Device binary 429 KB (v6.19: 304 KB; +125 KB of font outlines), well inside the installer's 1.2 MB check.
+- Frame budget on ARMv7 (qemu, not the device): brew frame 0.78 ms (v6.19: 1.16), full rebuild 3.4 ms (5.9), HOME rebuild
+  with the arc labels 7.9 ms, start-up 177 ms (once, before the splash).
+- Tests: UI self-test 583 checks EN + DA (v6.20: 570; the v6 layout checks rewritten for v7, plus checks for the rings, the
+  roller drag, pull-down, the static layer, arc labels, the glyph engine, the DONE view and touches during cross-fades); the
+  same as a 32-bit ARM binary under qemu (one environment-only failure that v6.19 shows too); sim self-test 195; full E2E
+  46/46 EN + 46/46 DA (pixel checks for the copper look, the white rings, the STOP pill, the dark error layer); Sim Studio
+  machine tests 150 + headless smoke (v7 and v6.19); installer ALL PASS (Python 3.12 and 3.9.6).
+- Real bugs the new tests found and this release fixes: STOP dead during the cross-fade into the live view; the offline
+  "tap for details" line dead after a brew and under the chevron; titles and the °F hero wider than their space; SYSTEM not
+  reachable during an activity; the DONE screen blocking the rings; a boot-time cross-fade swallowing a hold.
+- `bin/`: `merakiplus` `f33ce8a1…`, `merakiplus_sim_arm` `b3746ba9…`, Linux SIM `4b9aec3e…`, macOS SIM `47d42a1b…` (official
+  zig 0.17.1); `merakiplus_snd`, `switcher`, `tinj_hold`, `keyinj`, `grab_shim.so` as in v6.20.
+- **Not yet verified on a machine.**
+
 ## [6.20] — 2026-11-22
 Fixes from a four-part code review (protocol, persistence, installer, memory/UI/simulator). Every finding was
 reproduced first and each fix has its own regression test. The full report, with deferrals and their reasons, is in

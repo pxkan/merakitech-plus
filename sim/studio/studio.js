@@ -404,10 +404,15 @@ async function main() {
     [S.builds, S.config, S.spec] = await Promise.all([loadJSON('builds.json'), loadJSON('fixtures/config.json'), loadJSON('fixtures/parity_spec.json').catch(() => null)]);
     const b = S.builds;
     $('#buildinfo').textContent = `current ${b.current.version} · ${b.current.ref}` + (b.classic ? `   ·   classic ${b.classic.version} · ${b.classic.ref}` : '');
-    bindOutputs(); wire(); setSpeed(S.speed);
+    bindOutputs(); wire();
+    // deep links: ?scenario=pull&speed=4&compare=1 (shareable states; also used for headless screenshots)
+    const q = new URLSearchParams(location.search);
+    if (q.has('compare')) $('#compare').checked = q.get('compare') === '1' && !!b.classic;
+    setSpeed(q.has('speed') ? Math.max(0, +q.get('speed') || 0) : S.speed);
     await setRigs($('#compare').checked ? ['current', 'classic'] : ['current']);
     buildParams(); syncInputs();
     requestAnimationFrame(frame);
+    if (q.get('scenario')) scenario(q.get('scenario'));
     window.studio = S;   // for poking around in the console
   } catch (e) {
     $('#stage').innerHTML = `<div class="loading">Could not start: ${e.message}</div>`;
