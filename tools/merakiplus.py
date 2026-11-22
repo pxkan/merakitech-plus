@@ -534,6 +534,16 @@ def repo_root():
     return pathlib.Path(__file__).resolve().parent.parent
 
 
+def is_checkout():
+    """True when this script runs from a git clone (bin/MD5SUMS next to it). install.sh's
+    standalone (curl) mode runs a copy from a mktemp dir, whose parent is e.g. /tmp."""
+    return (repo_root() / "bin" / "MD5SUMS").is_file()
+
+
+def default_log_dir():
+    return repo_root() / "logs" if is_checkout() else pathlib.Path.home() / "merakiplus-logs"
+
+
 def get_binary(name, args, out, sub="bin"):
     """Local bin/<name> (git clone) or download from GitHub raw; md5-verified either way.
     sub="audio": the same for audio/<name> (v6.18), gated by AUDIO_MD5."""
@@ -541,7 +551,8 @@ def get_binary(name, args, out, sub="bin"):
     cands = []
     if getattr(args, "bin_dir", None) and sub == "bin":
         cands.append(pathlib.Path(args.bin_dir) / name)
-    cands.append(repo_root() / sub / name)
+    if is_checkout():
+        cands.append(repo_root() / sub / name)
     for p in cands:
         if p.is_file():
             data = p.read_bytes()
@@ -1243,9 +1254,15 @@ def main(argv=None):
 
     logfile = None
     if args.cmd in ("install", "revert"):
-        logfile = args.log or str(repo_root() / "logs" / datetime.datetime.now().strftime("merakiplus-%Y%m%d-%H%M%S.log"))
-        pathlib.Path(logfile).parent.mkdir(parents=True, exist_ok=True)
-    o = Out(logfile, getattr(args, "verbose", False))
+        logfile = args.log or str(default_log_dir() / datetime.datetime.now().strftime("merakiplus-%Y%m%d-%H%M%S.log"))
+    try:
+        if logfile:
+            pathlib.Path(logfile).parent.mkdir(parents=True, exist_ok=True)
+        o = Out(logfile, getattr(args, "verbose", False))
+    except OSError as e:
+        print(f"  [!]  cannot write the log file {logfile} ({e}); continuing without a log", flush=True)
+        logfile = None
+        o = Out(None, getattr(args, "verbose", False))
     dev = None
     try:
         if args.cmd == "scan":

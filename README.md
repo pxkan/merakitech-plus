@@ -199,7 +199,7 @@ steaming, grinding or hot water — while you install. The installer asks before
 
 The installer is **idempotent**: run it again to update to a new version, or to start Meraki+ again
 after a reboot (without `--persist` the machine starts the original UI at boot). A log is saved in
-`logs/`. Status without changing anything: `python3 tools/merakiplus.py status --ip ADDR`.
+`logs/` (in the standalone `curl` mode: `~/merakiplus-logs/`). Status without changing anything: `python3 tools/merakiplus.py status --ip ADDR`.
 
 **Installed with a release from before 2026-11-19 (v6.16 or earlier)?** Those releases used an older
 install directory under `/new_customer/`. Running `./install.sh` (or `./revert.sh`) again migrates it

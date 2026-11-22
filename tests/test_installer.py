@@ -8,6 +8,7 @@ tests/mock_device.py. No hardware, no network beyond 127.0.0.1.
 import hashlib
 import io
 import contextlib
+import os
 import pathlib
 import sys
 import tempfile
@@ -514,6 +515,34 @@ def disk_full_copy(srv, root):
     check("vendor slot B restored", md5f(root / "new_customer/demo_v9") == orig_b)
 
 
+def log_location(srv, root):
+    """Review finding 7: in install.sh's standalone (curl) mode the tool runs from a mktemp dir;
+    its parent is not a checkout, so logs must not go to <parent>/logs (e.g. /tmp/logs)."""
+    check("a git checkout logs to <repo>/logs", mp.is_checkout() and mp.default_log_dir() == ROOT / "logs")
+    fake = root.parent / "standalone"
+    (fake / "tools").mkdir(parents=True)
+    home = root.parent / "home"
+    home.mkdir()
+    real_root, real_home = mp.repo_root, os.environ.get("HOME")
+    mp.repo_root = lambda: fake
+    os.environ["HOME"] = str(home)
+    try:
+        check("standalone mode is detected", not mp.is_checkout())
+        check("standalone mode logs to ~/merakiplus-logs", mp.default_log_dir() == home / "merakiplus-logs")
+        buf = io.StringIO()
+        with contextlib.redirect_stdout(buf):
+            rc = mp.main(["revert", "--ip", "127.0.0.1", "--port", str(srv.port), "--test-prefix", str(root), "--yes"])
+        logs = list((home / "merakiplus-logs").glob("merakiplus-*.log"))
+        check("standalone revert writes its log under the home directory", rc == 0 and len(logs) == 1
+              and not (fake.parent / "logs").exists(), buf.getvalue()[-300:])
+    finally:
+        mp.repo_root = real_root
+        if real_home is None:
+            del os.environ["HOME"]
+        else:
+            os.environ["HOME"] = real_home
+
+
 def not_a_display(srv, root):
     (root / "customer/test.sh").unlink()
     before = tree_digest(root)
@@ -533,6 +562,7 @@ if __name__ == "__main__":
     scenario("--persist when Meraki+ fails to start", "stock_a", persist_start_fails)
     scenario("free-space gate", "stock_a", free_space)
     scenario("disk full during a copy; leftover temp files", "stock_a", disk_full_copy)
+    scenario("log location in install.sh standalone mode", "stock_a", log_location)
     scenario("vendor OTA into slot B after install", "stock_a", ota_after_install)
     scenario("vendor OTA into slot B after install + revert", "stock_a", ota_after_revert)
     scenario("stock UI left SIGSTOPped by an older run", "stock_a", stopped_ui)
