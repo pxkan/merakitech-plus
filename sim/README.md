@@ -1,5 +1,41 @@
 # sim/ — E2E test environment for merakiplus (MerakiTech Gen 1 espresso display)
 
+## Sim Studio — the real UI in the browser
+
+**Sim Studio** runs the Meraki+ UI itself (this repository's `src/`, compiled to WebAssembly with `-DMERAKIPLUS_WASM`)
+against a simulated controller written in JavaScript, entirely in the browser. Nothing talks to a machine.
+
+```sh
+sim/studio.sh                      # build (zig 0.17.1) + serve -> http://127.0.0.1:8765/
+sim/studio.sh --tailnet            # same, bound to this machine's Tailscale address
+sim/studio.sh build --no-classic   # only build build/studio/ (skip the classic build)
+```
+
+- **Use it:** tap, hold (≥ 0.65 s starts an activity), drag to scroll and swipe right on the round display, with a
+  mouse or a finger. The drawer has scenarios (cold morning, ready, pull a shot, steam milk, hot water, fault,
+  offline, sleep), the boilers and heat rates, cup/scale/tare, the steam wand, the grinder rate, faults E1–E3,
+  offline, the power button, time of day, sim speed (pause, 1×, 4×, 20×; keys space/1/2/3), a live panel
+  (phase, key registers), the UART log (filterable) and PNG export (display, or display in the bezel).
+- **Compare:** the *Compare* switch runs a second UI, *classic* (default: the v6.19 release `c9a8524`, extracted with
+  `git archive`, so it works on any branch), next to *current*, each with its own machine; the drawer's machine
+  controls and scenarios apply to both. Other ref: `sim/studio.sh build --classic-ref <ref>`.
+- **As a background service (macOS):** `sim/studio.sh install-agent` installs a LaunchAgent that serves a deployed
+  copy on port 8765, so other devices on your network (or tailnet) can open `http://<host>:8765/`. Deploy a new build
+  from any checkout with `sim/studio.sh deploy` (builds into `~/merakitech-plus-studio/site`, swaps it in, restarts
+  the agent). Status `sim/studio.sh status`; restart `launchctl kickstart -k gui/$(id -u)/<agent label in studio.sh>`;
+  `sim/studio.sh uninstall-agent` removes it. Log: `~/Library/Logs/meraki-studio.log`.
+- **Tests:** `node sim/studio/test_machine.mjs` (protocol vectors from `proto.py` + physics) and
+  `node sim/studio/smoke.mjs` (boots the wasm, holds BREW on the real `layout` target, runs a shot to auto-stop).
+- **How it works:** `src/mp/wasm_hal.c` turns the SIM build (`SIM_RT`: sandbox, state JSON, test hooks) into a WASI
+  reactor with exports (`mp_init`, `mp_step` = one main-loop iteration, `mp_touch`, `mp_fb_rgba`, `mp_ctrl` = the
+  hooks of `CONTRACT.md`, `mp_state`). main()'s startup and loop body live in `src/mp/main_setup.c` /
+  `src/mp/main_step.c`, so the device, the SIM and the browser run one implementation (device and SIM binaries are
+  unchanged). `sim/studio/wasi.js` is the WASI host (in-memory files, the UART as a device file, a host-owned
+  clock); `machine.js` ports `mcu_sim.py`'s protocol with tunable physics; `rig.js` wires one UI to one machine;
+  `build.py` builds the site (a ref older than the browser build is backported in a temp dir), `serve.py` serves it.
+  `play.py` (below) remains the pty-based play mode on the native SIM binary.
+
+
 > **Repository layout (public edition):** the notes below were written in the author's working
 > directory. In this repository: the UI source is `src/merakiplus.c`; the SIM build is built by
 > `./build.sh` into `build/merakiplus_sim` (auto-detected; prebuilt: `bin/merakiplus_sim-*`); the switcher code
