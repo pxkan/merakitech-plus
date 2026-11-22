@@ -149,142 +149,142 @@ enum { DR_NONE=0, DR_US, DR_EU, DR_LEV, DR_AU, DR_NZ };
 static void idle_kick(ms_t now);     /* auto off: every touch/button/SAVE restarts the idle timer (sched_step) */
 #define TZ_N 136
 static const struct { int off; const char*utc,*name; unsigned char rule; } TZT[TZ_N]={   /* stock 0x1A5890 (offset, label, name) + DST rule */
- {-43200,"UTC-12:00","DATELINE STANDARD TIME",DR_US},  /* 0 */
+ {-43200,"UTC-12:00","Dateline Standard Time",DR_US},  /* 0 */
  {-39600,"UTC-11:00","UTC-11",DR_US},  /* 1 */
- {-36000,"UTC-10:00","DATELINE STANDARD TIME",DR_US},  /* 2 */
+ {-36000,"UTC-10:00","Dateline Standard Time",DR_US},  /* 2 */
  {-36000,"UTC-11:00","UTC-10:00",DR_US},  /* 3 */
- {-34200," UTC-09:30","MARQUESAS ISLANDS",DR_US},  /* 4 */
- {-32400,"UTC-09:00","ALASKA",DR_US},  /* 5 */
- {-32400,"UTC-09:00","COORDINATED UNIVERSAL TIME-09",DR_US},  /* 6 */
- {-28800,"UTC-08:00","BAJA CALIFORNIA",DR_US},  /* 7 */
- {-28800,"UTC-08:00","COORDINATED UNIVERSAL TIME-08",DR_US},  /* 8 */
- {-28800,"UTC-08:00","PACIFIC TIME (US + CANADA)",DR_US},  /* 9 */
- {-25200,"UTC-07:00","ARIZONA",DR_US},  /* 10 */
- {-25200,"UTC-07:00","CHIHUAHUA, LA PAZ, MAZATLAN",DR_US},  /* 11 */
- {-21600,"UTC-06:00","CENTRAL AMERICA",DR_US},  /* 12 */
- {-21600,"UTC-06:00","CENTRAL TIME (US + CANADA)",DR_US},  /* 13 */
- {-21600,"UTC-06:00","EASTER ISLAND",DR_US},  /* 14 */
- {-21600,"UTC-06:00","GUADALAJARA, MEXICO CITY, MONTERREY",DR_US},  /* 15 */
- {-21600,"UTC-06:00","SASKATCHEWAN",DR_US},  /* 16 */
- {-18000,"UTC-05:00","BOGOTA, LIMA, QUITO, RIO BRANCO",DR_US},  /* 17 */
- {-18000,"UTC-05:00","CHETUMAL",DR_US},  /* 18 */
- {-18000,"UTC-05:00","EASTERN TIME (US + CANADA)",DR_US},  /* 19 */
- {-18000,"UTC-05:00","HAITI",DR_US},  /* 20 */
- {-18000,"UTC-05:00","HAVANA",DR_US},  /* 21 */
- {-18000,"UTC-05:00","INDIANA (EAST)",DR_US},  /* 22 */
- {-18000,"UTC-05:00","TURKS AND CAICOS",DR_US},  /* 23 */
- {-14400,"UTC-04:00","ASUNCION",DR_US},  /* 24 */
- {-14400,"UTC-04:00","ATLANTIC TIME (CANADA)",DR_US},  /* 25 */
- {-14400,"UTC-04:00","CARACAS",DR_US},  /* 26 */
- {-14400,"UTC-04:00","CUIABA",DR_US},  /* 27 */
- {-14400,"UTC-04:00","GEORGETOWN, LA PAZ, MANAUS, SAN JUAN",DR_US},  /* 28 */
- {-14400,"UTC-04:00","SANTIAGO",DR_NONE},  /* 29 */
- { -9000,"UTC-03:30","NEWFOUNDLAND",DR_US},  /* 30 */
- {-10800,"UTC-03:00","ARAGUAINA",DR_NONE},  /* 31 */
- {-10800,"UTC-03:00","BRASILIA",DR_NONE},  /* 32 */
- {-10800,"UTC-03:00","CAYENNE, FORTALEZA",DR_NONE},  /* 33 */
- {-10800,"UTC-03:00","CITY OF BUENOS AIRES",DR_NONE},  /* 34 */
- {-10800,"UTC-03:00","GREENLAND",DR_US},  /* 35 */
- {-10800,"UTC-03:00","MONTEVIDEO",DR_NONE},  /* 36 */
- {-10800,"UTC-03:00","PUNTA ARENAS",DR_NONE},  /* 37 */
- {-10800,"UTC-03:00","SAINT PIERRE AND MIQUELON",DR_US},  /* 38 */
- {-10800,"UTC-03:00","SALVADOR",DR_NONE},  /* 39 */
- { -7200,"UTC-02:00","COORDINATED UNIVERSAL TIME-02",DR_NONE},  /* 40 */
- { -3600,"UTC-01:00","AZORES",DR_EU},  /* 41 */
- { -3600,"UTC-01:00","CABO VERDE IS.",DR_EU},  /* 42 */
- {     0,"UTC","COORDINATED UNIVERSAL TIME",DR_NONE},  /* 43 */
- {     0,"UTC+00:00","DUBLIN, EDINBURGH, LISBON, LONDON",DR_EU},  /* 44 */
- {     0,"UTC+00:00","MONROVIA, REYKJAVIK",DR_EU},  /* 45 */
- {     0,"UTC+00:00","SAO TOME",DR_EU},  /* 46 */
- {  3600,"UTC+01:00","CASABLANCA",DR_EU},  /* 47 */
- {  3600,"UTC+01:00","AMSTERDAM, BERLIN, BERN, ROME, STOCKHOLM, VIENNA",DR_EU},  /* 48 */
- {  3600,"UTC+01:00","BELGRADE, BRATISLAVA, BUDAPEST, LJUBLJANA, PRAGUE",DR_EU},  /* 49 */
- {  3600,"UTC+01:00","BRUSSELS, COPENHAGEN, MADRID, PARIS",DR_EU},  /* 50 */
- {  3600,"UTC+01:00","SARAJEVO, SKOPJE, WARSAW, ZAGREB",DR_EU},  /* 51 */
- {  3600,"UTC+01:00","WEST CENTRAL AFRICA",DR_EU},  /* 52 */
- {  7200,"UTC+02:00","AMMAN",DR_LEV},  /* 53 */
- {  7200,"UTC+02:00","ATHENS, BUCHAREST",DR_EU},  /* 54 */
- {  7200,"UTC+02:00","BEIRUT",DR_LEV},  /* 55 */
- {  7200,"UTC+02:00","CAIRO",DR_EU},  /* 56 */
- {  7200,"UTC+02:00","CHISINAU",DR_EU},  /* 57 */
- {  7200,"UTC+02:00","DAMASCUS",DR_LEV},  /* 58 */
- {  7200,"UTC+02:00","GAZA, HEBRON",DR_LEV},  /* 59 */
- {  7200,"UTC+02:00","HARARE, PRETORIA",DR_EU},  /* 60 */
- {  7200,"UTC+02:00","HELSINKI, KYIV, RIGA, SOFIA, TALLINN, VILNIUS",DR_EU},  /* 61 */
- {  7200,"UTC+02:00","JERUSALEM",DR_LEV},  /* 62 */
- {  7200,"UTC+02:00","KALININGRAD",DR_EU},  /* 63 */
- {  7200,"UTC+02:00","KHARTOUM",DR_EU},  /* 64 */
- {  7200,"UTC+02:00","TRIPOLI",DR_EU},  /* 65 */
- {  7200,"UTC+02:00","WINDHOEK",DR_EU},  /* 66 */
- { 10800,"UTC+03:00","BAGHDAD",DR_EU},  /* 67 */
- { 10800,"UTC+03:00","ISTANBUL",DR_EU},  /* 68 */
- { 10800,"UTC+03:00","KUWAIT, RIYADH",DR_EU},  /* 69 */
- { 10800,"UTC+03:00","MINSK",DR_EU},  /* 70 */
- { 10800,"UTC+03:00","MOSCOW, ST. PETERSBURG",DR_EU},  /* 71 */
- { 10800,"UTC+03:00","NAIROBI",DR_NONE},  /* 72 */
- { 10800,"UTC+03:00","TEHRAN",DR_NONE},  /* 73 */
- { 14400,"UTC+04:00","ABU DHABI, MUSCAT",DR_NONE},  /* 74 */
- { 14400,"UTC+04:00","ASTRAKHAN, ULYANOVSK",DR_NONE},  /* 75 */
- { 14400,"UTC+04:00","BAKU",DR_NONE},  /* 76 */
- { 14400,"UTC+04:00","IZHEVSK, SAMARA",DR_NONE},  /* 77 */
- { 14400,"UTC+04:00","PORT LOUIS",DR_NONE},  /* 78 */
- { 14400,"UTC+04:00","SARATOV",DR_NONE},  /* 79 */
- { 14400,"UTC+04:00","TBILISI",DR_NONE},  /* 80 */
- { 14400,"UTC+04:00","VOLGOGRAD",DR_NONE},  /* 81 */
- { 14400,"UTC+04:00","YEREVAN",DR_NONE},  /* 82 */
- { 16200,"UTC+04:30","KABUL",DR_NONE},  /* 83 */
- { 18000,"UTC+05:00","ASHGABAT, TASHKENT",DR_NONE},  /* 84 */
- { 18000,"UTC+05:00","EKATERINBURG",DR_NONE},  /* 85 */
- { 18000,"UTC+05:00","ISLAMABAD, KARACHI",DR_NONE},  /* 86 */
- { 18000,"UTC+05:00","QYZYLORDA",DR_NONE},  /* 87 */
- { 19800,"UTC+05:30","CHENNAI, KOLKATA, MUMBAI, NEW DELHI",DR_NONE},  /* 88 */
- { 19800,"UTC+05:30","SRI JAYAWARDENEPURA",DR_NONE},  /* 89 */
- { 20700,"UTC+05:45","KATHMANDU",DR_NONE},  /* 90 */
- { 21600,"UTC+06:00","ASTANA",DR_NONE},  /* 91 */
- { 21600,"UTC+06:00","DHAKA",DR_NONE},  /* 92 */
- { 21600,"UTC+06:00","OMSK",DR_NONE},  /* 93 */
- { 23400,"UTC+06:30","YANGON (RANGOON)",DR_NONE},  /* 94 */
- { 25200,"UTC+07:00","BANGKOK, HANOI, JAKARTA",DR_NONE},  /* 95 */
- { 25200,"UTC+07:00","BARNAUL, GORNO-ALTAYSK",DR_NONE},  /* 96 */
- { 25200,"UTC+07:00","HOVD",DR_NONE},  /* 97 */
- { 25200,"UTC+07:00","KRASNOYARSK",DR_NONE},  /* 98 */
- { 25200,"UTC+07:00","NOVOSIBIRSK",DR_NONE},  /* 99 */
- { 25200,"UTC+07:00","TOMSK",DR_NONE},  /* 100 */
- { 28800,"UTC+08:00","BEIJING, CHONGQING, HONG KONG, URUMQI",DR_NONE},  /* 101 */
- { 28800,"UTC+08:00","IRKUTSK",DR_NONE},  /* 102 */
- { 28800,"UTC+08:00","KUALA LUMPUR, SINGAPORE",DR_NONE},  /* 103 */
- { 28800,"UTC+08:00","PERTH",DR_NONE},  /* 104 */
- { 28800,"UTC+08:00","TAIPEI",DR_NONE},  /* 105 */
- { 28800,"UTC+08:00","ULAANBAATAR",DR_NONE},  /* 106 */
- { 31500,"UTC+08:45","EUCLA",DR_NONE},  /* 107 */
- { 32400,"UTC+09:00","CHITA",DR_NONE},  /* 108 */
- { 32400,"UTC+09:00","OSAKA, SAPPORO, TOKYO",DR_NONE},  /* 109 */
- { 32400,"UTC+09:00","PYONGYANG",DR_NONE},  /* 110 */
- { 32400,"UTC+09:00","SEOUL",DR_NONE},  /* 111 */
- { 32400,"UTC+09:00","YAKUTSK",DR_NONE},  /* 112 */
- { 34200,"UTC+09:30","ADELAIDE",DR_AU},  /* 113 */
- { 34200,"UTC+09:30","DARWIN",DR_AU},  /* 114 */
- { 36000,"UTC+10:00","BRISBANE",DR_AU},  /* 115 */
- { 36000,"UTC+10:00","CANBERRA, MELBOURNE, SYDNEY",DR_AU},  /* 116 */
- { 36000,"UTC+10:00","GUAM, PORT MORESBY",DR_AU},  /* 117 */
- { 36000,"UTC+10:00","HOBART",DR_AU},  /* 118 */
- { 36000,"UTC+10:00","VLADIVOSTOK",DR_AU},  /* 119 */
- { 37800,"UTC+10:30","LORD HOWE ISLAND",DR_AU},  /* 120 */
- { 39600,"UTC+11:00","BOUGAINVILLE ISLAND",DR_NONE},  /* 121 */
- { 39600,"UTC+11:00","CHOKURDAKH",DR_NONE},  /* 122 */
- { 39600,"UTC+11:00","MAGADAN",DR_NONE},  /* 123 */
- { 39600,"UTC+11:00","NORFOLK ISLAND",DR_NONE},  /* 124 */
- { 39600,"UTC+11:00","SAKHALIN",DR_NONE},  /* 125 */
- { 39600,"UTC+11:00","SOLOMON IS., NEW CALEDONIA",DR_NONE},  /* 126 */
- { 43200,"UTC+12:00","ANADYR, PETROPAVLOVSK-KAMCHATSKY",DR_NZ},  /* 127 */
- { 43200,"UTC+12:00","AUCKLAND, WELLINGTON",DR_NZ},  /* 128 */
- { 43200,"UTC+12:00","COORDINATED UNIVERSAL TIME+12",DR_NZ},  /* 129 */
- { 43200,"UTC+12:00","FIJI",DR_NZ},  /* 130 */
- { 45900,"UTC+12:45","CHATHAM ISLANDS",DR_NZ},  /* 131 */
- { 46800,"UTC+13:00","COORDINATED UNIVERSAL TIME+13",DR_NONE},  /* 132 */
- { 46800,"UTC+13:00","NUKU'ALOFA",DR_NONE},  /* 133 */
- { 46800,"UTC+13:00","SAMOA",DR_NONE},  /* 134 */
- { 50400,"UTC+13:00","KIRITIMATI ISLAND",DR_NONE},  /* 135 */
+ {-34200," UTC-09:30","Marquesas Islands",DR_US},  /* 4 */
+ {-32400,"UTC-09:00","Alaska",DR_US},  /* 5 */
+ {-32400,"UTC-09:00","Coordinated Universal Time-09",DR_US},  /* 6 */
+ {-28800,"UTC-08:00","Baja California",DR_US},  /* 7 */
+ {-28800,"UTC-08:00","Coordinated Universal Time-08",DR_US},  /* 8 */
+ {-28800,"UTC-08:00","Pacific Time (US + Canada)",DR_US},  /* 9 */
+ {-25200,"UTC-07:00","Arizona",DR_US},  /* 10 */
+ {-25200,"UTC-07:00","Chihuahua, La Paz, Mazatlan",DR_US},  /* 11 */
+ {-21600,"UTC-06:00","Central America",DR_US},  /* 12 */
+ {-21600,"UTC-06:00","Central Time (US + Canada)",DR_US},  /* 13 */
+ {-21600,"UTC-06:00","Easter Island",DR_US},  /* 14 */
+ {-21600,"UTC-06:00","Guadalajara, Mexico City, Monterrey",DR_US},  /* 15 */
+ {-21600,"UTC-06:00","Saskatchewan",DR_US},  /* 16 */
+ {-18000,"UTC-05:00","Bogota, Lima, Quito, Rio Branco",DR_US},  /* 17 */
+ {-18000,"UTC-05:00","Chetumal",DR_US},  /* 18 */
+ {-18000,"UTC-05:00","Eastern Time (US + Canada)",DR_US},  /* 19 */
+ {-18000,"UTC-05:00","Haiti",DR_US},  /* 20 */
+ {-18000,"UTC-05:00","Havana",DR_US},  /* 21 */
+ {-18000,"UTC-05:00","Indiana (East)",DR_US},  /* 22 */
+ {-18000,"UTC-05:00","Turks and Caicos",DR_US},  /* 23 */
+ {-14400,"UTC-04:00","Asuncion",DR_US},  /* 24 */
+ {-14400,"UTC-04:00","Atlantic Time (Canada)",DR_US},  /* 25 */
+ {-14400,"UTC-04:00","Caracas",DR_US},  /* 26 */
+ {-14400,"UTC-04:00","Cuiaba",DR_US},  /* 27 */
+ {-14400,"UTC-04:00","Georgetown, La Paz, Manaus, San Juan",DR_US},  /* 28 */
+ {-14400,"UTC-04:00","Santiago",DR_NONE},  /* 29 */
+ { -9000,"UTC-03:30","Newfoundland",DR_US},  /* 30 */
+ {-10800,"UTC-03:00","Araguaina",DR_NONE},  /* 31 */
+ {-10800,"UTC-03:00","Brasilia",DR_NONE},  /* 32 */
+ {-10800,"UTC-03:00","Cayenne, Fortaleza",DR_NONE},  /* 33 */
+ {-10800,"UTC-03:00","City of Buenos Aires",DR_NONE},  /* 34 */
+ {-10800,"UTC-03:00","Greenland",DR_US},  /* 35 */
+ {-10800,"UTC-03:00","Montevideo",DR_NONE},  /* 36 */
+ {-10800,"UTC-03:00","Punta Arenas",DR_NONE},  /* 37 */
+ {-10800,"UTC-03:00","Saint Pierre and Miquelon",DR_US},  /* 38 */
+ {-10800,"UTC-03:00","Salvador",DR_NONE},  /* 39 */
+ { -7200,"UTC-02:00","Coordinated Universal Time-02",DR_NONE},  /* 40 */
+ { -3600,"UTC-01:00","Azores",DR_EU},  /* 41 */
+ { -3600,"UTC-01:00","Cabo Verde Is.",DR_EU},  /* 42 */
+ {     0,"UTC","Coordinated Universal Time",DR_NONE},  /* 43 */
+ {     0,"UTC+00:00","Dublin, Edinburgh, Lisbon, London",DR_EU},  /* 44 */
+ {     0,"UTC+00:00","Monrovia, Reykjavik",DR_EU},  /* 45 */
+ {     0,"UTC+00:00","Sao Tome",DR_EU},  /* 46 */
+ {  3600,"UTC+01:00","Casablanca",DR_EU},  /* 47 */
+ {  3600,"UTC+01:00","Amsterdam, Berlin, Bern, Rome, Stockholm, Vienna",DR_EU},  /* 48 */
+ {  3600,"UTC+01:00","Belgrade, Bratislava, Budapest, Ljubljana, Prague",DR_EU},  /* 49 */
+ {  3600,"UTC+01:00","Brussels, Copenhagen, Madrid, Paris",DR_EU},  /* 50 */
+ {  3600,"UTC+01:00","Sarajevo, Skopje, Warsaw, Zagreb",DR_EU},  /* 51 */
+ {  3600,"UTC+01:00","West Central Africa",DR_EU},  /* 52 */
+ {  7200,"UTC+02:00","Amman",DR_LEV},  /* 53 */
+ {  7200,"UTC+02:00","Athens, Bucharest",DR_EU},  /* 54 */
+ {  7200,"UTC+02:00","Beirut",DR_LEV},  /* 55 */
+ {  7200,"UTC+02:00","Cairo",DR_EU},  /* 56 */
+ {  7200,"UTC+02:00","Chisinau",DR_EU},  /* 57 */
+ {  7200,"UTC+02:00","Damascus",DR_LEV},  /* 58 */
+ {  7200,"UTC+02:00","Gaza, Hebron",DR_LEV},  /* 59 */
+ {  7200,"UTC+02:00","Harare, Pretoria",DR_EU},  /* 60 */
+ {  7200,"UTC+02:00","Helsinki, Kyiv, Riga, Sofia, Tallinn, Vilnius",DR_EU},  /* 61 */
+ {  7200,"UTC+02:00","Jerusalem",DR_LEV},  /* 62 */
+ {  7200,"UTC+02:00","Kaliningrad",DR_EU},  /* 63 */
+ {  7200,"UTC+02:00","Khartoum",DR_EU},  /* 64 */
+ {  7200,"UTC+02:00","Tripoli",DR_EU},  /* 65 */
+ {  7200,"UTC+02:00","Windhoek",DR_EU},  /* 66 */
+ { 10800,"UTC+03:00","Baghdad",DR_EU},  /* 67 */
+ { 10800,"UTC+03:00","Istanbul",DR_EU},  /* 68 */
+ { 10800,"UTC+03:00","Kuwait, Riyadh",DR_EU},  /* 69 */
+ { 10800,"UTC+03:00","Minsk",DR_EU},  /* 70 */
+ { 10800,"UTC+03:00","Moscow, St. Petersburg",DR_EU},  /* 71 */
+ { 10800,"UTC+03:00","Nairobi",DR_NONE},  /* 72 */
+ { 10800,"UTC+03:00","Tehran",DR_NONE},  /* 73 */
+ { 14400,"UTC+04:00","Abu Dhabi, Muscat",DR_NONE},  /* 74 */
+ { 14400,"UTC+04:00","Astrakhan, Ulyanovsk",DR_NONE},  /* 75 */
+ { 14400,"UTC+04:00","Baku",DR_NONE},  /* 76 */
+ { 14400,"UTC+04:00","Izhevsk, Samara",DR_NONE},  /* 77 */
+ { 14400,"UTC+04:00","Port Louis",DR_NONE},  /* 78 */
+ { 14400,"UTC+04:00","Saratov",DR_NONE},  /* 79 */
+ { 14400,"UTC+04:00","Tbilisi",DR_NONE},  /* 80 */
+ { 14400,"UTC+04:00","Volgograd",DR_NONE},  /* 81 */
+ { 14400,"UTC+04:00","Yerevan",DR_NONE},  /* 82 */
+ { 16200,"UTC+04:30","Kabul",DR_NONE},  /* 83 */
+ { 18000,"UTC+05:00","Ashgabat, Tashkent",DR_NONE},  /* 84 */
+ { 18000,"UTC+05:00","Ekaterinburg",DR_NONE},  /* 85 */
+ { 18000,"UTC+05:00","Islamabad, Karachi",DR_NONE},  /* 86 */
+ { 18000,"UTC+05:00","Qyzylorda",DR_NONE},  /* 87 */
+ { 19800,"UTC+05:30","Chennai, Kolkata, Mumbai, New Delhi",DR_NONE},  /* 88 */
+ { 19800,"UTC+05:30","Sri Jayawardenepura",DR_NONE},  /* 89 */
+ { 20700,"UTC+05:45","Kathmandu",DR_NONE},  /* 90 */
+ { 21600,"UTC+06:00","Astana",DR_NONE},  /* 91 */
+ { 21600,"UTC+06:00","Dhaka",DR_NONE},  /* 92 */
+ { 21600,"UTC+06:00","Omsk",DR_NONE},  /* 93 */
+ { 23400,"UTC+06:30","Yangon (Rangoon)",DR_NONE},  /* 94 */
+ { 25200,"UTC+07:00","Bangkok, Hanoi, Jakarta",DR_NONE},  /* 95 */
+ { 25200,"UTC+07:00","Barnaul, Gorno-Altaysk",DR_NONE},  /* 96 */
+ { 25200,"UTC+07:00","Hovd",DR_NONE},  /* 97 */
+ { 25200,"UTC+07:00","Krasnoyarsk",DR_NONE},  /* 98 */
+ { 25200,"UTC+07:00","Novosibirsk",DR_NONE},  /* 99 */
+ { 25200,"UTC+07:00","Tomsk",DR_NONE},  /* 100 */
+ { 28800,"UTC+08:00","Beijing, Chongqing, Hong Kong, Urumqi",DR_NONE},  /* 101 */
+ { 28800,"UTC+08:00","Irkutsk",DR_NONE},  /* 102 */
+ { 28800,"UTC+08:00","Kuala Lumpur, Singapore",DR_NONE},  /* 103 */
+ { 28800,"UTC+08:00","Perth",DR_NONE},  /* 104 */
+ { 28800,"UTC+08:00","Taipei",DR_NONE},  /* 105 */
+ { 28800,"UTC+08:00","Ulaanbaatar",DR_NONE},  /* 106 */
+ { 31500,"UTC+08:45","Eucla",DR_NONE},  /* 107 */
+ { 32400,"UTC+09:00","Chita",DR_NONE},  /* 108 */
+ { 32400,"UTC+09:00","Osaka, Sapporo, Tokyo",DR_NONE},  /* 109 */
+ { 32400,"UTC+09:00","Pyongyang",DR_NONE},  /* 110 */
+ { 32400,"UTC+09:00","Seoul",DR_NONE},  /* 111 */
+ { 32400,"UTC+09:00","Yakutsk",DR_NONE},  /* 112 */
+ { 34200,"UTC+09:30","Adelaide",DR_AU},  /* 113 */
+ { 34200,"UTC+09:30","Darwin",DR_AU},  /* 114 */
+ { 36000,"UTC+10:00","Brisbane",DR_AU},  /* 115 */
+ { 36000,"UTC+10:00","Canberra, Melbourne, Sydney",DR_AU},  /* 116 */
+ { 36000,"UTC+10:00","Guam, Port Moresby",DR_AU},  /* 117 */
+ { 36000,"UTC+10:00","Hobart",DR_AU},  /* 118 */
+ { 36000,"UTC+10:00","Vladivostok",DR_AU},  /* 119 */
+ { 37800,"UTC+10:30","Lord Howe Island",DR_AU},  /* 120 */
+ { 39600,"UTC+11:00","Bougainville Island",DR_NONE},  /* 121 */
+ { 39600,"UTC+11:00","Chokurdakh",DR_NONE},  /* 122 */
+ { 39600,"UTC+11:00","Magadan",DR_NONE},  /* 123 */
+ { 39600,"UTC+11:00","Norfolk Island",DR_NONE},  /* 124 */
+ { 39600,"UTC+11:00","Sakhalin",DR_NONE},  /* 125 */
+ { 39600,"UTC+11:00","Solomon Is., New Caledonia",DR_NONE},  /* 126 */
+ { 43200,"UTC+12:00","Anadyr, Petropavlovsk-Kamchatsky",DR_NZ},  /* 127 */
+ { 43200,"UTC+12:00","Auckland, Wellington",DR_NZ},  /* 128 */
+ { 43200,"UTC+12:00","Coordinated Universal Time+12",DR_NZ},  /* 129 */
+ { 43200,"UTC+12:00","Fiji",DR_NZ},  /* 130 */
+ { 45900,"UTC+12:45","Chatham Islands",DR_NZ},  /* 131 */
+ { 46800,"UTC+13:00","Coordinated Universal Time+13",DR_NONE},  /* 132 */
+ { 46800,"UTC+13:00","Nuku'alofa",DR_NONE},  /* 133 */
+ { 46800,"UTC+13:00","Samoa",DR_NONE},  /* 134 */
+ { 50400,"UTC+13:00","Kiritimati Island",DR_NONE},  /* 135 */
 };
 _Static_assert(sizeof TZT/sizeof TZT[0]==TZ_N,"TZT must have the stock table's 136 entries");
 #define CLK_MIN_VALID 1735689600LL          /* 2025-01-01 00:00 UTC: before this the SoC clock has never been set */

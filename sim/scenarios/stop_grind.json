@@ -123,13 +123,13 @@
       "kind": "toast",
       "t": 7.2,
       "window": 0.4,
-      "contains": "STOP"
+      "contains": "Stop"
     },
     {
       "kind": "toast",
       "t": 8,
       "window": 1.2,
-      "contains": "STOPP"
+      "contains": "stopp"
     },
     {
       "kind": "phase",

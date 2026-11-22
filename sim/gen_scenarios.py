@@ -276,7 +276,7 @@ SCENARIOS.append(base(
      ui(4, "action", name="brew"), snap(5, "error")],
     [{"kind": "phase", "t": 5, "window": 1.5, "value": "ERROR"},
      {"kind": "word", "word": 34, "t": 5, "window": 1.5, "value": 32},
-     {"kind": "toast", "t": 4.5, "window": 1.0, "contains": "FEJL AKTIV"},
+     {"kind": "toast", "t": 4.5, "window": 1.0, "contains": "Fejl aktiv"},
      {"kind": "word", "word": 22, "t": 6.5, "window": 1, "value": 0},
      {"kind": "phase", "t": 9.5, "window": 1.5, "value": "READY"}]))
 
@@ -319,7 +319,7 @@ SCENARIOS.append(base(
      ui(7, "save", param="brew_temp", value=880),
      snap(4, "save-blocked"), snap(9, "save-ok")],
     [{"kind": "save", "t": 3.6, "window": 0.9, "state": "fail", "param": "brew_temp"},
-     {"kind": "toast", "t": 3.6, "window": 1.2, "contains": "GEM FEJLET"},
+     {"kind": "toast", "t": 3.6, "window": 1.2, "contains": "Gem fejlet"},
      {"kind": "config", "field": "brewTemper", "t": 5, "value": 870},
      {"kind": "sim_log", "assert": "acks_dropped_min", "value": 2},
      {"kind": "sim_log", "assert": "writes_min", "sub": 11, "value": 2,
@@ -357,7 +357,7 @@ SCENARIOS.append(base(
      ui(8, "action", name="brew"),
      snap(3.5, "oor-blocked"), snap(10, "brew-after-fix")],
     [{"kind": "config_oor_min", "t0": 1, "t1": 5, "min": 3},
-     {"kind": "toast", "t": 3.5, "window": 1, "contains": "UDEN FOR SPEC"},
+     {"kind": "toast", "t": 3.5, "window": 1, "contains": "uden for spec"},
      {"kind": "sim_log", "assert": "no_writes_between", "t0": 1, "t1": 5.5,
       "except_subs": [0, 1, 112]},
      {"kind": "cmd6", "field": "block", "op": ">=", "value": 1},

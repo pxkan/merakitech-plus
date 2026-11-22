@@ -235,6 +235,10 @@ static void st_s0(uint16_t ws,uint16_t w24,uint16_t w44,uint16_t w46,uint16_t w4
 }
 static void st_s33(uint16_t ws,ms_t t){ uint8_t f[32]; uint16_t w[7]; memcpy(w,reg+33,sizeof w); w[0]=ws; rx_feed(f,mk_frame(f,0x83,33,w,7),t); }
 static int st_has(const char*hay,const char*needle){ return strstr(hay,needle)!=NULL; }
+#include <strings.h>   /* strncasecmp */
+/* case-insensitive (ASCII) strstr: the string table carries mixed case since the OEM-typography rework, so the
+ * "this word must not appear" checks match any case */
+static const char* ci_strstr(const char*h,const char*n){ size_t k=strlen(n); for(;*h;h++) if(!strncasecmp(h,n,k)) return h; return NULL; }
 /* idle machine with a fresh link at time t (HOME, no toast, empty write queue) */
 static ms_t st_home(void){
     sim_reset(); sim_run(400); memset(&wq,0,sizeof wq); txq_len=0; toast.dur=0;
@@ -539,7 +543,7 @@ static void st_repush(const char*cfgsrc){
              r.p[0]==0x0104&&r.p[1]==0x0600&&r.p[2]==70&&reg[11]==870&&reg[25]==650&&repush_count()==1&&rps.n_def==0&&r.n_a==a0+1);
     { char v[DG_N][28],lb[48],lb2[48],want[48]; uint32_t col[DG_N]; last_rx_ms=r.t; diag_top_text(v,col,r.t); uint32_t lc=diag_label(14,lb,sizeof lb), lc2=diag_label(15,lb2,sizeof lb2); snprintf(want,sizeof want,TR(TX_DL_BP_A_RE),1);
       st_check("DIAGNOSE: the boot push row is now called 'RE-PUSH 1 · 1-30' (accent colour) | '112-114'; the cells show the outcome of the latest push: OK / OK (green)",
-               !strcmp(lb,want)&&st_has(lb,"RE-PUSH 1 ")&&lc==C_ACC&&!strcmp(lb2,TR(TX_DL_BP_B_RE))&&lc2==C_TXT3&&!strcmp(v[14],TR(TX_DV_OK))&&!strcmp(v[15],TR(TX_DV_OK))&&col[14]==C_OK&&col[15]==C_OK); }
+               !strcmp(lb,want)&&!strncasecmp(lb,"RE-PUSH 1 ",10)&&lc==C_ACC&&!strcmp(lb2,TR(TX_DL_BP_B_RE))&&lc2==C_TXT3&&!strcmp(v[14],TR(TX_DV_OK))&&!strcmp(v[15],TR(TX_DV_OK))&&col[14]==C_OK&&col[15]==C_OK); }
     /* ---- (3) two restarts close together: at least RP_MIN_MS between two re-pushes ---- */
     { ms_t ta=r.t_a[r.n_a-1]; a0=r.n_a; rp_reboot(&r,3); rp_run(&r,1000); int held=r.n_a==a0&&rps.armed;   /* 4.2 s after the previous one: the round has settled, but the spacing is not reached */
       rp_run(&r,6000);
@@ -602,7 +606,7 @@ static void st_repush(const char*cfgsrc){
     { char la[48],lb[48]; int ok=1;
       for(int lg=0;lg<NLANG;lg++){ int kl=ui_lang; lang_set(lg); rps.n_ver=600; rps.n_def=600; diag_label(14,la,sizeof la); diag_label(15,lb,sizeof lb);
           float a=text_wf(la,F_XS), b2=text_wf(lb,F_XS); LAY(a/2+b2/2+8,DG_COL_R-DG_COL_L,"diagnose label pair with re-push counter",la); LAY(a,2*(DG_COL_L-40),"diagnose label L",la);
-          if(!st_has(la,"RE-PUSH 999 ")) ok=0; rps.n_ver=rps.n_def=0; diag_label(14,la,sizeof la); diag_label(15,lb,sizeof lb); if(strcmp(la,TR(TX_DL_BP_A))||strcmp(lb,TR(TX_DL_BP_B))) ok=0;
+          if(strncasecmp(la,"RE-PUSH 999 ",12)) ok=0; rps.n_ver=rps.n_def=0; diag_label(14,la,sizeof la); diag_label(15,lb,sizeof lb); if(strcmp(la,TR(TX_DL_BP_A))||strcmp(lb,TR(TX_DL_BP_B))) ok=0;
           lang_set(kl); }
       st_check("DIAGNOSE: the label pair with the re-push counter (cap 999) does not touch in any language; without a re-push the row is unchanged 'BOOT PUSH 1-30' | 'BOOT PUSH 112-114'",ok); }
     /* ---- clean up ---- */
@@ -869,7 +873,7 @@ static void st_cond(void){
     sim_reset(); sim_tick=NULL;
 }
 /* ============================ v6.10: pressure estimate ============================ */
-static int str_any(const char*needle){ for(int lg=0;lg<NLANG;lg++) for(int i=0;i<NSTR;i++) if(STR[lg][i]&&strstr(STR[lg][i],needle)) return 1; return 0; }
+static int str_any(const char*needle){ for(int lg=0;lg<NLANG;lg++) for(int i=0;i<NSTR;i++) if(STR[lg][i]&&ci_strstr(STR[lg][i],needle)) return 1; return 0; }
 static void st_press(const char*cfgsrc,const char*dir){
     printf("== selftest: v6.10 pressure estimate (anchor: pre-infusion %d raw in the capture = config preInfusionPressure; k = anchor / P0; > %.0f bar = pulse) ==\n",P_ANCHOR_RAW,(double)P_EST_MAX);
     char b[96],e[96];
@@ -890,7 +894,7 @@ static void st_press(const char*cfgsrc,const char*dir){
       st_check("HOME, EXTRACTION (plateau 1346): the BAR field shows 15.0 (+- 0.2) — linear anchor, pump side (UI_v6.md §16)",act.ph==PH_EXT&&hm.sl[1]==TR(TX_ST_BAR)&&fabsf(v-15.f)<=0.2f);
       printf("       ext: '%s' = '%s'\n",hm.sl[1],hm.svv[1]); }
     st_check("v6.17: the BAR field's label is '≈BAR' (EN + DA; the ≈ says 'estimate' — v6.11-v6.16 added 'EST.' on top of it), the chart caption is short ('PRESSURE' / 'TRYK'); 'UKALIBRERET' / 'UNCAL' no longer appear in any string",
-             !strcmp(STR[LANG_EN][TX_ST_BAR],"≈BAR")&&!strcmp(STR[LANG_DA][TX_ST_BAR],"≈BAR")&&!strcmp(STR[LANG_EN][TX_C_PRESS],"PRESSURE")&&!strcmp(STR[LANG_DA][TX_C_PRESS],"TRYK")&&!str_any("UKALIB")&&!str_any("UNCAL"));
+             !strcmp(STR[LANG_EN][TX_ST_BAR],"≈bar")&&!strcmp(STR[LANG_DA][TX_ST_BAR],"≈bar")&&!strcmp(STR[LANG_EN][TX_C_PRESS],"Pressure")&&!strcmp(STR[LANG_DA][TX_C_PRESS],"Tryk")&&!str_any("UKALIB")&&!str_any("UNCAL"));
     /* ---- (3) the basis: toast on tapping the chart / the BAR field (no frames, no phase change) ---- */
     { snprintf(e,sizeof e,TR(TX_T_PINFO),4,358); int n0=wq.n; long ok0=wq.n_ok;
       toast.dur=0; tap(240,268); int t1=toast.dur>0&&!strcmp(toast.msg,e); sim_run(3000);
@@ -1087,8 +1091,8 @@ static void st_v611(void){
     /* ---- (7) plain language: no word numbers / raw codes in user-facing strings (only DIAGNOSE and console) ---- */
     ok=1; for(int i=0;i<NSTR;i++){ int k=STR_K[i]; if(k==KDL||k==KDV||k==KDF||k==KCON||!strncmp(STR_ID[i],"TX_DL_",6)||!strncmp(STR_ID[i],"TX_DV_",6)||!strncmp(STR_ID[i],"TX_DG_",6)) continue;
         for(int lg=0;lg<NLANG;lg++){ const char*s=STR[lg][i]; if(!s) continue;
-            for(const char*p=s;(p=strstr(p,lg==LANG_DA?"ORD ":"WORD "));p++){ const char*q=p+(lg==LANG_DA?4:5); if(isdigit((unsigned char)*q)&&(p==s||!isalpha((unsigned char)p[-1]))){ ok=0; printf("     [%s] %s: '%s'\n",LANG_CODE[lg],STR_ID[i],s); break; } }
-            if(strstr(s," ACK")||strstr(s,"FRAME-POLI")||strstr(s,"FRAME POLI")||strstr(s,"WRITE-K")||strstr(s,"WRITE QUEUE")){ ok=0; printf("     [%s] %s: '%s'\n",LANG_CODE[lg],STR_ID[i],s); } } }
+            for(const char*p=s;(p=ci_strstr(p,lg==LANG_DA?"ORD ":"WORD "));p++){ const char*q=p+(lg==LANG_DA?4:5); if(isdigit((unsigned char)*q)&&(p==s||!isalpha((unsigned char)p[-1]))){ ok=0; printf("     [%s] %s: '%s'\n",LANG_CODE[lg],STR_ID[i],s); break; } }
+            if(ci_strstr(s," ACK")||ci_strstr(s,"FRAME-POLI")||ci_strstr(s,"FRAME POLI")||ci_strstr(s,"WRITE-K")||ci_strstr(s,"WRITE QUEUE")){ ok=0; printf("     [%s] %s: '%s'\n",LANG_CODE[lg],STR_ID[i],s); } } }
     st_check("plain language: no user-facing string (HOME, toasts, notes, footers) mentions word numbers, ACK, frame policy or write queue — they appear only on DIAGNOSE",ok);
     /* ---- (8) DIAGNOSE groups ---- */
     { int perm[DG_N]={0}, okp=1; for(int i=0;i<DG_N;i++){ if(DG_SLOT[i]<0||DG_SLOT[i]>=DG_N||perm[DG_SLOT[i]]++) okp=0; }
@@ -1373,7 +1377,7 @@ static void st_v617(void){
       detail_open(S_PISW,sim_now); sim_run(400); detail_status(a,sizeof a); int s3=!a[0]&&!detail_holdable(&SET[S_PISW])&&!detail_holdable(&SET[S_BREWT])&&!detail_holdable(&SET[S_TZ])&&detail_holdable(&SET[S_VOL])&&detail_holdable(&SET[S_PHAT]); detail_close(sim_now); sim_run(400);
       st_check("editor status line: untouched + a long range -> 'HOLD - OR + TO GO FAST' (the stepper's hidden ability, said where it applies); changed -> 'CHANGED · WAS …'; an ON/OFF or short range -> empty ('SAVED VALUE' is gone)",s1&&s2&&s3);
       int bad=0; for(int i=0;i<NSTR;i++){ int k=STR_K[i]; if(k==KCON||k==KDL||k==KDV||k==KDF) continue; for(int lg=0;lg<NLANG;lg++){ const char*t=STR[lg][i];
-            if(strstr(t,"CONFIG ONLY")||strstr(t,"KUN CONFIG")||strstr(t,"CMD8")||strstr(t,"CONFIG.JSON")||strstr(t,"OR STOP")||strstr(t,"ELLER STOP")||strstr(t,"EST.")){ bad++; printf("     [%s] %s: '%s'\n",LANG_CODE[lg],STR_ID[i],t); } } }
+            if(ci_strstr(t,"CONFIG ONLY")||ci_strstr(t,"KUN CONFIG")||ci_strstr(t,"CMD8")||ci_strstr(t,"CONFIG.JSON")||ci_strstr(t,"OR STOP")||ci_strstr(t,"ELLER STOP")||ci_strstr(t,"EST.")){ bad++; printf("     [%s] %s: '%s'\n",LANG_CODE[lg],STR_ID[i],t); } } }
       printf("       string table: %d ids (v6.16: 449)\n",NSTR);
       st_check("text: no user-facing string says CONFIG ONLY / CONFIG.JSON / CMD8 / '· OR STOP' / 'EST.' any more; the string table is smaller than v6.16's 449 ids although v6.17 adds pages (v6.18's sound block aside)",bad==0&&NSTR-(TX_DV_SO_DROP-TX_SL_SOUND+1)<449);   /* v6.18: the sound feature's own strings (one contiguous block) are not counted */
       st_home(); home_model(sim_now); int one=!strcmp(hm.hint1,TR(TX_C_HINT))&&hm.hint2==NULL&&!strcmp(hm.label,TR(TX_H_BOILER))&&!st_has(hm.label,"\xC2\xB7");
@@ -1385,7 +1389,7 @@ static void st_v617(void){
       fmt_fix(u,sizeof u,sv(S_HOTW),-1); snprintf(e[2],16,"%s %s",u,TR(TX_U_G)); fmt_t10(u,sizeof u,sv(S_STEAMT),0); snprintf(e[3],16,"%s\xC2\xB0",u);
       ok=1; for(int k=0;k<4;k++) ok&=!strcmp(hm.alab[k],e[k]);
       printf("       icon targets: %s · %s · %s · %s\n",hm.alab[0],hm.alab[1],hm.alab[2],hm.alab[3]);
-      int kv=SET[S_BREWW].val, ktu=SET[S_TUNIT].val; SET[S_BREWW].val=420; SET[S_TUNIT].val=0; home_model(sim_now); int chg=!strcmp(hm.alab[1],"42 G")&&strstr(hm.alab[3],"149")!=NULL; SET[S_BREWW].val=kv; SET[S_TUNIT].val=ktu;
+      int kv=SET[S_BREWW].val, ktu=SET[S_TUNIT].val; SET[S_BREWW].val=420; SET[S_TUNIT].val=0; home_model(sim_now); int chg=!strcmp(hm.alab[1],"42 g")&&strstr(hm.alab[3],"149")!=NULL; SET[S_BREWW].val=kv; SET[S_TUNIT].val=ktu;
       int kl=SET[S_HOTW].loaded; SET[S_HOTW].loaded=0; home_model(sim_now); int nl=!strcmp(hm.alab[2],"--"); SET[S_HOTW].loaded=kl; home_model(sim_now);
       st_check("HOME icons carry their target underneath (grind dose, brew weight, water amount, milk temperature in the chosen unit) and follow the settings; a value that is not loaded shows '--'",ok&&chg&&nl);
       char sm[40]; sec_summary(SEC_DISPLAY,sm,sizeof sm); int q1=!strcmp(sm,TR(TX_UL_EN+ui_lang)); sec_summary(SEC_CLOCK,sm,sizeof sm); char ck[24]; home_clock_text(ck,sizeof ck); int q2=!strcmp(sm,ck);
@@ -2212,7 +2216,7 @@ static int selftest(const char*cfgsrc){
       { int z=1; page=PG_HOME; sel=-1; static const uint16_t ws[2]={0x0101,0x1307};          /* v6.8: the REVERT pill is gone */
         for(int q=0;q<2;q++){ reg[33]=ws[q]; for(int y=404;y<480;y+=2) for(int x=150;x<330;x+=2){ int t=hit_test(x,y,tn);
             if(t!=T_NONE&&!(t==T_GEAR&&in_r(x,y,CX-GEAR_HW,GEAR_Y-22,2*GEAR_HW,46))) z=0; } }   /* v6.11: only the gear (page change, no frame) */
-        reg[33]=0x0101; int nr=1; for(int lg=0;lg<NLANG;lg++) for(int i=0;i<NSTR;i++) if(STR[lg][i]&&strstr(STR[lg][i],"REVERT")) nr=0;
+        reg[33]=0x0101; int nr=1; for(int lg=0;lg<NLANG;lg++) for(int i=0;i<NSTR;i++) if(STR[lg][i]&&ci_strstr(STR[lg][i],"REVERT")) nr=0;
         st_check("v6.8 HOME: no touch zone where the REVERT pill used to be (the area 150..329 x 404..479 gives T_NONE — idle and during a brew — except v6.11's gear, which only changes page); no UI string (EN/DA) mentions REVERT",z&&nr); }
       /* v6.17: SYSTEM > STOCK UI. Closed: 5 rows (4 sections + DIAGNOSTICS), no scrolling. A tap on the STOCK UI header opens it and
        * brings it to the top; BOOT UI and SWITCH TO ORIGINAL NOW are its first two rows. */
@@ -2357,7 +2361,7 @@ static int selftest(const char*cfgsrc){
       st_check("same printf conversions in the same order in EN and DA (format safety)",ok);
       ok=1; for(int i=0;i<NSTR;i++){ char a[96],b[96]; num_sig(STR[LANG_EN][i],a,sizeof a); num_sig(STR[LANG_DA][i],b,sizeof b); if(strcmp(a,b)){ ok=0; printf("     %s: numbers differ: EN '%s' / DA '%s'\n",STR_ID[i],a,b); }
           if(!strncmp(STR_ID[i],"TX_U_",5)&&strcmp(STR[LANG_EN][i],STR[LANG_DA][i])){ ok=0; printf("     %s: unit differs\n",STR_ID[i]); } }
-      { static const short u[]={TX_U_G,TX_U_S,TX_U_BAR,TX_U_C,TX_U_F}; static const char*const w[]={"G","S","BAR","\xC2\xB0" "C","\xC2\xB0" "F"}; for(int q=0;q<5;q++) for(int lg=0;lg<NLANG;lg++) if(strcmp(STR[lg][u[q]],w[q])) ok=0; }
+      { static const short u[]={TX_U_G,TX_U_S,TX_U_BAR,TX_U_C,TX_U_F}; static const char*const w[]={"g","s","bar","\xC2\xB0" "C","\xC2\xB0" "F"}; for(int q=0;q<5;q++) for(int lg=0;lg<NLANG;lg++) if(strcmp(STR[lg][u[q]],w[q])) ok=0; }
       st_check("numbers, decimal point and units (G, S, BAR, °C, °F) are identical in EN and DA — only words are translated",ok);
       ok=1; { static const char*const ban[]={"GEN 1","GEN1","GEN-1","GEN 2","GEN2","GEN-2","GENERATION","MERAKITECH"};
         char vt[700];
@@ -2378,10 +2382,10 @@ static int selftest(const char*cfgsrc){
                 if(w>KB[k].maxw){ ok=0; printf("     %s [%s] (%s): '%s' is %d px, room %d px\n",STR_ID[i],LANG_CODE[lg],KB[k].what,ex,w,KB[k].maxw); } } }
         char nm[160]; snprintf(nm,sizeof nm,"pixel budget per class: %d classified strings x 2 languages fit in their field (toasts, notes, footers, buttons, titles, cells)",nk); st_check(nm,ok&&nk>150); }
       for(int i=0;i<NSTR;i++) if(!strcmp(STR[LANG_EN][i],STR[LANG_DA][i])) same++;
-      st_check("endonyms: ENGLISH / DANSK are named the same in both tables (you can always recognise your own language)",!strcmp(STR[LANG_EN][TX_UL_DA],"DANSK")&&!strcmp(STR[LANG_DA][TX_UL_DA],"DANSK")&&!strcmp(STR[LANG_EN][TX_UL_EN],STR[LANG_DA][TX_UL_EN]));
+      st_check("endonyms: ENGLISH / DANSK are named the same in both tables (you can always recognise your own language)",!strcmp(STR[LANG_EN][TX_UL_DA],"Dansk")&&!strcmp(STR[LANG_DA][TX_UL_DA],"Dansk")&&!strcmp(STR[LANG_EN][TX_UL_EN],STR[LANG_DA][TX_UL_EN]));
       printf("     %d of %d strings are identical in EN and DA (units, proper names, technical words like OFFLINE/FLOW/SLOT B, commands)\n",same,NSTR);
       { int k=ui_lang; ui_lang=LANG_EN; const char*e=TR(TX_B_SAVE); ui_lang=LANG_DA; const char*d=TR(TX_B_SAVE); ui_lang=7; const char*u=TR(TX_B_SAVE); const char*o=TR(99999); ui_lang=k;
-        st_check("TR(): lookup per call (EN 'SAVE' / DA 'GEM'); unknown language -> English; unknown id -> empty string",!strcmp(e,"SAVE")&&!strcmp(d,"GEM")&&u==e&&o&&!*o); } }
+        st_check("TR(): lookup per call (EN 'SAVE' / DA 'GEM'); unknown language -> English; unknown id -> empty string",!strcmp(e,"Save")&&!strcmp(d,"Gem")&&u==e&&o&&!*o); } }
 
     printf("== selftest: i18n — the language file (%s; here: <work dir>/lang) ==\n",lang_path);
     { char lp[440],lt[460],keepl[256],nodir[460]; strcpy(keepl,lang_path); int keeps=lang_src;
@@ -2423,9 +2427,9 @@ static int selftest(const char*cfgsrc){
       st_check("the row opens the stepper detail with the active language (ENGLISH); the options are ENGLISH / DANSK",view==V_DETAIL&&sel==S_UILANG&&edit_val==LANG_EN&&SET[S_UILANG].lo==0&&SET[S_UILANG].hi==1&&hit_test(396,184,tn)==T_PLUS&&hit_test(310,316,tn)==T_SAVE);
       const char*t_en=TR(TX_B_CANCEL); static_dirty=0;
       ui_touch(TE_DOWN,396,184,tn); ui_touch(TE_UP,396,184,tn);
-      st_check("+ : LIVE — the whole UI switches to Danish immediately (lookup per render, static layer redrawn); nothing is written yet",edit_val==LANG_DA&&ui_lang==LANG_DA&&static_dirty==1&&TR(TX_B_CANCEL)!=t_en&&!strcmp(TR(TX_B_CANCEL),"ANNULLER")&&SET[S_UILANG].val==LANG_EN&&access(lp,F_OK)!=0);
+      st_check("+ : LIVE — the whole UI switches to Danish immediately (lookup per render, static layer redrawn); nothing is written yet",edit_val==LANG_DA&&ui_lang==LANG_DA&&static_dirty==1&&TR(TX_B_CANCEL)!=t_en&&!strcmp(TR(TX_B_CANCEL),"Annuller")&&SET[S_UILANG].val==LANG_EN&&access(lp,F_OK)!=0);
       ui_frame(tn+40); tr.type=0;
-      { char l[112], sm[40]; detail_text(S_UILANG,l,sizeof l); sec_summary(SEC_DISPLAY,sm,sizeof sm); st_check("  the detail shows 'ENGLISH / DANSK' (endonyms); the DISPLAY header's summary is the live language's own name",!strcmp(l,"ENGLISH / DANSK")&&!strcmp(sm,"DANSK")); }
+      { char l[112], sm[40]; detail_text(S_UILANG,l,sizeof l); sec_summary(SEC_DISPLAY,sm,sizeof sm); st_check("  the detail shows 'ENGLISH / DANSK' (endonyms); the DISPLAY header's summary is the live language's own name",!strcmp(l,"English / Dansk")&&!strcmp(sm,"Dansk")); }
       activate(T_CANCEL,tn); tr.type=0;
       st_check("CANCEL: back to English, no file",view==V_MAIN&&ui_lang==LANG_EN&&SET[S_UILANG].val==LANG_EN&&access(lp,F_OK)!=0);
       activate(UL_ROW,tn); tr.type=0; ui_touch(TE_DOWN,396,184,tn); ui_touch(TE_UP,396,184,tn); activate(T_SAVE,tn); tr.type=0;
