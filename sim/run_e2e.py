@@ -212,6 +212,11 @@ class ScenarioRun:
         self.ui_bin = ui_bin
         self.keep_sandbox = keep_sandbox
         self.samples = []          # (t, state)
+        self._st_off = 0           # v6.20: read_states is incremental (byte offset + the unfinished last line)
+        self._st_part = b""
+        self.state_invalid = 0     # v6.20: state lines that are not valid JSON (universal check state_valid)
+        self.state_invalid_first = None
+        self.loop_ms_max = 0.0     # v6.20: the slowest sample-loop iteration (report.json clock)
         self.cfg_samples = []      # (t, cfg dict)
         self.flag_samples = []     # (t, bool)
         self.snapshots = []        # {t, label, bin, png, raw}
@@ -493,22 +498,40 @@ class ScenarioRun:
 
     # ------------------------------------------------------------ (e) sampling
     def read_states(self):
+        """v6.20 (review 2026-11 mem-ui-sim #8): incremental — only the bytes appended since the last
+        call are read and parsed (it was the whole file every 20 ms: quadratic CPU in long scenarios,
+        which slipped event timestamps under --parallel). A line without its newline yet is kept
+        for the next call. Lines that are not valid JSON are counted (universal check state_valid)
+        instead of being skipped silently."""
         try:
-            with open(self.state_path) as f:
-                for line in f:
-                    line = line.strip()
-                    if not line:
-                        continue
-                    try:
-                        st = json.loads(line)
-                    except json.JSONDecodeError:
-                        continue
-                    t = st.get("t_ms", 0) / 1000.0
-                    if not self.samples or t > self.samples[-1][0] or \
-                            st.get("client") != self.samples[-1][1].get("client"):
-                        self.samples.append((t, st))
+            with open(self.state_path, "rb") as f:
+                f.seek(self._st_off)
+                chunk = f.read()
         except OSError:
-            pass
+            return
+        if not chunk:
+            return
+        self._st_off += len(chunk)
+        data = self._st_part + chunk
+        lines = data.split(b"\n")
+        self._st_part = lines.pop()          # b"" when the chunk ended with a newline
+        for raw in lines:
+            line = raw.strip()
+            if not line:
+                continue
+            try:
+                st = json.loads(line.decode("utf-8", "replace"))
+                if not isinstance(st, dict):
+                    raise ValueError("not an object")
+            except ValueError:
+                self.state_invalid += 1
+                if self.state_invalid_first is None:
+                    self.state_invalid_first = line[:200].decode("utf-8", "replace")
+                continue
+            t = st.get("t_ms", 0) / 1000.0
+            if not self.samples or t > self.samples[-1][0] or \
+                    st.get("client") != self.samples[-1][1].get("client"):
+                self.samples.append((t, st))
 
     def take_snapshot(self, label, force=False):
         try:
@@ -549,6 +572,9 @@ class ScenarioRun:
                                         "ok": False, "detail": str(e)})
                 ei += 1
             self.read_states()
+            it_ms = (time.monotonic() - self.t0 - now) * 1000.0
+            if it_ms > self.loop_ms_max:
+                self.loop_ms_max = it_ms
             if now - last_cfg >= 0.5:
                 last_cfg = now
                 try:
@@ -1105,6 +1131,11 @@ class ScenarioRun:
             self.eval_expect({"kind": "exit_code", "value": 0})
         if uni.get("no_cmd6_fail", True):
             self.eval_expect({"kind": "cmd6", "field": "fail", "op": "==", "value": 0})
+        if uni.get("state_valid", True):
+            # v6.20: every state line must be valid JSON (a NaN printed as "nan" used to hide the rest of the stream)
+            self.add("state lines: all valid JSON", self.state_invalid == 0 and len(self.samples) > 0,
+                     f"invalid={self.state_invalid} samples={len(self.samples)}"
+                     + (f" first={self.state_invalid_first!r}" if self.state_invalid_first else ""))
 
     # ------------------------------------------------------------ (g) report
     def finish(self):
@@ -1161,7 +1192,8 @@ class ScenarioRun:
             "sim_stats": next((e.get("stats") for e in reversed(self.sim_log)
                                if e["kind"] == "sim_exit"), None),
             "gesture_results": self.gesture_results,
-            "clock": self.clock,
+            "clock": dict(self.clock, loop_ms_max=round(self.loop_ms_max, 1)),
+            "state_lines_invalid": self.state_invalid,
             "sandbox": str(self.sandbox),
             "sim_assertions_log": str(self.assert_path),
             "state_jsonl": str(self.state_path),
