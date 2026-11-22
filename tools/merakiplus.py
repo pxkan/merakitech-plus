@@ -48,8 +48,8 @@ RAW_AUDIO = "https://raw.githubusercontent.com/" + REPO + "/{ref}/audio/{name}"
 
 # md5 of the shipped device binaries in bin/ (kept in sync with bin/MD5SUMS by CI).
 BIN_MD5 = {
-    "merakiplus": "e654f668636322204e18d9ac1b386795",
-    "switcher": "f2b95b16b33a9e1bc868a2f5b2414e6b",
+    "merakiplus": "c8b91a4c8d2d1de56a7fb9cea8d85e06",
+    "switcher": "c9d937fa36c51e2e58276041b6761ac0",
     "grab_shim.so": "c42076c807c54d477a5868977404186d",
     "merakiplus_snd": "a7659c176b8ef78385b0b612a69e81ca",
 }
@@ -69,6 +69,10 @@ OURDIR = "/new_customer/merakiplus"
 BOOTDIR = OURDIR + "/boot"
 STAGE = OURDIR + "/merakiplus"                          # staged copy (same fs as slot B)
 BAK_B = BOOTDIR + "/demo_v9.vendor"                     # slot B's original binary
+# A newer vendor build found in slot B later (vendor OTA) is backed up as BAK_B.<md5>; STATE names
+# the backup revert restores (bak_b=, bak_b_md5=).
+BAK_B_RE = re.compile("^" + re.escape(BAK_B) + "(?:\\.[0-9a-f]{32})?$")
+STATE_KEYS = ("orig_flag", "orig_b", "first_install", "bak_b", "bak_b_md5")
 BAK_B_ABSENT = BOOTDIR + "/demo_v9.vendor.absent"       # marker: slot B had no binary
 BAK_SH = BOOTDIR + "/demo.sh.bak"                       # original /customer/demo.sh
 STATE = BOOTDIR + "/merakiplus.state"
@@ -150,7 +154,8 @@ def legacy_migrate(dev, o, st, rewrite_guard):
                 dev.push(new_b, OURDIR + "/run.sh", mode="755")
                 o.ok("run.sh rewritten to the new directory, binary name and environment variables")
     if lg["guard"] and rewrite_guard:
-        lines = dev.read(DEMO_SH).decode("utf-8", "surrogateescape").splitlines(keepends=True)
+        cur_sh = dev.read(DEMO_SH)
+        lines = cur_sh.decode("utf-8", "surrogateescape").splitlines(keepends=True)
         out, placed = [], any(GUARD_KEY in l for l in lines)
         for l in lines:
             if LEGACY_GUARD_KEY in l:
@@ -160,6 +165,7 @@ def legacy_migrate(dev, o, st, rewrite_guard):
                 continue
             out.append(l)
         new_sh = "".join(out).encode("utf-8", "surrogateescape")
+        check_demo_sh_edit(cur_sh, new_sh)
         dev.push(new_sh, DEMO_SH, mode="755")
         if not dev.dry and dev.read(DEMO_SH) != new_sh:
             raise Abort("demo.sh read-back differs from what was written — run ./revert.sh now")
@@ -176,6 +182,22 @@ class Abort(Exception):
 
 def md5b(b):
     return hashlib.md5(b).hexdigest()
+
+
+def strip_guard(data):
+    """demo.sh bytes without any Meraki+ guard line (current or pre-rename)."""
+    return b"".join(l for l in data.splitlines(keepends=True)
+                    if GUARD_KEY.encode() not in l and LEGACY_GUARD_KEY.encode() not in l)
+
+
+def check_demo_sh_edit(cur, new):
+    """Refuse to write a demo.sh that differs from the current one in anything but guard lines
+    (or is empty): the vendor boot script mounts slot B, loads the drivers and starts the UI."""
+    if not cur.strip() or not new.strip() or not strip_guard(new).strip():
+        raise Abort("Refusing to write an empty /customer/demo.sh — demo.sh was NOT changed.")
+    if strip_guard(new) != strip_guard(cur) or sum(GUARD_KEY.encode() in l for l in new.splitlines()) > 1:
+        raise Abort("Refusing to write /customer/demo.sh: the new content differs from the current one in "
+                    "more than the Meraki+ guard line — demo.sh was NOT changed.")
 
 
 # ============================================================ console helpers
@@ -300,11 +322,12 @@ class Device:
             self.close()
             raise Abort(f"Lost the telnet connection ({e}).")
         end_re = re.compile(rb"(?:^|\n)E_" + tag.encode() + rb":(\d+)\r?\n")
-        data, deadline = b"", time.time() + timeout
+        data, deadline, hung_up = b"", time.time() + timeout, False
         while time.time() < deadline:
             try:
                 c = self.sock.recv(65536)
                 if not c:
+                    hung_up = True
                     break
                 data += self._strip_iac(c)
                 if end_re.search(data):
@@ -314,6 +337,8 @@ class Device:
         m = end_re.search(data)
         if not m:
             self.close()
+            if hung_up:
+                raise Abort(f"The display closed the telnet connection during: {cmd[:80]}")
             raise Abort(f"No answer from the display within {timeout}s for: {cmd[:80]}")
         text = data[:m.start()].decode("utf-8", "replace").replace("\r", "")
         lines = text.split("\n")
@@ -346,27 +371,51 @@ class Device:
         m = re.search(r"\b([0-9a-f]{32})\b", out)
         return m.group(1) if (rc == 0 and m) else None
 
+    def size(self, path):
+        """Size in bytes of a file on the display, or None."""
+        rc, out = self.sh(f"wc -c < {self.d(path)} 2>/dev/null", check=False)
+        last = out.strip().splitlines()[-1].strip() if out.strip() else ""
+        return int(last) if rc == 0 and last.isdigit() else None
+
     def is_ours(self, path):
         pats = " ".join(f"-e '{m}'" for m in (MERAKIPLUS_MARK,) + LEGACY_MARKS)
         return self.sh(f"grep -q -F {pats} {self.d(path)} 2>/dev/null && echo Y || echo N",
                        check=False)[1].strip().endswith("Y")
 
     def read(self, path):
-        """Byte-exact download (cat through the pty would mangle tabs/newlines)."""
+        """Byte-exact download (cat through the pty would mangle tabs/newlines), verified against
+        the display's own md5 of the file. The pipeline's rc is base64's, so a failing gzip (out of
+        memory, missing applet) would otherwise look like a successful read of an empty file."""
+        want = self.md5(path)
+        if want is None:
+            raise Abort(f"Cannot read {path} on the display (missing or unreadable).")
         _, out = self.sh(f"gzip -c {self.d(path)} | base64", timeout=60)
         b64 = "".join(l.strip() for l in out.splitlines() if re.fullmatch(r"[A-Za-z0-9+/=]+", l.strip()))
-        return gzip.decompress(base64.b64decode(b64))
+        try:
+            data = gzip.decompress(base64.b64decode(b64))
+        except (OSError, EOFError, ValueError) as e:
+            raise Abort(f"Reading {path} from the display failed ({e}); nothing was written for this step.")
+        if md5b(data) != want:
+            raise Abort(f"Reading {path} from the display failed verification (got {len(data)} bytes, md5 "
+                        f"{md5b(data)}; the display reports md5 {want}). Nothing was written for this step.")
+        return data
 
     def ui_procs(self):
-        """[(pid, exe)] for every running process whose exe is a demo_v9.
+        """[(pid, exe)] for every running process whose exe is a demo_v9."""
+        return [(p, e) for p, e, _ in self.ui_procs_state()]
+
+    def ui_procs_state(self):
+        """[(pid, exe, stopped)] for every process whose exe is a demo_v9; stopped is True for a
+        process in state T (SIGSTOPped, e.g. by an interrupted stop-first switch).
         Scans /proc instead of `pidof demo_v9`: the vendor watchdog greps `ps` for 'demo_v9',
         and a helper process with that string in its command line would fool it."""
         # After a binary is renamed over, the kernel reports "<path> (deleted)" for the old
         # inode that is still running — that process must still be seen (and stopped).
         _, out = self.sh(f"for d in {self.d('/proc')}/[0-9]*; do e=$(readlink $d/exe 2>/dev/null); "
-                         f"case \"$e\" in */demo_v9|*'/demo_v9 (deleted)') echo \"P ${{d##*/}} $e\";; esac; done",
+                         f"case \"$e\" in */demo_v9|*'/demo_v9 (deleted)') echo \"P ${{d##*/}} $e\"; "
+                         f"echo \"S ${{d##*/}} $(grep '^State:' $d/status 2>/dev/null)\";; esac; done",
                          check=False)
-        res = []
+        res, stopped = [], set()
         for ln in out.splitlines():
             parts = ln.split(" ", 2)
             if len(parts) == 3 and parts[0] == "P" and parts[1].isdigit():
@@ -376,7 +425,11 @@ class Device:
                 if self.p and exe.startswith(self.p):
                     exe = exe[len(self.p):]
                 res.append((int(parts[1]), exe))
-        return res
+            elif len(parts) == 3 and parts[0] == "S" and parts[1].isdigit():
+                f = parts[2].split()
+                if len(f) > 1 and f[0] == "State:" and f[1] in ("T", "t"):
+                    stopped.add(int(parts[1]))
+        return [(p, e, p in stopped) for p, e in res]
 
     def watchdog_slot(self):
         """'A' / 'B' / None — which slot the vendor watchdog (test.sh <slot>) restarts."""
@@ -409,7 +462,8 @@ class Device:
         self.changed = True
         for attempt in range(3):
             port = random.randint(40000, 49999)
-            _, out = self.sh(f"rm -f {part}; nohup nc -l -p {port} > {part} 2>/dev/null & echo NCPID=$!; sleep 1")
+            _, out = self.sh(f"rm -f {part}; nohup nc -l -p {port} > {part} 2>/dev/null < /dev/null & "
+                             f"echo NCPID=$!; sleep 1")
             ncpid = (re.search(r"NCPID=(\d+)", out) or [None, ""])[1]
             sent = False
             for _ in range(10):
@@ -438,14 +492,17 @@ class Device:
             if ncpid:
                 self.sh(f"kill {ncpid} 2>/dev/null; true", check=False)
             if got == want:
-                self.sh(f"chmod {mode} {part} && mv -f {part} {dpath} && sync")
+                rc, out = self.sh(f"chmod {mode} {part} && mv -f {part} {dpath} && sync", check=False)
+                if rc != 0:
+                    self.sh(f"rm -f {part}; sync", check=False)
+                    raise Abort(f"Could not move the verified upload into place: {dest} (rc={rc}) {out[-300:]}")
                 if self.md5(dest) != want:
                     raise Abort(f"md5 mismatch after rename: {dest}")
                 self.o.debug(f"push ok {dest} {want}")
                 return want
             self.sh(f"rm -f {part}", check=False)
             last_err = last_err or f"md5 {got} != {want}"
-            self.o.warn(f"upload attempt {attempt + 1} failed ({last_err}); retrying")
+            self.o.warn(f"upload attempt {attempt + 1} failed ({last_err})" + ("; retrying" if attempt < 2 else ""))
         raise Abort(f"Could not upload {dest}: {last_err}")
 
     def atomic_copy(self, src, dest, want_md5, mode="755"):
@@ -456,12 +513,19 @@ class Device:
             self.o.say(f"  [dry-run] would copy {src} -> {dest} via {tmp} (md5 {want_md5[:8]}…)")
             return
         self.changed = True
-        self.sh(f"rm -f {tmp}; cp {self.d(src)} {tmp} && chmod {mode} {tmp} && sync")
+        rc, out = self.sh(f"rm -f {tmp}; cp {self.d(src)} {tmp} && chmod {mode} {tmp} && sync", check=False)
+        if rc != 0:                   # e.g. ENOSPC after a partial write: never leave the partial file
+            self.sh(f"rm -f {tmp}; sync", check=False)
+            raise Abort(f"Copying {src} -> {dest} failed on the display (rc={rc}): {out[-300:]}\n"
+                        f"{dest} left untouched; the partial temp file was removed.")
         got = self.md5(str(pathlib.PurePosixPath(dest).parent / ("." + dp.name + ".tmp")))
         if got != want_md5:
             self.sh(f"rm -f {tmp}", check=False)
             raise Abort(f"Copy to {tmp} has md5 {got}, expected {want_md5}; {dest} left untouched.")
-        self.sh(f"mv -f {tmp} {self.d(dest)} && sync")
+        rc, out = self.sh(f"mv -f {tmp} {self.d(dest)} && sync", check=False)
+        if rc != 0:
+            self.sh(f"rm -f {tmp}; sync", check=False)
+            raise Abort(f"Could not rename {tmp} over {dest} (rc={rc}): {out[-300:]}")
         if self.md5(dest) != want_md5:
             raise Abort(f"{dest} has the wrong md5 after rename — run revert.sh.")
 
@@ -471,6 +535,16 @@ def repo_root():
     return pathlib.Path(__file__).resolve().parent.parent
 
 
+def is_checkout():
+    """True when this script runs from a git clone (bin/MD5SUMS next to it). install.sh's
+    standalone (curl) mode runs a copy from a mktemp dir, whose parent is e.g. /tmp."""
+    return (repo_root() / "bin" / "MD5SUMS").is_file()
+
+
+def default_log_dir():
+    return repo_root() / "logs" if is_checkout() else pathlib.Path.home() / "merakiplus-logs"
+
+
 def get_binary(name, args, out, sub="bin"):
     """Local bin/<name> (git clone) or download from GitHub raw; md5-verified either way.
     sub="audio": the same for audio/<name> (v6.18), gated by AUDIO_MD5."""
@@ -478,7 +552,8 @@ def get_binary(name, args, out, sub="bin"):
     cands = []
     if getattr(args, "bin_dir", None) and sub == "bin":
         cands.append(pathlib.Path(args.bin_dir) / name)
-    cands.append(repo_root() / sub / name)
+    if is_checkout():
+        cands.append(repo_root() / sub / name)
     for p in cands:
         if p.is_file():
             data = p.read_bytes()
@@ -517,7 +592,9 @@ def inspect(dev):
     st["arch"] = out.splitlines()[-1].strip() if out.strip() else "?"
     _, mnt = dev.sh("cat /proc/mounts", check=False)
     st["b_mounted"] = bool(dev.p) or any(len(l.split()) > 1 and l.split()[1] == B_DIR for l in mnt.splitlines())
-    st["procs"] = dev.ui_procs()
+    ps = dev.ui_procs_state()
+    st["procs"] = [(p, e) for p, e, _ in ps]
+    st["stopped"] = [p for p, _, stop in ps if stop]
     st["watchdog"] = dev.watchdog_slot()
     st["flag"] = dev.exists(FLAG)
     st["b_exists"] = dev.exists(B_EXE)
@@ -557,17 +634,100 @@ def slot_of(exe):
 def print_status(o, st):
     o.say(f"  device fingerprint : {'MerakiTech/Sanbon display (OK)' if st['fingerprint'] else 'NOT RECOGNISED'}"
           f"  arch={st['arch']}")
-    o.say(f"  running UI         : " + (", ".join(f"pid {p} = {slot_of(e)}" for p, e in st["procs"]) or "none"))
+    o.say(f"  running UI         : " + (", ".join(f"pid {p} = {slot_of(e)}"
+                                                    + (" (PAUSED by SIGSTOP)" if p in st.get("stopped", ()) else "")
+                                                    for p, e in st["procs"]) or "none"))
     o.say(f"  watchdog restarts  : slot {st['watchdog'] or '?'}")
     o.say(f"  boot flag          : {'SET -> next boot starts slot B' if st['flag'] else 'not set -> next boot starts slot A (stock)'}")
     b = "missing" if not st["b_exists"] else ("Meraki+" if st["b_ours"] else "vendor/other") + f" (md5 {st['b_md5']})"
     o.say(f"  slot B binary      : {b}")
     o.say(f"  slot A binary      : md5 {st['a_md5']} (never modified)")
     o.say(f"  demo.sh guard line : {st['guard_lines']}   switcher running: {bool(st['switcher_pids'])}")
-    o.say(f"  backups            : slot-B {'yes' if st['bak_b'] else ('was-empty' if st['bak_b_absent'] else 'no')}"
+    o.say(f"  backups            : slot-B {'yes' if st['bak_b'] or st['state'].get('bak_b') else ('was-empty' if st['bak_b_absent'] else 'no')}"
           f", demo.sh {'yes' if st['bak_sh'] else 'no'}")
     if st["legacy"]["dir"] or st["legacy"]["guard"]:
         o.say("  older install      : found in the pre-rename layout — migrated by install / revert")
+
+
+def vendor_backup(dev, st):
+    """(device path, md5) of the slot-B vendor backup that revert restores, or (None, None).
+    STATE names it (bak_b / bak_b_md5); installs that predate that only have BAK_B."""
+    sp = st["state"].get("bak_b", "")
+    if BAK_B_RE.match(sp) and dev.exists(sp):
+        want = st["state"].get("bak_b_md5", "")
+        return sp, (want if re.fullmatch(r"[0-9a-f]{32}", want) else dev.md5(sp))
+    if st["bak_b"]:
+        path = BAK_B if dev.exists(BAK_B) or not st["legacy"]["dir"] else legacy_path(BAK_B)
+        return path, dev.md5(path)
+    return None, None
+
+
+def plan_vendor_backup(dev, st):
+    """Where slot B's current binary must be backed up before install overwrites it, or None
+    (slot B empty, already Meraki+, or that exact vendor binary is already backed up). A vendor
+    build that differs from the existing backup (a vendor OTA since then) gets its own
+    md5-named backup: no vendor binary is ever destroyed without a copy."""
+    if not st["b_exists"] or st["b_ours"]:
+        return None
+    bak_path, bak_md5 = vendor_backup(dev, st)
+    if bak_md5 == st["b_md5"]:
+        return None
+    if not (bak_path or st["bak_b"] or st["bak_b_absent"]):
+        return BAK_B
+    return BAK_B + "." + st["b_md5"]
+
+
+def write_state(dev, state):
+    lines = "".join(f"{k}={state[k]}\\n" for k in STATE_KEYS
+                    if k in state and re.fullmatch(r"[A-Za-z0-9_.:/+-]*", str(state[k])))
+    dev.w(f"printf '{lines}' > {dev.d(STATE)}.tmp && mv -f {dev.d(STATE)}.tmp {dev.d(STATE)} && sync")
+
+
+def leftover_globs(dev):
+    """Shell globs of the temp files an interrupted install can leave (atomic_copy .X.tmp,
+    push X.part, STATE.tmp). All are ours by name; revert removes them."""
+    return " ".join(dev.d(g) for g in (
+        B_DIR + "/.demo_v9.tmp", A_DIR + "/.demo.sh.tmp", DEMO_SH + ".part",
+        BOOTDIR + "/.*.tmp", BOOTDIR + "/*.tmp", BOOTDIR + "/*.part",
+        OURDIR + "/.*.tmp", OURDIR + "/*.part", AUDIO_DIR + "/*.part"))
+
+
+def clean_leftovers(dev, o):
+    globs = leftover_globs(dev)
+    _, out = dev.sh(f"for f in {globs}; do [ -e \"$f\" ] && echo \"L $f\"; done; true", check=False)
+    found = [l[2:] for l in out.splitlines() if l.startswith("L ")]
+    if found:
+        dev.w(f"rm -f {globs}; sync")
+        o.ok(f"removed {len(found)} temporary file(s) left by an interrupted run")
+
+
+def check_free_space(dev, o, st, uploads, merakiplus):
+    """Space on /new_customer for what this install writes: the vendor backup (if one is taken),
+    the staged binary plus the temp copy that sits beside slot B's old inode while the running
+    UI still holds it, and every helper/sound that is not already up to date (each is written
+    as X.part next to the old file)."""
+    if st["b_free_kb"] is None:
+        return
+    want = BIN_MD5["merakiplus"]
+    need, parts = 0, []
+    if plan_vendor_backup(dev, st):
+        bsize = dev.size(B_EXE) or 0
+        need += bsize
+        parts.append(f"vendor backup {bsize // 1024} KB")
+    m = (len(merakiplus) if dev.md5(STAGE) != want else 0) + (len(merakiplus) if st["b_md5"] != want else 0)
+    up = sum(len(data) for dest, data in uploads if dev.md5(dest) != md5b(data))
+    need += m + up
+    if m:
+        parts.append(f"Meraki+ {m // 1024} KB")
+    if up:
+        parts.append(f"helpers/sounds {up // 1024} KB")
+    if not need:
+        return
+    need_kb = (need + 1023) // 1024 + 64          # + a margin for directory blocks / the log
+    if st["b_free_kb"] < need_kb:
+        raise Abort(f"Only {st['b_free_kb']} KB free on /new_customer — this install needs about {need_kb} KB "
+                    f"({', '.join(parts)}). Nothing was changed.")
+    o.ok(f"free space on /new_customer: {st['b_free_kb']} KB (needs about {need_kb} KB)")
 
 
 def require_device(st):
@@ -579,6 +739,24 @@ def require_device(st):
     if not st["b_mounted"]:
         raise Abort("Slot B (/new_customer) is not mounted on this display, so Meraki+ cannot be "
                     "installed there. Nothing was changed.")
+
+
+def resume_stopped(dev, o, st):
+    """A UI left SIGSTOPped (frozen screen) by an interrupted earlier run is resumed before
+    anything else; the watchdog never restarts it, because its pid still exists."""
+    if not st.get("stopped"):
+        return st
+    pids = " ".join(map(str, st["stopped"]))
+    if dev.dry:
+        o.say(f"  [dry-run] would resume the paused UI process(es) {pids} (kill -CONT)")
+        return st
+    o.warn(f"UI process(es) {pids} are paused (SIGSTOP), probably by an interrupted earlier run — resuming")
+    dev.sh(f"kill -CONT {pids}", check=False)
+    st2 = inspect(dev)
+    if st2["stopped"]:
+        raise Abort(f"Could not resume the paused UI process(es) {st2['stopped']}. Power-cycle the machine.")
+    o.ok("paused UI resumed")
+    return st2
 
 
 # ============================================================ activation (no reboot)
@@ -600,11 +778,17 @@ def stop_first_switch(dev, o, target_dir, target_exe, ldp, logname):
     old = [p for p, _ in dev.ui_procs()]
     olds = " ".join(map(str, old))
     dev.changed = True
-    if olds:
-        dev.sh(f"for p in {olds}; do kill -STOP $p; done")
-    dev.sh(f"cd {dev.d(target_dir)} && LD_LIBRARY_PATH={ldp} nohup ./demo_v9 > {dev.d('/tmp/' + logname)} "
-           f"2>&1 < /dev/null & sleep 2")
-    pid, procs = find_new(dev, target_exe, old, 8)
+    try:
+        if olds:
+            dev.sh(f"for p in {olds}; do kill -STOP $p; done")
+        dev.sh(f"cd {dev.d(target_dir)} && LD_LIBRARY_PATH={ldp} nohup ./demo_v9 > {dev.d('/tmp/' + logname)} "
+               f"2>&1 < /dev/null & sleep 2")
+        pid, procs = find_new(dev, target_exe, old, 8)
+    except BaseException:
+        # Ctrl-C, a dropped connection or a timeout between STOP and the final kill: never leave
+        # the old UI frozen. Reconnect, resume it, stop a half-started new one, then re-raise.
+        undo_switch(dev, o, olds, old, target_exe)
+        raise
     if pid is None:
         if olds:
             dev.sh(f"for p in {olds}; do kill -CONT $p; done", check=False)
@@ -616,6 +800,20 @@ def stop_first_switch(dev, o, target_dir, target_exe, ldp, logname):
     if olds:
         dev.sh(f"kill -9 {olds}; sleep 1", check=False)
     return pid
+
+
+def undo_switch(dev, o, olds, old, target_exe):
+    dev.close()                       # the connection may be dead or mid-command; sh() reconnects
+    try:
+        if olds:
+            dev.sh(f"for p in {olds}; do kill -CONT $p; done", timeout=10, check=False)
+        stray = [p for p, e in dev.ui_procs() if e == target_exe and p not in old]
+        if stray:
+            dev.sh("kill -9 " + " ".join(map(str, stray)), timeout=10, check=False)
+        o.warn("the UI switch was interrupted; the previous UI was resumed")
+    except BaseException as e:        # best effort; the original error is re-raised by the caller
+        o.warn(f"the UI switch was interrupted and the previous UI could not be resumed ({e}). "
+               f"Run the same command again: it resumes a paused UI first.")
 
 
 def activate_meraki(dev, o, st, want_md5):
@@ -671,8 +869,7 @@ def cmd_install(dev, o, args):
     st = inspect(dev)
     print_status(o, st)
     require_device(st)
-    if st["b_free_kb"] is not None and st["b_free_kb"] < 1200 and not st["b_ours"]:
-        raise Abort(f"Only {st['b_free_kb']} KB free on /new_customer — need about 1.2 MB.")
+    st = resume_stopped(dev, o, st)
     if not st["procs"]:
         o.warn("no UI process running right now (the watchdog usually restarts one within a second)")
 
@@ -689,6 +886,9 @@ def cmd_install(dev, o, args):
         check_arm_elf(extra["switcher"], "switcher")
         extra["grab_shim.so"] = get_binary("grab_shim.so", args, o)
         check_arm_elf(extra["grab_shim.so"], "grab_shim.so", shared=True)
+    uploads = [(SND_HELPER, snd)] + [(AUDIO_DIR + "/" + n, d) for n, d in sounds.items()] + \
+        [(dest, extra[name]) for name, dest in (("switcher", SWITCHER), ("grab_shim.so", SHIM)) if name in extra]
+    check_free_space(dev, o, st, uploads, merakiplus)
 
     o.say("")
     o.say("  Meraki+ will replace the display's touch UI. The coffee machine's own controller is not")
@@ -700,17 +900,28 @@ def cmd_install(dev, o, args):
         st = inspect(dev)
     o.step("3/7 Backups (only taken once; never overwritten)")
     dev.w(f"mkdir -p {dev.d(BOOTDIR)}")
-    if st["bak_b"] or st["bak_b_absent"]:
+    bak_dest = plan_vendor_backup(dev, st)
+    had_backup = bool(vendor_backup(dev, st)[0] or st["bak_b_absent"])
+    new_state = {}
+    if bak_dest:
+        if bak_dest != BAK_B and dev.md5(bak_dest) == st["b_md5"]:
+            o.ok(f"slot-B vendor binary already backed up as {bak_dest}")
+        else:
+            dev.atomic_copy(B_EXE, bak_dest, st["b_md5"])
+            o.ok(f"slot-B vendor binary -> {bak_dest} (md5 {st['b_md5']})")
+        if had_backup:
+            o.warn("slot B held a different vendor build than the existing backup (a vendor update?) — "
+                   "backed it up too; revert restores this newer build and its boot flag")
+        new_state = {"orig_flag": 1 if st["flag"] else 0, "orig_b": "vendor",
+                     "bak_b": bak_dest, "bak_b_md5": st["b_md5"]}
+    elif had_backup:
         o.ok("slot-B backup already exists — kept as is")
     elif not st["b_exists"]:
         dev.w(f"touch {dev.d(BAK_B_ABSENT)} && sync")
         o.ok("slot B was empty — recorded (revert will leave it empty again)")
-    elif st["b_ours"]:
+    else:
         o.warn("slot B already holds a Meraki+ build and there is no vendor backup "
                "(older manual install). Revert will then leave slot B empty and boot stock A.")
-    else:
-        dev.atomic_copy(B_EXE, BAK_B, st["b_md5"])
-        o.ok(f"slot-B vendor binary -> {BAK_B} (md5 {st['b_md5']})")
     if st["bak_sh"]:
         o.ok("demo.sh backup already exists — kept as is")
     elif st["guard_lines"]:
@@ -718,11 +929,14 @@ def cmd_install(dev, o, args):
     else:
         dev.atomic_copy(DEMO_SH, BAK_SH, dev.md5(DEMO_SH), mode="644")
         o.ok(f"/customer/demo.sh -> {BAK_SH}")
-    if not st["state"]:
-        orig_b = "absent" if not st["b_exists"] else ("ours" if st["b_ours"] else "vendor")
-        lines = (f"orig_flag={1 if st['flag'] else 0}\\norig_b={orig_b}\\n"
-                 f"first_install={datetime.datetime.now(datetime.timezone.utc).strftime('%Y-%m-%dT%H:%M:%SZ')}\\n")
-        dev.w(f"printf '{lines}' > {dev.d(STATE)}.tmp && mv -f {dev.d(STATE)}.tmp {dev.d(STATE)} && sync")
+    state = dict(st["state"])
+    if not state:
+        state = {"orig_flag": 1 if st["flag"] else 0,
+                 "orig_b": "absent" if not st["b_exists"] else ("ours" if st["b_ours"] else "vendor"),
+                 "first_install": datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")}
+    state.update(new_state)
+    if state != st["state"]:
+        write_state(dev, state)
         o.ok("original boot state recorded (used by revert)")
 
     o.step(f"4/7 Installing Meraki+ {VERSION} into slot B")
@@ -749,12 +963,12 @@ def cmd_install(dev, o, args):
         install_guard(dev, o)
     else:
         o.say("  --gesture not given: /customer/demo.sh is left untouched")
-    if args.persist:
-        if st["flag"]:
-            o.ok("boot flag already set: Meraki+ starts at every boot")
-        else:
-            dev.w(f"touch {dev.d(FLAG)} && sync")
-            o.ok("boot flag set: Meraki+ starts at every boot (undo: ./revert.sh, or BOOT-UI in Meraki+ settings)")
+    if args.persist and args.no_activate:
+        o.warn("--persist with --no-activate: the boot flag is set although Meraki+ is not started and "
+               "verified now. If it does not come up at the next boot, run ./revert.sh")
+        set_boot_flag(dev, o, st)
+    elif args.persist:
+        o.say("  --persist: the boot flag is set once Meraki+ has been verified running (step 7)")
     elif st["flag"]:
         o.warn("the boot flag was ALREADY set before this install, so the machine boots slot B = Meraki+")
     else:
@@ -770,6 +984,8 @@ def cmd_install(dev, o, args):
     o.step("7/7 Verifying")
     if pid and not dev.dry:
         verify_running(dev, o, pid, want)
+    if args.persist and not args.no_activate:
+        set_boot_flag(dev, o, st)
     if not dev.dry:
         if dev.md5(B_EXE) != want:
             raise Abort("slot B binary md5 changed unexpectedly")
@@ -780,6 +996,15 @@ def cmd_install(dev, o, args):
     o.say(f"Done. Meraki+ {VERSION} is {'installed (dry-run: nothing was changed)' if dev.dry else 'running'}.")
     o.say("  Check on the screen: the gear on HOME -> SYSTEM shows 'MERAKI+ V" + VERSION + "' under its title.")
     o.say(f"  Undo everything:     ./revert.sh --ip {args.ip}")
+
+
+def set_boot_flag(dev, o, st):
+    """--persist: boot slot B (Meraki+) at every power-on."""
+    if st["flag"]:
+        o.ok("boot flag already set: Meraki+ starts at every boot")
+    else:
+        dev.w(f"touch {dev.d(FLAG)} && sync")
+        o.ok("boot flag set: Meraki+ starts at every boot (undo: ./revert.sh, or BOOT-UI in Meraki+ settings)")
 
 
 def install_sound(dev, o, snd, sounds):
@@ -800,7 +1025,8 @@ def install_sound(dev, o, snd, sounds):
 
 
 def install_guard(dev, o):
-    content = dev.read(DEMO_SH).decode("utf-8", "surrogateescape")
+    raw = dev.read(DEMO_SH)
+    content = raw.decode("utf-8", "surrogateescape")
     lines = content.splitlines(keepends=True)
     ours = [l for l in lines if GUARD_KEY in l or LEGACY_GUARD_KEY in l]
     if len(ours) == 1 and ours[0].rstrip("\n") == GUARD_LINE:
@@ -816,6 +1042,7 @@ def install_guard(dev, o):
                     "is safe; demo.sh was NOT changed.")
     base.insert(anchors[-1], GUARD_LINE + "\n")
     new = "".join(base).encode("utf-8", "surrogateescape")
+    check_demo_sh_edit(raw, new)
     dev.push(new, DEMO_SH, mode="755")
     if not dev.dry:
         back = dev.read(DEMO_SH)
@@ -832,9 +1059,12 @@ def cmd_revert(dev, o, args):
     st = inspect(dev)
     print_status(o, st)
     require_device(st)
-    nothing = (not st["b_ours"] and not st["guard_lines"] and not st["switcher_pids"]
-               and not any(e == B_EXE for _, e in st["procs"]) and not st["state"])
+    st = resume_stopped(dev, o, st)
+    # a UI running from slot B is only Meraki+ when slot B holds Meraki+ (b_ours): after a vendor
+    # OTA the stock UI itself runs from B with the boot flag set, and that must be left alone
+    nothing = not st["b_ours"] and not st["guard_lines"] and not st["switcher_pids"] and not st["state"]
     if nothing and not args.purge:
+        clean_leftovers(dev, o)
         o.say("\nMeraki+ is not installed here — nothing to revert.")
         return
     if not dev.dry and not confirm("  Revert this display to the stock UI now?", args.yes):
@@ -859,8 +1089,8 @@ def cmd_revert(dev, o, args):
     o.step("3/6 Restoring /customer/demo.sh")
     if st["guard_lines"]:
         cur = dev.read(DEMO_SH)
-        stripped = b"".join(l for l in cur.splitlines(keepends=True)
-                            if GUARD_KEY.encode() not in l and LEGACY_GUARD_KEY.encode() not in l)
+        stripped = strip_guard(cur)
+        check_demo_sh_edit(cur, stripped)
         bak_md5 = dev.md5(at(BAK_SH)) if st["bak_sh"] else None
         if bak_md5 and bak_md5 == md5b(stripped):
             dev.atomic_copy(BAK_SH, DEMO_SH, bak_md5)
@@ -881,19 +1111,29 @@ def cmd_revert(dev, o, args):
 
     o.step("5/6 Restoring slot B and the boot flag")
     restored_vendor = False
-    if st["bak_b"]:
-        bmd5 = dev.md5(at(BAK_B))
-        if st["b_md5"] == bmd5:
-            o.ok("slot B already holds the vendor binary")
-        else:
-            dev.atomic_copy(BAK_B, B_EXE, bmd5)
-            o.ok(f"slot B vendor binary restored (md5 {bmd5})")
+    bak_path, bak_md5 = vendor_backup(dev, st)
+    foreign_b = st["b_exists"] and not st["b_ours"] and st["b_md5"] != bak_md5
+    if st["b_ours"] and bak_path:
+        have = dev.md5(bak_path)
+        if have != bak_md5:
+            raise Abort(f"The slot-B vendor backup {bak_path} has md5 {have}, expected {bak_md5} (damaged?). "
+                        f"Slot B was left as Meraki+; the stock UI in slot A is unaffected.")
+        dev.atomic_copy(bak_path, B_EXE, bak_md5)
+        o.ok(f"slot B vendor binary restored from {bak_path} (md5 {bak_md5})")
         restored_vendor = True
     elif st["b_ours"]:
         dev.w(f"rm -f {dev.d(B_EXE)} && sync")
         o.ok("Meraki+ removed from slot B (slot B was empty / had no vendor backup)")
+    elif foreign_b:
+        o.ok("slot B holds a vendor build that is not Meraki+ (e.g. from a vendor update) — left as it is")
+    elif st["b_exists"]:
+        o.ok("slot B already holds the vendor binary")
+        restored_vendor = True
     orig_flag = st["state"].get("orig_flag") == "1"
-    if orig_flag and restored_vendor:
+    if foreign_b or not (st["state"] or st["b_ours"]):
+        # the flag belongs to the vendor build in slot B, or Meraki+ never recorded it: not ours to change
+        o.ok("boot flag left as it is (" + ("set" if st["flag"] else "not set") + ")")
+    elif orig_flag and restored_vendor:
         if not st["flag"]:
             dev.w(f"touch {dev.d(FLAG)} && sync")
         o.ok("boot flag kept as it was before Meraki+ (vendor slot B)")
@@ -902,6 +1142,7 @@ def cmd_revert(dev, o, args):
         o.ok("boot flag removed: next boot starts the stock UI (slot A)")
     else:
         o.ok("boot flag not set: next boot starts the stock UI (slot A)")
+    clean_leftovers(dev, o)
     if args.purge:
         dev.w(f"rm -rf {dev.d(OURDIR)} {dev.d(LEGACY_DIR)} && sync")
         o.ok(f"{OURDIR} removed (backups, language file and settings backups included)")
@@ -1014,9 +1255,15 @@ def main(argv=None):
 
     logfile = None
     if args.cmd in ("install", "revert"):
-        logfile = args.log or str(repo_root() / "logs" / datetime.datetime.now().strftime("merakiplus-%Y%m%d-%H%M%S.log"))
-        pathlib.Path(logfile).parent.mkdir(parents=True, exist_ok=True)
-    o = Out(logfile, getattr(args, "verbose", False))
+        logfile = args.log or str(default_log_dir() / datetime.datetime.now().strftime("merakiplus-%Y%m%d-%H%M%S.log"))
+    try:
+        if logfile:
+            pathlib.Path(logfile).parent.mkdir(parents=True, exist_ok=True)
+        o = Out(logfile, getattr(args, "verbose", False))
+    except OSError as e:
+        print(f"  [!]  cannot write the log file {logfile} ({e}); continuing without a log", flush=True)
+        logfile = None
+        o = Out(None, getattr(args, "verbose", False))
     dev = None
     try:
         if args.cmd == "scan":
@@ -1049,7 +1296,9 @@ def main(argv=None):
             o.say(f"Log: {logfile}")
         return 1
     except KeyboardInterrupt:
-        o.say("\nInterrupted. Every step is atomic; run ./install.sh again or ./revert.sh to get a clean state.")
+        o.say("\nInterrupted. Files on the display are only replaced atomically (temp file + rename) and a paused "
+              "UI is resumed, but the run may be incomplete. Run the same command again to finish it, or "
+              "./revert.sh to go back to the stock UI.")
         return 130
     finally:
         if dev:

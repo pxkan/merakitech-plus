@@ -793,6 +793,7 @@ static float ease_io(float t){ return t<0.5f? 4*t*t*t : 1-powf(-2*t+2,3)/2; }
 static int trans_frame(ms_t now){
     float t=(float)(now-tr.t0)/tr.dur;
     if(t>=1){ tr.type=TR_NONE; return 0; }
+    if(t<0) t=0;                                                        /* v6.20 (review 2026-11): b[sxp-W] is only in range for 0 <= off <= W */
     if(tr.type==TR_SLIDE){
         int off=(int)(ease_io(t)*W);
         for(int y=0;y<H;y++){

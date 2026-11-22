@@ -363,6 +363,14 @@ static Action decide_action(const Mode *modes, int n)
     return ACT_IDLE_NONE;
 }
 
+/* v6.20 (review 2026-11 persist #5): the merakiplus a gesture switch launches must not inherit the switcher's fds — the
+ * flock'd /tmp/switcher.lock (a restarted switcher would think another instance runs), the evdev nodes, the sysfs files and the
+ * log. The child closes everything >= 3 before exec (as merakiplus's own switch_launch does); the fds are also O_CLOEXEC. */
+static void close_fds_from(int lo)
+{
+    for (int fd = lo; fd < 1024; fd++) close(fd);
+}
+
 #ifndef SWITCHER_SELFTEST
 /* ============================ DAEMON (device/host) ============================ */
 #include <sys/ioctl.h>
@@ -401,7 +409,7 @@ static void logline(const char *fmt, ...)
     if (!logf) return;
     if (ftell(logf) > 65536) {           /* simple rotation: truncate */
         fclose(logf);
-        logf = fopen(LOG_PATH, "w");
+        logf = fopen(LOG_PATH, "we");
         if (!logf) return;
     }
     time_t t = time(NULL);
@@ -480,6 +488,7 @@ static void do_switch(int pid_a)
         if (nul >= 0) { dup2(nul, 0); close(nul); }
         int out = open("/tmp/merakiplus_boot.log", O_WRONLY | O_CREAT | O_APPEND, 0644);
         if (out >= 0) { dup2(out, 1); dup2(out, 2); close(out); }
+        close_fds_from(3);
         execl("/new_customer/demo_v9", "./demo_v9", (char *)NULL);
         _exit(127);
     }
@@ -534,7 +543,7 @@ static void handle_trigger(void)
 /* Open ONE node and probe abs ranges + name. Returns fd or -1. */
 static int probe_node(const char *path, AbsProbe *p, char *name, size_t namesz, int *has_mt)
 {
-    int fd = open(path, O_RDONLY | O_NONBLOCK);
+    int fd = open(path, O_RDONLY | O_NONBLOCK | O_CLOEXEC);
     if (fd < 0) return -1;
     memset(p, 0, sizeof *p);
     p->have_x  = ioctl(fd, SW_EVIOCGABS(ABS_X_), &p->x) == 0;
@@ -599,11 +608,11 @@ static int sysfs_open_dir(Sysfs *s, const char *dir)
     snprintf(p, sizeof p, "%s/point_num", dir);
     if (access(p, R_OK) != 0) return 0;
     snprintf(p, sizeof p, "%s/lu_coordinate_x", dir);
-    s->fx = open(p, O_RDONLY);
+    s->fx = open(p, O_RDONLY | O_CLOEXEC);
     snprintf(p, sizeof p, "%s/lu_coordinate_y", dir);
-    s->fy = open(p, O_RDONLY);
+    s->fy = open(p, O_RDONLY | O_CLOEXEC);
     snprintf(p, sizeof p, "%s/point_num", dir);
-    s->fn = open(p, O_RDONLY);
+    s->fn = open(p, O_RDONLY | O_CLOEXEC);
     if (s->fx < 0 || s->fy < 0 || s->fn < 0) {
         if (s->fx >= 0) close(s->fx);
         if (s->fy >= 0) close(s->fy);
@@ -694,10 +703,10 @@ int main(void)
     if ((e = getenv("SWITCHER_LOG")) && *e)  LOG_PATH = e;
     if ((e = getenv("SWITCHER_LOCK")) && *e) LOCK_PATH = e;
 
-    logf = fopen(LOG_PATH, "a");
+    logf = fopen(LOG_PATH, "ae");
     sw_dbg = logline;
     /* single instance: flock (non-blocking) */
-    int lockfd = open(LOCK_PATH, O_CREAT | O_RDWR, 0644);
+    int lockfd = open(LOCK_PATH, O_CREAT | O_RDWR | O_CLOEXEC, 0644);
     if (lockfd >= 0 && flock(lockfd, LOCK_EX | LOCK_NB) != 0) {
         logline("another switcher instance is already running — exit");
         if (logf) fclose(logf);
@@ -740,7 +749,7 @@ int main(void)
     while (!stopflag) {
         if (filemode) {
             if (fd < 0) {
-                fd = open(getenv("SWITCHER_INPUT_FILE"), O_RDONLY | O_NONBLOCK);
+                fd = open(getenv("SWITCHER_INPUT_FILE"), O_RDONLY | O_NONBLOCK | O_CLOEXEC);
                 if (fd < 0) { usleep(500000); continue; }
                 int rmax = RAW_MAX_D;
                 if ((e = getenv("SWITCHER_RAW_MAX")) && *e) rmax = atoi(e);
@@ -1164,6 +1173,36 @@ int main(void)
     trig |= hold(&g, 45, 45, 80, 100);
     trig |= hold(&g, 45, 45, 1600, 0);
     CHECK(trig == 1, "corner: taps between valid holds → trigger (span 5.16 s)");
+
+    /* 22 (v6.20): fd hygiene of the switch child — a flock'd lock fd and a pipe are not inherited across close_fds_from(3),
+     * so a restarted switcher gets the lock while the launched child still runs (review 2026-11 persist #5) */
+    {
+        char lp[64]; snprintf(lp, sizeof lp, "/tmp/switcher_selftest_%d.lock", (int)getpid());
+        int lk = open(lp, O_CREAT | O_RDWR, 0644), pp[2] = {-1, -1};
+        int okl = lk >= 0 && flock(lk, LOCK_EX | LOCK_NB) == 0 && pipe(pp) == 0;
+        int gate[2]; okl &= pipe(gate) == 0;
+        pid_t c = fork();
+        if (c == 0) {
+            int keep = gate[0];
+            int g = dup2(keep, 1000); /* the gate survives as fd 1000 >= 3 only to detect "closed": it must be closed too */
+            (void)g;
+            close_fds_from(3);
+            int leaked = fcntl(lk, F_GETFD) != -1 || fcntl(pp[0], F_GETFD) != -1 || fcntl(pp[1], F_GETFD) != -1 || fcntl(1000, F_GETFD) != -1;
+            usleep(300000);              /* stay alive while the parent re-takes the lock */
+            _exit(leaked ? 1 : 0);
+        }
+        close(gate[0]); close(gate[1]);
+        usleep(100000);
+        if (lk >= 0) close(lk);          /* the switcher dies ... */
+        int lk2 = open(lp, O_CREAT | O_RDWR, 0644);
+        int relock = lk2 >= 0 && flock(lk2, LOCK_EX | LOCK_NB) == 0;   /* ... and a new instance must get the lock */
+        int st = -1; waitpid(c, &st, 0);
+        if (lk2 >= 0) close(lk2);
+        if (pp[0] >= 0) { close(pp[0]); close(pp[1]); }
+        unlink(lp);
+        CHECK(okl && c > 0 && WIFEXITED(st) && WEXITSTATUS(st) == 0, "switch child: close_fds_from(3) leaves no fd >= 3 (lock, pipe, high fd)");
+        CHECK(relock, "switch child alive: a restarted switcher still gets the flock (the child does not hold it)");
+    }
 
     printf("\n%d tests, %d failed\n", tests_run, tests_fail);
     return tests_fail ? 1 : 0;

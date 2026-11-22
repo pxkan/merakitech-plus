@@ -2,11 +2,17 @@
  * 480x480 screen, v6.16: feature parity (settings + activity control), its own visual
  * design system, boot-slot integration, product name + two languages — and from v6.4 a SIM build.
  *
- * v7.0 = v6.19 + THE OEM REDESIGN (display and navigation only; docs/dev/UI_v6.md "CHANGES-v7.0", docs/design/): the stock look —
+ * v7.0 = v6.20 + THE OEM REDESIGN (display and navigation only; docs/dev/UI_v6.md "CHANGES-v7.0", docs/design/): the stock look —
  *  a copper background with a fine guilloche, white ring buttons in the stock 2x2 grid with their names set along the arc, line icons,
  *  real typography (Montserrat, SIL OFL 1.1, baked as outlines into src/mp/font_data.c by tools/gen_font.py and rasterized with exact
  *  coverage), a live view with a big number + an edge progress ring, white rows on copper, a roller editor, a dark error layer. The
  *  model, guards, save path, frame policy, recipes, STOP, boot push and everything else that reaches the UART are unchanged.
+ * v6.20 = v6.19 + the fixes of the 2026-11 code review (docs/dev/REVIEW-2026-11.md, CHANGELOG): stepper repeat after a failed save;
+ *  SAVE refused while a start is pending; the existing STOP stays offered for a latched start word; queued STOPs survive a failing
+ *  frame; a pre-arm/disarm cmd8 without its 0x88 echo is resent (max 2); an unusable Wi-Fi password is never "open"; a one-shot saved
+ *  without a clock is armed once the clock is set; config.json.orig via tmp + rename; glyph_next stops at the NUL; NaN-safe SIM JSON,
+ *  hardened ctrl parser and clamped display of absurd config values. The src/mp/ module split (unity build) came just before.
+ *
  * v6.19 = v6.18.1 + (1) NO READY TONE AT A POWER-ON WITH HOT BOILERS (user: jingle + both ready tones back-to-back is redundant): at every
  *  power-on (cold boot of the display, OFF -> on, sleep -> wake) a boiler whose heat stage is already 100 over the first 1.5 s counts as
  *  announced — only the jingle plays; a tone needs a real cold -> hot transition during the session (re-arm after cooling unchanged).

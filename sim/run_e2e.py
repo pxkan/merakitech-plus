@@ -180,6 +180,25 @@ class Ctrl:
             raise RuntimeError(f"ctrl got no reply: {req}")
         return json.loads(line)
 
+    def call_raw(self, data, n_replies, timeout=3.0):
+        """v6.20: send raw bytes on ONE connection and read n reply lines (robustness tests of the ctrl parser)."""
+        s = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+        s.settimeout(timeout)
+        s.connect(self.path)
+        s.sendall(data)
+        f = s.makefile("r", encoding="utf-8", errors="replace")
+        out = []
+        try:
+            for _ in range(n_replies):
+                line = f.readline()
+                if not line:
+                    break
+                out.append(line.strip())
+        except socket.timeout:
+            pass
+        s.close()
+        return out
+
 
 def find_ui_bin(explicit=None):
     if explicit:
@@ -212,6 +231,11 @@ class ScenarioRun:
         self.ui_bin = ui_bin
         self.keep_sandbox = keep_sandbox
         self.samples = []          # (t, state)
+        self._st_off = 0           # v6.20: read_states is incremental (byte offset + the unfinished last line)
+        self._st_part = b""
+        self.state_invalid = 0     # v6.20: state lines that are not valid JSON (universal check state_valid)
+        self.state_invalid_first = None
+        self.loop_ms_max = 0.0     # v6.20: the slowest sample-loop iteration (report.json clock)
         self.cfg_samples = []      # (t, cfg dict)
         self.flag_samples = []     # (t, bool)
         self.snapshots = []        # {t, label, bin, png, raw}
@@ -280,6 +304,13 @@ class ScenarioRun:
         self.state_path.write_text("")
         self.assert_path.write_text("")
 
+    @staticmethod
+    def _tail(path, n=4000):
+        try:
+            return Path(path).read_text(errors="replace")[-n:]
+        except OSError:
+            return ""
+
     # ------------------------------------------------------------ (b) sim
     def start_sim(self):
         simcfg = self.scen.get("sim", {})
@@ -304,14 +335,17 @@ class ScenarioRun:
                 cmd.append("--replay-hold")       # started by anchor_replay() once the UI runs
         pf = self.dir / "pty_path"
         pf.unlink(missing_ok=True)      # old file from a previous run in the same directory
-        self.sim_proc = subprocess.Popen(cmd, stdout=subprocess.DEVNULL,
-                                         stderr=subprocess.PIPE, text=True)
+        # v6.20 (review 2026-11): stderr goes to a file in the scenario dir — a PIPE nobody drains blocks the
+        # process once 64 KB are written (e.g. a sanitizer report), and the scenario then fails for unrelated reasons
+        self.sim_err = self.dir / "mcu_sim.stderr"
+        with open(self.sim_err, "w") as fh:          # the child keeps its own copy of the fd
+            self.sim_proc = subprocess.Popen(cmd, stdout=subprocess.DEVNULL, stderr=fh, text=True)
         for _ in range(200):
             if pf.exists() and pf.read_text().strip():
                 break
             if self.sim_proc.poll() is not None:
                 raise RuntimeError("mcu_sim died at startup: "
-                                   + (self.sim_proc.stderr.read() or ""))
+                                   + self._tail(self.sim_err))
             time.sleep(0.05)
         self.pty_path = pf.read_text().strip()
         self.sim_ctrl = Ctrl(self.sim_ctrl_path)
@@ -323,7 +357,7 @@ class ScenarioRun:
                 break
             except (FileNotFoundError, ConnectionRefusedError):
                 if self.sim_proc.poll() is not None:
-                    raise RuntimeError("mcu_sim died at startup: " + (self.sim_proc.stderr.read() or ""))
+                    raise RuntimeError("mcu_sim died at startup: " + self._tail(self.sim_err))
                 time.sleep(0.05)
         else:
             self.sim_ctrl.call({"cmd": "ping"})
@@ -363,8 +397,9 @@ class ScenarioRun:
             self.client_kind = "reference"
             cmd = [sys.executable, str(HERE / "ref_client.py")]
         m_spawn = time.monotonic()
-        self.ui_proc = subprocess.Popen(cmd, env=env, stdout=subprocess.DEVNULL,
-                                        stderr=subprocess.PIPE, text=True)
+        self.ui_err = self.dir / "ui.stderr"
+        with open(self.ui_err, "w") as fh:
+            self.ui_proc = subprocess.Popen(cmd, env=env, stdout=subprocess.DEVNULL, stderr=fh, text=True)
         self.ui_ctrl = Ctrl(self.ui_ctrl_path)
         # wait for the first state line (contract: state per frame)
         for _ in range(200):
@@ -372,7 +407,7 @@ class ScenarioRun:
                 break
             if self.ui_proc.poll() is not None:
                 raise RuntimeError("UI client died at startup: "
-                                   + (self.ui_proc.stderr.read() or ""))
+                                   + self._tail(self.ui_err))
             time.sleep(0.05)
         m_a = time.monotonic()
         resp = self.ui_ctrl.call({"cmd": "ping"})
@@ -449,6 +484,24 @@ class ScenarioRun:
                 self.flag_path.unlink(missing_ok=True)
         elif op == "gesture":
             self.run_gesture(ev)
+        elif op == "ctrl_raw":
+            # v6.20: raw lines on ONE ctrl connection (e.g. with an embedded NUL); every line must get a reply and
+            # the replies must be valid JSON — a bad line must not wedge the connection for the lines after it
+            data = ("\n".join(ev["lines"]) + "\n").encode("utf-8")
+            replies = self.ui_ctrl.call_raw(data, len(ev["lines"]))
+            def _valid(r):
+                try:
+                    return isinstance(json.loads(r), dict)
+                except ValueError:
+                    return False
+            want_ok = ev.get("ok", [])
+            ok = len(replies) == len(ev["lines"]) and all(_valid(r) for r in replies)
+            for i, w in enumerate(want_ok):
+                if ok and w is not None:
+                    ok = json.loads(replies[i]).get("ok") is w
+            self.checks.append({"name": f"ctrl_raw {ev.get('name', '')}@{ev.get('t')}: {len(ev['lines'])} lines -> "
+                                        f"{len(ev['lines'])} valid replies", "ok": ok,
+                                "detail": json.dumps(replies, ensure_ascii=False)[:400]})
         elif op == "touch_stream":
             stream = touch_stream(ev.get("presses", 1), ev.get("x", 240),
                                   ev.get("y", 240), ev.get("hold_ms", 80),
@@ -493,22 +546,40 @@ class ScenarioRun:
 
     # ------------------------------------------------------------ (e) sampling
     def read_states(self):
+        """v6.20 (review 2026-11 mem-ui-sim #8): incremental — only the bytes appended since the last
+        call are read and parsed (it was the whole file every 20 ms: quadratic CPU in long scenarios,
+        which slipped event timestamps under --parallel). A line without its newline yet is kept
+        for the next call. Lines that are not valid JSON are counted (universal check state_valid)
+        instead of being skipped silently."""
         try:
-            with open(self.state_path) as f:
-                for line in f:
-                    line = line.strip()
-                    if not line:
-                        continue
-                    try:
-                        st = json.loads(line)
-                    except json.JSONDecodeError:
-                        continue
-                    t = st.get("t_ms", 0) / 1000.0
-                    if not self.samples or t > self.samples[-1][0] or \
-                            st.get("client") != self.samples[-1][1].get("client"):
-                        self.samples.append((t, st))
+            with open(self.state_path, "rb") as f:
+                f.seek(self._st_off)
+                chunk = f.read()
         except OSError:
-            pass
+            return
+        if not chunk:
+            return
+        self._st_off += len(chunk)
+        data = self._st_part + chunk
+        lines = data.split(b"\n")
+        self._st_part = lines.pop()          # b"" when the chunk ended with a newline
+        for raw in lines:
+            line = raw.strip()
+            if not line:
+                continue
+            try:
+                st = json.loads(line.decode("utf-8", "replace"))
+                if not isinstance(st, dict):
+                    raise ValueError("not an object")
+            except ValueError:
+                self.state_invalid += 1
+                if self.state_invalid_first is None:
+                    self.state_invalid_first = line[:200].decode("utf-8", "replace")
+                continue
+            t = st.get("t_ms", 0) / 1000.0
+            if not self.samples or t > self.samples[-1][0] or \
+                    st.get("client") != self.samples[-1][1].get("client"):
+                self.samples.append((t, st))
 
     def take_snapshot(self, label, force=False):
         try:
@@ -549,6 +620,9 @@ class ScenarioRun:
                                         "ok": False, "detail": str(e)})
                 ei += 1
             self.read_states()
+            it_ms = (time.monotonic() - self.t0 - now) * 1000.0
+            if it_ms > self.loop_ms_max:
+                self.loop_ms_max = it_ms
             if now - last_cfg >= 0.5:
                 last_cfg = now
                 try:
@@ -1105,6 +1179,11 @@ class ScenarioRun:
             self.eval_expect({"kind": "exit_code", "value": 0})
         if uni.get("no_cmd6_fail", True):
             self.eval_expect({"kind": "cmd6", "field": "fail", "op": "==", "value": 0})
+        if uni.get("state_valid", True):
+            # v6.20: every state line must be valid JSON (a NaN printed as "nan" used to hide the rest of the stream)
+            self.add("state lines: all valid JSON", self.state_invalid == 0 and len(self.samples) > 0,
+                     f"invalid={self.state_invalid} samples={len(self.samples)}"
+                     + (f" first={self.state_invalid_first!r}" if self.state_invalid_first else ""))
 
     # ------------------------------------------------------------ (g) report
     def finish(self):
@@ -1161,7 +1240,8 @@ class ScenarioRun:
             "sim_stats": next((e.get("stats") for e in reversed(self.sim_log)
                                if e["kind"] == "sim_exit"), None),
             "gesture_results": self.gesture_results,
-            "clock": self.clock,
+            "clock": dict(self.clock, loop_ms_max=round(self.loop_ms_max, 1)),
+            "state_lines_invalid": self.state_invalid,
             "sandbox": str(self.sandbox),
             "sim_assertions_log": str(self.assert_path),
             "state_jsonl": str(self.state_path),

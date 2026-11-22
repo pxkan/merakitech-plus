@@ -5,7 +5,7 @@ All notable changes to Meraki+. Details (with evidence, frames and test figures)
 
 ## [7.0] — 2026-11-22
 **The OEM redesign.** Meraki+ now looks like the machine's own UI, only better crafted, and keeps all of its power,
-revealed step by step instead of crammed onto HOME. **Display and navigation only:** the model, the guards, the save
+revealed step by step instead of crammed onto HOME. Built on v6.20 (the review fixes). **Display and navigation only:** the model, the guards, the save
 path (MCU write + ACK, then config.json), the frame policy, the activity recipes, STOP, the boot push, keep-awake and
 every other thing that reaches the UART are the same code as before. Before/after: [docs/design/](docs/design/).
 ### Changed
@@ -40,6 +40,59 @@ every other thing that reaches the UART are the same code as before. Before/afte
   full rebuild 0.20 ms (0.30), HOME rebuild with the four arc labels 0.36 ms, start-up (two background layers + font)
   4.1 ms. Device binary 429 KB (v6.19: 304 KB; +125 KB of font outlines), well inside the installer's 1.2 MB check.
 - **Not yet verified on a machine.**
+## [6.20] — 2026-11-22
+Fixes from a four-part code review (protocol, persistence, installer, memory/UI/simulator). Every finding was
+reproduced first and each fix has its own regression test. The full report, with deferrals and their reasons, is in
+[docs/dev/REVIEW-2026-11.md](docs/dev/REVIEW-2026-11.md).
+
+**UART-visible changes are limited to:** (1) up to 2 extra copies of the stock cmd8 pre-arm/disarm frame, only when
+its 0x88 echo is missing; (2) a STOP frame queued behind a frame that failed is now sent (it was swallowed); (3) the
+user can now tap the unchanged STOP for a start word left set after *NO START* (nothing is sent automatically);
+(4) a one-shot pre-heat saved while the clock was unset now gets its normal pre-arm cmd8 once the clock is valid;
+(5) fewer frames: an MCU SAVE is refused while a start is pending. No new frame type, word, limit or timing.
+### Fixed
+- **Revert could write an empty `/customer/demo.sh`** when a read on the display silently failed (gzip failing,
+  base64 rc 0). Every read is now md5-verified against the display, and a demo.sh that is empty or differs in more
+  than the guard line is never written (also for `--gesture` and the legacy migration).
+- **An interrupted activation left the stock UI paused** (SIGSTOP, frozen screen) and revert said "Done". The
+  installer now resumes the old UI on Ctrl-C, a dropped connection or a timeout; install and revert resume a paused
+  `demo_v9` first, and `status` shows it.
+- **A newer vendor (OTA) build in slot B** was overwritten without a backup, and revert restored an older one.
+  Install now backs it up as `demo_v9.vendor.<md5>`; revert only replaces slot B when it holds Meraki+ (and checks
+  the backup's md5). **Revert on a display without Meraki+** no longer deletes a vendor's boot flag.
+- `--persist` sets the boot flag only after Meraki+ is verified running; the free-space check includes the vendor
+  backup; failed copies leave no partial temp files (and revert removes old ones); standalone (`curl`) mode logs to
+  `~/merakiplus-logs/` instead of the temp dir's parent.
+- **A lost pre-arm or disarm was never resent** (protocol): after a physical-button power-off the controller could
+  wake the machine at a stale time. The arm now counts only after its echo; otherwise it is resent at most twice.
+- **No way to clear a start that never ran:** after *NO START · CHECK THE MACHINE* the start word stayed set with no
+  STOP button, and the power button / auto off stayed blocked. HOME now keeps offering that activity's STOP.
+- **A STOP tapped while another frame was failing** was discarded unsent; it is now kept and sent.
+- **Holding − / + while a SAVE failed** made the value jump to its limit (thousands of steps in one frame).
+- A SAVE is refused (*ONE MOMENT…*) while a start is waiting for the machine, like the reverse.
+- **Wi-Fi:** a password that is too long, has a malformed `\u` escape or is not a string was treated as "no password",
+  and the NET guard wrote an **open** network for the SSID. It is now *BAD PASSWORD* and the network is left alone.
+- A one-shot pre-heat saved while the clock was not set stayed ON forever; it is armed once the clock is valid.
+- `config.json.orig` (the pristine backup) is written via tmp + fsync + rename; an empty or cut-off one is re-created.
+- The gesture switcher no longer leaks its lock, input and log file descriptors into the merakiplus it launches
+  (a restarted switcher could refuse to run). `bin/switcher` rebuilt.
+- Renderer: a string cut off inside a UTF-8 sequence no longer reads past its end; absurd config values (INT_MIN /
+  INT_MAX) are clamped for display (no integer overflow); the transition progress is clamped.
+- Simulator / tests: non-finite floats print `null` in the SIM state JSON; the ctrl hook ignores NaN/Inf, range-checks
+  integers and survives an embedded NUL; `mcu_sim`'s band check matches the documented write bands; the E2E runner
+  reads the state stream incrementally, fails on invalid state lines and logs child stderr to files.
+### CI
+- `release.yml`: least privilege — only the publish job has `contents: write`; no persisted checkout token; manual
+  releases only from main. `ci.yml`: the preview self-test also in Danish, a version/CHANGELOG consistency step, a
+  Python 3.8 job and a sanitizer job (UBSan via zig, ASan + UBSan via clang). Actions stay on major tags.
+### Notes
+- Self-test: new section *v6.20 review fixes* (R1–R11, 25 checks): 570 checks EN + DA, also clean under ASan + UBSan.
+  Switcher self-test 52/52 (+2). `sim/selftest.py` +3 band checks. New E2E scenario `ctrl_hardening` (46 scenarios).
+  `tests/test_installer.py` gains mock failure injection and 13 scenarios (about 7 min now).
+- Deferred with reasons (REVIEW-2026-11.md §2.2): the `grab_shim.so` errno issue (the committed `.so` is the
+  on-device-verified build), the pre-heat being 1 h off across a DST change (stock has the same flaw; the fix adds
+  cmd8 traffic and needs its own test matrix), and informational items.
+- **Not verified on a machine.** Update: run the installer again (`./install.sh`).
 
 ## [6.19] — 2026-11-21
 Two sound changes from user feedback. Display and audio only — no UART frame, guard, limit, timing, setting or helper

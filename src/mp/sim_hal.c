@@ -130,8 +130,12 @@ static int sim_ev_next(struct input_event*ev,ms_t now){
     if(!sim_evn||sim_evq[sim_evh].due>now) return 0;
     *ev=sim_evq[sim_evh].ev; sim_evh=(sim_evh+1)%SIM_EVQ; sim_evn--; return 1;
 }
+/* v6.20 (review 2026-11 mem-ui-sim #3): a float in the state/ctrl JSON is printed as null when it is not finite — "nan" made every
+ * later state line invalid JSON, and the runner silently skipped them */
+static const char* jf(const char*fmt,double v){ static char b[8][40]; static int k; if(!isfinite(v)) return "null"; char*o=b[k++&7]; snprintf(o,40,fmt,v); return o; }
 /* ctrl "touch": same record sequence as tinj_hold, put in the same queue (down now, up after ms) */
 static void sim_touch_inject(int x,int y,int ms,ms_t now){
+    x=clampi(x,-480,960); y=clampi(y,-480,960);                     /* v6.20: no int overflow in x*4096 for absurd coordinates */
     int rx=clampi((x*4096+479)/480,0,4095), ry=clampi((y*4096+479)/480,0,4095);   /* rounded up: scalex() returns exactly x */
     ms_t due=now>sim_ev_last()?now:sim_ev_last()+1; if(ms<1) ms=1;
     sim_ev_push(EV_ABS,ABS_MT_TRACKING_ID,1,due); sim_ev_push(EV_ABS,ABS_MT_POSITION_X,rx,due); sim_ev_push(EV_ABS,ABS_MT_POSITION_Y,ry,due);
@@ -269,13 +273,13 @@ static void sim_state_emit(ms_t now,int force){   /* force=0: only if the line's
       for(int k=snd.log_n-1;k>=0;k--) jb(&j,"%s%s:%s",k==snd.log_n-1?"":",",SE_KEY[(int)snd.log[k].ev],SO_KEY[(int)snd.log[k].out]);
       jb(&j,"\",\"file\":"); jb_s(&j,snd.last_file); jb(&j,",\"last\":"); if(snd.log_n) jb(&j,"\"%s\"",SE_KEY[(int)snd.log[0].ev]); else jb(&j,"null"); jb(&j,"}"); }
     /* v6.9 (addendum): display conditioning + latest chart scale (display only — regs above are raw) */
-    jb(&j,",\"cond\":{\"raw\":%s,\"a_chart\":%.3f,\"a_hero\":%.3f,\"med\":%d,\"scale\":\"%s\",\"pct\":%d,\"hold\":%d,\"head\":%.2f,\"hero_snaps\":%d,\"wdb\":%.1f,\"gate\":%d}",
-       cd.raw?"true":"false",cd.a_chart,cd.a_hero,cd.med,CS_KEY[cd.scale],cd.pct,cd.hold,cd.head,hf.n_snap,(double)CD_WDB,cd.gate);
+    jb(&j,",\"cond\":{\"raw\":%s,\"a_chart\":%s,\"a_hero\":%s,\"med\":%d,\"scale\":\"%s\",\"pct\":%d,\"hold\":%d,\"head\":%s,\"hero_snaps\":%d,\"wdb\":%.1f,\"gate\":%d}",
+       cd.raw?"true":"false",jf("%.3f",cd.a_chart),jf("%.3f",cd.a_hero),cd.med,CS_KEY[cd.scale],cd.pct,cd.hold,jf("%.2f",cd.head),hf.n_snap,(double)CD_WDB,cd.gate);
     /* v6.9: the weight source (latch) and the displayed weight (0.1 g, signed, conditioned + deadband) — regs/regs_s are raw */
     jb(&j,",\"weight\":{\"src\":%d,\"switches\":%d,\"shown\":%d}",wsl.src,wsl.n_sw,w_disp(wsl.src,now));
     { float pb=p_bar((float)reg[51]);                       /* v6.10: the pressure estimate (display only; regs are raw) — bar = null above P_EST_MAX (pulse) */
-      jb(&j,",\"press\":{\"raw\":%u,\"k\":%.6f,\"anchor_bar\":%d,\"p0\":%d,\"max_bar\":%.1f",reg[51],(double)p_k(),p_anchor_bar(),P_ANCHOR_RAW,(double)P_EST_MAX);
-      if(pb<0.f) jb(&j,",\"bar\":null,\"pulse\":true}"); else jb(&j,",\"bar\":%.2f,\"pulse\":false}",(double)pb); }
+      jb(&j,",\"press\":{\"raw\":%u,\"k\":%s,\"anchor_bar\":%d,\"p0\":%d,\"max_bar\":%.1f",reg[51],jf("%.6f",(double)p_k()),p_anchor_bar(),P_ANCHOR_RAW,(double)P_EST_MAX);
+      if(pb<0.f) jb(&j,",\"bar\":null,\"pulse\":true}"); else jb(&j,",\"bar\":%s,\"pulse\":false}",jf("%.2f",(double)pb)); }
     jb(&j,",\"chart\":{\"mode\":%d,\"active\":%s,\"full\":%d,\"top\":%d,\"raw_max\":%d,\"disp_max\":%d,\"ticks\":%d,\"base_ticks\":%d,\"clipped\":%d,\"n\":%d,\"n_active\":%d",
        cst.mode,cst.active?"true":"false",cst.full,cst.top,cst.raw_max,cst.disp_max,cst.ticks,cst.bticks,cst.clip,cst.n,cst.na);
     /* v6.15: graph reset on activity start — buf = samples in the ring, w_max/w_top = the weight line's max + axis top (mode 0),
@@ -353,8 +357,8 @@ static void sim_state_emit(ms_t now,int force){   /* force=0: only if the line's
     if(act.pending==ACT_NONE) jb(&j,",\"activity_pending\":null"); else jb(&j,",\"activity_pending\":\"%s\"",ACT_KEY[act.pending]);
     /* counters outside the content comparison: RX counter + frame time (last, max since previous line, mean, max over the run; HOST) */
     char*tail=j.p; uint32_t h=H0; for(char*q=buf;q<tail;q++){ h^=(unsigned char)*q; h*=16777619u; }
-    jb(&j,",\"crc_ok\":%u,\"frame_ms\":%.3f,\"frame_ms_max\":%.3f,\"frame_ms_avg\":%.3f,\"frame_ms_peak\":%.3f,\"frames\":%ld,\"fb_seq\":%ld}",
-       rx_ok,ft_last,sim_ft_win>ft_last?sim_ft_win:ft_last,sim_frames?sim_ft_sum/sim_frames:0.0,sim_ft_peak,sim_frames,sim_fb_seq);
+    jb(&j,",\"crc_ok\":%u,\"frame_ms\":%s,\"frame_ms_max\":%s,\"frame_ms_avg\":%s,\"frame_ms_peak\":%s,\"frames\":%ld,\"fb_seq\":%ld}",
+       rx_ok,jf("%.3f",ft_last),jf("%.3f",sim_ft_win>ft_last?sim_ft_win:ft_last),jf("%.3f",sim_frames?sim_ft_sum/sim_frames:0.0),jf("%.3f",sim_ft_peak),sim_frames,sim_fb_seq);
     if(j.p>=j.e){ static int warned; if(!warned){ warned=1; fputs("merakiplus-sim: state line too long\n",stderr); } return; }
     if(!force&&h==last_h&&now-sim_state_last<90) return;
     last_h=h; *j.p++='\n'; fprintf(sim_sf,"{\"t_ms\":%lld,",(long long)(now-sim_t0)); fwrite(buf,1,(size_t)(j.p-buf),sim_sf); fflush(sim_sf); sim_state_last=now; sim_ft_win=0;
@@ -394,17 +398,22 @@ static const JKV* js_get(const JKV*kv,int n,const char*key){ int L=(int)strlen(k
 static int js_str(const JKV*kv,int n,const char*key,char*out,size_t on){
     const JKV*e=js_get(kv,n,key); out[0]=0; if(!e||e->t!='s') return 0;
     size_t o=0; for(int i=0;i<e->vl&&o+1<on;i++){ char c=e->v[i];
-        if(c=='\\'&&i+1<e->vl){ c=e->v[++i]; if(c=='n') c='\n'; else if(c=='t') c='\t'; else if(c=='u'&&i+4<e->vl){ char h[5]; memcpy(h,e->v+i+1,4); h[4]=0; c=(char)strtol(h,NULL,16); i+=4; } }
+        if(c=='\\'&&i+1<e->vl){ c=e->v[++i]; if(c=='n') c='\n'; else if(c=='t') c='\t';
+            else if(c=='u'&&i+4<e->vl){ char h[5]; memcpy(h,e->v+i+1,4); h[4]=0; unsigned u=(unsigned)strtoul(h,NULL,16); i+=4;   /* v6.20: \\u as UTF-8 (was: truncated to one byte) */
+                if(u==0) c='?'; else if(u<0x80) c=(char)u;
+                else if(u<0x800){ if(o+2>=on) break; out[o++]=(char)(0xC0|(u>>6)); c=(char)(0x80|(u&0x3F)); }
+                else { if(o+3>=on) break; out[o++]=(char)(0xE0|(u>>12)); out[o++]=(char)(0x80|((u>>6)&0x3F)); c=(char)(0x80|(u&0x3F)); } } }
         out[o++]=c; }
     out[o]=0; return 1;
 }
 static int js_int(const JKV*kv,int n,const char*key,int def){
     const JKV*e=js_get(kv,n,key); if(!e) return def;
     if(e->t=='n'){ if(e->vl>=4&&!memcmp(e->v,"true",4)) return 1; if(e->vl>=5&&!memcmp(e->v,"false",5)) return 0; if(e->vl>=4&&!memcmp(e->v,"null",4)) return def; }
-    if(e->t=='n'||e->t=='s') return (int)strtod(e->v,NULL);
+    if(e->t=='n'||e->t=='s'){ double d=strtod(e->v,NULL); return (d>=-2147483648.0&&d<=2147483647.0)?(int)d:def; }   /* v6.20: NaN / out of int range -> def (was UB) */
     return def;
 }
-static double js_num(const JKV*kv,int n,const char*key,double def){ const JKV*e=js_get(kv,n,key); return (e&&(e->t=='n'||e->t=='s')&&e->v[0]!='n')?strtod(e->v,NULL):def; }
+static double js_num(const JKV*kv,int n,const char*key,double def){ const JKV*e=js_get(kv,n,key); if(!(e&&(e->t=='n'||e->t=='s'))) return def;
+    double d=strtod(e->v,NULL); return isfinite(d)?d:def; }                                                      /* v6.20: "-nan", "inf" -> def */
 static int js_words(const JKV*kv,int n,const char*key,uint16_t*w,int max){
     const JKV*e=js_get(kv,n,key); if(!e||e->t!='a') return -1;
     int c=0; const char*s=e->v+1,*end=e->v+e->vl-1;
@@ -571,8 +580,8 @@ static void sim_dispatch(const char*line,char*out,size_t on,ms_t now){
         for(int k=0;k<3;k++) if(!strcmp(sc,CS_KEY[k])) cd.scale=k;
         if(js_get(kv,n,"reset")||js_get(kv,n,"a_chart")||js_get(kv,n,"med")) cond_reset();
         hf.ok=0; ui_kick=1;
-        jb(&j,"{\"ok\":true,\"raw\":%s,\"a_chart\":%.3f,\"a_hero\":%.3f,\"med\":%d,\"scale\":\"%s\",\"hold\":%d,\"pct\":%d,\"head\":%.2f,\"gate\":%d",
-           cd.raw?"true":"false",cd.a_chart,cd.a_hero,cd.med,CS_KEY[cd.scale],cd.hold,cd.pct,cd.head,cd.gate);
+        jb(&j,"{\"ok\":true,\"raw\":%s,\"a_chart\":%s,\"a_hero\":%s,\"med\":%d,\"scale\":\"%s\",\"hold\":%d,\"pct\":%d,\"head\":%s,\"gate\":%d",
+           cd.raw?"true":"false",jf("%.3f",cd.a_chart),jf("%.3f",cd.a_hero),cd.med,CS_KEY[cd.scale],cd.hold,cd.pct,jf("%.2f",cd.head),cd.gate);
     }
     else if(!strcmp(cmd,"net")){                            /* v6.7: the wifi model — kill | ip_drop | if_down | cold | ap_down | ap_up | status */
         int ok=1; char ipb[20];
@@ -650,6 +659,7 @@ static void sim_ctrl_io(ms_t now){
         int r=(int)read(sim_cli[k].fd,sim_cli[k].buf+sim_cli[k].n,sizeof sim_cli[k].buf-1-(size_t)sim_cli[k].n);
         if(r<0&&(errno==EAGAIN||errno==EWOULDBLOCK||errno==EINTR)) continue;
         if(r<=0){ close(sim_cli[k].fd); sim_cli[k].fd=-1; continue; }
+        for(int i=sim_cli[k].n;i<sim_cli[k].n+r;i++) if(!sim_cli[k].buf[i]) sim_cli[k].buf[i]=0x01;   /* v6.20: an embedded NUL makes its line invalid JSON instead of wedging the connection */
         sim_cli[k].n+=r; sim_cli[k].buf[sim_cli[k].n]=0;
         char*s=sim_cli[k].buf,*nl;
         while((nl=strchr(s,'\n'))){

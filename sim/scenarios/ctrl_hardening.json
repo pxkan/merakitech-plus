@@ -1,0 +1,94 @@
+{
+  "name": "ctrl_hardening",
+  "description": "SIM ctrl hook robustness: -nan/inf in cond keep the old values (state stays valid JSON), touch at 1e10 is clamped, a line with an embedded NUL gets an error reply and the next line on the same connection is still answered",
+  "duration_s": 10,
+  "events": [
+    {
+      "t": 3,
+      "target": "ui",
+      "cmd": "cond",
+      "a_chart": "-nan",
+      "head": "inf"
+    },
+    {
+      "t": 3.5,
+      "target": "ui",
+      "cmd": "cond",
+      "a_hero": "nan"
+    },
+    {
+      "t": 4,
+      "target": "ui",
+      "cmd": "touch",
+      "x": 10000000000.0,
+      "y": -10000000000.0
+    },
+    {
+      "t": 5,
+      "target": "runner",
+      "op": "ctrl_raw",
+      "name": "nul",
+      "lines": [
+        "{\"cmd\":\"ping\"\u0000garbage}",
+        "{\"cmd\":\"ping\"}"
+      ],
+      "ok": [
+        false,
+        true
+      ]
+    },
+    {
+      "t": 7,
+      "target": "runner",
+      "op": "snapshot",
+      "label": "after"
+    }
+  ],
+  "expect": [
+    {
+      "kind": "phase_hold",
+      "t0": 2,
+      "t1": 9.5,
+      "value": "READY",
+      "min_ratio": 0.95
+    },
+    {
+      "kind": "state",
+      "path": "cond.a_chart",
+      "t0": 3.5,
+      "t1": 9.5,
+      "min": 0.01,
+      "max": 1,
+      "mode": "all"
+    },
+    {
+      "kind": "state",
+      "path": "cond.a_hero",
+      "t0": 4,
+      "t1": 9.5,
+      "min": 0.01,
+      "max": 1,
+      "mode": "all"
+    },
+    {
+      "kind": "state",
+      "path": "cond.head",
+      "t0": 3.5,
+      "t1": 9.5,
+      "min": 1,
+      "max": 3,
+      "mode": "all"
+    },
+    {
+      "kind": "sim_log",
+      "assert": "no_writes_between",
+      "t0": 2,
+      "t1": 9.5,
+      "except_subs": [
+        0,
+        1,
+        112
+      ]
+    }
+  ]
+}

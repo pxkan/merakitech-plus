@@ -8,6 +8,7 @@ tests/mock_device.py. No hardware, no network beyond 127.0.0.1.
 import hashlib
 import io
 import contextlib
+import os
 import pathlib
 import sys
 import tempfile
@@ -40,14 +41,14 @@ def tree_digest(root):
     return h.hexdigest()
 
 
-def run(srv, root, *args):
+def run(srv, root, *args, quiet=False):
     buf = io.StringIO()
     with contextlib.redirect_stdout(buf):
         rc = mp.main([args[0], "--ip", "127.0.0.1", "--port", str(srv.port), "--test-prefix", str(root),
                       "--yes", "--log", str(root.parent / "test.log")] +
                      (["--bin-dir", str(ROOT / "bin")] if args[0] == "install" else []) + list(args[1:]))
     out = buf.getvalue()
-    if rc != 0:
+    if rc != 0 and not quiet:
         print(out)
     return rc, out
 
@@ -280,6 +281,282 @@ def legacy_purge(srv, root):
     check("stock UI running", [e for _, e in ui(root)] == ["/customer/demo_v9"])
 
 
+def read_fail(srv, root):
+    """Review finding 1: a device read whose gzip fails must not turn into an empty demo.sh."""
+    orig_sh = md5f(root / "customer/demo.sh")
+    rc, _ = run(srv, root, "install", "--gesture")
+    check("setup: install --gesture", rc == 0)
+    with_guard = md5f(root / "customer/demo.sh")
+    md.inject(root, "gzip_fail")
+    rc, out = run(srv, root, "revert", quiet=True)
+    check("revert with a failing device read exits 1", rc == 1 and "failed verification" in out, out[-500:])
+    check("demo.sh left unchanged (not emptied)", md5f(root / "customer/demo.sh") == with_guard
+          and (root / "customer/demo.sh").stat().st_size > 0)
+    md.uninject(root, "gzip_fail")
+    rc, out = run(srv, root, "revert")
+    check("revert once reads work again exits 0", rc == 0)
+    check("demo.sh byte-identical to the original", md5f(root / "customer/demo.sh") == orig_sh)
+
+    rc, _ = run(srv, root, "install", "--gesture")
+    check("setup: install --gesture again", rc == 0)
+    make_legacy(root)
+    legacy_sh = md5f(root / "customer/demo.sh")
+    md.inject(root, "gzip_fail")
+    rc, out = run(srv, root, "install", quiet=True)
+    check("legacy migration with a failing device read exits 1", rc == 1 and "failed verification" in out, out[-500:])
+    check("legacy migration: demo.sh left unchanged", md5f(root / "customer/demo.sh") == legacy_sh)
+    md.uninject(root, "gzip_fail")
+
+    def refused(cur, new):
+        try:
+            mp.check_demo_sh_edit(cur, new)
+        except mp.Abort:
+            return True
+        return False
+    sh = md.DEMO_SH.encode()
+    guarded = sh.replace(mp.ANCHOR.encode(), (mp.GUARD_LINE + "\n" + mp.ANCHOR).encode(), 1)
+    check("demo.sh guard: adding/removing the guard line is allowed",
+          not refused(sh, guarded) and not refused(guarded, sh))
+    check("demo.sh guard: an empty result is refused", refused(guarded, b"") and refused(b"", b""))
+    check("demo.sh guard: any other change is refused", refused(guarded, sh.replace(b"insmod", b"#insmod")))
+
+
+def no_stopped(root):
+    return [d.name for d in (root / "proc").iterdir() if md.is_stopped(root, d.name)]
+
+
+def switch_interrupted(srv, root):
+    """Review finding 2: an interrupted stop-first switch must not leave the stock UI SIGSTOPped."""
+    real_find_new = mp.find_new
+
+    def ctrl_c(*a, **k):
+        raise KeyboardInterrupt
+    mp.find_new = ctrl_c
+    try:
+        rc, out = run(srv, root, "install", quiet=True)
+    finally:
+        mp.find_new = real_find_new
+    check("Ctrl-C inside the switch: install exits 130", rc == 130, out[-400:])
+    check("Ctrl-C inside the switch: no UI left stopped", not no_stopped(root), no_stopped(root))
+    check("Ctrl-C inside the switch: only the resumed stock UI runs", ui(root) == [("600", "/customer/demo_v9")], ui(root))
+    check("Ctrl-C message no longer claims every step is atomic", "Every step is atomic" not in out
+          and "Run the same command again" in out)
+
+    md.inject(root, "ui_start", "die")
+    rc, out = run(srv, root, "install", quiet=True)
+    md.uninject(root, "ui_start")
+    check("connection drop inside the switch: install exits 1", rc == 1, out[-400:])
+    check("connection drop inside the switch: no UI left stopped", not no_stopped(root), no_stopped(root))
+    check("connection drop inside the switch: the stock UI runs", ui(root) == [("600", "/customer/demo_v9")], ui(root))
+
+    rc, out = run(srv, root, "install")
+    check("install afterwards succeeds (no 'several UIs')", rc == 0 and [e for _, e in ui(root)] == ["/new_customer/demo_v9"])
+
+
+def stopped_ui(srv, root):
+    """Review finding 2: revert / install resume a stock UI left stopped by an older run."""
+    md.set_stopped(root, 600)
+    rc, out = run(srv, root, "status")
+    check("status reports the paused UI", rc == 0 and "PAUSED" in out, out[-400:])
+    rc, out = run(srv, root, "revert")
+    check("revert on a device with a stopped stock UI exits 0", rc == 0 and "nothing to revert" in out, out[-400:])
+    check("revert resumed the stopped stock UI", not md.is_stopped(root, 600) and ui(root) == [("600", "/customer/demo_v9")])
+    md.set_stopped(root, 600)
+    rc, out = run(srv, root, "install")
+    check("install on a device with a stopped stock UI resumes it first and exits 0",
+          rc == 0 and "resuming" in out and [e for _, e in ui(root)] == ["/new_customer/demo_v9"], ui(root))
+    check("no UI left stopped after install", not no_stopped(root), no_stopped(root))
+    md.set_stopped(root, ui(root)[0][0])
+    rc, out = run(srv, root, "revert")
+    check("revert with a stopped Meraki+ UI exits 0, stock UI runs, nothing stopped",
+          rc == 0 and ui(root) == [(ui(root)[0][0], "/customer/demo_v9")] and not no_stopped(root), ui(root))
+
+
+def vendor_b_no_install(srv, root):
+    """Review finding 4: revert on a display WITHOUT Meraki+ that runs a vendor build from slot B
+    (after a vendor OTA) must not touch the vendor's boot flag or slot B."""
+    orig_b = md5f(root / "new_customer/demo_v9")
+    before = tree_digest(root)
+    rc, out = run(srv, root, "revert")
+    check("revert without an install: nothing to revert", rc == 0 and "nothing to revert" in out, out[-300:])
+    check("revert without an install: device unchanged", tree_digest(root) == before)
+    rc, out = run(srv, root, "revert", "--purge")
+    check("revert --purge without an install exits 0", rc == 0, out[-300:])
+    check("revert --purge without an install: vendor boot flag kept", (root / "customer/new").exists())
+    check("revert --purge without an install: vendor slot B kept", md5f(root / "new_customer/demo_v9") == orig_b)
+    check("revert --purge without an install: vendor UI from slot B still runs",
+          [e for _, e in ui(root)] == ["/new_customer/demo_v9"], ui(root))
+
+
+def ota_after_install(srv, root):
+    """Review finding 3, path 1: install, a vendor OTA overwrites slot B, revert, install, revert."""
+    orig_b = md5f(root / "new_customer/demo_v9")
+    rc, _ = run(srv, root, "install")
+    check("setup: install", rc == 0)
+    ota = hashlib.md5(md.ota_into_b(root)).hexdigest()
+    rc, out = run(srv, root, "revert")
+    check("revert after an OTA exits 0", rc == 0, out[-400:])
+    check("revert after an OTA keeps the OTA build in slot B", md5f(root / "new_customer/demo_v9") == ota)
+    check("revert after an OTA keeps the OTA's boot flag", (root / "customer/new").exists())
+    check("revert after an OTA: the old vendor backup is still kept",
+          md5f(root / "new_customer/merakiplus/boot/demo_v9.vendor") == orig_b)
+
+    rc, out = run(srv, root, "install")
+    check("install over the OTA build exits 0", rc == 0)
+    bak = root / ("new_customer/merakiplus/boot/demo_v9.vendor." + ota)
+    check("the OTA build was backed up under its md5 before being overwritten", bak.is_file() and md5f(bak) == ota)
+    check("state points at the new backup", f"bak_b={mp.BAK_B}.{ota}" in
+          (root / "new_customer/merakiplus/boot/merakiplus.state").read_text())
+    check("slot B holds Meraki+", md5f(root / "new_customer/demo_v9") == MERAKIPLUS)
+    rc, out = run(srv, root, "revert")
+    check("second revert exits 0", rc == 0)
+    check("second revert restores the OTA build (not the stale backup)", md5f(root / "new_customer/demo_v9") == ota)
+    check("second revert keeps the OTA's boot flag", (root / "customer/new").exists())
+
+
+def ota_after_revert(srv, root):
+    """Review finding 3, path 2: install, revert, a vendor OTA lands in slot B, install, revert."""
+    orig_b = md5f(root / "new_customer/demo_v9")
+    rc1, _ = run(srv, root, "install")
+    rc2, _ = run(srv, root, "revert")
+    check("setup: install + revert", rc1 == 0 and rc2 == 0)
+    ota = hashlib.md5(md.ota_into_b(root)).hexdigest()
+    rc, out = run(srv, root, "install")
+    check("install after the OTA exits 0", rc == 0)
+    check("install warns that slot B held a different vendor build", "different vendor build" in out, out[-1500:])
+    bak = root / ("new_customer/merakiplus/boot/demo_v9.vendor." + ota)
+    check("the OTA build survives on the device (md5-named backup)", bak.is_file() and md5f(bak) == ota)
+    check("the first vendor backup is not overwritten",
+          md5f(root / "new_customer/merakiplus/boot/demo_v9.vendor") == orig_b)
+    rc, out = run(srv, root, "revert")
+    check("revert exits 0", rc == 0)
+    check("revert restores the OTA build, not the stale backup", md5f(root / "new_customer/demo_v9") == ota)
+    check("revert keeps the boot flag the OTA set", (root / "customer/new").exists())
+
+    # a damaged backup is never restored
+    rc, _ = run(srv, root, "install")
+    bak.write_bytes(b"\x7fELF damaged\n")
+    rc, out = run(srv, root, "revert", quiet=True)
+    check("revert with a damaged vendor backup stops (exit 1)", rc == 1 and "damaged" in out, out[-400:])
+    check("... and leaves Meraki+ in slot B instead of a damaged binary", md5f(root / "new_customer/demo_v9") == MERAKIPLUS)
+
+
+def persist_start_fails(srv, root):
+    """Review finding 5: --persist must not select slot B for the next boot when Meraki+ did not start."""
+    md.inject(root, "ui_start", "never")
+    rc, out = run(srv, root, "install", "--persist", quiet=True)
+    md.uninject(root, "ui_start")
+    check("install --persist with a UI that never starts exits 1", rc == 1 and "did not start" in out, out[-400:])
+    check("boot flag NOT set after the failed start", not (root / "customer/new").exists())
+    check("the previous UI was resumed", ui(root) == [("600", "/customer/demo_v9")] and not no_stopped(root), ui(root))
+    rc, out = run(srv, root, "install", "--persist", "--no-activate")
+    check("--persist --no-activate exits 0 with a warning", rc == 0 and "--persist with --no-activate" in out)
+    check("--persist --no-activate sets the flag (as before)", (root / "customer/new").exists())
+    rc, out = run(srv, root, "revert")
+    check("revert afterwards exits 0 and removes the flag", rc == 0 and not (root / "customer/new").exists())
+
+
+def tmp_files(root):
+    return sorted(str(q.relative_to(root)) for q in root.rglob("*") if q.name.endswith((".tmp", ".part")))
+
+
+def free_space(srv, root):
+    """Review finding 6: the free-space gate counts the vendor backup, and still applies when B is ours."""
+    big = b"\x7fELF MOCK VENDOR UI (large build)\n" + bytes(1500 * 1024)
+    (root / "new_customer/demo_v9").write_bytes(big)
+    m = (ROOT / "bin/merakiplus").read_bytes()
+    small = 2 * len(m) + len((ROOT / "bin/merakiplus_snd").read_bytes()) + \
+        sum(len((ROOT / "audio" / n).read_bytes()) for n in mp.AUDIO_MD5)
+    md.inject(root, "df_free_kb", str((small + len(big) // 2) // 1024 + 64))
+    before = tree_digest(root)
+    rc, out = run(srv, root, "install", quiet=True)
+    check("too little space for the vendor backup: install refuses (exit 1)",
+          rc == 1 and "KB free" in out and "vendor backup" in out, out[-400:])
+    check("too little space: nothing changed", tree_digest(root) == before)
+    md.inject(root, "df_free_kb", str((small + len(big)) // 1024 + 200))
+    rc, out = run(srv, root, "install")
+    check("enough space incl. the vendor backup: install exits 0", rc == 0)
+    md.inject(root, "df_free_kb", "8")
+    rc, out = run(srv, root, "install")
+    check("re-install with nothing to write passes the gate on a full disk", rc == 0 and "already" in out)
+    old = b"\x7fELF FAKE OLDER BUILD " + mp.MERAKIPLUS_MARK.encode() + b"V6.0\n" * 40
+    (root / "new_customer/demo_v9").write_bytes(old)
+    (root / mp.STAGE.lstrip("/")).write_bytes(old)
+    before = tree_digest(root)
+    rc, out = run(srv, root, "install", quiet=True)
+    check("update of an older Meraki+ in slot B is still space-checked", rc == 1 and "KB free" in out, out[-300:])
+    check("... and changes nothing", tree_digest(root) == before)
+    md.uninject(root, "df_free_kb")
+
+
+def disk_full_copy(srv, root):
+    """Review finding 6: a cp that fails mid-way leaves no partial temp file; revert cleans leftovers."""
+    md.inject(root, "cp_enospc", ".demo_v9.vendor.tmp")
+    orig_b = md5f(root / "new_customer/demo_v9")
+    rc, out = run(srv, root, "install", quiet=True)
+    md.uninject(root, "cp_enospc")
+    check("disk full during the vendor backup: install exits 1", rc == 1 and "No space left" in out, out[-400:])
+    check("no partial temp file left behind", not tmp_files(root), tmp_files(root))
+    check("slot B untouched", md5f(root / "new_customer/demo_v9") == orig_b)
+
+    # leftovers of a run that was killed outright (e.g. the laptop went to sleep)
+    leftovers = ["new_customer/merakiplus/boot/.demo_v9.vendor.tmp", "new_customer/.demo_v9.tmp",
+                 "customer/demo.sh.part", "new_customer/merakiplus/merakiplus.part"]
+    for f in leftovers:
+        (root / f).write_bytes(b"partial")
+    rc, out = run(srv, root, "revert")
+    check("revert with only leftovers: nothing to revert, exit 0", rc == 0 and "nothing to revert" in out, out[-300:])
+    check("revert removed the leftover temp files", not tmp_files(root), tmp_files(root))
+    rc, _ = run(srv, root, "install")
+    for f in leftovers + ["new_customer/merakiplus/audio/start.wav.part", "new_customer/merakiplus/boot/merakiplus.state.tmp"]:
+        (root / f).write_bytes(b"partial")
+    rc, out = run(srv, root, "revert")
+    check("full revert also removes leftover temp files", rc == 0 and not tmp_files(root), tmp_files(root))
+    check("vendor slot B restored", md5f(root / "new_customer/demo_v9") == orig_b)
+
+
+def corrupt_upload(srv, root):
+    """Every upload arrives corrupted: push retries, then aborts with the destination untouched."""
+    orig_b = md5f(root / "new_customer/demo_v9")
+    md.inject(root, "nc_corrupt")
+    rc, out = run(srv, root, "install", quiet=True)
+    md.uninject(root, "nc_corrupt")
+    att = [l for l in out.splitlines() if "upload attempt" in l]
+    check("corrupt uploads: install exits 1 after 3 attempts", rc == 1 and "Could not upload" in out and len(att) == 3, att)
+    check("only the attempts before the last say 'retrying'",
+          [l.endswith("retrying") for l in att] == [True, True, False], att)
+    check("corrupt uploads: slot B untouched, no .part left", md5f(root / "new_customer/demo_v9") == orig_b
+          and not tmp_files(root), tmp_files(root))
+
+
+def log_location(srv, root):
+    """Review finding 7: in install.sh's standalone (curl) mode the tool runs from a mktemp dir;
+    its parent is not a checkout, so logs must not go to <parent>/logs (e.g. /tmp/logs)."""
+    check("a git checkout logs to <repo>/logs", mp.is_checkout() and mp.default_log_dir() == ROOT / "logs")
+    fake = root.parent / "standalone"
+    (fake / "tools").mkdir(parents=True)
+    home = root.parent / "home"
+    home.mkdir()
+    real_root, real_home = mp.repo_root, os.environ.get("HOME")
+    mp.repo_root = lambda: fake
+    os.environ["HOME"] = str(home)
+    try:
+        check("standalone mode is detected", not mp.is_checkout())
+        check("standalone mode logs to ~/merakiplus-logs", mp.default_log_dir() == home / "merakiplus-logs")
+        buf = io.StringIO()
+        with contextlib.redirect_stdout(buf):
+            rc = mp.main(["revert", "--ip", "127.0.0.1", "--port", str(srv.port), "--test-prefix", str(root), "--yes"])
+        logs = list((home / "merakiplus-logs").glob("merakiplus-*.log"))
+        check("standalone revert writes its log under the home directory", rc == 0 and len(logs) == 1
+              and not (fake.parent / "logs").exists(), buf.getvalue()[-300:])
+    finally:
+        mp.repo_root = real_root
+        if real_home is None:
+            del os.environ["HOME"]
+        else:
+            os.environ["HOME"] = real_home
+
+
 def not_a_display(srv, root):
     (root / "customer/test.sh").unlink()
     before = tree_digest(root)
@@ -293,6 +570,17 @@ if __name__ == "__main__":
     scenario("machine running a vendor update from slot B", "vendor_b", vendor_b)
     scenario("slot B empty", "empty_b", empty_b)
     scenario("not a MerakiTech display", "stock_a", not_a_display)
+    scenario("failing device read (gzip) during revert and legacy migration", "stock_a", read_fail)
+    scenario("interrupted stop-first switch (Ctrl-C, connection drop)", "stock_a", switch_interrupted)
+    scenario("revert on a vendor build in slot B, never installed", "vendor_b", vendor_b_no_install)
+    scenario("--persist when Meraki+ fails to start", "stock_a", persist_start_fails)
+    scenario("free-space gate", "stock_a", free_space)
+    scenario("disk full during a copy; leftover temp files", "stock_a", disk_full_copy)
+    scenario("log location in install.sh standalone mode", "stock_a", log_location)
+    scenario("corrupt uploads", "stock_a", corrupt_upload)
+    scenario("vendor OTA into slot B after install", "stock_a", ota_after_install)
+    scenario("vendor OTA into slot B after install + revert", "stock_a", ota_after_revert)
+    scenario("stock UI left SIGSTOPped by an older run", "stock_a", stopped_ui)
     scenario("upgrade of a pre-rename install (legacy migration)", "stock_a", legacy_upgrade)
     scenario("revert of a pre-rename install (legacy migration)", "stock_a", legacy_revert)
     scenario("revert --purge with both layouts present", "stock_a", legacy_purge)

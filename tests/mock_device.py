@@ -8,9 +8,25 @@ sandbox cannot do for real are emulated with shell functions:
   * processes: <root>/proc/<pid>/{exe,cmdline,exe_path,image}. `readlink .../exe` reports the
     launched path, or "<path> (deleted)" once that file was replaced (inode semantics).
   * kill -STOP/-CONT/-TERM/-9 act on fake pids; when no UI is left the vendor watchdog is
-    emulated (it restarts the slot recorded in <root>/watchdog_slot).
+    emulated (it restarts the slot recorded in <root>/watchdog_slot). A stopped process keeps
+    its pid (so the watchdog does not restart it), gets a <root>/proc/<pid>/stopped marker and
+    reports "State:\tT (stopped)" in /proc/<pid>/status, as Linux does.
   * nohup ./demo_v9 spawns a fake UI process; nc -l -p PORT is a tiny Python listener.
   * uname -m says armv7l.
+
+Failure injection (for the installer's error paths): create <root>/inject/<name> with
+inject(root, name[, value]) and remove it with uninject(root, name). The shell functions
+check for the file on every call, so a test can switch a failure on and off between runs:
+
+  * gzip_fail        gzip exits 1 without output (busybox gzip OOM); base64 still exits 0.
+  * ui_start=die     `nohup ./demo_v9` kills the shell: the telnet connection drops mid-switch.
+  * ui_start=never   `nohup ./demo_v9` starts nothing (the binary fails to come up).
+  * cp_enospc=SUFFIX `cp X DEST` with DEST ending in SUFFIX writes 100 bytes, then fails (disk full).
+  * df_free_kb=N     `df` reports N KB available on every filesystem.
+  * nc_corrupt       every upload received by `nc -l` gets one extra byte (md5 mismatch).
+
+When the shell exits, the server closes the connection (like telnetd), so a client sees a
+transport drop at once instead of waiting for its timeout.
 
 Everything here is synthetic — no vendor files are used. demo.sh below only reproduces the
 lines the installer anchors on.
@@ -60,13 +76,24 @@ fi
 FUNCS = r'''
 R="$MOCK_ROOT"
 uname() { [ "$1" = "-m" ] && echo armv7l || command uname "$@"; }
+mock_inject() { [ -f "$R/inject/$1" ]; }
+# `env cp`, not `command cp`: bash 3.2 (macOS) execs a `command` builtin inside a background
+# subshell, which would end mock_spawn (run under `nohup ./demo_v9 &`) right after its cp.
+cp() { if mock_inject cp_enospc; then case "$2" in *"$(cat "$R/inject/cp_enospc")")
+  head -c 100 "$1" > "$2"; echo "cp: write error: No space left on device" >&2; return 1;; esac; fi; env cp "$@"; }
+df() { if mock_inject df_free_kb; then echo "Filesystem 1K-blocks Used Available Use% Mounted on"
+  echo "ubi0:mock 100000 90000 $(cat "$R/inject/df_free_kb") 90% /mock"; else command df "$@"; fi; }
+gzip() { if mock_inject gzip_fail; then echo "gzip: out of memory" >&2; return 1; fi; command gzip "$@"; }
 command -v md5sum >/dev/null 2>&1 || md5sum() {
   rc=0; for f in "$@"; do if [ -e "$f" ]; then echo "$(md5 -q "$f")  $f"; else echo "md5sum: $f: No such file" >&2; rc=1; fi; done; return $rc; }
 mock_next_pid() { n=$(cat "$R/pidcounter"); n=$((n+1)); echo $n > "$R/pidcounter"; echo $n; }
 mock_spawn() {  # $1 = absolute exe path, $2 = argv0
   p=$(mock_next_pid); mkdir -p "$R/proc/$p"; cp "$1" "$R/proc/$p/image"
   printf '%s' "$1" > "$R/proc/$p/exe_path"; ln -s "$R/proc/$p/image" "$R/proc/$p/exe"
-  printf '%s\000' "$2" > "$R/proc/$p/cmdline"; echo "spawn $p $1" >> "$R/events"; }
+  printf '%s\000' "$2" > "$R/proc/$p/cmdline"; mock_state $p S; echo "spawn $p $1" >> "$R/events"; }
+mock_state() {  # $1 = pid, $2 = S (running) / T (stopped)
+  if [ "$2" = T ]; then touch "$R/proc/$1/stopped"; printf 'Name:\tdemo_v9\nState:\tT (stopped)\n' > "$R/proc/$1/status"
+  else rm -f "$R/proc/$1/stopped"; printf 'Name:\tdemo_v9\nState:\tS (sleeping)\n' > "$R/proc/$1/status"; fi; }
 mock_ui_left() { for d in "$R"/proc/[0-9]*; do [ -f "$d/exe_path" ] && case "$(cat $d/exe_path)" in */demo_v9) return 0;; esac; done; return 1; }
 readlink() {
   case "$1" in
@@ -82,7 +109,7 @@ kill() {
     if [ -d "$R/proc/$p" ]; then
       echo "kill -$sig $p" >> "$R/events"
       case "$sig" in
-        STOP) touch "$R/proc/$p/stopped";; CONT) rm -f "$R/proc/$p/stopped";;
+        STOP) mock_state $p T;; CONT) mock_state $p S;;
         *) rm -rf "$R/proc/$p"
            if ! mock_ui_left; then ws=$(cat "$R/watchdog_slot" 2>/dev/null)
              [ "$ws" = B ] && [ -f "$R/new_customer/demo_v9" ] && mock_spawn "$R/new_customer/demo_v9" ./demo_v9
@@ -100,10 +127,14 @@ while True:
     b=c.recv(65536)
     if not b: break
     sys.stdout.buffer.write(b)
-sys.stdout.flush(); c.close()' "$3"; }
+sys.stdout.flush(); c.close()' "$3"; rc=$?; mock_inject nc_corrupt && printf X; return $rc; }
 nohup() {
   case "$1" in
-    ./demo_v9) mock_spawn "$PWD/demo_v9" ./demo_v9;;
+    ./demo_v9) case "$(cat "$R/inject/ui_start" 2>/dev/null)" in
+                 die) command kill -9 $$;;
+                 never) :;;
+                 *) mock_spawn "$PWD/demo_v9" ./demo_v9;;
+               esac;;
     nc) shift; nc "$@";;
     *) command nohup "$@";;
   esac; }
@@ -145,7 +176,59 @@ def make_root(root, scenario="stock_a"):
     (p / "exe_path").write_text(str(ui))
     os.symlink(p / "image", p / "exe")
     (p / "cmdline").write_bytes(b"./demo_v9\0")
+    set_stopped(root, 600, False)
     return root
+
+
+def ota_into_b(root, build=b"v2 (OTA)"):
+    """A vendor OTA while no boot flag is set (docs/boot.md section 7): the OTA unpacks a NEW vendor
+    build into /new_customer (overwriting whatever slot B held, Meraki+ included), sets the flag,
+    and after the next boot the vendor UI runs from slot B under `test.sh new_customer`.
+    Returns the new build's bytes."""
+    root = pathlib.Path(root)
+    newv = b"\x7fELF MOCK VENDOR UI " + build + b"\n" * 60
+    (root / "new_customer/demo_v9").write_bytes(newv)
+    (root / "customer/new").touch()
+    for d in list((root / "proc").iterdir()):            # "reboot": every old process is gone
+        if (d / "exe_path").exists():
+            shutil.rmtree(d)
+    p = root / "proc/800"
+    p.mkdir()
+    (p / "image").write_bytes(newv)
+    (p / "exe_path").write_text(str(root / "new_customer/demo_v9"))
+    os.symlink(p / "image", p / "exe")
+    (p / "cmdline").write_bytes(b"./demo_v9\0")
+    set_stopped(root, 800, False)
+    (root / "proc/650/cmdline").write_bytes(b"/bin/sh\0/customer/test.sh\0new_customer\0")
+    (root / "watchdog_slot").write_text("B\n")
+    return newv
+
+
+def set_stopped(root, pid, stopped=True):
+    """Put a fake process into the state `kill -STOP` (True) / `kill -CONT` (False) leaves it in."""
+    d = pathlib.Path(root) / "proc" / str(pid)
+    (d / "status").write_text("Name:\tdemo_v9\nState:\t" + ("T (stopped)" if stopped else "S (sleeping)") + "\n")
+    if stopped:
+        (d / "stopped").touch()
+    elif (d / "stopped").exists():
+        (d / "stopped").unlink()
+
+
+def is_stopped(root, pid):
+    return (pathlib.Path(root) / "proc" / str(pid) / "stopped").exists()
+
+
+def inject(root, name, value=""):
+    """Switch on a failure injection (see the module docstring)."""
+    d = pathlib.Path(root) / "inject"
+    d.mkdir(exist_ok=True)
+    (d / name).write_text(value)
+
+
+def uninject(root, name):
+    f = pathlib.Path(root) / "inject" / name
+    if f.exists():
+        f.unlink()
 
 
 class MockServer:
@@ -182,6 +265,10 @@ class MockServer:
                     c.sendall(chunk.replace(b"\n", b"\r\n"))
                 except OSError:
                     break
+            try:                        # the shell is gone: hang up, as telnetd does
+                c.shutdown(socket.SHUT_RDWR)
+            except OSError:
+                pass
         threading.Thread(target=pump_out, daemon=True).start()
         try:
             while True:

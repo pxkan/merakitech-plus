@@ -58,7 +58,9 @@ static void boot_id_read(char*out,size_t n){
  * Pattern from WRITETEST.md §7: the byte-exact cJSON format is preserved (only the number token of
  * the one field is replaced), tmp file in the SAME directory + fsync + verify + rename().
  * demo_v9 (SIGSTOPped) holds a write fd on the old inode -> no race.
- * Before the first write: pristine backup (config.json.orig, never overwritten).
+ * Before the first write: pristine backup (config.json.orig, never overwritten). v6.20 (review 2026-11 persist #6): written via
+ * tmp + fsync + rename (was: in place, so a power cut during the first SAVE could leave it empty or cut off forever), and an
+ * existing .orig that is empty or not a whole JSON object is re-created from the config as it is before this write.
  * Before every write: rolling backup (config.json.bak). Every write is logged w. md5. */
 #define CFG_MAX 16384
 static char cfg_path[256]="/customer/config.json";
@@ -115,6 +117,13 @@ static void fsync_dir(const char*filepath){
     char d[256]; snprintf(d,sizeof d,"%s",filepath); char*s=strrchr(d,'/'); if(!s) return; if(s==d) s[1]=0; else *s=0;
     int fd=open(d,O_RDONLY); if(fd>=0){ fsync(fd); close(fd); }
 }
+/* v6.20: is the .orig backup a whole JSON object ('{' ... '}', more than 2 bytes)? */
+static int orig_ok(const char*p){
+    static char b[CFG_MAX]; int fd=open(p,O_RDONLY); if(fd<0) return 0; int n=(int)read(fd,b,sizeof b); close(fd);
+    if(n<=2||n>=CFG_MAX) return 0;
+    int i=0, j=n-1; while(i<n&&isspace((unsigned char)b[i])) i++; while(j>i&&isspace((unsigned char)b[j])) j--;
+    return j-i>=1&&b[i]=='{'&&b[j]=='}';
+}
 /* returns 1 on success; on failure config.json is unchanged and cfg_err is set */
 static int cfg_set_int(const char*key,int newv){
     char cur[CFG_MAX]; char md_before[33],md_after[33];
@@ -129,9 +138,12 @@ static int cfg_set_int(const char*key,int newv){
     mkdir(cfg_bakdir,0755);
     char p[320];
     snprintf(p,sizeof p,"%s/config.json.orig",cfg_bakdir);
-    if(access(p,F_OK)!=0){ if(!write_all(p,cur,n,1)){ snprintf(cfg_err,sizeof cfg_err,"orig backup failed"); return 0; } fsync_dir(p); }
-    char pt[340]; snprintf(p,sizeof p,"%s/config.json.bak",cfg_bakdir); snprintf(pt,sizeof pt,"%s.tmp",p);
-    if(!write_all(pt,cur,n,0)||rename(pt,p)!=0){ snprintf(cfg_err,sizeof cfg_err,"backup failed"); return 0; }
+    char pt[340];
+    if(!orig_ok(p)){ snprintf(pt,sizeof pt,"%s.tmp",p);
+        if(!write_all(pt,cur,n,0)||rename(pt,p)!=0){ unlink(pt); snprintf(cfg_err,sizeof cfg_err,"orig backup failed"); return 0; }
+        fsync_dir(p); }
+    snprintf(p,sizeof p,"%s/config.json.bak",cfg_bakdir); snprintf(pt,sizeof pt,"%s.tmp",p);
+    if(!write_all(pt,cur,n,0)||rename(pt,p)!=0){ unlink(pt); snprintf(cfg_err,sizeof cfg_err,"backup failed"); return 0; }
     /* 3) build the new content: only the number token is replaced */
     char nb[CFG_MAX]; char num[16]; int nl=snprintf(num,sizeof num,"%d",newv);
     int nn=a+nl+(n-b); if(nn>=CFG_MAX-1){ snprintf(cfg_err,sizeof cfg_err,"too large"); return 0; }

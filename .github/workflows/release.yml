@@ -20,7 +20,10 @@ name: Release
 # the committed on-device-verified build and is not a release asset (installer fetches
 # it from raw bin/, md5-gated by BIN_MD5).
 #
-# Auth: GITHUB_TOKEN only (contents: write below). No other credentials anywhere.
+# Auth: GITHUB_TOKEN only. Least privilege (v6.20): the workflow default is contents: read; only the
+# publish job (which runs no repository code and no third-party action) gets contents: write. Checkouts
+# do not persist the token. Actions are pinned to major tags; pinning them (at least the third-party
+# mlugg/setup-zig) to commit SHAs would harden this further.
 
 on:
   push:
@@ -29,7 +32,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: write
+  contents: read
 
 concurrency:
   group: release
@@ -48,6 +51,8 @@ jobs:
       prerelease: ${{ steps.v.outputs.prerelease }}
     steps:
       - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
       - name: Decide whether a release is needed (and for which version)
         id: v
         env:
@@ -85,6 +90,8 @@ jobs:
                            "bump VERSION (tools/merakiplus.py + src/merakiplus.c) first")
               needed = True                       # create or update, idempotent
           elif event == "workflow_dispatch":
+              if ref != "refs/heads/main":        # v6.20: assets must come from main's bin/, never from a side branch
+                  sys.exit(f"workflow_dispatch from {ref}: releases are only made from main")
               needed = True                       # create or update, idempotent
               target = sha                        # only used if the tag does not exist yet
           else:                                   # push to main: auto-maintain
@@ -123,6 +130,8 @@ jobs:
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
@@ -181,6 +190,8 @@ jobs:
     if: needs.check.outputs.needed == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 10
+    permissions:
+      contents: write                     # the only job that may write (create/edit the release, upload assets)
     steps:
       - name: Download release assets
         uses: actions/download-artifact@v4
