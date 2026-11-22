@@ -600,7 +600,8 @@ static void sim_dispatch(const char*line,char*out,size_t on,ms_t now){
         } else if(view==V_MAIN&&page==PG_HOME){
             int sk[2], sn=stop_btns(now,sk);                                   /* v6.13: STOP for grind/brew/water + latched steam */
             if(sn){ for(int i=0;i<sn;i++){ Rect r=stop_hit(sn,i); LT_R(STOP_KEY[sk[i]],r.x0,r.y0,r.x1-r.x0,r.y1-r.y0); } }
-            else if(!phase_active(phase_raw(now))&&hm_mode!=HM_ERROR) for(int k=0;k<4;k++){ int i=ring_of_act(k); LT_C(ACT_KEY[k],RING_X[i],RING_Y[i],RING_R); }   /* v7.0: the rings: tap = the feature's page, hold = start */
+            else if(hm_mode==HM_ACTIVE&&act.ph==PH_DONE) LT_R("done",60,60,360,290);   /* v7.0: the 3 s DONE view: a tap brings the rings back */
+            else if(!phase_active(phase_raw(now))&&hm_mode!=HM_ERROR&&hm_mode!=HM_ACTIVE) for(int k=0;k<4;k++){ int i=ring_of_act(k); LT_C(ACT_KEY[k],RING_X[i],RING_Y[i],RING_R); }   /* v7.0: the rings: tap = the feature's page, hold = start */
             if(hm_mode==HM_ERROR) LT_R("diag",60,96,360,250);
             else if(diag_hint_shown()) LT_R("diag",70,HOME_STAT_Y-2,340,32);
             LT_R("gear",CX-60,0,120,hm_mode==HM_ACTIVE?44:58);               /* v7.0: the chevron at the top -> SYSTEM */

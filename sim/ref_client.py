@@ -530,7 +530,7 @@ class RefClient:
                 if self.now - self.pw_t_press >= PW_HOLD_S and not self.pw_blk_shown:
                     self.pw_blk_shown = True
                     self.pw_n["blocked"] += 1
-                    self.toast_set("STOP AKTIVITETEN FØRST · SÅ SLUK", "warn")
+                    self.toast_set("Stop aktiviteten først · så sluk", "warn")   # merakiplus TX_T_PW_BUSY (DA, sentence case since the i18n case change)
             elif self.now - self.pw_t_down >= PW_HOLD_S:
                 self.pw_fired = True
                 if not self.link_up() or not self.reg_seen[0] or self.regs[0] == 0:
@@ -1004,7 +1004,9 @@ class RefClient:
             if self.stop_pending:
                 if not self._stop_running(self.stop_pending):
                     self.stop_ok += 1
-                    self.toast_set(f"{self.stop_pending[:-5].upper()} STOPPED", "ok")
+                    self.toast_set({"grind": "Kværn stoppet", "brew": "Bryg stoppet", "water": "Vand stoppet",
+                                    "steam": "Damp stoppet"}.get(self.stop_pending[:-5],
+                                                                 f"{self.stop_pending[:-5]} stoppet"), "ok")   # TX_T_STOPPED_* (DA)
                     self.stop_pending = None
                 elif self.now - self.stop_t0 >= 5.0:
                     self.stop_fail += 1
