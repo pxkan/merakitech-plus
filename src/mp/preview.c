@@ -253,15 +253,36 @@ static void sim_ready(ms_t now){   /* minimal "READY" state without simulator */
     memset(reg,0,sizeof reg); for(int i=0;i<REGN;i++) reg_seen[i]=1;
     reg[0]=1; reg[33]=0x0101; reg[11]=870; reg[40]=900; reg[23]=360; reg[112]=0x0104; reg[113]=0x0605; reg[114]=70; last_rx_ms=now;
 }
+/* v7.0: does any INK of a text drawn at (x = left edge, y = cap top) fall outside the display circle (the chord mask the drawing code
+ * clips to)? Mirrors text_at() glyph by glyph (kerning, tabular digits, sub-pixel phase, icons) and counts the pixels with coverage
+ * >= 25 % outside cx0..cx1 — exact where the outline lies, not the advance box (a 'D' at the end of a title is clipped, an 'e' is not) */
+static int ink_out(float x,int y,const char*s,int f){
+    const unsigned char*p=(const unsigned char*)s; int prev=-1, face=FS[f].face, base=y+(int)lroundf(FS[f].cap), n=0;
+    while(*p){ int g=glyph_next(&p); if(g<0) continue; GBmp*b; int gx,gy;
+        if(g>=G_ICON){ int ig=g-G_ICON; b=ico_get(f,ig); float box=ico_box(f); gx=(int)lroundf(x+FS[f].cap*0.05f)+b->ox; gy=base-(int)lroundf(box*0.5f+FS[f].cap*0.5f)+b->oy; x+=ico_adv(f,ig); prev=-1; }
+        else { if(prev>=0) x+=fg_kern(face,prev,g)*fg_scale(f); float gxf=x+fg_lsb(f,g), fl=floorf(gxf); int ph=(int)((gxf-fl)*4.f+0.5f), ix=(int)fl; if(ph>=4){ ph=0; ix++; }
+               b=glyph_get(f,g,ph); gx=ix+b->ox; gy=base+b->oy; x+=fg_adv(f,g); prev=g; }
+        if(b->st!=1) continue;
+        for(int j=0;j<b->h;j++){ int yy=gy+j; for(int i=0;i<b->w;i++){ if(b->a[j*b->w+i]<64) continue; int xx=gx+i; if(yy<0||yy>=H||xx<cx0[yy]||xx>cx1[yy]) n++; } } }
+    return n; }
+#define INK(cx,y,s,f,what) do{ int n_=ink_out((cx)-text_wf(s,f)/2,(y),(s),(f)); if(n_>0){ ok=0; printf("     [%s] %s: '%s' — %d ink px outside the display circle\n",LANG_CODE[ui_lang],what,s,n_); } }while(0)
 /* ---- v6.3: i18n helpers ---- */
 #define LAY(w,lim,what,st) do{ if((w)>(lim)){ ok=0; printf("     [%s] %s: '%s' is %.0f px, room %.0f px\n",LANG_CODE[ui_lang],what,st,(double)(w),(double)(lim)); } }while(0)
 static const char* stl(const char*name){ static char b[4][420]; static int k; char*o=b[k++&3]; snprintf(o,420,"[%s] %s",LANG_CODE[ui_lang],name); return o; }
-/* pixel budget per string class (font, max width) — same numbers as the drawing code uses */
+/* pixel budget per string class (font, max width) — v7.0: the numbers the DRAWING code uses (ui_pages.c), and where a field is wider than
+ * the display circle at its y, the circle's chord there (the text would otherwise be clipped by the bezel):
+ *   toast: TOAST_TW · HOME subline: the live view's SUB_W - 8 (idle status lines are measured per state in the layout check) · label: not
+ *   drawn in v7 (model / SIM state only) · phase chip: the live view's chip field (300 - 8) · buttons: the system action's pills (SB_W - 24;
+ *   KBTN may fall back to F_XS) · page title: TITLE_W in F_M (F_L when it fits) · page sub: the live line LIVE_W · note: fit 330 ·
+ *   footers: F_TINY, the chord at y 416 / 434 · row subline: F_TINY 270 (200 next to a value: checked in the layout) · status: the
+ *   editor's status field (320 - 8) */
+#define FOOT1_W 276        /* 2 x chord_half(416, F_TINY cap) - 8 (checked against chord_half in the layout test) */
+#define FOOT2_W 220        /* 2 x chord_half(434, F_TINY cap) - 8 */
 static const struct { int font,maxw; const char*what; } KB[NKLASS]={
- [KT]={F_XS,TOAST_TW,"toast"},[KSUB]={F_XS,SUB_W-8,"HOME subline"},[KLAB]={F_XS,254,"HOME label (field 260)"},[KCHIP]={F_S,150,"phase chip"},
- [KBTN]={F_XS,104,"button"},[KBTNS]={F_S,104,"button"},[KTITLE]={F_M,224,"page title"},[KPSUB]={F_XS,298,"page subtitle"},[KSPL]={F_XS,SPLASH_W-8,"tagline"},
- [KDL]={F_XS,170,"diagnose label"},[KDV]={F_S,168,"diagnose value"},[KDF]={F_XS,DG_FULL_W,"full-width line"},[KNOTE]={F_XS,392,"note (field 400)"},
- [KF1]={F_XS,264,"footer 1 (clear of the gauge ends)"},[KF2]={F_XS,269,"footer 2"},[KXSUB]={F_XS,300,"row subline"},[KST]={F_XS,348,"status (field 360)"},
+ [KT]={F_XS,TOAST_TW,"toast"},[KSUB]={F_XS,SUB_W-8,"HOME subline (live view)"},[KLAB]={F_XS,254,"HOME label (model only in v7)"},[KCHIP]={F_S,292,"phase chip (live view field 300)"},
+ [KBTN]={F_XS,SB_W-24,"button (pill, F_XS fallback)"},[KBTNS]={F_S,SB_W-24,"button (pill)"},[KTITLE]={F_M,TITLE_W,"page title"},[KPSUB]={F_XS,LIVE_W,"page live line / sub"},[KSPL]={F_XS,SPLASH_W-8,"tagline"},
+ [KDL]={F_XS,170,"diagnose label"},[KDV]={F_S,168,"diagnose value"},[KDF]={F_XS,DG_FULL_W,"full-width line"},[KNOTE]={F_XS,330,"note (fit 330)"},
+ [KF1]={F_TINY,FOOT1_W,"footer 1 (chord at y 416)"},[KF2]={F_TINY,FOOT2_W,"footer 2 (chord at y 434)"},[KXSUB]={F_TINY,270,"row subline"},[KST]={F_XS,312,"status (editor field 320)"},
 };
 static const char*const KNAME[NKLASS]={"-","toast","home-sub","home-label","phase-chip","button","button","page-title","page-sub","tagline","diag-label","diag-value","full-line","note","foot-1","foot-2","row-sub","status","console"};
 /* the printf conversions in a string, in order ("%s|%.34s|%ld|") */
