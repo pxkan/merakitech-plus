@@ -1318,6 +1318,18 @@ static void st_v620(const char*dir){
       snprintf(cfg_path,sizeof cfg_path,"%s",kc); sim_reset(); }
     st_r3();
     st_r5(dir);
+    /* R8 (review persist #6): config.json.orig via tmp + rename; an empty or cut-off .orig is re-created, a whole one is never touched */
+    { char kc[sizeof cfg_path], kb[sizeof cfg_bakdir], cp[400], bd[400], op[460], ot[470], m0[33], m1[33]; snprintf(kc,sizeof kc,"%s",cfg_path); snprintf(kb,sizeof kb,"%s",cfg_bakdir);
+      snprintf(cp,sizeof cp,"%s/_r8_config.json",dir); copy_file(kc,cp); snprintf(bd,sizeof bd,"%s/_r8_bak",dir); mkdir(bd,0755);
+      snprintf(cfg_path,sizeof cfg_path,"%s",cp); snprintf(cfg_bakdir,sizeof cfg_bakdir,"%s",bd); snprintf(op,sizeof op,"%s/config.json.orig",bd); snprintf(ot,sizeof ot,"%s.tmp",op);
+      int sz0=st_file_md5(cp,m0); int ok=1, r[4];
+      put_bytes(op,"",0); int w=cfg_set_int("volume",11); int sz=st_file_md5(op,m1); r[0]=w&&sz==sz0&&!strcmp(m1,m0)&&access(ot,F_OK)!=0;   /* empty -> re-created from the pre-write config */
+      st_file_md5(cp,m0); sz0=st_file_md5(cp,m0); put_bytes(op,"{\n\t\"Temperature\":\t1,\n\t\"vol",22); w=cfg_set_int("volume",12); sz=st_file_md5(op,m1); r[1]=w&&sz==sz0&&!strcmp(m1,m0);   /* cut off */
+      char mo[33]; st_file_md5(op,mo); w=cfg_set_int("volume",13); st_file_md5(op,m1); r[2]=w&&!strcmp(m1,mo);                 /* whole: never overwritten */
+      unlink(op); sz0=st_file_md5(cp,m0); w=cfg_set_int("volume",14); sz=st_file_md5(op,m1); r[3]=w&&sz==sz0&&!strcmp(m1,m0)&&access(ot,F_OK)!=0;   /* missing -> created */
+      for(int i=0;i<4;i++){ if(!r[i]) printf("     R8 case %d failed\n",i); ok&=r[i]; }
+      st_check("R8 config.json.orig: written via tmp + fsync + rename (no .tmp left); an EMPTY or CUT-OFF .orig is re-created from the config before the write; a whole one is never overwritten",ok);
+      snprintf(cfg_path,sizeof cfg_path,"%s",kc); snprintf(cfg_bakdir,sizeof cfg_bakdir,"%s",kb); settings_load(); }
     /* R4: a STOP queued behind a frame that fails (no ACK twice) is still transmitted; the failed frame's own group and starts are not */
     { sim_reset(); wq.sim_ack=0; ms_t t=sim_now; uint16_t v=(uint16_t)sv(S_BREWW); long f0=wq.n_fail;
       int q=wq_push(23,&v,1)&&act_push_stop(ACT_GRIND)&&wq.n==2; int stop_tx=0, acked=0;
