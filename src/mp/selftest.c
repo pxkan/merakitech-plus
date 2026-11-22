@@ -1274,6 +1274,7 @@ static void st_v619(void){
     sim_reset();
 }
 /* ============================ v6.20: code review 2026-11 (docs/dev/REVIEW-2026-11.md) ============================ */
+static void st_r3(void);
 static void st_v620(const char*dir){
     printf("== selftest: v6.20 review fixes (stepper repeat after a failed save, ...) ==\n");
     /* R1: a stepper press DURING SAVING, then the save fails (no ACK) while the finger stays down */
@@ -1300,6 +1301,42 @@ static void st_v620(const char*dir){
       st_check("R2 SAVE during a pending steam start (bits not yet set): refused with ONE MOMENT…, nothing queued or sent, the editor stays open",
                pend&&chg&&!sav.active&&wq.n==0&&txq_len==tx0&&wq.n_ok==n0&&view==V_DETAIL&&!strcmp(toast.msg,TR(TX_G_WAIT)));
       snprintf(cfg_path,sizeof cfg_path,"%s",kc); sim_reset(); }
+    st_r3();
+}
+/* R3 helper: a NORMAL run whose MCU clears the start word 0.4 s after the bits (mcu_sim / BREW §5.1: word 6 is consumed last) */
+static int r3_kind=0; static ms_t r3_t=0;
+static void tick_r3(ms_t t){
+    static const uint16_t WS[4]={0x0141,0x1307,0x010B,0x4121}; static const uint8_t SW[4]={6,22,16,24};
+    if(t<r3_t) reg[33]=WS[r3_kind]; else { reg[33]=0x0101; if(t>=r3_t+400) reg[SW[r3_kind]]=0; }
+}
+static void st_r3(void){
+    static const char*const NM[4]={"GRIND (word 6)","BREW (word 22)","WATER (word 16)","STEAM (word 24)"}; static const uint8_t SW[4]={6,22,16,24};
+    static const uint8_t SUB[4]={6,22,16,24};
+    for(int k=0;k<4;k++){
+        sim_reset(); sim_run(1500); act_request(k,sim_now); sim_run(400);
+        int acked=act.pending==k&&!wq_busy()&&reg[SW[k]]==1, sk[2], sn0=stop_btns(sim_now,sk);
+        sim_run(k==ACT_STEAM?15200:3700);
+        int nostart=act.pending==ACT_NONE&&!strcmp(toast.msg,TR(TX_T_NOSTART));
+        int sn=stop_btns(sim_now,sk), busy=pw_busy();
+        int tgt=hit_test(stop_hit(sn,0).x0+10,stop_hit(sn,0).y0+10,sim_now);
+        st_check(k==ACT_STEAM?"R3 latched start word, STEAM (word 24): ACKed, bits never come -> NO START, and HOME offers ITS STOP (the only button) — not during the pending start":
+                 "R3 latched start word: ACKed, bits never come -> NO START, and HOME offers that activity's STOP — not during the pending start",
+                 acked&&sn0==0&&nostart&&sn==1&&sk[0]==k&&tgt==T_STOP&&busy==(k!=ACT_WATER));   /* pw_busy = stock's words 6/22/24 (not 16) */
+        int tx0=txq_len; tap(stop_hit(1,0).x0+20,stop_hit(1,0).y0+20); int q=wq.n>=1&&wq.q[0].sub==SUB[k];
+        sim_run(600); sn=stop_btns(sim_now,sk); (void)tx0;
+        char nm[200]; snprintf(nm,sizeof nm,"R3 %s: the tap sends the existing stop frame (sub%d, all zeros), the ACK clears the word: STOPPED toast, no STOP button, power button / auto off free again",NM[k],SUB[k]);
+        st_check(nm,q&&reg[SW[k]]==0&&sn==0&&!pw_busy()&&!strcmp(toast.msg,TR(STOP_DONE[k]))&&stp.n_ok==1);
+    }
+    /* no false STOP after a NORMAL run: the bits clear, the MCU clears the word 0.4 s later */
+    { int ok=1; for(int k=0;k<4;k++){ sim_reset(); sim_run(1500); act_request(k,sim_now); sim_run(300); r3_kind=k; r3_t=2500; sim_t0=sim_now; sim_tick=tick_r3;
+        int seen=0, sk[2]; for(int i=0;i<200;i++){ sim_run(33); if(!stop_running(k)&&stop_btns(sim_now,sk)) seen=1; }
+        ok&=!seen&&reg[SW[k]]==0; sim_tick=NULL; }
+      st_check("R3 no false STOP: after a normal run of each activity (bits clear, the MCU clears its start word 0.4 s later) no STOP button is offered",ok); }
+    /* asleep or offline: never offered */
+    { sim_reset(); sim_run(1500); reg_seen[6]=1; reg[6]=1; sim_run(3500); int sk[2]; int awake=stop_btns(sim_now,sk)==1;
+      reg[1]=1; reg[33]=0x0001; sim_run(200); int sl=stop_btns(sim_now,sk)==0; reg[1]=0; reg[33]=0x0101; sim_link=0; sim_run(2000); int off=stop_btns(sim_now,sk)==0;
+      st_check("R3 a latched word 6 found at startup (no start of ours) is offered too; never while the controller sleeps or the link is down",awake&&sl&&off);
+      sim_reset(); }
 }
 static void st_v617(void){
     printf("== selftest: v6.17 IA consolidation (HOME = live root; one page per feature w. its settings + HOLD TO START; SYSTEM in sections; DIAGNOSTICS behind SYSTEM; one way back) ==\n");

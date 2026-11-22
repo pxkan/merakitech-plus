@@ -200,6 +200,7 @@ static void ui_update(ms_t now){
         if(wq.seq!=act.seq&&wq.result==WR_FAIL&&!wq_busy()){ act.pending=ACT_NONE; toast_show(TR(TX_T_NOACK),C_ERR,now); }
         else if(now-act.t_req>(act.pending==ACT_STEAM?15000:3500)){ act.pending=ACT_NONE; toast_show(TR(TX_T_NOSTART),C_WARN,now); }
     }
+    start_latch_track(now,act.pending);                              /* v6.20: a start word left set without the activity (STOP stays offered) */
     stop_step(now);                                                  /* v6.13: manual STOP — confirmation / failure */
     save_step(now);
     /* v6.17: a feature page is the setup for something that is NOT running. As soon as an activity runs (started here, on the machine or

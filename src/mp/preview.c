@@ -41,7 +41,7 @@ static void sim_reset(void){
     sim_now+=100000; ui_start=sim_now-20000; ui_last=sim_now; sim_tick=NULL; sim_link=1; sim_t0=sim_now;
     memset(&wq,0,sizeof wq); wq.sim_ack=1; sim_base(); settings_load();
     memset(&bp,0,sizeof bp); bp.state=BP_DONE; bp.ra=bp.rb=BPR_OK; bp.runs=1; rx_resync=0;   /* v6.5: normal operation — the boot push has completed */
-    memset(&stm,0,sizeof stm); memset(&stp,0,sizeof stp); stp.kind=ACT_NONE; memset(&rps,0,sizeof rps); memset(&lt,0,sizeof lt); ver_n=0; rx_n112=0;      /* v6.6 */
+    memset(&stm,0,sizeof stm); memset(&stp,0,sizeof stp); stp.kind=ACT_NONE; memset(&lat,0,sizeof lat); lat.pend=ACT_NONE; memset(&rps,0,sizeof rps); memset(&lt,0,sizeof lt); ver_n=0; rx_n112=0;      /* v6.6 */
     memset(&pw,0,sizeof pw); pw.kbd_ok=1; snprintf(pw.node,sizeof pw.node,"%s · %s",INP_KBD,KBD_NAME); bl_is_off=0; ka_next=0;   /* v6.14: the button node as on the device */
     nm_reset(0); memset(&net,0,sizeof net); net.on=1; net.cfg_logged=-1; nh_probe(&net.p,sim_now,1); net.state=NS_UP; net.booted=net.was_up=net.gw_seen=1;   /* v6.7: healthy stack (DIAGNOSE: 841 / 192.168.1.100 / UP) */
     memset(&snd,0,sizeof snd); snd_uptime_ovr=86400;               /* v6.18: the sound engine restarts; the display has been up for a day (no cold boot) */

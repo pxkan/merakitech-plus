@@ -541,13 +541,14 @@ static void stop_request(int kind,ms_t now){
     if(stp.active&&stp.kind==kind&&wq_busy()){ toast_show(TR(STOP_SENT[kind]),C_TXT,now); return; }   /* the stop frame is already in the queue */
     if(!act_push_stop(kind)){ stp.n_fail++; toast_show(TR(TX_T_STOP_FAIL),C_ERR,now); return; }
     stp.n_req++; stp.kind=kind; stp.t_req=now; stp.seq=wq.seq;
-    stp.active=link_up(now)&&stop_running(kind);            /* only a running activity can be confirmed (the ctrl hook can send without one) */
+    stp.latched=!stop_running(kind)&&start_latched(kind,now);                      /* v6.20: a STOP for a latched start word */
+    stp.active=link_up(now)&&(stop_running(kind)||stp.latched);   /* only a running (or latched) activity can be confirmed (the ctrl hook can send without one) */
     toast_show(TR(STOP_SENT[kind]),C_TXT,now);
 }
 static void stop_step(ms_t now){
     if(!stp.active) return;
     if(!link_up(now)){ stp.active=0; return; }                                                       /* the OFFLINE view takes over */
-    if(!stop_running(stp.kind)){ stp.active=0; stp.n_ok++; toast_show(TR(STOP_DONE[stp.kind]),C_OK,now); return; }
+    if(!stop_running(stp.kind)&&!(stp.latched&&start_word_set(stp.kind))){ stp.active=0; stp.n_ok++; toast_show(TR(STOP_DONE[stp.kind]),C_OK,now); return; }
     if(wq.seq!=stp.seq&&wq.result==WR_FAIL&&!wq_busy()){ stp.active=0; stp.n_fail++; toast_show(TR(TX_T_STOP_NOACK),C_ERR,now); return; }
     if(now-stp.t_req>=STOP_CONFIRM_MS){ stp.active=0; stp.n_fail++; toast_show(TR(TX_T_STOP_UNCONF),C_WARN,now); }
 }
